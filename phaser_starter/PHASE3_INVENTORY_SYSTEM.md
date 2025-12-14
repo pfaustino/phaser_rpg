@@ -71,3 +71,14 @@
 4. Hover over items to see tooltips
 5. Press 'I' again to close
 6. Collect more items and see inventory update
+
+
+
+
+
+
+
+
+
+
+

@@ -33,6 +33,13 @@
   - ✅ Quest objectives and progress tracking
   - ✅ Quest completion and rewards
   - ✅ Sample quests (kill monsters, collect items, level up)
+  - ✅ Quest Completed modal window
+  - ✅ New Quest modal with accept/cancel options
+  - ✅ Expanded quest system (20+ quests with various types)
+  - ✅ Quest log redesign (tabs for Current/Completed, split-view layout)
+  - ✅ Quest progress bars with proper alignment
+  - ✅ Quest chain system
+  - ✅ Combat restrictions (quest modals/window blocked during combat)
 - ✅ **Phase 6: Advanced Features (COMPLETE!)**
   - ✅ NPC system (spawn NPCs, interaction indicators, press 'F')
   - ✅ Dialog system (dialog UI, text display, choice selection)
@@ -53,6 +60,10 @@
   - ✅ Item tooltip improvements (all item types)
   - ✅ Shop UI improvements (scrollbar, layout fixes)
   - ✅ Inventory display enhancements
+  - ✅ Single interface system (only one window open at a time)
+  - ✅ Universal ESC key to close any open interface
+  - ✅ Inventory window size increase (650x600 for better item display)
+  - ✅ Interface management (automatic closing of other windows when opening new ones)
 - ✅ **Phase 9: Graphics & Animation Enhancements - Phase 1 (COMPLETE!)**
   - ✅ **Phase 1.1: Hit Effects & Impact Feedback**
     - ✅ Hit sparks/particles (color-coded by damage type: physical=yellow/orange, magic=blue/purple)
@@ -106,6 +117,31 @@
 - Achievement system
 
 ## Recent Technical Improvements
+
+### Quest System Enhancements (Phase 5)
+- Quest Completed modal window with quest details and rewards
+- New Quest modal with accept/cancel functionality
+- Sequential modal display (prevents overlapping windows)
+- Expanded quest pool (20+ quests covering kill, collect, level, gold, explore, survive types)
+- Quest log redesign with tabbed interface (Current Quests / Completed Quests)
+- Split-view layout (quest list on left, details on right)
+- Progress bar alignment fixes (left-aligned for all quest types)
+- Quest chain system with automatic progression
+- Combat detection system (prevents quest UI during combat)
+- Pending quest queue (shows quests after combat ends)
+
+### UI/UX Improvements (Phase 8)
+- Single interface system (only one window can be open at a time)
+- Universal ESC key handler (closes any open interface, opens Settings if none open)
+- Interface auto-close (opening a new interface closes others automatically)
+- Inventory window size increase (550x400 → 650x600)
+- Better spacing and layout for item grids
+
+### NPC System Enhancements (Phase 6)
+- PixelLab integration for custom NPC sprites
+- Elder Malik character sprite generation (64x64, 8 directions)
+- NPC indicator positioning fixes (proper world-to-screen coordinate conversion)
+- Indicator visibility and animation improvements
 
 ### Procedural Dungeon System (Phase 9)
 - Seed-based dungeon generation for deterministic layouts

@@ -128,6 +128,7 @@ let statsText;
 let goldText;
 let damageNumbers = []; // Array of {x, y, text, timer, color, textObject}
 let comboText = null; // Combo counter display
+let hideTooltipTimeout = null; // Timeout for hiding equipment tooltip
 let comboIndicator = null; // Combo visual indicator
 let attackSpeedIndicator = null; // Attack speed bonus indicator
 
@@ -147,6 +148,7 @@ let inventoryTooltip = null;
 let equipmentVisible = false;
 let equipmentKey;
 let equipmentPanel = null;
+let equipmentTooltip = null;
 
 // Settings UI
 let settingsVisible = false;
@@ -163,6 +165,12 @@ let dungeonMusic = null;
 let questVisible = false;
 let questKey;
 let questPanel = null;
+let questCompletedModal = null;
+let newQuestModal = null;
+let selectedQuestIndex = 0;
+let questLogTab = 'current'; // 'current' or 'completed'
+let pendingNewQuest = null; // Store new quest to show after completed modal closes
+let pendingCompletedQuest = null; // Store completed quest to show after combat ends
 
 // Dialog UI
 let dialogVisible = false;
@@ -175,6 +183,11 @@ let interactKey; // 'F' key for interaction
 let shopVisible = false;
 let shopPanel = null;
 let currentShopNPC = null;
+
+// Building UI
+let buildingPanelVisible = false;
+let buildingPanel = null;
+let currentBuilding = null;
 
 // Assets window UI
 let assetsVisible = false;
@@ -266,6 +279,10 @@ function preload() {
         frameHeight: 64
     });
     this.load.spritesheet('npc_captain_thorne', 'assets/animations/CaptainThorne.png', {
+        frameWidth: 64,
+        frameHeight: 64
+    });
+    this.load.spritesheet('npc_elder_malik', 'assets/animations/ElderMalik.png', {
         frameWidth: 64,
         frameHeight: 64
     });
@@ -1411,13 +1428,19 @@ function createTownMap() {
     }
     
     const buildingData = [
-        // Inn: Upper left quadrant only
-        { type: 'inn', x: 5, y: 5, width: 6, height: 5, color: buildingColors.inn, quadrant: 'upperLeft' },
+        // Inn: Upper left quadrant only - positioned near center for easier access
+        { type: 'inn', x: 5, y: 8, width: 6, height: 5, color: buildingColors.inn, quadrant: 'upperLeft' },
         // Other buildings: Other 3 quadrants (upper right, lower left, lower right)
-        { type: 'tavern', x: centerX + 6, y: 5, width: 5, height: 5, color: buildingColors.tavern, quadrant: 'other' },
-        { type: 'blacksmith', x: 5, y: centerY + 4, width: 5, height: 4, color: buildingColors.blacksmith, quadrant: 'other' },
-        { type: 'shop', x: centerX + 6, y: centerY + 4, width: 5, height: 4, color: buildingColors.shop, quadrant: 'other' },
-        { type: 'market', x: centerX + 3, y: centerY - 6, width: 3, height: 3, color: buildingColors.market, quadrant: 'other' }
+        // Tavern: Upper right, closer to center
+        { type: 'tavern', x: centerX + 4, y: 8, width: 5, height: 5, color: buildingColors.tavern, quadrant: 'other' },
+        // Blacksmith: Lower left quadrant, positioned in middle-left area for better visibility
+        // At x: 3 (left side), y: 18 (middle area, well above spawn at y: 37, maxY = 22)
+        // This ensures it's visible from spawn and not in upper left quadrant
+        { type: 'blacksmith', x: 3, y: 18, width: 5, height: 4, color: buildingColors.blacksmith, quadrant: 'other' },
+        // Shop: Lower right, moved up to avoid spawn area
+        { type: 'shop', x: centerX + 4, y: 15, width: 5, height: 4, color: buildingColors.shop, quadrant: 'other' },
+        // Market: Near center, upper area
+        { type: 'market', x: centerX + 2, y: centerY - 4, width: 3, height: 3, color: buildingColors.market, quadrant: 'other' }
     ];
     
     // Filter out buildings that would block spawn/exit or violate quadrant rules
@@ -1453,38 +1476,66 @@ function createTownMap() {
     });
     
     // Place buildings (only valid ones that don't block spawn/exit)
+    console.log(`🏗️ Placing ${validBuildings.length} valid buildings out of ${buildingData.length} total`);
     validBuildings.forEach(building => {
+        const buildingCenterX = building.x * tileSize + (building.width * tileSize) / 2;
+        const buildingCenterY = building.y * tileSize + (building.height * tileSize) / 2;
+        console.log(`✅ Creating building: ${building.type} at tile (${building.x}, ${building.y}) = pixel (${buildingCenterX}, ${buildingCenterY})`);
+        
         // Create building rectangle
         const buildingRect = scene.add.rectangle(
-            building.x * tileSize + (building.width * tileSize) / 2,
-            building.y * tileSize + (building.height * tileSize) / 2,
+            buildingCenterX,
+            buildingCenterY,
             building.width * tileSize,
             building.height * tileSize,
             building.color,
             0.9
         ).setDepth(1).setStrokeStyle(2, 0x000000);
         
-        // Add building to collision list
+        // Add building to collision list with interaction properties
         buildings.push({
             x: building.x * tileSize,
             y: building.y * tileSize,
             width: building.width * tileSize,
             height: building.height * tileSize,
             type: building.type,
-            rect: buildingRect
+            rect: buildingRect,
+            centerX: buildingCenterX,
+            centerY: buildingCenterY,
+            interactionRadius: 120, // pixels - increased from 80 to make buildings easier to interact with
+            interactionIndicator: null,
+            showIndicator: false
         });
         
-        // Add building label
+        // Add building label with better visibility
         const label = scene.add.text(
-            building.x * tileSize + (building.width * tileSize) / 2,
-            building.y * tileSize + (building.height * tileSize) / 2,
+            buildingCenterX,
+            buildingCenterY,
             building.type.toUpperCase(),
             {
-                fontSize: '10px',
+                fontSize: '12px',
                 fill: '#ffffff',
-                fontStyle: 'bold'
+                fontStyle: 'bold',
+                stroke: '#000000',
+                strokeThickness: 2
             }
         ).setDepth(2).setOrigin(0.5, 0.5);
+        
+        // Special debug for blacksmith
+        if (building.type === 'blacksmith') {
+            console.log(`🔨 BLACKSMITH created at pixel position (${buildingCenterX}, ${buildingCenterY})`);
+            console.log(`   Map size: ${mapWidth}x${mapHeight} tiles = ${mapWidth * tileSize}x${mapHeight * tileSize} pixels`);
+            console.log(`   Blacksmith is in the LOWER LEFT area of the map`);
+            console.log(`   Building rect active: ${buildingRect.active}, visible: ${buildingRect.visible}`);
+            console.log(`   Label active: ${label.active}, visible: ${label.visible}`);
+            // Force render by ensuring it's in the scene
+            if (!buildingRect.active) {
+                console.warn('⚠️ Blacksmith rect is not active!');
+            }
+            if (!label.active) {
+                console.warn('⚠️ Blacksmith label is not active!');
+            }
+        }
     });
     
     // Place some regular houses around the edges (avoiding spawn/exit)
@@ -1575,13 +1626,22 @@ function createTownMap() {
                 0.8
             ).setDepth(1).setStrokeStyle(2, 0x000000);
             
+            // Calculate house center for interaction
+            const houseCenterX = (houseX * tileSize) + (houseW * tileSize) / 2;
+            const houseCenterY = (houseY * tileSize) + (houseH * tileSize) / 2;
+            
             buildings.push({
                 x: houseX * tileSize,
                 y: houseY * tileSize,
                 width: houseW * tileSize,
                 height: houseH * tileSize,
                 type: 'house',
-                rect: houseRect
+                rect: houseRect,
+                centerX: houseCenterX,
+                centerY: houseCenterY,
+                interactionRadius: 80,
+                interactionIndicator: null,
+                showIndicator: false
             });
         }
     }
@@ -1926,12 +1986,26 @@ function transitionToMap(targetMap, level = 1) {
     
     // Clear NPCs (will be repositioned)
     npcs.forEach(npc => {
+        // Clean up indicators before destroying NPC
+        if (npc.interactionIndicator && npc.interactionIndicator.active) {
+            npc.interactionIndicator.destroy();
+            npc.interactionIndicator = null;
+        }
         if (npc && npc.active) npc.destroy();
     });
     npcs = [];
     
     // Clear buildings and transition markers
+    // Close building UI if open
+    if (buildingPanelVisible) {
+        closeBuildingUI();
+    }
+    
+    // Clean up building indicators
     buildings.forEach(b => {
+        if (b.interactionIndicator && b.interactionIndicator.active) {
+            b.interactionIndicator.destroy();
+        }
         if (b.rect && b.rect.active) b.rect.destroy();
     });
     buildings = [];
@@ -3284,13 +3358,15 @@ function create() {
             
             // Try to play - may fail due to browser autoplay policy
             const playResult = villageMusic.play();
-            if (playResult) {
+            if (playResult && typeof playResult.then === 'function') {
+                // playResult is a Promise
                 playResult.then(() => {
                     console.log('🎵 Started village music on game start successfully');
                 }).catch(err => {
                     console.warn('⚠️ Could not play music on start (may need user interaction):', err);
                 });
             } else {
+                // playResult is not a Promise (might be boolean or sound object)
                 console.log('🎵 Started village music on game start');
             }
         } catch (e) {
@@ -3604,16 +3680,20 @@ function create() {
     this.input.keyboard.on('keydown', unlockAudio);
     this.input.on('pointerdown', unlockAudio);
     
-    // Set up mouse wheel event listener for shop scrolling
+    // Set up mouse wheel event listener for shop scrolling (left panel only)
     this.input.on('wheel', (pointer, gameObjects, deltaX, deltaY, deltaZ) => {
         if (shopVisible && shopPanel && shopPanel.maxScrollY > 0) {
-            const scrollSpeed = 90; // One item height
-            const oldScroll = shopPanel.scrollY;
-            shopPanel.scrollY += deltaY > 0 ? scrollSpeed : -scrollSpeed;
-            shopPanel.scrollY = Math.max(0, Math.min(shopPanel.scrollY, shopPanel.maxScrollY));
-            if (oldScroll !== shopPanel.scrollY) {
-                updateShopItems();
-                updateShopInventoryItems(); // Re-render inventory items after scrolling
+            // Check if pointer is over the left panel (shop items area)
+            const leftPanelBounds = shopPanel.leftBg.getBounds();
+            if (leftPanelBounds.contains(pointer.x, pointer.y)) {
+                const scrollSpeed = 90; // One item height
+                const oldScroll = shopPanel.scrollY;
+                shopPanel.scrollY += deltaY > 0 ? scrollSpeed : -scrollSpeed;
+                shopPanel.scrollY = Math.max(0, Math.min(shopPanel.scrollY, shopPanel.maxScrollY));
+                if (oldScroll !== shopPanel.scrollY) {
+                    updateShopItems();
+                    updateShopInventoryItems(); // Re-render inventory items after scrolling
+                }
             }
         }
     });
@@ -3657,10 +3737,10 @@ function update(time, delta) {
     updateAttackSpeedIndicator();
     
     // Player movement (like your movement system)
-    // Don't allow movement when shop/inventory/dialog/settings is open
+    // Don't allow movement when shop/inventory/dialog/settings/building is open
     player.setVelocity(0);
     
-    if (shopVisible || inventoryVisible || dialogVisible || settingsVisible) {
+    if (shopVisible || inventoryVisible || dialogVisible || settingsVisible || buildingPanelVisible) {
         // Don't process movement when UI is open, but continue with other updates
         // (monsters, UI updates, etc. still need to run)
     } else {
@@ -3740,18 +3820,77 @@ function update(time, delta) {
         }
     }
     
-    // Check building collisions (only in town) - allow sliding along walls
+    // Check building collisions (only in town) - allow sliding along walls (using dungeon wall logic)
     if (currentMap === 'town' && buildings.length > 0) {
-        const playerSize = 16; // Half of 32
+        const playerSize = 12; // Smaller collision box for easier navigation (matches dungeon)
         const deltaTime = delta / 1000;
+        
+        // Store original velocities before collision check
+        const originalVelX = player.body.velocity.x;
+        const originalVelY = player.body.velocity.y;
+        
+        // Check if player is currently overlapping with any buildings
+        let isTouchingBuilding = false;
+        let touchingBuildings = [];
+        
+        for (const building of buildings) {
+            const overlap = player.x + playerSize > building.x &&
+                           player.x - playerSize < building.x + building.width &&
+                           player.y + playerSize > building.y &&
+                           player.y - playerSize < building.y + building.height;
+            
+            if (overlap) {
+                isTouchingBuilding = true;
+                touchingBuildings.push(building);
+            }
+        }
+        
+        // First, check if player is stuck inside a building and push them out immediately
+        for (const building of buildings) {
+            const isInside = player.x + playerSize > building.x &&
+                            player.x - playerSize < building.x + building.width &&
+                            player.y + playerSize > building.y &&
+                            player.y - playerSize < building.y + building.height;
+            
+            if (isInside) {
+                // Player is stuck inside building - push them out to the nearest edge
+                const buildingCenterX = building.x + building.width / 2;
+                const buildingCenterY = building.y + building.height / 2;
+                const distX = player.x - buildingCenterX;
+                const distY = player.y - buildingCenterY;
+                
+                // Push to nearest edge (whichever is closer)
+                if (Math.abs(distX) > Math.abs(distY)) {
+                    // Push horizontally
+                    if (distX > 0) {
+                        // Push right (out of left side of building)
+                        player.x = building.x + building.width + playerSize + 2;
+                    } else {
+                        // Push left (out of right side of building)
+                        player.x = building.x - playerSize - 2;
+                    }
+                } else {
+                    // Push vertically
+                    if (distY > 0) {
+                        // Push down (out of top of building)
+                        player.y = building.y + building.height + playerSize + 2;
+                    } else {
+                        // Push up (out of bottom of building)
+                        player.y = building.y - playerSize - 2;
+                    }
+                }
+                // After pushing out, stop checking - we'll handle collisions normally
+                break;
+            }
+        }
         
         // Check collisions separately for X and Y to allow sliding
         let canMoveX = true;
         let canMoveY = true;
         
         // Test X movement (keep Y fixed at current position)
-        if (player.body.velocity.x !== 0) {
-            const testX = player.x + player.body.velocity.x * deltaTime;
+        if (originalVelX !== 0) {
+            const testX = player.x + originalVelX * deltaTime;
             const testY = player.y; // Use current Y position
             
             for (const building of buildings) {
@@ -3766,9 +3905,9 @@ function update(time, delta) {
         }
         
         // Test Y movement (keep X fixed at current position)
-        if (player.body.velocity.y !== 0) {
+        if (originalVelY !== 0) {
             const testX = player.x; // Use current X position
-            const testY = player.y + player.body.velocity.y * deltaTime;
+            const testY = player.y + originalVelY * deltaTime;
             
             for (const building of buildings) {
                 if (testX + playerSize > building.x &&
@@ -3781,12 +3920,154 @@ function update(time, delta) {
             }
         }
         
+        // If touching a building, allow sliding along it OR moving away from it
+        if (isTouchingBuilding && touchingBuildings.length > 0) {
+            // Check if we're actually overlapping (stuck inside) vs just touching
+            let isActuallyStuck = false;
+            for (const building of touchingBuildings) {
+                const overlap = player.x + playerSize > building.x &&
+                               player.x - playerSize < building.x + building.width &&
+                               player.y + playerSize > building.y &&
+                               player.y - playerSize < building.y + building.height;
+                if (overlap) {
+                    isActuallyStuck = true;
+                    break;
+                }
+            }
+            
+            // Only apply special sliding/moving away logic if we're actually stuck inside
+            if (isActuallyStuck) {
+                for (const building of touchingBuildings) {
+                    const buildingLeft = building.x;
+                    const buildingRight = building.x + building.width;
+                    const buildingTop = building.y;
+                    const buildingBottom = building.y + building.height;
+                    const isHorizontalBuilding = building.width >= building.height;
+                    const isVerticalBuilding = building.height >= building.width;
+                    
+                    // For vertical buildings: allow Y movement (sliding along) OR X movement away from building
+                    if (isVerticalBuilding) {
+                        const isOverlapping = player.x + playerSize > building.x &&
+                                            player.x - playerSize < building.x + building.width &&
+                                            player.y + playerSize > building.y &&
+                                            player.y - playerSize < building.y + building.height;
+                        
+                        const buildingCenterX = building.x + building.width / 2;
+                        const currentDistX = Math.abs(player.x - buildingCenterX);
+                        const newX = player.x + originalVelX * deltaTime;
+                        const newDistX = Math.abs(newX - buildingCenterX);
+                        
+                        // If moving X away from the building (distance increases) AND we're overlapping, allow it
+                        if (originalVelX !== 0 && isOverlapping && newDistX > currentDistX) {
+                            // Moving away from vertical building - check if it would collide with other buildings
+                            const testX = player.x + originalVelX * deltaTime;
+                            let wouldCollideWithOther = false;
+                            for (const otherBuilding of buildings) {
+                                if (otherBuilding === building) continue;
+                                if (testX + playerSize > otherBuilding.x &&
+                                    testX - playerSize < otherBuilding.x + otherBuilding.width &&
+                                    player.y + playerSize > otherBuilding.y &&
+                                    player.y - playerSize < otherBuilding.y + otherBuilding.height) {
+                                    wouldCollideWithOther = true;
+                                    break;
+                                }
+                            }
+                            if (!wouldCollideWithOther) {
+                                canMoveX = true;
+                            }
+                        } else if (originalVelY !== 0) {
+                            // Not moving away, so allow sliding along building (Y movement)
+                            const slidePlayerSize = playerSize - 2;
+                            const testY = player.y + originalVelY * deltaTime;
+                            let yWouldCollide = false;
+                            for (const otherBuilding of buildings) {
+                                if (otherBuilding === building) continue;
+                                if (player.x + slidePlayerSize > otherBuilding.x &&
+                                    player.x - slidePlayerSize < otherBuilding.x + otherBuilding.width &&
+                                    testY + slidePlayerSize > otherBuilding.y &&
+                                    testY - slidePlayerSize < otherBuilding.y + otherBuilding.height) {
+                                    yWouldCollide = true;
+                                    break;
+                                }
+                            }
+                            if (!yWouldCollide) {
+                                canMoveY = true;
+                            }
+                        }
+                    }
+                    
+                    // For horizontal buildings: allow X movement (sliding along) OR Y movement away from building
+                    if (isHorizontalBuilding) {
+                        const buildingCenterY = building.y + building.height / 2;
+                        const currentDistY = Math.abs(player.y - buildingCenterY);
+                        const newY = player.y + originalVelY * deltaTime;
+                        const newDistY = Math.abs(newY - buildingCenterY);
+                        
+                        const isOverlapping = player.x + playerSize > building.x &&
+                                            player.x - playerSize < building.x + building.width &&
+                                            player.y + playerSize > building.y &&
+                                            player.y - playerSize < building.y + building.height;
+                        
+                        // If moving Y away from the building (distance increases) AND we're overlapping, allow it
+                        if (originalVelY !== 0 && isOverlapping && newDistY > currentDistY) {
+                            // Moving away from horizontal building - allow Y movement
+                            const testY = player.y + originalVelY * deltaTime;
+                            let wouldCollideWithOther = false;
+                            for (const otherBuilding of buildings) {
+                                if (otherBuilding === building) continue;
+                                if (player.x + playerSize > otherBuilding.x &&
+                                    player.x - playerSize < otherBuilding.x + otherBuilding.width &&
+                                    testY + playerSize > otherBuilding.y &&
+                                    testY - playerSize < otherBuilding.y + otherBuilding.height) {
+                                    wouldCollideWithOther = true;
+                                    break;
+                                }
+                            }
+                            if (!wouldCollideWithOther) {
+                                canMoveY = true;
+                            }
+                        } else if (originalVelX !== 0) {
+                            // Not moving away, so allow sliding along building (X movement)
+                            const slidePlayerSize = playerSize - 2;
+                            const testX = player.x + originalVelX * deltaTime;
+                            let xWouldCollide = false;
+                            for (const otherBuilding of buildings) {
+                                if (otherBuilding === building) continue;
+                                if (testX + slidePlayerSize > otherBuilding.x &&
+                                    testX - slidePlayerSize < otherBuilding.x + otherBuilding.width &&
+                                    player.y + slidePlayerSize > otherBuilding.y &&
+                                    player.y - slidePlayerSize < otherBuilding.y + otherBuilding.height) {
+                                    xWouldCollide = true;
+                                    break;
+                                }
+                            }
+                            if (!xWouldCollide) {
+                                canMoveX = true;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
         // Apply movement restrictions - only block the axis that collides
+        // This allows sliding along buildings when moving diagonally
         if (!canMoveX) {
             player.setVelocityX(0);
         }
         if (!canMoveY) {
             player.setVelocityY(0);
+        }
+        
+        // Final check: if one axis is blocked but the other isn't, ensure the non-blocked axis can still move
+        // This handles the case where diagonal movement hits a building - allow sliding along it
+        if (!canMoveX && canMoveY && originalVelY !== 0) {
+            // X is blocked, but Y is free - allow Y movement (sliding along vertical building)
+            player.setVelocityY(originalVelY);
+        }
+        if (!canMoveY && canMoveX && originalVelX !== 0) {
+            // Y is blocked, but X is free - allow X movement (sliding along horizontal building)
+            player.setVelocityX(originalVelX);
         }
     }
     
@@ -4139,9 +4420,15 @@ function update(time, delta) {
         toggleQuestLog();
     }
     
-    // Toggle settings (ESC key)
+    // ESC key - close any open interface
     if (settingsKey && Phaser.Input.Keyboard.JustDown(settingsKey)) {
-        toggleSettings();
+        // Check if any interface is open
+        if (inventoryVisible || equipmentVisible || questVisible || shopVisible || settingsVisible) {
+            closeAllInterfaces();
+        } else {
+            // If no interface is open, toggle settings
+            toggleSettings();
+        }
     }
     
     // Interaction (F key)
@@ -4183,9 +4470,24 @@ function update(time, delta) {
                 }
             }
             
-            // If not near a marker, check NPC interaction
+            // If not near a marker, check building or NPC interaction
             if (!nearMarker) {
-                checkNPCInteraction();
+                // If building UI is open, close it
+                if (buildingPanelVisible) {
+                    closeBuildingUI();
+                    return;
+                }
+                
+                // Check buildings first (in town), then NPCs
+                if (currentMap === 'town') {
+                    checkBuildingInteraction();
+                    // If building UI didn't open, check NPCs
+                    if (!buildingPanelVisible) {
+                        checkNPCInteraction();
+                    }
+                } else {
+                    checkNPCInteraction();
+                }
             }
         }
     }
@@ -4288,6 +4590,11 @@ function update(time, delta) {
     
     // Update NPC indicators
     updateNPCIndicators();
+    
+    // Update building indicators (only in town)
+    if (currentMap === 'town') {
+        updateBuildingIndicators();
+    }
     
     // Update transition marker visibility (pulse effect when near)
     transitionMarkers.forEach(marker => {
@@ -4517,6 +4824,22 @@ function update(time, delta) {
     
     // Items are now manually picked up with Spacebar (handled above)
     // No automatic pickup - player must press Spacebar when near items
+    
+    // Check if combat just ended and show pending quest modals
+    const currentlyInCombat = isInCombat();
+    if (!currentlyInCombat && (pendingCompletedQuest || pendingNewQuest)) {
+        // Combat ended, show pending quest modals
+        if (pendingCompletedQuest) {
+            const questToShow = pendingCompletedQuest;
+            pendingCompletedQuest = null;
+            showQuestCompletedModal(questToShow);
+        } else if (pendingNewQuest) {
+            // Only show new quest if no completed quest was pending
+            const questToShow = pendingNewQuest;
+            pendingNewQuest = null;
+            showNewQuestModal(questToShow);
+        }
+    }
 }
 
 /**
@@ -5767,15 +6090,20 @@ function pickupItem(item, index) {
         playerStats.gold += item.amount;
         playerStats.questStats.goldEarned += item.amount;
         showDamageNumber(item.sprite.x, item.sprite.y, `+${item.amount} Gold`, 0xffd700);
+        updatePlayerStats(); // Update gold display
     } else {
         // Add item to inventory
+        console.log(`📦 Adding item to inventory: ${item.name} (type: ${item.type})`);
+        console.log(`   Before: ${playerStats.inventory.length} items`);
         playerStats.inventory.push(item);
+        console.log(`   After: ${playerStats.inventory.length} items`);
+        console.log(`   Inventory contents:`, playerStats.inventory.map(i => i.name));
         playerStats.questStats.itemsCollected++;
         showDamageNumber(item.sprite.x, item.sprite.y, `Picked up ${item.name}`, 0x00ff00);
         playSound('item_pickup');
         console.log(`Picked up: ${item.name} (Inventory: ${playerStats.inventory.length} items)`);
         
-        // Refresh inventory UI if open
+        // Refresh inventory UI if open - this will update the display with the new item
         refreshInventory();
     }
     
@@ -5787,17 +6115,52 @@ function pickupItem(item, index) {
 }
 
 /**
+ * Close all open interfaces
+ */
+function closeAllInterfaces() {
+    if (inventoryVisible) {
+        inventoryVisible = false;
+        destroyInventoryUI();
+    }
+    if (equipmentVisible) {
+        equipmentVisible = false;
+        destroyEquipmentUI();
+    }
+    if (questVisible) {
+        questVisible = false;
+        destroyQuestLogUI();
+    }
+    if (shopVisible) {
+        shopVisible = false;
+        closeShop();
+    }
+    if (settingsVisible) {
+        settingsVisible = false;
+        destroySettingsUI();
+    }
+    // Note: dialogVisible and buildingPanelVisible may have their own close handlers
+    // Add them here if needed
+}
+
+/**
  * Toggle inventory visibility
  */
 function toggleInventory() {
     const scene = game.scene.scenes[0];
-    inventoryVisible = !inventoryVisible;
     
+    // If already open, close it
     if (inventoryVisible) {
-        createInventoryUI();
-    } else {
+        inventoryVisible = false;
         destroyInventoryUI();
+        return;
     }
+    
+    // Close all other interfaces before opening
+    closeAllInterfaces();
+    
+    // Now open inventory
+    inventoryVisible = true;
+    createInventoryUI();
 }
 
 /**
@@ -5807,9 +6170,9 @@ function createInventoryUI() {
     const scene = game.scene.scenes[0];
     
     // Create background panel (centered on screen)
-    // Width calculated for 6 columns: 6 slots (60px) + 5 spacings (10px) + padding = ~450px, using 550px for comfortable spacing
-    const panelWidth = 550;
-    const panelHeight = 400;
+    // Width calculated for 6 columns: 6 slots (60px) + 5 spacings (10px) + padding = ~450px, using 650px for comfortable spacing
+    const panelWidth = 650;
+    const panelHeight = 600;
     const centerX = scene.cameras.main.width / 2;
     const centerY = scene.cameras.main.height / 2;
     
@@ -5838,7 +6201,12 @@ function createInventoryUI() {
  */
 function updateInventoryItems() {
     const scene = game.scene.scenes[0];
-    if (!inventoryPanel) return;
+    if (!inventoryPanel) {
+        console.warn('⚠️ updateInventoryItems: inventoryPanel is null');
+        return;
+    }
+    
+    console.log(`📦 updateInventoryItems: Displaying ${playerStats.inventory.length} items`);
     
     // Always hide tooltip when refreshing inventory items
     hideItemTooltip();
@@ -5876,7 +6244,9 @@ function updateInventoryItems() {
     const startY = panelCenterY - panelHeight / 2 + 80;
     
     // Display items
+    console.log(`📦 Rendering ${playerStats.inventory.length} items in inventory UI`);
     playerStats.inventory.forEach((item, index) => {
+        console.log(`  - Item ${index}: ${item.name} (type: ${item.type})`);
         const row = Math.floor(index / slotsPerRow);
         const col = index % slotsPerRow;
         const x = startX + col * (slotSize + spacing);
@@ -6168,7 +6538,10 @@ function destroyInventoryUI() {
                 item.sprite.destroy();
             }
             if (item.text && item.text.active) item.text.destroy();
+            if (item.borderRect && item.borderRect.active) item.borderRect.destroy();
         });
+        
+        inventoryPanel.items = [];
         
         inventoryPanel = null;
     }
@@ -6198,9 +6571,18 @@ let lastInventoryCount = 0;
  * Force inventory refresh (call when items are added/removed)
  */
 function refreshInventory() {
+    console.log(`🔄 refreshInventory called - inventoryVisible: ${inventoryVisible}, equipmentVisible: ${equipmentVisible}, items: ${playerStats.inventory.length}`);
+    
+    // Refresh "I" inventory panel if open
     if (inventoryVisible && inventoryPanel) {
         updateInventoryItems();
     }
+    
+    // Refresh "E" equipment panel inventory display if open
+    if (equipmentVisible && equipmentPanel) {
+        updateEquipmentInventoryItems();
+    }
+    
     lastInventoryCount = playerStats.inventory.length;
 }
 
@@ -6353,13 +6735,20 @@ function updatePlayerStats() {
  */
 function toggleEquipment() {
     const scene = game.scene.scenes[0];
-    equipmentVisible = !equipmentVisible;
     
+    // If already open, close it
     if (equipmentVisible) {
-        createEquipmentUI();
-    } else {
+        equipmentVisible = false;
         destroyEquipmentUI();
+        return;
     }
+    
+    // Close all other interfaces before opening
+    closeAllInterfaces();
+    
+    // Now open equipment
+    equipmentVisible = true;
+    createEquipmentUI();
 }
 
 /**
@@ -6392,6 +6781,148 @@ function createEquipmentUI() {
     dividerGraphics.setScrollFactor(0).setDepth(301);
     const divider = dividerGraphics;
     
+    // Define scrollable area dimensions first
+    const inventoryStartY = 90; // Start below title (reduced for less padding)
+    const inventoryEndY = gameHeight - 20; // Leave some space at bottom
+    const inventoryVisibleHeight = inventoryEndY - inventoryStartY;
+    
+    // Create scrollable container for inventory items
+    // Container starts higher to show first items fully when scrollPosition = minScroll
+    // Need enough space for first item icon (60px) + text label below (20px) + padding
+    // When scrollPosition = minScroll (-20), container is at: inventoryStartY - containerOffset - (-20)
+    // = inventoryStartY - containerOffset + 20
+    // To show first item fully, we need: inventoryStartY - containerOffset + 20 + itemTop = inventoryStartY - someMargin
+    // So: containerOffset = 20 + itemHeight + margin
+    const containerOffset = 80; // Offset to show full first row (icon 60px + label 20px)
+    const inventoryContainer = scene.add.container(rightPanelX, inventoryStartY - containerOffset);
+    inventoryContainer.setScrollFactor(0).setDepth(301);
+    
+    // Create mask for the scrollable area (visible area in right panel)
+    // Start mask well above inventoryStartY to prevent clipping of first row
+    const maskTopOffset = 20; // Large offset to prevent clipping
+    const inventoryMask = scene.make.graphics();
+    inventoryMask.fillStyle(0xffffff);
+    inventoryMask.fillRect(rightPanelX - panelWidth/2, inventoryStartY - maskTopOffset, panelWidth, inventoryVisibleHeight + maskTopOffset);
+    inventoryMask.setScrollFactor(0).setDepth(301);
+    const maskGeometry = inventoryMask.createGeometryMask();
+    
+    // Create scrollbar
+    const scrollbarWidth = 12;
+    const scrollbarX = rightPanelX + panelWidth/2 - scrollbarWidth - 10;
+    const scrollbarTrack = scene.add.rectangle(scrollbarX, inventoryStartY + inventoryVisibleHeight/2, scrollbarWidth, inventoryVisibleHeight, 0x333333, 0.8)
+        .setScrollFactor(0).setDepth(303).setStrokeStyle(1, 0x555555)
+        .setInteractive({ useHandCursor: true });
+    
+    const scrollbarThumbHeight = 40; // Will be adjusted based on content
+    // Thumb starts at the top of the track (will be repositioned when content is loaded)
+    const scrollbarThumb = scene.add.rectangle(scrollbarX, inventoryStartY + scrollbarThumbHeight/2, scrollbarWidth - 4, scrollbarThumbHeight, 0x666666, 1)
+        .setScrollFactor(0).setDepth(304).setStrokeStyle(1, 0x888888)
+        .setInteractive({ useHandCursor: true });
+    
+    // Scroll state
+    // Allow negative scroll to bring first items fully into view
+    // Container starts at inventoryStartY - containerOffset
+    // At scrollPosition = minScroll (negative), container moves up more to show first items
+    // At scrollPosition = 0, container is at inventoryStartY - containerOffset
+    // At scrollPosition = maxScroll, container moves up: y = inventoryStartY - containerOffset - maxScroll
+    const minScroll = -20; // Allow negative scroll to show first items fully (increased for better visibility)
+    let scrollPosition = minScroll; // Start at minScroll to show first items
+    let maxScroll = 0;
+    let isDragging = false;
+    let dragStartY = 0;
+    let dragStartScroll = 0;
+    
+    // Scrollbar drag handlers (only when equipment panel is visible)
+    const handlePointerDown = (pointer) => {
+        if (equipmentVisible) {
+            if (scrollbarThumb.getBounds().contains(pointer.x, pointer.y)) {
+                // Start dragging thumb
+                isDragging = true;
+                dragStartY = pointer.y;
+                dragStartScroll = scrollPosition;
+            } else if (scrollbarTrack.getBounds().contains(pointer.x, pointer.y)) {
+                // Click on track - jump to that position
+                const availableTrackHeight = inventoryVisibleHeight - scrollbarThumb.height;
+                const clickY = pointer.y - inventoryStartY;
+                const clickRatio = Math.max(0, Math.min(1, clickY / availableTrackHeight));
+                const scrollRange = maxScroll - minScroll;
+                const newScroll = minScroll + clickRatio * scrollRange;
+                setScrollPosition(newScroll);
+            }
+        }
+    };
+    
+    const handlePointerMove = (pointer) => {
+        if (equipmentVisible && isDragging && pointer.isDown) {
+            const deltaY = pointer.y - dragStartY;
+            // Calculate scroll based on available track space (accounting for thumb height)
+            const availableTrackHeight = inventoryVisibleHeight - scrollbarThumb.height;
+            if (availableTrackHeight > 0 && maxScroll > 0) {
+                const scrollRatio = deltaY / availableTrackHeight;
+                const scrollRange = maxScroll - minScroll;
+                const newScroll = Math.max(minScroll, Math.min(maxScroll, dragStartScroll + scrollRatio * scrollRange));
+                setScrollPosition(newScroll);
+            }
+        }
+    };
+    
+    const handlePointerUp = () => {
+        isDragging = false;
+    };
+    
+    const handleWheel = (pointer, gameObjects, deltaX, deltaY, deltaZ) => {
+        if (equipmentVisible && maxScroll > 0) {
+            // Check if pointer is over the right panel (inventory area)
+            const rightPanelBounds = rightBg.getBounds();
+            if (rightPanelBounds.contains(pointer.x, pointer.y)) {
+                const scrollDelta = deltaY * 0.5; // Scroll speed
+                const newScroll = Math.max(minScroll, Math.min(maxScroll, scrollPosition + scrollDelta));
+                setScrollPosition(newScroll);
+            }
+        }
+    };
+    
+    scene.input.on('pointerdown', handlePointerDown);
+    scene.input.on('pointermove', handlePointerMove);
+    scene.input.on('pointerup', handlePointerUp);
+    scene.input.on('wheel', handleWheel);
+    
+    // Function to update scroll position
+    function setScrollPosition(newPosition) {
+        // Allow slight negative scroll to bring first item fully into view
+        const oldScrollPosition = scrollPosition;
+        scrollPosition = Math.max(minScroll, Math.min(maxScroll, newPosition));
+        
+        // Update container position
+        const offset = equipmentPanel ? equipmentPanel.containerOffset : containerOffset;
+        inventoryContainer.y = inventoryStartY - offset - scrollPosition;
+        
+        // Update scrollbar thumb position
+        if (maxScroll > 0) {
+            // Map scrollPosition from [minScroll, maxScroll] to [0, 1] for thumb positioning
+            const scrollRange = maxScroll - minScroll;
+            const normalizedScroll = scrollRange > 0 ? (scrollPosition - minScroll) / scrollRange : 0;
+            const scrollRatio = Math.min(1, Math.max(0, normalizedScroll));
+            const availableTrackHeight = inventoryVisibleHeight - scrollbarThumb.height;
+            
+            // Position thumb: when scrollRatio = 0 (at minScroll), thumb at top
+            // when scrollRatio = 1 (at maxScroll), thumb at bottom
+            const thumbY = inventoryStartY + scrollRatio * availableTrackHeight;
+            let thumbCenterY = thumbY + scrollbarThumb.height/2;
+            
+            // Ensure thumb reaches absolute top when at or near minScroll
+            if (scrollPosition <= minScroll + 0.5) {
+                // Force thumb to absolute top of track
+                thumbCenterY = inventoryStartY + scrollbarThumb.height/2;
+            }
+            
+            scrollbarThumb.y = thumbCenterY;
+        } else {
+            // Reset thumb to top when no scrolling needed
+            scrollbarThumb.y = inventoryStartY + scrollbarThumb.height/2;
+        }
+    }
+    
     equipmentPanel = {
         leftBg: leftBg,
         rightBg: rightBg,
@@ -6411,7 +6942,26 @@ function createEquipmentUI() {
             fill: '#aaaaaa'
         }).setScrollFactor(0).setDepth(301).setOrigin(1, 0),
         slots: {},
-        inventoryItems: []
+        inventoryItems: [],
+        inventoryContainer: inventoryContainer,
+        inventoryMask: inventoryMask,
+        maskGeometry: maskGeometry,
+        scrollbarTrack: scrollbarTrack,
+        scrollbarThumb: scrollbarThumb,
+        inventoryStartY: inventoryStartY,
+        inventoryVisibleHeight: inventoryVisibleHeight,
+        containerOffset: containerOffset, // Store offset so it's accessible in updateEquipmentInventoryItems
+        minScroll: minScroll,
+        scrollPosition: () => scrollPosition, // Expose current scroll position
+        setScrollPosition: setScrollPosition,
+        maxScroll: () => maxScroll,
+        setMaxScroll: (value) => { maxScroll = value; },
+        scrollHandlers: {
+            pointerDown: handlePointerDown,
+            pointerMove: handlePointerMove,
+            pointerUp: handlePointerUp,
+            wheel: handleWheel
+        }
     };
     
     // Show equipment slots in left panel
@@ -6448,7 +6998,7 @@ function updateEquipmentSlots() {
     const leftPanelX = equipmentPanel.leftBg.x;
     const centerY = equipmentPanel.leftBg.y;
     const slotSize = 80;
-    const startY = 120; // Start below title
+    const startY = 150; // Start below title (increased from 120 to 150 for more padding)
     
     // Equipment slots in a grid layout (2 columns for better fit)
     const slotsPerRow = 2;
@@ -6524,7 +7074,12 @@ function updateEquipmentSlots() {
  */
 function updateEquipmentInventoryItems() {
     const scene = game.scene.scenes[0];
-    if (!equipmentPanel) return;
+    if (!equipmentPanel) {
+        console.warn('⚠️ updateEquipmentInventoryItems: equipmentPanel is null');
+        return;
+    }
+    
+    console.log(`📦 updateEquipmentInventoryItems: Displaying ${playerStats.inventory.length} items in equipment panel`);
     
     // Clear existing inventory item displays
     equipmentPanel.inventoryItems.forEach(item => {
@@ -6558,34 +7113,66 @@ function updateEquipmentInventoryItems() {
     });
     equipmentPanel.inventoryItems = [];
     
+    // Clear container
+    if (equipmentPanel.inventoryContainer) {
+        equipmentPanel.inventoryContainer.removeAll(true);
+    }
+    
+    // Define container offset and inventory start Y early (needed for item positioning)
+    const containerOffset = (equipmentPanel && typeof equipmentPanel.containerOffset === 'number') 
+        ? equipmentPanel.containerOffset 
+        : 80; // Default fallback value
+    const inventoryStartY = (equipmentPanel && typeof equipmentPanel.inventoryStartY === 'number')
+        ? equipmentPanel.inventoryStartY
+        : 100; // Default fallback
+    
     // Show all inventory items (not just equippable ones)
     const inventoryItems = playerStats.inventory;
     
     if (inventoryItems.length === 0) {
-        const rightPanelX = equipmentPanel.rightBg.x;
-        const emptyText = scene.add.text(rightPanelX, 200, 'Inventory is empty', {
+        const rightPanelXValue = equipmentPanel.rightBg ? equipmentPanel.rightBg.x : 768;
+        const emptyText = scene.add.text(rightPanelXValue, 200, 'Inventory is empty', {
             fontSize: '16px',
             fill: '#888888',
             fontStyle: 'italic'
         }).setScrollFactor(0).setDepth(302).setOrigin(0.5, 0.5);
         equipmentPanel.inventoryItems.push({ label: emptyText });
+        // Hide scrollbar when empty
+        if (equipmentPanel.scrollbarTrack) equipmentPanel.scrollbarTrack.setVisible(false);
+        if (equipmentPanel.scrollbarThumb) equipmentPanel.scrollbarThumb.setVisible(false);
         return;
     }
     
     // Display items in a scrollable grid in right panel
-    const rightPanelX = equipmentPanel.rightBg.x;
+    const rightPanelXValue = equipmentPanel.rightBg ? equipmentPanel.rightBg.x : 768;
     const itemSize = 60;
     const spacing = 15;
     const itemsPerRow = 6;
     // Calculate grid width and center it in the right panel
     const gridWidth = itemsPerRow * itemSize + (itemsPerRow - 1) * spacing;
-    const startX = rightPanelX - gridWidth / 2 + itemSize / 2; // Center in right panel
-    const startY = 100; // Start below title
+    const startX = -gridWidth / 2 + itemSize / 2; // Relative to container center
+    // Items need to start at a position that's clearly below the mask edge
+    // Container is at: inventoryStartY - containerOffset (e.g., 90 - 80 = 10)
+    // Mask starts at: inventoryStartY - maskTopOffset (e.g., 90 - 20 = 70)
+    // Items at y=containerOffset (80) relative to container are at world y=10+80=90
+    // But mask starts at 70, so items would be clipped. Start items lower.
+    // Start items at containerOffset + padding to ensure they're below mask edge
+    const itemTopPadding = 15; // Padding to ensure items are well below mask edge
+    const startY = containerOffset + itemTopPadding; // Start items below mask edge to prevent clipping
     
     // Define equippable types once for the function
     const equippableTypes = ['weapon', 'armor', 'helmet', 'ring', 'amulet', 'boots', 'gloves', 'belt'];
     
+    // Calculate total content height
+    const totalRows = Math.ceil(inventoryItems.length / itemsPerRow);
+    const rowHeight = itemSize + spacing + 20; // itemSize + spacing + text space
+    const totalContentHeight = totalRows * rowHeight;
+    
+    console.log(`📦 Equipment panel: Rendering ${inventoryItems.length} items (${totalRows} rows)`);
+    console.log(`   Container exists: ${!!equipmentPanel.inventoryContainer}, active: ${equipmentPanel.inventoryContainer?.active}`);
+    
     inventoryItems.forEach((item, index) => {
+        console.log(`  - Equipment panel item ${index}: ${item.name} (type: ${item.type})`);
         const row = Math.floor(index / itemsPerRow);
         const col = index % itemsPerRow;
         const x = startX + col * (itemSize + spacing);
@@ -6608,7 +7195,8 @@ function updateEquipmentInventoryItems() {
             spriteKey = 'item_weapon'; // Fallback
         }
         
-        // Create item sprite with background
+        // Create item sprite with background (add to container)
+        // Note: Items in container use relative coordinates, and container has setScrollFactor(0)
         const itemBg = scene.add.rectangle(x, y, itemSize, itemSize, 0x222222, 0.8)
             .setScrollFactor(0).setDepth(300).setStrokeStyle(1, 0x444444);
         
@@ -6634,11 +7222,20 @@ function updateEquipmentInventoryItems() {
             wordWrap: { width: itemSize + 10 }
         }).setScrollFactor(0).setDepth(302).setOrigin(0.5, 0);
         
+        // Add all items to container
+        equipmentPanel.inventoryContainer.add([itemBg, itemSprite, borderRect, itemNameText]);
+        
+        console.log(`   Added item ${index} to container at relative position (${x}, ${y})`);
+        
         // Make clickable - equip if equippable, otherwise show tooltip
         const isEquippable = equippableTypes.includes(item.type);
         
         itemSprite.setInteractive({ useHandCursor: true });
         itemBg.setInteractive({ useHandCursor: true });
+        
+        // Calculate absolute position for tooltip (container position + item position)
+        const getAbsoluteX = () => rightPanelXValue + x;
+        const getAbsoluteY = () => equipmentPanel.inventoryContainer.y + y;
         
         const showTooltip = (pointer) => {
             if (pointer) pointer.event.stopPropagation();
@@ -6650,7 +7247,7 @@ function updateEquipmentInventoryItems() {
                     hideTooltipTimeout = null;
                 }
             }
-            showEquipmentTooltip(item, x, y, true);
+            showEquipmentTooltip(item, getAbsoluteX(), getAbsoluteY(), true);
         };
         const hideTooltip = () => {
             console.log('Item pointerout - scheduling hide');
@@ -6658,14 +7255,13 @@ function updateEquipmentInventoryItems() {
         };
         const clickItem = (pointer) => {
             if (pointer) pointer.event.stopPropagation();
+            hideEquipmentTooltip(); // Hide tooltip after clicking
             if (isEquippable) {
                 // Equip the item
                 const invIndex = playerStats.inventory.indexOf(item);
                 if (invIndex !== -1) {
                     equipItemFromInventory(item, invIndex);
                 }
-            } else {
-                // Tooltip functionality removed
             }
         };
         
@@ -6684,6 +7280,110 @@ function updateEquipmentInventoryItems() {
             item: item
         });
     });
+    
+    // Apply mask to container (only if mask exists)
+    if (equipmentPanel.inventoryContainer) {
+        if (equipmentPanel.maskGeometry) {
+            equipmentPanel.inventoryContainer.setMask(equipmentPanel.maskGeometry);
+            console.log(`📦 Mask applied to container`);
+        } else {
+            console.warn(`⚠️ No maskGeometry found for equipment panel container`);
+        }
+        // Ensure container is visible
+        equipmentPanel.inventoryContainer.setVisible(true);
+    }
+    
+    // Reset container position to show first items (important: reset before setting scroll)
+    // Use the same calculation as when container was created
+    // (containerOffset and inventoryStartY are already defined at the top of the function)
+    if (equipmentPanel.inventoryContainer) {
+        // Reset container to initial position
+        // Container should be positioned so that items at y=0 in container are visible
+        // When scrollPosition = minScroll, container is at: inventoryStartY - containerOffset - minScroll
+        // For items at y=0 to be at world y=inventoryStartY, container should be at: inventoryStartY
+        // But we use offset to allow scrolling up. So: container = inventoryStartY - containerOffset when at top
+        const rightPanelXValue = equipmentPanel.rightBg ? equipmentPanel.rightBg.x : 768;
+        equipmentPanel.inventoryContainer.x = rightPanelXValue;
+        // Position container so items at y=0 are at the top of visible area when scrolled to top
+        // When at minScroll (-20), container should be at: inventoryStartY - containerOffset - (-20) = inventoryStartY - containerOffset + 20
+        // But we want items at y=0 to be at inventoryStartY, so: container = inventoryStartY when at top
+        // Actually, let's use the original calculation but ensure items start at the right Y
+        equipmentPanel.inventoryContainer.y = inventoryStartY - containerOffset;
+        console.log(`📦 Equipment panel container positioned at (${equipmentPanel.inventoryContainer.x}, ${equipmentPanel.inventoryContainer.y})`);
+        console.log(`   startY: ${inventoryStartY}, offset: ${containerOffset}, rightPanelX: ${rightPanelXValue}`);
+        console.log(`   Container children count: ${equipmentPanel.inventoryContainer.list.length}`);
+        if (equipmentPanel.inventoryContainer.list.length > 0) {
+            const firstChild = equipmentPanel.inventoryContainer.list[0];
+            console.log(`   First child position: (${firstChild.x}, ${firstChild.y}), visible: ${firstChild.visible}`);
+        }
+    }
+    
+    // Calculate scroll limits
+    // Ensure we can scroll enough to show the last item at the bottom of visible area
+    const visibleHeight = equipmentPanel.inventoryVisibleHeight;
+    // Container starts at: inventoryStartY - containerOffset
+    // Items in container start at y=0, last item bottom is at y=totalContentHeight
+    // When scrollPosition = maxScroll, container is at: inventoryStartY - containerOffset - maxScroll
+    // Last item bottom in world space: inventoryStartY - containerOffset - maxScroll + totalContentHeight
+    // Visible area bottom: inventoryStartY + visibleHeight
+    // For last item bottom to align with visible bottom: inventoryStartY - containerOffset - maxScroll + totalContentHeight = inventoryStartY + visibleHeight
+    // Solving: -containerOffset - maxScroll + totalContentHeight = visibleHeight
+    // Therefore: maxScroll = totalContentHeight - visibleHeight - containerOffset
+    // Calculate maxScroll: when scrolled to bottom, last item should be at visible bottom
+    // Container at maxScroll: inventoryStartY - containerOffset - maxScroll
+    // Last item bottom: inventoryStartY - containerOffset - maxScroll + totalContentHeight
+    // Visible bottom: inventoryStartY + visibleHeight
+    // For alignment: inventoryStartY - containerOffset - maxScroll + totalContentHeight = inventoryStartY + visibleHeight
+    // Solving: maxScroll = totalContentHeight - visibleHeight - containerOffset
+    const maxScrollValue = Math.max(0, totalContentHeight - visibleHeight - containerOffset);
+    equipmentPanel.setMaxScroll(maxScrollValue);
+    
+    // Reset scroll position to minScroll (top) when items are updated
+    // This ensures the first items are fully visible and scrollbar thumb is at top
+    if (equipmentPanel.setScrollPosition && equipmentPanel.minScroll !== undefined) {
+        // Force scrollPosition to minScroll to ensure thumb goes to top and first items are visible
+        equipmentPanel.setScrollPosition(equipmentPanel.minScroll);
+        console.log(`📦 Reset scroll position to minScroll: ${equipmentPanel.minScroll}`);
+    } else {
+        console.warn(`⚠️ Cannot reset scroll - setScrollPosition: ${!!equipmentPanel.setScrollPosition}, minScroll: ${equipmentPanel.minScroll}`);
+    }
+    
+    // Force container to be visible and active
+    if (equipmentPanel.inventoryContainer) {
+        equipmentPanel.inventoryContainer.setVisible(true);
+        equipmentPanel.inventoryContainer.setActive(true);
+        console.log(`📦 Container visibility: visible=${equipmentPanel.inventoryContainer.visible}, active=${equipmentPanel.inventoryContainer.active}`);
+    }
+    
+    // Update scrollbar visibility and size
+    if (maxScrollValue > 0) {
+        // Show scrollbar
+        equipmentPanel.scrollbarTrack.setVisible(true);
+        equipmentPanel.scrollbarThumb.setVisible(true);
+        
+        // Calculate thumb size based on visible/content ratio
+        // Thumb height should be proportional to how much content is visible
+        // Standard formula: thumbHeight = (visibleArea / totalContent) * scrollbarHeight
+        // But we need to ensure thumb is reasonable size and can move within track
+        const trackHeight = visibleHeight; // This is the inventoryVisibleHeight from equipmentPanel
+        // Calculate what portion of content is visible
+        const visibleRatio = Math.min(1, trackHeight / totalContentHeight);
+        // Thumb height should represent visible ratio
+        // Cap at 50% of track to ensure there's always room to scroll
+        // Also ensure minimum of 20px and maximum that leaves room for movement
+        const maxThumbHeight = Math.min(trackHeight * 0.5, trackHeight - 60); // Max 50% or track-60px
+        const calculatedThumbHeight = visibleRatio * trackHeight;
+        const thumbHeight = Math.max(20, Math.min(maxThumbHeight, calculatedThumbHeight));
+        equipmentPanel.scrollbarThumb.height = thumbHeight;
+        
+        // Reset scroll position to top (0)
+        // Container is already offset, so scrollPosition = 0 shows first items
+        equipmentPanel.setScrollPosition(0);
+    } else {
+        // Hide scrollbar when not needed
+        equipmentPanel.scrollbarTrack.setVisible(false);
+        equipmentPanel.scrollbarThumb.setVisible(false);
+    }
 }
 
 /**
@@ -6746,8 +7446,23 @@ function createEquipmentSlot(slotName, x, y, size) {
         
         // Make slotBg interactive and add event handlers
         slotBg.setInteractive({ useHandCursor: true });
-        // Tooltip functionality removed
-        slotBg.on('pointerdown', () => unequipItem(slotName));
+        
+        // Add tooltip handlers for equipped items
+        const onPointerOver = () => {
+            hideEquipmentTooltip();
+            showEquipmentTooltip(item, x, y, false);
+        };
+        
+        const onPointerOut = () => {
+            hideEquipmentTooltip();
+        };
+        
+        slotBg.on('pointerover', onPointerOver);
+        slotBg.on('pointerout', onPointerOut);
+        slotBg.on('pointerdown', () => {
+            unequipItem(slotName);
+            hideEquipmentTooltip();
+        });
     } else {
         // Empty slot - show placeholder with tooltip on hover
         nameText = scene.add.text(x, y, 'Empty', {
@@ -6771,31 +7486,59 @@ function createEquipmentSlot(slotName, x, y, size) {
 }
 
 /**
- * Show equipment tooltip - REMOVED
- */
-function showEquipmentTooltip(item, x, y, isFromInventory = false) {
-    // Tooltip functionality removed - no longer used
-}
-
-/**
- * Show tooltip for empty equipment slot - REMOVED
- */
-function showEmptySlotTooltip(slotName, description, x, y) {
-    // Tooltip functionality removed - no longer used
-}
-
-/**
- * Hide equipment tooltip - REMOVED
+ * Hide equipment tooltip
  */
 function hideEquipmentTooltip() {
-    // Tooltip functionality removed - no longer used
+    if (equipmentTooltip) {
+        try {
+            if (equipmentTooltip.bg) {
+                if (equipmentTooltip.bg.active) {
+                    equipmentTooltip.bg.destroy();
+                }
+            }
+            if (equipmentTooltip.text) {
+                if (equipmentTooltip.text.active) {
+                    equipmentTooltip.text.destroy();
+                }
+            }
+        } catch (e) {
+            // Ignore errors if already destroyed
+            console.warn('Error destroying equipment tooltip:', e);
+        }
+        equipmentTooltip = null;
+    }
+    
+    // Cancel any pending hide timeout
+    if (hideTooltipTimeout) {
+        const scene = game.scene.scenes[0];
+        if (scene && scene.time) {
+            scene.time.removeEvent(hideTooltipTimeout);
+            hideTooltipTimeout = null;
+        }
+    }
 }
 
 /**
- * Schedule tooltip hide - REMOVED
+ * Schedule tooltip hide with delay
  */
 function scheduleHideEquipmentTooltip(delay = 500) {
-    // Tooltip functionality removed - no longer used
+    const scene = game.scene.scenes[0];
+    
+    // Cancel any existing timeout
+    if (hideTooltipTimeout) {
+        if (scene && scene.time) {
+            scene.time.removeEvent(hideTooltipTimeout);
+        }
+        hideTooltipTimeout = null;
+    }
+    
+    // Schedule new hide
+    if (scene && scene.time) {
+        hideTooltipTimeout = scene.time.delayedCall(delay, () => {
+            hideEquipmentTooltip();
+            hideTooltipTimeout = null;
+        });
+    }
 }
 
 /**
@@ -6821,16 +7564,42 @@ function refreshEquipment() {
 }
 
 /**
- * Destroy equipment UI
+ * Show equipment tooltip
  */
-function destroyEquipmentUI() {
+function showEquipmentTooltip(item, x, y, isFromInventory = false) {
+    const scene = game.scene.scenes[0];
+    
+    // Only show tooltips when equipment is visible
+    if (!equipmentVisible || !equipmentPanel) {
+        return;
+    }
+    
+    // Always hide any existing tooltip first
+    if (equipmentTooltip) {
+        hideEquipmentTooltip();
+    }
+    
+    // Build tooltip text - always show basic info
+    let tooltipLines = [];
+    
+    // Always add name if it exists
+    if (item.name) {
+        tooltipLines.push(item.name);
+    } else {
+        tooltipLines.push('Unknown Item');
+    }
+    
+    // Always add quality if it exists
+    if (item.quality) {
+        tooltipLines.push(`Quality: ${item.quality}`);
+    }
     
     // Always add type if it exists
     if (item.type) {
         tooltipLines.push(`Type: ${item.type.charAt(0).toUpperCase() + item.type.slice(1)}`);
     }
     
-    // Show relevant stats for each item type (same logic as showItemTooltip)
+    // Show relevant stats for each item type
     if (item.type === 'weapon') {
         if (item.attackPower) tooltipLines.push(`Attack: +${item.attackPower}`);
     } else if (item.type === 'armor') {
@@ -6872,197 +7641,10 @@ function destroyEquipmentUI() {
         tooltipLines.push('Click to unequip');
     }
     
-    // Filter out empty lines and ensure we have content
-    const filteredLines = tooltipLines.filter(line => line && line.trim() !== '');
-    
-    if (filteredLines.length === 0) {
-        console.warn('No tooltip lines for item:', item);
-        filteredLines.push(item.name || 'Unknown Item');
-        filteredLines.push('No additional information');
-    }
-    
-    let tooltipText = filteredLines.join('\n');
-    
-    // Final safety check
-    if (!tooltipText || tooltipText.trim() === '') {
-        console.error('Still empty tooltip text after filtering! Item:', item);
-        tooltipText = `${item.name || 'Unknown Item'}\nNo additional information`;
-    }
-    
+    const tooltipText = tooltipLines.join('\n');
     const qualityColor = QUALITY_COLORS[item.quality] || QUALITY_COLORS['Common'];
     
-    // Hide existing tooltip only if it's different from what we're about to show
-    if (equipmentTooltip && equipmentTooltip.text) {
-        const existingText = equipmentTooltip.text.text || '';
-        if (existingText !== tooltipText) {
-            console.log('Hiding existing tooltip - different content');
-            // Tooltip removed
-        } else {
-            console.log('Tooltip already showing same content - not recreating');
-            return; // Tooltip already showing, don't recreate
-        }
-    } else if (equipmentTooltip) {
-        // Tooltip exists but has no text - destroy it
-        // Tooltip removed
-    }
-    
-    // COPY ENTIRE BODY OF showEmptySlotTooltip - exact same code, just different text
-    // This eliminates any possibility of function call issues
-    
-    // Calculate position first, then create text DIRECTLY at final position
-    // This avoids WebGL rendering issues with moved text objects
-    const padding = 10;
-    const estimatedWidth = 200; // Estimate for initial positioning
-    let tooltipX = x + 60;
-    let tooltipY = y;
-    
-    // Adjust if tooltip would go off screen (rough estimate)
-    if (tooltipX + estimatedWidth > scene.cameras.main.width) {
-        tooltipX = x - estimatedWidth - 10;
-    }
-    
-    // Create text DIRECTLY at final position (not at 0,0 then moved)
-    // This is critical for WebGL rendering
-    const tooltip = scene.add.text(tooltipX + padding, tooltipY, tooltipText, {
-        fontSize: '14px',
-        fill: '#ffffff',
-        color: '#ffffff',
-        wordWrap: { width: 200 },
-        align: 'left',
-        fontFamily: 'Arial'
-    }).setScrollFactor(0).setDepth(311).setOrigin(0, 0.5).setVisible(true).setAlpha(1.0);
-    
-    // Get actual bounds now that text is created
-    const textBounds = tooltip.getBounds();
-    const tooltipWidth = textBounds.width + padding * 2;
-    const tooltipHeight = textBounds.height + padding * 2;
-    
-    // Recalculate position based on actual width
-    tooltipX = x + 60;
-    if (tooltipX + tooltipWidth > scene.cameras.main.width) {
-        tooltipX = x - tooltipWidth - 10;
-        tooltip.x = tooltipX + padding; // Update position if needed
-    }
-    
-    const tooltipBg = scene.add.rectangle(tooltipX + tooltipWidth/2, tooltipY, tooltipWidth, tooltipHeight, 0x000000, 0.95)
-        .setScrollFactor(0).setDepth(310).setStrokeStyle(2, qualityColor)
-        .setInteractive();
-    
-    // Prevent tooltip from triggering pointerout on items underneath
-    // AND cancel any pending hide when mouse enters tooltip
-    tooltipBg.on('pointerover', (pointer) => {
-        if (pointer) pointer.event.stopPropagation();
-        // Cancel any pending hide - user is hovering over tooltip
-        if (hideTooltipTimeout) {
-            if (scene && scene.time) {
-                scene.time.removeEvent(hideTooltipTimeout);
-                hideTooltipTimeout = null;
-                console.log('Cancelled hide - mouse over tooltip');
-            }
-        }
-    });
-    tooltipBg.on('pointerout', (pointer) => {
-        if (pointer) pointer.event.stopPropagation();
-        // Schedule hide when mouse leaves tooltip
-        scheduleHideEquipmentTooltip(300);
-    });
-    
-    tooltip.setInteractive(); // Make text interactive too
-    
-    // Prevent text from triggering pointerout on items underneath
-    // AND cancel any pending hide when mouse enters tooltip text
-    tooltip.on('pointerover', (pointer) => {
-        if (pointer) pointer.event.stopPropagation();
-        // Cancel any pending hide - user is hovering over tooltip
-        if (hideTooltipTimeout) {
-            if (scene && scene.time) {
-                scene.time.removeEvent(hideTooltipTimeout);
-                hideTooltipTimeout = null;
-                console.log('Cancelled hide - mouse over tooltip text');
-            }
-        }
-    });
-    tooltip.on('pointerout', (pointer) => {
-        if (pointer) pointer.event.stopPropagation();
-        // Schedule hide when mouse leaves tooltip text
-        scheduleHideEquipmentTooltip(300);
-    });
-    
-    // Text has canvas, so it should render. renderable property might not exist on text objects.
-    // Instead, ensure it's visible and on top of everything
-    tooltip.setVisible(true);
-    tooltip.setAlpha(1.0);
-    tooltip.setDepth(311); // Ensure it's above background (310)
-    
-    // Bring to top of display list to ensure it renders
-    scene.children.bringToTop(tooltip);
-    
-    // Force text to render - WebGL texture management fix
-    // Text has canvas, so ensure style is applied and canvas is refreshed
-    if (tooltip.style) {
-        // Explicitly set fill multiple ways to ensure it sticks
-        tooltip.style.fill = '#ffffff';
-        tooltip.style.setFill('#ffffff');
-        if (tooltip.style.update) {
-            tooltip.style.update(false);
-        }
-    }
-    tooltip.setColor('#ffffff');
-    
-    // Force text update to refresh the canvas
-    if (tooltip.updateText) {
-        tooltip.updateText();
-    }
-    
-    // Try setting text again to force canvas refresh
-    const currentText = tooltip.text;
-    tooltip.setText(currentText);
-    
-    // Force scene to render this frame
-    if (scene.sys && scene.sys.displayList) {
-        scene.sys.displayList.queueDepthSort();
-    }
-    
-    // Ensure text is in the scene's display list
-    if (scene.children && !scene.children.list.includes(tooltip)) {
-        scene.children.add(tooltip);
-    }
-    if (scene.children && !scene.children.list.includes(tooltipBg)) {
-        scene.children.add(tooltipBg);
-    }
-    
-    // DEBUG: Check text state immediately after creation
-    console.log('After tooltip creation - text:', tooltip.text, 'fill:', tooltip.style ? tooltip.style.fill : 'no style', 
-                'visible:', tooltip.visible, 'active:', tooltip.active, 'renderable:', tooltip.renderable,
-                'x:', tooltip.x, 'y:', tooltip.y, 'width:', tooltip.width, 'height:', tooltip.height);
-    
-    // Check if text canvas is actually rendering
-    if (tooltip.canvas) {
-        console.log('Text has canvas - width:', tooltip.canvas.width, 'height:', tooltip.canvas.height);
-    } else {
-        console.warn('Text has NO canvas - this might be the rendering issue!');
-    }
-    
-    // Check again after delay to see if something is changing it
-    // Check at 600ms to see if it survives the hide delay (500ms)
-    scene.time.delayedCall(600, () => {
-        if (tooltip && tooltip.active && equipmentTooltip && equipmentTooltip.text === tooltip) {
-            console.log('After 600ms - tooltip still active! text:', tooltip.text, 'fill:', tooltip.style ? tooltip.style.fill : 'no style',
-                        'visible:', tooltip.visible, 'active:', tooltip.active);
-        } else {
-            console.log('After 600ms - tooltip was destroyed or inactive!');
-        }
-    });
-    
-    equipmentTooltip = {
-        bg: tooltipBg,
-        text: tooltip
-    };
-    
-    // OLD CODE BELOW - commented out for testing
-    /*
-    if (equipmentTooltip) hideEquipmentTooltip();
-    
+    // Create tooltip text first to measure size
     const tooltip = scene.add.text(0, 0, tooltipText, {
         fontSize: '14px',
         fill: '#ffffff',
@@ -7070,21 +7652,26 @@ function destroyEquipmentUI() {
         align: 'left'
     }).setScrollFactor(0).setDepth(311);
     
+    // Get text bounds
     const textBounds = tooltip.getBounds();
     const padding = 10;
     const tooltipWidth = textBounds.width + padding * 2;
     const tooltipHeight = textBounds.height + padding * 2;
     
+    // Position tooltip to the right of item, but keep on screen
     let tooltipX = x + 50;
     let tooltipY = y;
     
+    // Adjust if tooltip would go off screen
     if (tooltipX + tooltipWidth > scene.cameras.main.width) {
-        tooltipX = x - tooltipWidth - 10;
+        tooltipX = x - tooltipWidth - 10; // Show to the left instead
     }
     
+    // Create tooltip background
     const tooltipBg = scene.add.rectangle(tooltipX + tooltipWidth/2, tooltipY, tooltipWidth, tooltipHeight, 0x000000, 0.95)
         .setScrollFactor(0).setDepth(310).setStrokeStyle(2, qualityColor);
     
+    // Position text
     tooltip.x = tooltipX + padding;
     tooltip.y = tooltipY;
     tooltip.setOrigin(0, 0.5);
@@ -7093,36 +7680,8 @@ function destroyEquipmentUI() {
         bg: tooltipBg,
         text: tooltip
     };
-    */
 }
 
-/**
- * Show tooltip for empty equipment slot
- */
-function showEmptySlotTooltip(slotName, description, x, y) {
-    // Tooltip functionality removed - no longer used
-}
-
-/**
- * Hide equipment tooltip - REMOVED
- */
-function hideEquipmentTooltip() {
-    // Tooltip functionality removed - no longer used
-}
-
-/**
- * Schedule tooltip hide - REMOVED
- */
-function scheduleHideEquipmentTooltip(delay = 500) {
-    // Tooltip functionality removed - no longer used
-}
-
-/**
- * Show empty slot tooltip - REMOVED
- */
-function showEmptySlotTooltip(slotName, description, x, y) {
-    // Tooltip functionality removed - no longer used
-}
 
 /**
  * Update equipment (refresh display)
@@ -7245,12 +7804,37 @@ function destroyEquipmentUI() {
             }
         });
         
+        // Remove scroll event handlers
+        if (equipmentPanel.scrollHandlers) {
+            scene.input.off('pointerdown', equipmentPanel.scrollHandlers.pointerDown);
+            scene.input.off('pointermove', equipmentPanel.scrollHandlers.pointerMove);
+            scene.input.off('pointerup', equipmentPanel.scrollHandlers.pointerUp);
+            scene.input.off('wheel', equipmentPanel.scrollHandlers.wheel);
+        }
+        
+        // Destroy scrollable container and mask
+        if (equipmentPanel.inventoryContainer && equipmentPanel.inventoryContainer.active) {
+            equipmentPanel.inventoryContainer.destroy();
+        }
+        if (equipmentPanel.inventoryMask && equipmentPanel.inventoryMask.active) {
+            equipmentPanel.inventoryMask.destroy();
+        }
+        
+        // Destroy scrollbar
+        if (equipmentPanel.scrollbarTrack && equipmentPanel.scrollbarTrack.active) {
+            equipmentPanel.scrollbarTrack.destroy();
+        }
+        if (equipmentPanel.scrollbarThumb && equipmentPanel.scrollbarThumb.active) {
+            equipmentPanel.scrollbarThumb.destroy();
+        }
+        
         equipmentPanel.slots = {};
         equipmentPanel.inventoryItems = [];
         equipmentPanel = null;
     }
     
-    // Tooltip removed
+    // Hide any visible tooltips
+    hideEquipmentTooltip();
 }
 
 // ============================================
@@ -7320,12 +7904,143 @@ function initializeQuests() {
             target: 120, // seconds
             progress: 0,
             rewards: { xp: 80, gold: 40 }
+        },
+        {
+            id: 'quest_007',
+            title: 'Monster Slayer',
+            description: 'Defeat 15 monsters to show your combat prowess.',
+            type: 'kill',
+            target: 15,
+            progress: 0,
+            rewards: { xp: 120, gold: 60 }
+        },
+        {
+            id: 'quest_008',
+            title: 'Item Collector',
+            description: 'Gather 10 items from your adventures.',
+            type: 'collect',
+            target: 10,
+            progress: 0,
+            rewards: { xp: 80, gold: 40 }
+        },
+        {
+            id: 'quest_009',
+            title: 'Level Up',
+            description: 'Reach level 3 and grow stronger.',
+            type: 'level',
+            target: 3,
+            progress: playerStats.level,
+            rewards: { xp: 150, gold: 75 }
+        },
+        {
+            id: 'quest_010',
+            title: 'Wealth Accumulator',
+            description: 'Amass 250 gold through your efforts.',
+            type: 'gold',
+            target: 250,
+            progress: 0,
+            rewards: { xp: 100, gold: 50 }
+        },
+        {
+            id: 'quest_011',
+            title: 'Wanderer',
+            description: 'Explore 1000 tiles of the world.',
+            type: 'explore',
+            target: 1000,
+            progress: 0,
+            rewards: { xp: 150, gold: 75 }
+        },
+        {
+            id: 'quest_012',
+            title: 'Endurance Test',
+            description: 'Survive for 5 minutes in the dangerous world.',
+            type: 'survive',
+            target: 300, // seconds
+            progress: 0,
+            rewards: { xp: 200, gold: 100 }
+        },
+        {
+            id: 'quest_013',
+            title: 'Exterminator',
+            description: 'Eliminate 25 monsters from the land.',
+            type: 'kill',
+            target: 25,
+            progress: 0,
+            rewards: { xp: 180, gold: 90 }
+        },
+        {
+            id: 'quest_014',
+            title: 'Hoarder',
+            description: 'Collect 20 items for your inventory.',
+            type: 'collect',
+            target: 20,
+            progress: 0,
+            rewards: { xp: 140, gold: 70 }
+        },
+        {
+            id: 'quest_015',
+            title: 'Power Seeker',
+            description: 'Achieve level 5 through experience.',
+            type: 'level',
+            target: 5,
+            progress: playerStats.level,
+            rewards: { xp: 250, gold: 125 }
+        },
+        {
+            id: 'quest_016',
+            title: 'Rich Beyond Measure',
+            description: 'Accumulate 500 gold pieces.',
+            type: 'gold',
+            target: 500,
+            progress: 0,
+            rewards: { xp: 200, gold: 100 }
+        },
+        {
+            id: 'quest_017',
+            title: 'World Traveler',
+            description: 'Journey across 2000 tiles of terrain.',
+            type: 'explore',
+            target: 2000,
+            progress: 0,
+            rewards: { xp: 250, gold: 125 }
+        },
+        {
+            id: 'quest_018',
+            title: 'Unstoppable',
+            description: 'Survive for 10 minutes without falling.',
+            type: 'survive',
+            target: 600, // seconds
+            progress: 0,
+            rewards: { xp: 300, gold: 150 }
+        },
+        {
+            id: 'quest_019',
+            title: 'Massacre',
+            description: 'Slay 50 monsters in your path.',
+            type: 'kill',
+            target: 50,
+            progress: 0,
+            rewards: { xp: 300, gold: 150 }
+        },
+        {
+            id: 'quest_020',
+            title: 'Master Collector',
+            description: 'Gather 30 items for your collection.',
+            type: 'collect',
+            target: 30,
+            progress: 0,
+            rewards: { xp: 220, gold: 110 }
         }
     ];
     
     // Initialize quest chain tracking
     if (!playerStats.questChains) {
         playerStats.questChains = {};
+    }
+    
+    // Initialize completed quests array if it doesn't exist
+    if (!playerStats.quests.completedQuests) {
+        playerStats.quests.completedQuests = [];
     }
     
     playerStats.quests.active = starterQuests;
@@ -7399,15 +8114,28 @@ function completeQuest(quest, index) {
         if (nextQuest) {
             playerStats.quests.active.push(nextQuest);
             console.log(`New chain quest unlocked: ${nextQuest.title}`);
+            // Store to show after completed modal closes
+            pendingNewQuest = nextQuest;
         }
     }
     
-    // Move to completed
+    // Move to completed (store full quest object, not just ID)
+    if (!playerStats.quests.completedQuests) {
+        playerStats.quests.completedQuests = [];
+    }
+    playerStats.quests.completedQuests.push(quest);
     playerStats.quests.completed.push(quest.id);
     playerStats.quests.active.splice(index, 1);
     
     // Check level up after XP reward
     checkLevelUp();
+    
+    // Show quest completed modal (or queue if in combat)
+    if (isInCombat()) {
+        pendingCompletedQuest = quest;
+    } else {
+        showQuestCompletedModal(quest);
+    }
     
     // Refresh quest log if visible
     if (questVisible) {
@@ -7459,17 +8187,55 @@ function getNextChainQuest(chainId, currentStep) {
 }
 
 /**
+ * Check if player is in combat (has nearby monsters)
+ */
+function isInCombat() {
+    if (!monsters || monsters.length === 0) {
+        return false;
+    }
+    
+    const combatRange = 150; // Distance to consider "in combat" (larger than attack range)
+    
+    for (const monster of monsters) {
+        if (!monster || !monster.active) continue;
+        
+        const distance = Phaser.Math.Distance.Between(
+            player.x, player.y,
+            monster.x, monster.y
+        );
+        
+        if (distance <= combatRange) {
+            return true;
+        }
+    }
+    
+    return false;
+}
+
+/**
  * Toggle quest log visibility
  */
 function toggleQuestLog() {
-    const scene = game.scene.scenes[0];
-    questVisible = !questVisible;
-    
-    if (questVisible) {
-        createQuestLogUI();
-    } else {
-        destroyQuestLogUI();
+    // Don't allow opening quest log during combat
+    if (isInCombat()) {
+        return;
     }
+    
+    const scene = game.scene.scenes[0];
+    
+    // If already open, close it
+    if (questVisible) {
+        questVisible = false;
+        destroyQuestLogUI();
+        return;
+    }
+    
+    // Close all other interfaces before opening
+    closeAllInterfaces();
+    
+    // Now open quest log
+    questVisible = true;
+    createQuestLogUI();
 }
 
 /**
@@ -7479,26 +8245,105 @@ function createQuestLogUI() {
     const scene = game.scene.scenes[0];
     
     // Create background panel (centered on screen)
-    const panelWidth = 600;
-    const panelHeight = 500;
+    const panelWidth = 900;
+    const panelHeight = 600;
     const centerX = scene.cameras.main.width / 2;
     const centerY = scene.cameras.main.height / 2;
     
     // Background
-    questPanel = {
-        bg: scene.add.rectangle(centerX, centerY, panelWidth, panelHeight, 0x1a1a1a, 0.95)
-            .setScrollFactor(0).setDepth(300).setStrokeStyle(3, 0xffffff),
-        title: scene.add.text(centerX, centerY - panelHeight/2 + 20, 'QUEST LOG', {
-            fontSize: '28px',
-            fill: '#ffffff',
-            fontStyle: 'bold'
-        }).setScrollFactor(0).setDepth(301).setOrigin(0.5, 0),
-        closeText: scene.add.text(centerX + panelWidth/2 - 20, centerY - panelHeight/2 + 20, 'Press Q to Close', {
-            fontSize: '14px',
-            fill: '#aaaaaa'
-        }).setScrollFactor(0).setDepth(301).setOrigin(1, 0),
-        questElements: []
+    const bg = scene.add.rectangle(centerX, centerY, panelWidth, panelHeight, 0x1a1a1a, 0.95)
+        .setScrollFactor(0).setDepth(300).setStrokeStyle(3, 0xffffff);
+    
+    // Title
+    const title = scene.add.text(centerX, centerY - panelHeight/2 + 20, 'QUEST LOG', {
+        fontSize: '28px',
+        fill: '#ffffff',
+        fontStyle: 'bold'
+    }).setScrollFactor(0).setDepth(301).setOrigin(0.5, 0);
+    
+    // Close text
+    const closeText = scene.add.text(centerX + panelWidth/2 - 20, centerY - panelHeight/2 + 20, 'Press Q to Close', {
+        fontSize: '14px',
+        fill: '#aaaaaa'
+    }).setScrollFactor(0).setDepth(301).setOrigin(1, 0);
+    
+    // Tab buttons
+    const tabY = centerY - panelHeight/2 + 60;
+    const currentTabBtn = scene.add.rectangle(centerX - 100, tabY, 150, 35, 0x333333, 0.9)
+        .setScrollFactor(0).setDepth(301).setStrokeStyle(2, 0xffffff).setInteractive({ useHandCursor: true });
+    
+    const currentTabText = scene.add.text(centerX - 100, tabY, 'Current Quests', {
+        fontSize: '16px',
+        fill: '#ffffff',
+        fontStyle: 'bold'
+    }).setScrollFactor(0).setDepth(302).setOrigin(0.5, 0.5);
+    
+    const completedTabBtn = scene.add.rectangle(centerX + 100, tabY, 150, 35, 0x333333, 0.9)
+        .setScrollFactor(0).setDepth(301).setStrokeStyle(2, 0x666666).setInteractive({ useHandCursor: true });
+    
+    const completedTabText = scene.add.text(centerX + 100, tabY, 'Completed Quests', {
+        fontSize: '16px',
+        fill: '#aaaaaa'
+    }).setScrollFactor(0).setDepth(302).setOrigin(0.5, 0.5);
+    
+    // Tab click handlers
+    const switchToCurrent = () => {
+        questLogTab = 'current';
+        selectedQuestIndex = 0; // Reset selection
+        updateTabButtons();
+        updateQuestLogItems();
     };
+    
+    const switchToCompleted = () => {
+        questLogTab = 'completed';
+        selectedQuestIndex = 0; // Reset selection
+        updateTabButtons();
+        updateQuestLogItems();
+    };
+    
+    const updateTabButtons = () => {
+        if (questLogTab === 'current') {
+            currentTabBtn.setStrokeStyle(2, 0xffffff);
+            currentTabText.setStyle({ fill: '#ffffff', fontStyle: 'bold' });
+            completedTabBtn.setStrokeStyle(2, 0x666666);
+            completedTabText.setStyle({ fill: '#aaaaaa', fontStyle: 'normal' });
+        } else {
+            currentTabBtn.setStrokeStyle(2, 0x666666);
+            currentTabText.setStyle({ fill: '#aaaaaa', fontStyle: 'normal' });
+            completedTabBtn.setStrokeStyle(2, 0xffffff);
+            completedTabText.setStyle({ fill: '#ffffff', fontStyle: 'bold' });
+        }
+    };
+    
+    currentTabBtn.on('pointerdown', switchToCurrent);
+    currentTabText.setInteractive({ useHandCursor: true });
+    currentTabText.on('pointerdown', switchToCurrent);
+    
+    completedTabBtn.on('pointerdown', switchToCompleted);
+    completedTabText.setInteractive({ useHandCursor: true });
+    completedTabText.on('pointerdown', switchToCompleted);
+    
+    // Divider between list and details
+    const dividerX = centerX - panelWidth/2 + 350;
+    const divider = scene.add.line(dividerX, centerY - panelHeight/2 + 90, 0, 0, 0, panelHeight - 180, 0x666666, 1)
+        .setScrollFactor(0).setDepth(301);
+    
+    questPanel = {
+        bg: bg,
+        title: title,
+        closeText: closeText,
+        currentTabBtn: currentTabBtn,
+        currentTabText: currentTabText,
+        completedTabBtn: completedTabBtn,
+        completedTabText: completedTabText,
+        divider: divider,
+        updateTabButtons: updateTabButtons,
+        questListElements: [],
+        questDetailElements: []
+    };
+    
+    // Initialize tab buttons
+    updateTabButtons();
     
     // Show quests
     updateQuestLogItems();
@@ -7512,98 +8357,207 @@ function updateQuestLogItems() {
     if (!questPanel) return;
     
     // Clear existing quest displays
-    questPanel.questElements.forEach(element => {
+    questPanel.questListElements.forEach(element => {
         if (element) element.destroy();
     });
-    questPanel.questElements = [];
+    questPanel.questListElements = [];
+    
+    questPanel.questDetailElements.forEach(element => {
+        if (element) element.destroy();
+    });
+    questPanel.questDetailElements = [];
     
     const centerX = questPanel.bg.x;
     const centerY = questPanel.bg.y;
-    const panelWidth = 600;
-    const panelHeight = 500;
-    let currentY = centerY - panelHeight/2 + 70;
-    const lineHeight = 80;
-    const leftMargin = centerX - panelWidth/2 + 30;
-    const rightMargin = centerX + panelWidth/2 - 30;
+    const panelWidth = 900;
+    const panelHeight = 600;
     
-    // Show active quests
-    if (playerStats.quests.active.length === 0) {
-        const noQuestsText = scene.add.text(centerX, currentY, 'No active quests', {
-            fontSize: '18px',
+    // Left panel: Quest list
+    const listStartX = centerX - panelWidth/2 + 20;
+    const listStartY = centerY - panelHeight/2 + 100;
+    const listWidth = 310;
+    const listHeight = panelHeight - 200;
+    const dividerX = centerX - panelWidth/2 + 350;
+    
+    // Right panel: Quest details
+    const detailStartX = dividerX + 20;
+    const detailStartY = listStartY;
+    const detailWidth = panelWidth - (detailStartX - (centerX - panelWidth/2)) - 20;
+    
+    // Get quests based on current tab
+    let quests = [];
+    if (questLogTab === 'current') {
+        quests = playerStats.quests.active;
+    } else {
+        // Get completed quests
+        quests = playerStats.quests.completedQuests || [];
+    }
+    
+    // Ensure selectedQuestIndex is valid
+    if (selectedQuestIndex >= quests.length) {
+        selectedQuestIndex = Math.max(0, quests.length - 1);
+    }
+    if (quests.length === 0) {
+        selectedQuestIndex = -1;
+    }
+    
+    // Quest list on left
+    if (quests.length === 0) {
+        const noQuestsText = scene.add.text(listStartX + listWidth/2, listStartY + listHeight/2, 
+            questLogTab === 'current' ? 'No active quests' : 'No completed quests', {
+            fontSize: '16px',
             fill: '#888888',
             fontStyle: 'italic'
-        }).setScrollFactor(0).setDepth(302).setOrigin(0.5, 0);
-        questPanel.questElements.push(noQuestsText);
+        }).setScrollFactor(0).setDepth(302).setOrigin(0.5, 0.5);
+        questPanel.questListElements.push(noQuestsText);
     } else {
-        playerStats.quests.active.forEach((quest, index) => {
+        const questItemHeight = 50;
+        const maxVisibleQuests = Math.floor(listHeight / questItemHeight);
+        const startIndex = Math.max(0, selectedQuestIndex - maxVisibleQuests + 1);
+        const endIndex = Math.min(quests.length, startIndex + maxVisibleQuests);
+        
+        for (let i = startIndex; i < endIndex; i++) {
+            const quest = quests[i];
+            const itemY = listStartY + (i - startIndex) * questItemHeight;
+            const isSelected = i === selectedQuestIndex;
+            
+            // Quest item background
+            const itemBg = scene.add.rectangle(listStartX + listWidth/2, itemY, listWidth - 10, questItemHeight - 5, 
+                isSelected ? 0x444444 : 0x2a2a2a, 0.9)
+                .setScrollFactor(0).setDepth(301).setStrokeStyle(2, isSelected ? 0x00aaff : 0x555555)
+                .setInteractive({ useHandCursor: true });
+            
             // Quest title
-            const titleText = scene.add.text(leftMargin, currentY, quest.title, {
-                fontSize: '20px',
+            const titleText = scene.add.text(listStartX + 10, itemY, quest.title, {
+                fontSize: '16px',
+                fill: isSelected ? '#ffffff' : '#cccccc',
+                fontStyle: 'bold'
+            }).setScrollFactor(0).setDepth(302).setOrigin(0, 0.5);
+            
+            // Progress indicator for current quests
+            if (questLogTab === 'current' && quest.progress !== undefined && quest.target !== undefined) {
+                const progressPercent = Math.min(quest.progress / quest.target, 1);
+                const progressText = scene.add.text(listStartX + listWidth - 15, itemY, `${Math.round(progressPercent * 100)}%`, {
+                    fontSize: '12px',
+                    fill: '#00ff00'
+                }).setScrollFactor(0).setDepth(302).setOrigin(1, 0.5);
+                questPanel.questListElements.push(progressText);
+            } else if (questLogTab === 'completed') {
+                const completedIcon = scene.add.text(listStartX + listWidth - 15, itemY, '✓', {
+                    fontSize: '20px',
+                    fill: '#00ff00'
+                }).setScrollFactor(0).setDepth(302).setOrigin(1, 0.5);
+                questPanel.questListElements.push(completedIcon);
+            }
+            
+            // Click handler
+            const selectQuest = () => {
+                selectedQuestIndex = i;
+                updateQuestLogItems();
+            };
+            
+            itemBg.on('pointerdown', selectQuest);
+            titleText.setInteractive({ useHandCursor: true });
+            titleText.on('pointerdown', selectQuest);
+            
+            questPanel.questListElements.push(itemBg, titleText);
+        }
+    }
+    
+    // Quest details on right
+    if (quests.length > 0 && selectedQuestIndex >= 0 && selectedQuestIndex < quests.length && selectedQuestIndex !== -1) {
+        const quest = quests[selectedQuestIndex];
+        let detailY = detailStartY;
+        
+        // Quest title
+        const detailTitle = scene.add.text(detailStartX, detailY, quest.title, {
+            fontSize: '24px',
+            fill: '#ffffff',
+            fontStyle: 'bold',
+            wordWrap: { width: detailWidth - 20 }
+        }).setScrollFactor(0).setDepth(302).setOrigin(0, 0);
+        questPanel.questDetailElements.push(detailTitle);
+        detailY += 35;
+        
+        // Quest description
+        const detailDesc = scene.add.text(detailStartX, detailY, quest.description, {
+            fontSize: '16px',
+            fill: '#cccccc',
+            wordWrap: { width: detailWidth - 20 }
+        }).setScrollFactor(0).setDepth(302).setOrigin(0, 0);
+        questPanel.questDetailElements.push(detailDesc);
+        detailY += 50;
+        
+        // Progress section (only for current quests)
+        if (questLogTab === 'current' && quest.progress !== undefined && quest.target !== undefined) {
+            const progressLabel = scene.add.text(detailStartX, detailY, 'Progress:', {
+                fontSize: '18px',
                 fill: '#ffffff',
                 fontStyle: 'bold'
             }).setScrollFactor(0).setDepth(302).setOrigin(0, 0);
-            questPanel.questElements.push(titleText);
-            
-            // Quest description
-            const descText = scene.add.text(leftMargin, currentY + 25, quest.description, {
-                fontSize: '14px',
-                fill: '#cccccc'
-            }).setScrollFactor(0).setDepth(302).setOrigin(0, 0);
-            questPanel.questElements.push(descText);
+            questPanel.questDetailElements.push(progressLabel);
+            detailY += 30;
             
             // Progress bar background
-            const progressBarBgX = centerX;
-            const progressBarBgY = currentY + 50;
-            const progressBarBgWidth = panelWidth - 60;
-            const progressBarBgHeight = 20;
-            const progressBarBg = scene.add.rectangle(progressBarBgX, progressBarBgY, progressBarBgWidth, progressBarBgHeight, 0x333333, 0.8)
+            const progressBarBgWidth = detailWidth - 20;
+            const progressBarBgX = detailStartX + progressBarBgWidth / 2;
+            const progressBarBgY = detailY + 15;
+            const progressBarBg = scene.add.rectangle(progressBarBgX, progressBarBgY, progressBarBgWidth, 25, 0x333333, 0.8)
                 .setScrollFactor(0).setDepth(301).setStrokeStyle(2, 0x666666);
-            questPanel.questElements.push(progressBarBg);
+            questPanel.questDetailElements.push(progressBarBg);
             
             // Progress bar fill (left-aligned)
             const progressPercent = Math.min(quest.progress / quest.target, 1);
             const progressBarWidth = progressBarBgWidth * progressPercent;
-            const progressBarX = progressBarBgX - progressBarBgWidth/2; // Left edge of background
+            // Calculate left edge of background bar
+            const progressBarLeftX = progressBarBgX - progressBarBgWidth / 2;
+            // Position fill bar starting from left edge
             const progressBar = scene.add.rectangle(
-                progressBarX,
+                progressBarLeftX + progressBarWidth / 2,
                 progressBarBgY,
                 progressBarWidth,
-                16,
+                21,
                 0x00ff00
-            ).setScrollFactor(0).setDepth(302).setOrigin(0, 0.5);
-            questPanel.questElements.push(progressBar);
+            ).setScrollFactor(0).setDepth(302).setOrigin(0.5, 0.5);
+            questPanel.questDetailElements.push(progressBar);
             
             // Progress text
-            const progressText = scene.add.text(centerX, currentY + 50, `${quest.progress}/${quest.target}`, {
-                fontSize: '14px',
+            const progressText = scene.add.text(detailStartX + (detailWidth - 20)/2, detailY + 15, 
+                `${quest.progress}/${quest.target}`, {
+                fontSize: '16px',
                 fill: '#ffffff',
                 fontStyle: 'bold'
             }).setScrollFactor(0).setDepth(303).setOrigin(0.5, 0.5);
-            questPanel.questElements.push(progressText);
-            
-            // Rewards text
-            const rewardsText = scene.add.text(leftMargin, currentY + 75, 
-                `Rewards: ${quest.rewards.xp ? quest.rewards.xp + ' XP' : ''} ${quest.rewards.gold ? quest.rewards.gold + ' Gold' : ''}`,
-                {
-                    fontSize: '12px',
-                    fill: '#ffd700'
-                }
-            ).setScrollFactor(0).setDepth(302).setOrigin(0, 0);
-            questPanel.questElements.push(rewardsText);
-            
-            currentY += lineHeight;
-        });
-    }
-    
-    // Show completed quests count
-    if (playerStats.quests.completed.length > 0) {
-        const completedText = scene.add.text(centerX, centerY + panelHeight/2 - 40, 
-            `Completed: ${playerStats.quests.completed.length}`, {
-            fontSize: '16px',
-            fill: '#00ff00',
+            questPanel.questDetailElements.push(progressText);
+            detailY += 50;
+        }
+        
+        // Rewards section
+        detailY += 10;
+        const rewardsLabel = scene.add.text(detailStartX, detailY, 'Rewards:', {
+            fontSize: '18px',
+            fill: '#ffd700',
             fontStyle: 'bold'
-        }).setScrollFactor(0).setDepth(302).setOrigin(0.5, 0.5);
-        questPanel.questElements.push(completedText);
+        }).setScrollFactor(0).setDepth(302).setOrigin(0, 0);
+        questPanel.questDetailElements.push(rewardsLabel);
+        detailY += 30;
+        
+        let rewardsText = '';
+        if (quest.rewards.xp) {
+            rewardsText += `+${quest.rewards.xp} XP`;
+        }
+        if (quest.rewards.gold) {
+            if (rewardsText) rewardsText += '\n';
+            rewardsText += `+${quest.rewards.gold} Gold`;
+        }
+        
+        const rewards = scene.add.text(detailStartX, detailY, rewardsText, {
+            fontSize: '16px',
+            fill: '#ffd700'
+        }).setScrollFactor(0).setDepth(302).setOrigin(0, 0);
+        questPanel.questDetailElements.push(rewards);
+    } else if (quests.length === 0) {
+        // No quests message already shown in list
     }
 }
 
@@ -7633,13 +8587,335 @@ function destroyQuestLogUI() {
         if (questPanel.bg) questPanel.bg.destroy();
         if (questPanel.title) questPanel.title.destroy();
         if (questPanel.closeText) questPanel.closeText.destroy();
+        if (questPanel.currentTabBtn) questPanel.currentTabBtn.destroy();
+        if (questPanel.currentTabText) questPanel.currentTabText.destroy();
+        if (questPanel.completedTabBtn) questPanel.completedTabBtn.destroy();
+        if (questPanel.completedTabText) questPanel.completedTabText.destroy();
+        if (questPanel.divider) questPanel.divider.destroy();
         
-        questPanel.questElements.forEach(element => {
+        questPanel.questListElements.forEach(element => {
             if (element) element.destroy();
         });
         
-        questPanel.questElements = [];
+        questPanel.questDetailElements.forEach(element => {
+            if (element) element.destroy();
+        });
+        
+        questPanel.questListElements = [];
+        questPanel.questDetailElements = [];
         questPanel = null;
+    }
+}
+
+/**
+ * Show quest completed modal
+ */
+function showQuestCompletedModal(quest) {
+    // Don't show quest completed modal during combat
+    if (isInCombat()) {
+        return;
+    }
+    
+    const scene = game.scene.scenes[0];
+    
+    // Hide any existing modal
+    if (questCompletedModal) {
+        hideQuestCompletedModal();
+    }
+    
+    const centerX = scene.cameras.main.width / 2;
+    const centerY = scene.cameras.main.height / 2;
+    const modalWidth = 500;
+    const modalHeight = 400;
+    
+    // Background overlay
+    const overlay = scene.add.rectangle(centerX, centerY, scene.cameras.main.width, scene.cameras.main.height, 0x000000, 0.7)
+        .setScrollFactor(0).setDepth(400).setInteractive();
+    
+    // Modal background
+    const modalBg = scene.add.rectangle(centerX, centerY, modalWidth, modalHeight, 0x1a1a1a, 0.98)
+        .setScrollFactor(0).setDepth(401).setStrokeStyle(4, 0x00ff00);
+    
+    // Title
+    const title = scene.add.text(centerX, centerY - modalHeight/2 + 40, 'QUEST COMPLETED!', {
+        fontSize: '32px',
+        fill: '#00ff00',
+        fontStyle: 'bold'
+    }).setScrollFactor(0).setDepth(402).setOrigin(0.5, 0);
+    
+    // Quest title
+    const questTitle = scene.add.text(centerX, centerY - modalHeight/2 + 90, quest.title, {
+        fontSize: '24px',
+        fill: '#ffffff',
+        fontStyle: 'bold'
+    }).setScrollFactor(0).setDepth(402).setOrigin(0.5, 0);
+    
+    // Quest description
+    const questDesc = scene.add.text(centerX, centerY - modalHeight/2 + 130, quest.description, {
+        fontSize: '16px',
+        fill: '#cccccc',
+        wordWrap: { width: modalWidth - 60 }
+    }).setScrollFactor(0).setDepth(402).setOrigin(0.5, 0);
+    
+    // Rewards section
+    let rewardsText = 'Rewards:\n';
+    if (quest.rewards.xp) {
+        rewardsText += `+${quest.rewards.xp} XP\n`;
+    }
+    if (quest.rewards.gold) {
+        rewardsText += `+${quest.rewards.gold} Gold`;
+    }
+    
+    const rewards = scene.add.text(centerX, centerY - 20, rewardsText, {
+        fontSize: '20px',
+        fill: '#ffd700',
+        fontStyle: 'bold',
+        align: 'center'
+    }).setScrollFactor(0).setDepth(402).setOrigin(0.5, 0.5);
+    
+    // Close button
+    const closeBtn = scene.add.rectangle(centerX, centerY + modalHeight/2 - 50, 150, 40, 0x333333, 0.9)
+        .setScrollFactor(0).setDepth(402).setStrokeStyle(2, 0xffffff).setInteractive({ useHandCursor: true });
+    
+    const closeBtnText = scene.add.text(centerX, centerY + modalHeight/2 - 50, 'Close', {
+        fontSize: '18px',
+        fill: '#ffffff',
+        fontStyle: 'bold'
+    }).setScrollFactor(0).setDepth(403).setOrigin(0.5, 0.5);
+    
+    // Close on click
+    const closeModal = () => {
+        hideQuestCompletedModal();
+        // Show new quest modal if there's a pending one
+        if (pendingNewQuest) {
+            const questToShow = pendingNewQuest;
+            pendingNewQuest = null; // Clear before showing (in case showNewQuestModal fails)
+            showNewQuestModal(questToShow);
+        }
+    };
+    
+    closeBtn.on('pointerdown', closeModal);
+    closeBtnText.setInteractive({ useHandCursor: true });
+    closeBtnText.on('pointerdown', closeModal);
+    
+    // Close on ESC key
+    const escKey = scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ESC);
+    const escHandler = () => {
+        if (questCompletedModal) {
+            hideQuestCompletedModal();
+            escKey.removeListener('down', escHandler);
+            // Show new quest modal if there's a pending one
+            if (pendingNewQuest) {
+                const questToShow = pendingNewQuest;
+                pendingNewQuest = null; // Clear before showing
+                showNewQuestModal(questToShow);
+            }
+        }
+    };
+    escKey.on('down', escHandler);
+    
+    questCompletedModal = {
+        overlay: overlay,
+        modalBg: modalBg,
+        title: title,
+        questTitle: questTitle,
+        questDesc: questDesc,
+        rewards: rewards,
+        closeBtn: closeBtn,
+        closeBtnText: closeBtnText,
+        escKey: escKey,
+        escHandler: escHandler
+    };
+}
+
+/**
+ * Hide quest completed modal
+ */
+function hideQuestCompletedModal() {
+    if (questCompletedModal) {
+        if (questCompletedModal.overlay) questCompletedModal.overlay.destroy();
+        if (questCompletedModal.modalBg) questCompletedModal.modalBg.destroy();
+        if (questCompletedModal.title) questCompletedModal.title.destroy();
+        if (questCompletedModal.questTitle) questCompletedModal.questTitle.destroy();
+        if (questCompletedModal.questDesc) questCompletedModal.questDesc.destroy();
+        if (questCompletedModal.rewards) questCompletedModal.rewards.destroy();
+        if (questCompletedModal.closeBtn) questCompletedModal.closeBtn.destroy();
+        if (questCompletedModal.closeBtnText) questCompletedModal.closeBtnText.destroy();
+        if (questCompletedModal.escKey && questCompletedModal.escHandler) {
+            questCompletedModal.escKey.removeListener('down', questCompletedModal.escHandler);
+        }
+        questCompletedModal = null;
+    }
+    // Note: Don't show pending new quest here - let the close handlers do it
+    // This allows the close handlers to control the flow
+}
+
+/**
+ * Show new quest modal
+ */
+function showNewQuestModal(quest) {
+    // Don't show new quest modal during combat
+    if (isInCombat()) {
+        return;
+    }
+    
+    const scene = game.scene.scenes[0];
+    
+    // Hide any existing modal
+    if (newQuestModal) {
+        hideNewQuestModal();
+    }
+    
+    const centerX = scene.cameras.main.width / 2;
+    const centerY = scene.cameras.main.height / 2;
+    const modalWidth = 500;
+    const modalHeight = 450;
+    
+    // Background overlay
+    const overlay = scene.add.rectangle(centerX, centerY, scene.cameras.main.width, scene.cameras.main.height, 0x000000, 0.7)
+        .setScrollFactor(0).setDepth(400).setInteractive();
+    
+    // Modal background
+    const modalBg = scene.add.rectangle(centerX, centerY, modalWidth, modalHeight, 0x1a1a1a, 0.98)
+        .setScrollFactor(0).setDepth(401).setStrokeStyle(4, 0x00aaff);
+    
+    // Title
+    const title = scene.add.text(centerX, centerY - modalHeight/2 + 40, 'NEW QUEST!', {
+        fontSize: '32px',
+        fill: '#00aaff',
+        fontStyle: 'bold'
+    }).setScrollFactor(0).setDepth(402).setOrigin(0.5, 0);
+    
+    // Quest title
+    const questTitle = scene.add.text(centerX, centerY - modalHeight/2 + 90, quest.title, {
+        fontSize: '24px',
+        fill: '#ffffff',
+        fontStyle: 'bold'
+    }).setScrollFactor(0).setDepth(402).setOrigin(0.5, 0);
+    
+    // Quest description
+    const questDesc = scene.add.text(centerX, centerY - modalHeight/2 + 130, quest.description, {
+        fontSize: '16px',
+        fill: '#cccccc',
+        wordWrap: { width: modalWidth - 60 }
+    }).setScrollFactor(0).setDepth(402).setOrigin(0.5, 0);
+    
+    // Progress info
+    const progressInfo = scene.add.text(centerX, centerY - 30, `Progress: 0/${quest.target}`, {
+        fontSize: '16px',
+        fill: '#aaaaaa'
+    }).setScrollFactor(0).setDepth(402).setOrigin(0.5, 0.5);
+    
+    // Rewards section
+    let rewardsText = 'Rewards:\n';
+    if (quest.rewards.xp) {
+        rewardsText += `+${quest.rewards.xp} XP\n`;
+    }
+    if (quest.rewards.gold) {
+        rewardsText += `+${quest.rewards.gold} Gold`;
+    }
+    
+    const rewards = scene.add.text(centerX, centerY + 20, rewardsText, {
+        fontSize: '18px',
+        fill: '#ffd700',
+        fontStyle: 'bold',
+        align: 'center'
+    }).setScrollFactor(0).setDepth(402).setOrigin(0.5, 0.5);
+    
+    // Accept button
+    const acceptBtn = scene.add.rectangle(centerX - 90, centerY + modalHeight/2 - 50, 150, 40, 0x00aa00, 0.9)
+        .setScrollFactor(0).setDepth(402).setStrokeStyle(2, 0x00ff00).setInteractive({ useHandCursor: true });
+    
+    const acceptBtnText = scene.add.text(centerX - 90, centerY + modalHeight/2 - 50, 'Accept', {
+        fontSize: '18px',
+        fill: '#ffffff',
+        fontStyle: 'bold'
+    }).setScrollFactor(0).setDepth(403).setOrigin(0.5, 0.5);
+    
+    // Cancel button
+    const cancelBtn = scene.add.rectangle(centerX + 90, centerY + modalHeight/2 - 50, 150, 40, 0xaa0000, 0.9)
+        .setScrollFactor(0).setDepth(402).setStrokeStyle(2, 0xff0000).setInteractive({ useHandCursor: true });
+    
+    const cancelBtnText = scene.add.text(centerX + 90, centerY + modalHeight/2 - 50, 'Cancel', {
+        fontSize: '18px',
+        fill: '#ffffff',
+        fontStyle: 'bold'
+    }).setScrollFactor(0).setDepth(403).setOrigin(0.5, 0.5);
+    
+    // Store quest reference for accept handler
+    const questRef = quest;
+    
+    // Accept handler
+    const acceptQuest = () => {
+        // Quest is already added, just close modal
+        hideNewQuestModal();
+    };
+    
+    // Cancel handler
+    const cancelQuest = () => {
+        // Remove quest from active list
+        const questIndex = playerStats.quests.active.findIndex(q => q.id === questRef.id);
+        if (questIndex !== -1) {
+            playerStats.quests.active.splice(questIndex, 1);
+        }
+        hideNewQuestModal();
+    };
+    
+    acceptBtn.on('pointerdown', acceptQuest);
+    acceptBtnText.setInteractive({ useHandCursor: true });
+    acceptBtnText.on('pointerdown', acceptQuest);
+    
+    cancelBtn.on('pointerdown', cancelQuest);
+    cancelBtnText.setInteractive({ useHandCursor: true });
+    cancelBtnText.on('pointerdown', cancelQuest);
+    
+    // Close on ESC key (same as cancel)
+    const escKey = scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ESC);
+    const escHandler = () => {
+        if (newQuestModal) {
+            cancelQuest();
+            escKey.removeListener('down', escHandler);
+        }
+    };
+    escKey.on('down', escHandler);
+    
+    newQuestModal = {
+        overlay: overlay,
+        modalBg: modalBg,
+        title: title,
+        questTitle: questTitle,
+        questDesc: questDesc,
+        progressInfo: progressInfo,
+        rewards: rewards,
+        acceptBtn: acceptBtn,
+        acceptBtnText: acceptBtnText,
+        cancelBtn: cancelBtn,
+        cancelBtnText: cancelBtnText,
+        escKey: escKey,
+        escHandler: escHandler
+    };
+}
+
+/**
+ * Hide new quest modal
+ */
+function hideNewQuestModal() {
+    if (newQuestModal) {
+        if (newQuestModal.overlay) newQuestModal.overlay.destroy();
+        if (newQuestModal.modalBg) newQuestModal.modalBg.destroy();
+        if (newQuestModal.title) newQuestModal.title.destroy();
+        if (newQuestModal.questTitle) newQuestModal.questTitle.destroy();
+        if (newQuestModal.questDesc) newQuestModal.questDesc.destroy();
+        if (newQuestModal.progressInfo) newQuestModal.progressInfo.destroy();
+        if (newQuestModal.rewards) newQuestModal.rewards.destroy();
+        if (newQuestModal.acceptBtn) newQuestModal.acceptBtn.destroy();
+        if (newQuestModal.acceptBtnText) newQuestModal.acceptBtnText.destroy();
+        if (newQuestModal.cancelBtn) newQuestModal.cancelBtn.destroy();
+        if (newQuestModal.cancelBtnText) newQuestModal.cancelBtnText.destroy();
+        if (newQuestModal.escKey && newQuestModal.escHandler) {
+            newQuestModal.escKey.removeListener('down', newQuestModal.escHandler);
+        }
+        newQuestModal = null;
     }
 }
 
@@ -7750,7 +9026,9 @@ function initializeNPCs() {
     positionedNPCs.forEach(data => {
         // Determine which spritesheet to use based on NPC name
         let spriteKey = 'npc'; // Default fallback
-        if (data.name === 'Merchant Lysa') {
+        if (data.name === 'Elder Malik') {
+            spriteKey = 'npc_elder_malik';
+        } else if (data.name === 'Merchant Lysa') {
             spriteKey = 'npc_lysa';
         } else if (data.name === 'Guard Thorne') {
             spriteKey = 'npc_captain_thorne';
@@ -7795,13 +9073,20 @@ function initializeNPCs() {
  */
 function toggleSettings() {
     const scene = game.scene.scenes[0];
-    settingsVisible = !settingsVisible;
     
+    // If already open, close it
     if (settingsVisible) {
-        createSettingsUI();
-    } else {
+        settingsVisible = false;
         destroySettingsUI();
+        return;
     }
+    
+    // Close all other interfaces before opening
+    closeAllInterfaces();
+    
+    // Now open settings
+    settingsVisible = true;
+    createSettingsUI();
 }
 
 /**
@@ -7984,8 +9269,29 @@ function destroySettingsUI() {
 function updateNPCIndicators() {
     const scene = game.scene.scenes[0];
     
+    // Only show NPC indicators in town (NPCs don't exist in wilderness/dungeon)
+    if (currentMap !== 'town') {
+        // Clean up any lingering indicators
+        npcs.forEach(npc => {
+            if (npc.interactionIndicator && npc.interactionIndicator.active) {
+                npc.interactionIndicator.destroy();
+                npc.interactionIndicator = null;
+                npc.showIndicator = false;
+            }
+        });
+        return;
+    }
+    
     npcs.forEach(npc => {
-        if (!npc.active) return;
+        if (!npc || !npc.active) return;
+        
+        // Ensure NPC has required properties
+        if (npc.interactionRadius === undefined) {
+            npc.interactionRadius = 50;
+        }
+        if (npc.showIndicator === undefined) {
+            npc.showIndicator = false;
+        }
         
         // Check distance to player
         const distance = Phaser.Math.Distance.Between(
@@ -7997,14 +9303,20 @@ function updateNPCIndicators() {
         
         // Show/hide interaction indicator
         if (inRange && !npc.showIndicator) {
+            // Convert NPC world position to screen coordinates (since indicator has setScrollFactor(0))
+            // When camera follows player, screen position = world position - camera scroll
+            const camera = scene.cameras.main;
+            const screenX = npc.x - camera.scrollX;
+            const screenY = (npc.y - 45) - camera.scrollY;
+            
             // Create indicator (exclamation mark or speech bubble)
-            npc.interactionIndicator = scene.add.text(npc.x, npc.y - 45, '!', {
+            npc.interactionIndicator = scene.add.text(screenX, screenY, '!', {
                 fontSize: '24px',
                 fill: '#ffff00',
                 stroke: '#000000',
                 strokeThickness: 3,
                 fontStyle: 'bold'
-            }).setOrigin(0.5, 0.5).setDepth(20);
+            }).setOrigin(0.5, 0.5).setDepth(20).setScrollFactor(0); // UI element, don't scroll with world
             
             // Add pulsing animation
             scene.tweens.add({
@@ -8026,12 +9338,149 @@ function updateNPCIndicators() {
             npc.showIndicator = false;
         }
         
-        // Update indicator position to follow NPC
-        if (npc.interactionIndicator && npc.interactionIndicator.active) {
-            npc.interactionIndicator.x = npc.x;
-            npc.interactionIndicator.y = npc.y - 45;
+        // Update indicator position to follow NPC (convert world to screen coordinates)
+        if (npc.interactionIndicator && npc.interactionIndicator.active && npc.active) {
+            // For objects with setScrollFactor(0), calculate screen position from world position
+            // When camera follows player, screen position = world position - camera scroll
+            const camera = scene.cameras.main;
+            npc.interactionIndicator.x = npc.x - camera.scrollX;
+            npc.interactionIndicator.y = (npc.y - 45) - camera.scrollY;
         }
     });
+}
+
+/**
+ * Update building interaction indicators
+ */
+function updateBuildingIndicators() {
+    const scene = game.scene.scenes[0];
+    
+    buildings.forEach((building, index) => {
+        if (!building.rect || !building.rect.active) {
+            if (building.type && ['inn', 'tavern', 'blacksmith'].includes(building.type)) {
+                console.log(`⚠️ Building ${index} (${building.type}) has no active rect`);
+            }
+            return;
+        }
+        
+        // Ensure building has centerX and centerY (for backwards compatibility)
+        if (building.centerX === undefined || building.centerY === undefined) {
+            building.centerX = building.x + building.width / 2;
+            building.centerY = building.y + building.height / 2;
+        }
+        
+        // Ensure building has interaction properties
+        if (building.interactionRadius === undefined) {
+            building.interactionRadius = 120; // Increased from 80
+        }
+        if (building.showIndicator === undefined) {
+            building.showIndicator = false;
+        }
+        
+        // Check distance to player from building center
+        const distance = Phaser.Math.Distance.Between(
+            player.x, player.y,
+            building.centerX, building.centerY
+        );
+        
+        const inRange = distance <= building.interactionRadius;
+        
+        // Show/hide interaction indicator
+        if (inRange && !building.showIndicator) {
+            // Create indicator (door icon or exclamation mark)
+            building.interactionIndicator = scene.add.text(building.centerX, building.y - 20, '🚪', {
+                fontSize: '20px',
+                fill: '#ffff00',
+                stroke: '#000000',
+                strokeThickness: 3,
+                fontStyle: 'bold'
+            }).setOrigin(0.5, 0.5).setDepth(20).setScrollFactor(0);
+            
+            // Add pulsing animation
+            scene.tweens.add({
+                targets: building.interactionIndicator,
+                scaleX: 1.3,
+                scaleY: 1.3,
+                duration: 500,
+                yoyo: true,
+                repeat: -1,
+                ease: 'Sine.easeInOut'
+            });
+            
+            building.showIndicator = true;
+            if (['inn', 'tavern', 'blacksmith'].includes(building.type)) {
+                console.log(`✅ Showing indicator for ${building.type} (distance: ${distance.toFixed(0)})`);
+            }
+        } else if (!inRange && building.showIndicator) {
+            if (building.interactionIndicator) {
+                building.interactionIndicator.destroy();
+                building.interactionIndicator = null;
+            }
+            building.showIndicator = false;
+        }
+        
+        // Update indicator position to follow building
+        if (building.interactionIndicator && building.interactionIndicator.active) {
+            building.interactionIndicator.x = building.centerX;
+            building.interactionIndicator.y = building.y - 20;
+        }
+    });
+}
+
+/**
+ * Check for building interaction when F is pressed
+ */
+function checkBuildingInteraction() {
+    if (currentMap !== 'town') {
+        console.log('❌ Not in town, skipping building interaction');
+        return;
+    }
+    if (dialogVisible || shopVisible || inventoryVisible || settingsVisible || buildingPanelVisible) {
+        console.log('❌ UI already open, skipping building interaction');
+        return;
+    }
+    
+    console.log(`🔍 Checking building interaction. Total buildings: ${buildings.length}`);
+    
+    // Find nearest building in range
+    let closestBuilding = null;
+    let closestDistance = Infinity;
+    
+    buildings.forEach((building, index) => {
+        if (!building.rect || !building.rect.active) {
+            console.log(`⚠️ Building ${index} (${building.type}) has no active rect`);
+            return;
+        }
+        
+        // Ensure building has centerX and centerY
+        if (building.centerX === undefined || building.centerY === undefined) {
+            building.centerX = building.x + building.width / 2;
+            building.centerY = building.y + building.height / 2;
+        }
+        if (building.interactionRadius === undefined) {
+            building.interactionRadius = 120; // Increased from 80
+        }
+        
+        const distance = Phaser.Math.Distance.Between(
+            player.x, player.y,
+            building.centerX, building.centerY
+        );
+        
+        console.log(`  Building ${index}: ${building.type} at (${building.centerX.toFixed(0)}, ${building.centerY.toFixed(0)}), distance: ${distance.toFixed(0)}, radius: ${building.interactionRadius}`);
+        
+        if (distance <= building.interactionRadius && distance < closestDistance) {
+            closestDistance = distance;
+            closestBuilding = building;
+            console.log(`  ✅ ${building.type} is in range!`);
+        }
+    });
+    
+    if (closestBuilding) {
+        console.log(`🏠 Opening UI for ${closestBuilding.type} (distance: ${closestDistance.toFixed(0)})`);
+        openBuildingUI(closestBuilding);
+    } else {
+        console.log('❌ No building in range');
+    }
 }
 
 /**
@@ -8373,7 +9822,10 @@ const shopInventory = [
 function openShop(npc) {
     if (!npc || !npc.merchant) return;
     
-    closeDialog(); // Close dialog first
+    // Close all other interfaces before opening shop
+    closeAllInterfaces();
+    closeDialog(); // Also close dialog if open
+    
     shopVisible = true;
     createShopUI(npc);
 }
@@ -8408,6 +9860,121 @@ function createShopUI(npc) {
     dividerGraphics.setScrollFactor(0).setDepth(401);
     const divider = dividerGraphics;
     
+    // Create scrollable container for inventory items in right panel
+    const inventoryStartY = 100; // Start below title
+    const inventoryEndY = gameHeight - 20; // Leave some space at bottom
+    const inventoryVisibleHeight = inventoryEndY - inventoryStartY;
+    const containerOffset = 80; // Offset to show first items fully
+    const inventoryContainer = scene.add.container(rightPanelX, inventoryStartY - containerOffset);
+    inventoryContainer.setScrollFactor(0).setDepth(401);
+    
+    // Create mask for the scrollable area
+    const inventoryMask = scene.make.graphics();
+    inventoryMask.fillStyle(0xffffff);
+    inventoryMask.fillRect(rightPanelX - panelWidth/2, inventoryStartY, panelWidth, inventoryVisibleHeight);
+    inventoryMask.setScrollFactor(0).setDepth(401);
+    const maskGeometry = inventoryMask.createGeometryMask();
+    
+    // Create scrollbar for inventory
+    const scrollbarWidth = 12;
+    const scrollbarX = rightPanelX + panelWidth/2 - scrollbarWidth - 10;
+    const scrollbarTrack = scene.add.rectangle(scrollbarX, inventoryStartY + inventoryVisibleHeight/2, scrollbarWidth, inventoryVisibleHeight, 0x333333, 0.8)
+        .setScrollFactor(0).setDepth(403).setStrokeStyle(1, 0x555555)
+        .setInteractive({ useHandCursor: true });
+    
+    const scrollbarThumbHeight = 40; // Will be adjusted based on content
+    const scrollbarThumb = scene.add.rectangle(scrollbarX, inventoryStartY + scrollbarThumbHeight/2, scrollbarWidth - 4, scrollbarThumbHeight, 0x666666, 1)
+        .setScrollFactor(0).setDepth(404).setStrokeStyle(1, 0x888888)
+        .setInteractive({ useHandCursor: true });
+    
+    // Scroll state for inventory
+    const minScroll = -20;
+    let inventoryScrollPosition = minScroll;
+    let inventoryMaxScroll = 0;
+    let isDraggingInventory = false;
+    let dragStartY = 0;
+    let dragStartScroll = 0;
+    
+    // Scrollbar drag handlers for inventory
+    const handleInventoryPointerDown = (pointer) => {
+        if (shopVisible && scrollbarThumb.getBounds().contains(pointer.x, pointer.y)) {
+            isDraggingInventory = true;
+            dragStartY = pointer.y;
+            dragStartScroll = inventoryScrollPosition;
+        } else if (shopVisible && scrollbarTrack.getBounds().contains(pointer.x, pointer.y)) {
+            // Click on track - jump to that position
+            const availableTrackHeight = inventoryVisibleHeight - scrollbarThumb.height;
+            const clickY = pointer.y - inventoryStartY;
+            const clickRatio = Math.max(0, Math.min(1, clickY / availableTrackHeight));
+            const scrollRange = inventoryMaxScroll - minScroll;
+            const newScroll = minScroll + clickRatio * scrollRange;
+            setInventoryScrollPosition(newScroll);
+        }
+    };
+    
+    const handleInventoryPointerMove = (pointer) => {
+        if (shopVisible && isDraggingInventory && pointer.isDown) {
+            const deltaY = pointer.y - dragStartY;
+            const availableTrackHeight = inventoryVisibleHeight - scrollbarThumb.height;
+            if (availableTrackHeight > 0 && inventoryMaxScroll > 0) {
+                const scrollRatio = deltaY / availableTrackHeight;
+                const scrollRange = inventoryMaxScroll - minScroll;
+                const newScroll = Math.max(minScroll, Math.min(inventoryMaxScroll, dragStartScroll + scrollRatio * scrollRange));
+                setInventoryScrollPosition(newScroll);
+            }
+        }
+    };
+    
+    const handleInventoryPointerUp = () => {
+        isDraggingInventory = false;
+    };
+    
+    const handleInventoryWheel = (pointer, gameObjects, deltaX, deltaY, deltaZ) => {
+        if (shopVisible && inventoryMaxScroll > 0) {
+            // Check if pointer is over the right panel (inventory area)
+            const rightPanelBounds = rightBg.getBounds();
+            if (rightPanelBounds.contains(pointer.x, pointer.y)) {
+                const scrollDelta = deltaY * 0.5;
+                const newScroll = Math.max(minScroll, Math.min(inventoryMaxScroll, inventoryScrollPosition + scrollDelta));
+                setInventoryScrollPosition(newScroll);
+            }
+        }
+    };
+    
+    // Function to update inventory scroll position
+    function setInventoryScrollPosition(newPosition) {
+        inventoryScrollPosition = Math.max(minScroll, Math.min(inventoryMaxScroll, newPosition));
+        
+        // Update container position
+        const offset = containerOffset;
+        inventoryContainer.y = inventoryStartY - offset - inventoryScrollPosition;
+        
+        // Update scrollbar thumb position
+        if (inventoryMaxScroll > 0) {
+            const scrollRange = inventoryMaxScroll - minScroll;
+            const normalizedScroll = scrollRange > 0 ? (inventoryScrollPosition - minScroll) / scrollRange : 0;
+            const scrollRatio = Math.min(1, Math.max(0, normalizedScroll));
+            const availableTrackHeight = inventoryVisibleHeight - scrollbarThumb.height;
+            const thumbY = inventoryStartY + scrollRatio * availableTrackHeight;
+            let thumbCenterY = thumbY + scrollbarThumb.height/2;
+            
+            // Ensure thumb reaches absolute top when at or near minScroll
+            if (inventoryScrollPosition <= minScroll + 0.5) {
+                thumbCenterY = inventoryStartY + scrollbarThumb.height/2;
+            }
+            
+            scrollbarThumb.y = thumbCenterY;
+        } else {
+            scrollbarThumb.y = inventoryStartY + scrollbarThumb.height/2;
+        }
+    }
+    
+    // Add scroll handlers
+    scene.input.on('pointerdown', handleInventoryPointerDown);
+    scene.input.on('pointermove', handleInventoryPointerMove);
+    scene.input.on('pointerup', handleInventoryPointerUp);
+    scene.input.on('wheel', handleInventoryWheel);
+    
     shopPanel = {
         leftBg: leftBg,
         rightBg: rightBg,
@@ -8430,7 +9997,26 @@ function createShopUI(npc) {
         items: [],
         inventoryItems: [],
         scrollY: 0, // Scroll position for shop items
-        maxScrollY: 0 // Maximum scroll (calculated in updateShopItems)
+        maxScrollY: 0, // Maximum scroll (calculated in updateShopItems)
+        // Inventory scrolling
+        inventoryContainer: inventoryContainer,
+        inventoryMask: inventoryMask,
+        maskGeometry: maskGeometry,
+        scrollbarTrack: scrollbarTrack,
+        scrollbarThumb: scrollbarThumb,
+        inventoryStartY: inventoryStartY,
+        inventoryVisibleHeight: inventoryVisibleHeight,
+        containerOffset: containerOffset,
+        minScroll: minScroll,
+        setInventoryScrollPosition: setInventoryScrollPosition,
+        inventoryMaxScroll: () => inventoryMaxScroll,
+        setInventoryMaxScroll: (value) => { inventoryMaxScroll = value; },
+        inventoryScrollHandlers: {
+            pointerDown: handleInventoryPointerDown,
+            pointerMove: handleInventoryPointerMove,
+            pointerUp: handleInventoryPointerUp,
+            wheel: handleInventoryWheel
+        }
     };
     
     // Show current gold - positioned in left panel
@@ -8782,6 +10368,11 @@ function updateShopInventoryItems() {
     });
     shopPanel.inventoryItems = [];
     
+    // Clear container
+    if (shopPanel.inventoryContainer) {
+        shopPanel.inventoryContainer.removeAll(true);
+    }
+    
     const rightPanelX = shopPanel.rightBg.x;
     const inventoryItems = playerStats.inventory;
     
@@ -8792,6 +10383,9 @@ function updateShopInventoryItems() {
             fontStyle: 'italic'
         }).setScrollFactor(0).setDepth(401).setOrigin(0.5, 0.5);
         shopPanel.inventoryItems.push({ label: emptyText });
+        // Hide scrollbar when empty
+        if (shopPanel.scrollbarTrack) shopPanel.scrollbarTrack.setVisible(false);
+        if (shopPanel.scrollbarThumb) shopPanel.scrollbarThumb.setVisible(false);
         return;
     }
     
@@ -8800,8 +10394,13 @@ function updateShopInventoryItems() {
     const spacing = 15;
     const itemsPerRow = 6;
     const gridWidth = itemsPerRow * itemSize + (itemsPerRow - 1) * spacing;
-    const startX = rightPanelX - gridWidth / 2 + itemSize / 2;
-    const startY = 100;
+    const startX = -gridWidth / 2 + itemSize / 2; // Relative to container center
+    const startY = 0; // Items start at container origin
+    
+    // Calculate total content height
+    const totalRows = Math.ceil(inventoryItems.length / itemsPerRow);
+    const rowHeight = itemSize + spacing + 20; // itemSize + spacing + text space
+    const totalContentHeight = totalRows * rowHeight;
     
     inventoryItems.forEach((item, index) => {
         const row = Math.floor(index / itemsPerRow);
@@ -8822,7 +10421,7 @@ function updateShopInventoryItems() {
         else if (item.type === 'consumable') spriteKey = 'item_consumable';
         else if (item.type === 'gold') spriteKey = 'item_gold';
         
-        // Create item sprite with background
+        // Create item sprite with background (add to container)
         const itemBg = scene.add.rectangle(x, y, itemSize, itemSize, 0x222222, 0.8)
             .setScrollFactor(0).setDepth(400).setStrokeStyle(1, 0x444444);
         
@@ -8851,6 +10450,9 @@ function updateShopInventoryItems() {
             fontSize: '10px',
             fill: '#ffd700'
         }).setScrollFactor(0).setDepth(402).setOrigin(0.5, 0);
+        
+        // Add all items to container (this fixes the positioning issue)
+        shopPanel.inventoryContainer.add([itemBg, itemSprite, borderRect, itemNameText, priceText]);
         
         // Make clickable to sell
         itemSprite.setInteractive({ useHandCursor: true });
@@ -8903,6 +10505,22 @@ function updateShopInventoryItems() {
             item: item
         });
     });
+    
+    // Apply mask to container
+    if (shopPanel.inventoryContainer && shopPanel.maskGeometry) {
+        shopPanel.inventoryContainer.setMask(shopPanel.maskGeometry);
+    }
+    
+    // Calculate and update scroll limits
+    const visibleHeight = shopPanel.inventoryVisibleHeight;
+    const containerOffset = shopPanel.containerOffset || 80;
+    const maxScrollValue = Math.max(0, totalContentHeight - visibleHeight - containerOffset);
+    shopPanel.setInventoryMaxScroll(maxScrollValue);
+    
+    // Reset scroll position to top when items are updated
+    if (shopPanel.setInventoryScrollPosition) {
+        shopPanel.setInventoryScrollPosition(shopPanel.minScroll || -20);
+    }
 }
 
 /**
@@ -8982,6 +10600,573 @@ function closeShop() {
     shopVisible = false;
     currentShopNPC = null;
     console.log('🛒 Shop closed');
+}
+
+// ============================================
+// BUILDING INTERACTION SYSTEM
+// ============================================
+
+/**
+ * Open building UI based on building type
+ */
+function openBuildingUI(building) {
+    const scene = game.scene.scenes[0];
+    currentBuilding = building;
+    buildingPanelVisible = true;
+    
+    console.log(`🏠 Opening building UI for type: ${building.type}`);
+    
+    switch (building.type) {
+        case 'inn':
+            createInnUI();
+            break;
+        case 'blacksmith':
+            createBlacksmithUI();
+            break;
+        case 'tavern':
+            createTavernUI();
+            break;
+        case 'market':
+            // Market uses shop system (Merchant Lysa), so just show a message
+            showDamageNumber(player.x, player.y - 40, 'Visit Merchant Lysa for shopping!', 0xffff00);
+            buildingPanelVisible = false;
+            currentBuilding = null;
+            break;
+        case 'shop':
+            // Shop uses NPC system (Merchant Lysa), so just show a message
+            showDamageNumber(player.x, player.y - 40, 'Visit Merchant Lysa for shopping!', 0xffff00);
+            buildingPanelVisible = false;
+            currentBuilding = null;
+            break;
+        default:
+            console.log(`⚠️ Building type ${building.type} not implemented yet`);
+            showDamageNumber(player.x, player.y - 40, `${building.type} not yet available`, 0xff0000);
+            buildingPanelVisible = false;
+            currentBuilding = null;
+    }
+}
+
+/**
+ * Close building UI
+ */
+function closeBuildingUI() {
+    if (buildingPanel) {
+        // Destroy all UI elements
+        if (buildingPanel.bg && buildingPanel.bg.active) buildingPanel.bg.destroy();
+        if (buildingPanel.title && buildingPanel.title.active) buildingPanel.title.destroy();
+        if (buildingPanel.closeText && buildingPanel.closeText.active) buildingPanel.closeText.destroy();
+        
+        // Destroy buttons
+        if (buildingPanel.buttons) {
+            buildingPanel.buttons.forEach(btn => {
+                // Common elements
+                if (btn.bg && btn.bg.active) btn.bg.destroy();
+                if (btn.text && btn.text.active) btn.text.destroy();
+                
+                // Tavern-specific: destroy item button elements
+                if (btn.sprite && btn.sprite.active) btn.sprite.destroy();
+                if (btn.name && btn.name.active) btn.name.destroy();
+                if (btn.price && btn.price.active) btn.price.destroy();
+                if (btn.buyBg && btn.buyBg.active) btn.buyBg.destroy();
+                if (btn.buyText && btn.buyText.active) btn.buyText.destroy();
+                
+                // Blacksmith-specific: destroy slot elements
+                if (btn.label && btn.label.active) btn.label.destroy();
+                if (btn.emptyText && btn.emptyText.active) btn.emptyText.destroy();
+                if (btn.upgradeBg && btn.upgradeBg.active) btn.upgradeBg.destroy();
+                if (btn.upgradeText && btn.upgradeText.active) btn.upgradeText.destroy();
+            });
+        }
+        
+        // Destroy tavern-specific item buttons
+        if (buildingPanel.itemButtons) {
+            buildingPanel.itemButtons.forEach(itemBtn => {
+                if (itemBtn.bg && itemBtn.bg.active) itemBtn.bg.destroy();
+                if (itemBtn.sprite && itemBtn.sprite.active) itemBtn.sprite.destroy();
+                if (itemBtn.name && itemBtn.name.active) itemBtn.name.destroy();
+                if (itemBtn.price && itemBtn.price.active) itemBtn.price.destroy();
+                if (itemBtn.buyBg && itemBtn.buyBg.active) itemBtn.buyBg.destroy();
+                if (itemBtn.buyText && itemBtn.buyText.active) itemBtn.buyText.destroy();
+            });
+        }
+        
+        // Destroy text elements
+        if (buildingPanel.textElements) {
+            buildingPanel.textElements.forEach(elem => {
+                if (elem && elem.active) elem.destroy();
+            });
+        }
+        
+        // Destroy other elements (for blacksmith, etc.)
+        if (buildingPanel.otherElements) {
+            buildingPanel.otherElements.forEach(elem => {
+                if (elem && elem.active) elem.destroy();
+            });
+        }
+        
+        buildingPanel = null;
+    }
+    
+    buildingPanelVisible = false;
+    currentBuilding = null;
+    console.log('🏠 Building UI closed');
+}
+
+/**
+ * Create Inn UI - Restore HP/mana, save game
+ */
+function createInnUI() {
+    const scene = game.scene.scenes[0];
+    const gameWidth = 1024;
+    const gameHeight = 768;
+    const panelWidth = 500;
+    const panelHeight = 400;
+    const centerX = gameWidth / 2;
+    const centerY = gameHeight / 2;
+    
+    // Background panel
+    const bg = scene.add.rectangle(centerX, centerY, panelWidth, panelHeight, 0x1a1a1a, 0.95)
+        .setScrollFactor(0).setDepth(400).setStrokeStyle(3, 0x8B4513);
+    
+    // Title
+    const title = scene.add.text(centerX, centerY - 150, "The Cozy Inn", {
+        fontSize: '28px',
+        fill: '#ffffff',
+        fontStyle: 'bold'
+    }).setScrollFactor(0).setDepth(401).setOrigin(0.5, 0.5);
+    
+    // Close text
+    const closeText = scene.add.text(centerX + panelWidth/2 - 20, centerY - panelHeight/2 + 20, 'Press F to Close', {
+        fontSize: '14px',
+        fill: '#aaaaaa'
+    }).setScrollFactor(0).setDepth(401).setOrigin(1, 0);
+    
+    // Welcome message
+    const welcomeText = scene.add.text(centerX, centerY - 80, 'Welcome, traveler! Rest and save your progress.', {
+        fontSize: '16px',
+        fill: '#cccccc',
+        wordWrap: { width: panelWidth - 40 }
+    }).setScrollFactor(0).setDepth(401).setOrigin(0.5, 0.5);
+    
+    // Current stats display
+    const statsText = scene.add.text(centerX, centerY - 20, 
+        `HP: ${playerStats.hp}/${playerStats.maxHp} | Mana: ${playerStats.mana}/${playerStats.maxMana} | Gold: ${playerStats.gold}`, {
+        fontSize: '14px',
+        fill: '#ffffff'
+    }).setScrollFactor(0).setDepth(401).setOrigin(0.5, 0.5);
+    
+    // Rest button (restore HP/mana for gold)
+    const restCost = 50;
+    const restButtonBg = scene.add.rectangle(centerX - 100, centerY + 60, 180, 50, 0x4a4a4a, 1)
+        .setScrollFactor(0).setDepth(401).setStrokeStyle(2, 0x8B4513)
+        .setInteractive({ useHandCursor: true });
+    
+    const restButtonText = scene.add.text(centerX - 100, centerY + 60, `Rest (${restCost} Gold)`, {
+        fontSize: '16px',
+        fill: '#ffffff',
+        fontStyle: 'bold'
+    }).setScrollFactor(0).setDepth(402).setOrigin(0.5, 0.5);
+    
+    const restAction = () => {
+        if (playerStats.gold >= restCost) {
+            if (playerStats.hp < playerStats.maxHp || playerStats.mana < playerStats.maxMana) {
+                playerStats.gold -= restCost;
+                playerStats.hp = playerStats.maxHp;
+                playerStats.mana = playerStats.maxMana;
+                updatePlayerStats();
+                statsText.setText(`HP: ${playerStats.hp}/${playerStats.maxHp} | Mana: ${playerStats.mana}/${playerStats.maxMana} | Gold: ${playerStats.gold}`);
+                showDamageNumber(player.x, player.y - 40, 'Fully Restored!', 0x00ff00);
+                addChatMessage('Restored HP and Mana', 0x00ff00, '💤');
+            } else {
+                showDamageNumber(player.x, player.y - 40, 'Already at full health!', 0xffff00);
+            }
+        } else {
+            showDamageNumber(player.x, player.y - 40, 'Not enough gold!', 0xff0000);
+        }
+    };
+    
+    restButtonBg.on('pointerdown', restAction);
+    restButtonText.setInteractive({ useHandCursor: true });
+    restButtonText.on('pointerdown', restAction);
+    
+    // Hover effects for rest button
+    restButtonBg.on('pointerover', () => {
+        restButtonBg.setFillStyle(0x5a5a5a, 1);
+    });
+    restButtonBg.on('pointerout', () => {
+        restButtonBg.setFillStyle(0x4a4a4a, 1);
+    });
+    
+    // Save button
+    const saveButtonBg = scene.add.rectangle(centerX + 100, centerY + 60, 180, 50, 0x4a4a4a, 1)
+        .setScrollFactor(0).setDepth(401).setStrokeStyle(2, 0x8B4513)
+        .setInteractive({ useHandCursor: true });
+    
+    const saveButtonText = scene.add.text(centerX + 100, centerY + 60, 'Save Game', {
+        fontSize: '16px',
+        fill: '#ffffff',
+        fontStyle: 'bold'
+    }).setScrollFactor(0).setDepth(402).setOrigin(0.5, 0.5);
+    
+    const saveAction = () => {
+        saveGame();
+        showDamageNumber(player.x, player.y - 40, 'Game Saved!', 0x00ff00);
+        addChatMessage('Game saved successfully', 0x00ff00, '💾');
+    };
+    
+    saveButtonBg.on('pointerdown', saveAction);
+    saveButtonText.setInteractive({ useHandCursor: true });
+    saveButtonText.on('pointerdown', saveAction);
+    
+    // Hover effects for save button
+    saveButtonBg.on('pointerover', () => {
+        saveButtonBg.setFillStyle(0x5a5a5a, 1);
+    });
+    saveButtonBg.on('pointerout', () => {
+        saveButtonBg.setFillStyle(0x4a4a4a, 1);
+    });
+    
+    buildingPanel = {
+        bg: bg,
+        title: title,
+        closeText: closeText,
+        buttons: [
+            { bg: restButtonBg, text: restButtonText },
+            { bg: saveButtonBg, text: saveButtonText }
+        ],
+        textElements: [welcomeText, statsText]
+    };
+}
+
+/**
+ * Create Blacksmith UI - Upgrade/enchant equipment
+ */
+function createBlacksmithUI() {
+    const scene = game.scene.scenes[0];
+    const gameWidth = 1024;
+    const gameHeight = 768;
+    const panelWidth = 600;
+    const panelHeight = 500;
+    const centerX = gameWidth / 2;
+    const centerY = gameHeight / 2;
+    
+    // Background panel
+    const bg = scene.add.rectangle(centerX, centerY, panelWidth, panelHeight, 0x1a1a1a, 0.95)
+        .setScrollFactor(0).setDepth(400).setStrokeStyle(3, 0x696969);
+    
+    // Title
+    const title = scene.add.text(centerX, centerY - 200, "Blacksmith's Forge", {
+        fontSize: '28px',
+        fill: '#ffffff',
+        fontStyle: 'bold'
+    }).setScrollFactor(0).setDepth(401).setOrigin(0.5, 0.5);
+    
+    // Close text
+    const closeText = scene.add.text(centerX + panelWidth/2 - 20, centerY - panelHeight/2 + 20, 'Press F to Close', {
+        fontSize: '14px',
+        fill: '#aaaaaa'
+    }).setScrollFactor(0).setDepth(401).setOrigin(1, 0);
+    
+    // Welcome message
+    const welcomeText = scene.add.text(centerX, centerY - 140, 'I can upgrade your equipment for a price.', {
+        fontSize: '16px',
+        fill: '#cccccc',
+        wordWrap: { width: panelWidth - 40 }
+    }).setScrollFactor(0).setDepth(401).setOrigin(0.5, 0.5);
+    
+    // Equipment display area
+    const equipmentY = centerY - 40;
+    const slotSize = 60;
+    const slotSpacing = 80;
+    const startX = centerX - (slotSpacing * 2);
+    
+    const equipmentSlots = ['weapon', 'armor', 'helmet'];
+    const slotButtons = [];
+    
+    equipmentSlots.forEach((slotType, index) => {
+        const slotX = startX + (index * slotSpacing);
+        const equippedItem = playerStats.equipment[slotType];
+        
+        // Slot background
+        const slotBg = scene.add.rectangle(slotX, equipmentY, slotSize, slotSize, 0x333333, 1)
+            .setScrollFactor(0).setDepth(401).setStrokeStyle(2, 0x666666);
+        
+        // Slot label
+        const slotLabel = scene.add.text(slotX, equipmentY + 40, slotType.toUpperCase(), {
+            fontSize: '12px',
+            fill: '#aaaaaa'
+        }).setScrollFactor(0).setDepth(401).setOrigin(0.5, 0.5);
+        
+        if (equippedItem) {
+            // Show equipped item
+            const itemSprite = scene.add.sprite(slotX, equipmentY, `item_${slotType}`);
+            itemSprite.setScrollFactor(0).setDepth(402).setScale(0.6);
+            
+            // Upgrade button
+            const upgradeCost = Math.floor(equippedItem.price * 0.3) || 100;
+            const upgradeButtonBg = scene.add.rectangle(slotX, equipmentY + 80, 100, 30, 0x4a4a4a, 1)
+                .setScrollFactor(0).setDepth(401).setStrokeStyle(1, 0x8B4513)
+                .setInteractive({ useHandCursor: true });
+            
+            const upgradeButtonText = scene.add.text(slotX, equipmentY + 80, `Upgrade\n${upgradeCost}G`, {
+                fontSize: '11px',
+                fill: '#ffffff',
+                align: 'center'
+            }).setScrollFactor(0).setDepth(402).setOrigin(0.5, 0.5);
+            
+            const upgradeAction = () => {
+                if (playerStats.gold >= upgradeCost) {
+                    playerStats.gold -= upgradeCost;
+                    
+                    // Store old values for feedback
+                    const oldAttack = equippedItem.attackPower || 0;
+                    const oldDefense = equippedItem.defense || 0;
+                    
+                    // Increase item stats by 10%
+                    if (equippedItem.attackPower) {
+                        equippedItem.attackPower = Math.floor(equippedItem.attackPower * 1.1);
+                    }
+                    if (equippedItem.defense) {
+                        equippedItem.defense = Math.floor(equippedItem.defense * 1.1);
+                    }
+                    
+                    // Also increase maxHp, speed, and other stats if they exist
+                    if (equippedItem.maxHp) {
+                        equippedItem.maxHp = Math.floor(equippedItem.maxHp * 1.1);
+                    }
+                    if (equippedItem.speed) {
+                        equippedItem.speed = Math.floor(equippedItem.speed * 1.1);
+                    }
+                    
+                    updatePlayerStats();
+                    updateEquipment();
+                    
+                    // Show detailed upgrade message
+                    let upgradeMsg = `${equippedItem.name} Upgraded!`;
+                    if (oldAttack > 0 && equippedItem.attackPower) {
+                        upgradeMsg += ` Attack: ${oldAttack} → ${equippedItem.attackPower}`;
+                    }
+                    if (oldDefense > 0 && equippedItem.defense) {
+                        upgradeMsg += ` Defense: ${oldDefense} → ${equippedItem.defense}`;
+                    }
+                    showDamageNumber(player.x, player.y - 40, upgradeMsg, 0x00ff00);
+                    addChatMessage(`${equippedItem.name} upgraded (+10% stats)`, 0x00ff00, '⚒️');
+                    
+                    // Update button cost
+                    const newCost = Math.floor(equippedItem.price * 0.3) || 100;
+                    upgradeButtonText.setText(`Upgrade\n${newCost}G`);
+                    
+                    // Refresh the blacksmith UI to show updated stats
+                    // Close and reopen to refresh
+                    closeBuildingUI();
+                    setTimeout(() => {
+                        if (currentBuilding && currentBuilding.type === 'blacksmith') {
+                            createBlacksmithUI();
+                        }
+                    }, 50);
+                } else {
+                    showDamageNumber(player.x, player.y - 40, 'Not enough gold!', 0xff0000);
+                }
+            };
+            
+            upgradeButtonBg.on('pointerdown', upgradeAction);
+            upgradeButtonText.setInteractive({ useHandCursor: true });
+            upgradeButtonText.on('pointerdown', upgradeAction);
+            
+            slotButtons.push({ bg: slotBg, label: slotLabel, sprite: itemSprite, upgradeBg: upgradeButtonBg, upgradeText: upgradeButtonText });
+        } else {
+            // Empty slot
+            const emptyText = scene.add.text(slotX, equipmentY, 'Empty', {
+                fontSize: '12px',
+                fill: '#666666'
+            }).setScrollFactor(0).setDepth(402).setOrigin(0.5, 0.5);
+            
+            slotButtons.push({ bg: slotBg, label: slotLabel, emptyText: emptyText });
+        }
+    });
+    
+    buildingPanel = {
+        bg: bg,
+        title: title,
+        closeText: closeText,
+        buttons: slotButtons,
+        textElements: [welcomeText]
+    };
+}
+
+/**
+ * Create Tavern UI - Buy consumables, hear rumors
+ */
+function createTavernUI() {
+    const scene = game.scene.scenes[0];
+    const gameWidth = 1024;
+    const gameHeight = 768;
+    const panelWidth = 500;
+    const panelHeight = 400;
+    const centerX = gameWidth / 2;
+    const centerY = gameHeight / 2;
+    
+    // Background panel
+    const bg = scene.add.rectangle(centerX, centerY, panelWidth, panelHeight, 0x1a1a1a, 0.95)
+        .setScrollFactor(0).setDepth(400).setStrokeStyle(3, 0x654321);
+    
+    // Title
+    const title = scene.add.text(centerX, centerY - 150, "The Rusty Tankard", {
+        fontSize: '28px',
+        fill: '#ffffff',
+        fontStyle: 'bold'
+    }).setScrollFactor(0).setDepth(401).setOrigin(0.5, 0.5);
+    
+    // Close text
+    const closeText = scene.add.text(centerX + panelWidth/2 - 20, centerY - panelHeight/2 + 20, 'Press F to Close', {
+        fontSize: '14px',
+        fill: '#aaaaaa'
+    }).setScrollFactor(0).setDepth(401).setOrigin(1, 0);
+    
+    // Welcome message
+    const welcomeText = scene.add.text(centerX, centerY - 80, 'Welcome! What can I get for you?', {
+        fontSize: '16px',
+        fill: '#cccccc',
+        wordWrap: { width: panelWidth - 40 }
+    }).setScrollFactor(0).setDepth(401).setOrigin(0.5, 0.5);
+    
+    // Consumables for sale
+    const consumables = [
+        { name: 'Health Potion', price: 25, type: 'consumable', healAmount: 50 },
+        { name: 'Mana Potion', price: 20, type: 'consumable', manaAmount: 30 }
+    ];
+    
+    const itemY = centerY - 20;
+    const itemSpacing = 80;
+    const startX = centerX - 100;
+    const itemButtons = [];
+    
+    consumables.forEach((item, index) => {
+        const itemX = startX + (index * itemSpacing);
+        
+        // Item display
+        const itemBg = scene.add.rectangle(itemX, itemY, 70, 70, 0x333333, 1)
+            .setScrollFactor(0).setDepth(401).setStrokeStyle(2, 0x654321);
+        
+        const itemSprite = scene.add.sprite(itemX, itemY, 'item_consumable');
+        itemSprite.setScrollFactor(0).setDepth(402).setScale(0.7);
+        
+        // Item name
+        const itemName = scene.add.text(itemX, itemY + 50, item.name, {
+            fontSize: '12px',
+            fill: '#ffffff'
+        }).setScrollFactor(0).setDepth(401).setOrigin(0.5, 0.5);
+        
+        // Price
+        const priceText = scene.add.text(itemX, itemY + 65, `${item.price} Gold`, {
+            fontSize: '11px',
+            fill: '#ffd700'
+        }).setScrollFactor(0).setDepth(401).setOrigin(0.5, 0.5);
+        
+        // Buy button
+        const buyButtonBg = scene.add.rectangle(itemX, itemY + 95, 60, 25, 0x4a4a4a, 1)
+            .setScrollFactor(0).setDepth(401).setStrokeStyle(1, 0x654321)
+            .setInteractive({ useHandCursor: true });
+        
+        const buyButtonText = scene.add.text(itemX, itemY + 95, 'Buy', {
+            fontSize: '12px',
+            fill: '#ffffff'
+        }).setScrollFactor(0).setDepth(402).setOrigin(0.5, 0.5);
+        
+        const buyAction = () => {
+            if (playerStats.gold >= item.price) {
+                if (playerStats.inventory.length < 30) { // Max inventory size
+                    playerStats.gold -= item.price;
+                    playerStats.inventory.push({ ...item, id: `consumable_${Date.now()}_${Math.random()}` });
+                    updatePlayerStats();
+                    showDamageNumber(player.x, player.y - 40, `Bought ${item.name}!`, 0x00ff00);
+                    addChatMessage(`Bought ${item.name}`, 0x00ff00, '🍺');
+                } else {
+                    showDamageNumber(player.x, player.y - 40, 'Inventory full!', 0xff0000);
+                }
+            } else {
+                showDamageNumber(player.x, player.y - 40, 'Not enough gold!', 0xff0000);
+            }
+        };
+        
+        buyButtonBg.on('pointerdown', buyAction);
+        buyButtonText.setInteractive({ useHandCursor: true });
+        buyButtonText.on('pointerdown', buyAction);
+        
+        // Hover effects
+        buyButtonBg.on('pointerover', () => {
+            buyButtonBg.setFillStyle(0x5a5a5a, 1);
+        });
+        buyButtonBg.on('pointerout', () => {
+            buyButtonBg.setFillStyle(0x4a4a4a, 1);
+        });
+        
+        itemButtons.push({ bg: itemBg, sprite: itemSprite, name: itemName, price: priceText, buyBg: buyButtonBg, buyText: buyButtonText });
+    });
+    
+    // Rumors button
+    const rumorButtonBg = scene.add.rectangle(centerX, centerY + 120, 200, 40, 0x4a4a4a, 1)
+        .setScrollFactor(0).setDepth(401).setStrokeStyle(2, 0x654321)
+        .setInteractive({ useHandCursor: true });
+    
+    const rumorButtonText = scene.add.text(centerX, centerY + 120, 'Hear Rumors (Free)', {
+        fontSize: '14px',
+        fill: '#ffffff',
+        fontStyle: 'bold'
+    }).setScrollFactor(0).setDepth(402).setOrigin(0.5, 0.5);
+    
+    const rumors = [
+        'I heard there\'s a powerful weapon hidden in the deepest dungeon...',
+        'The monsters have been more aggressive lately. Be careful out there!',
+        'Some say there\'s a secret passage behind the blacksmith\'s shop.',
+        'A legendary adventurer once lived in this town. Their treasure is still out there somewhere...'
+    ];
+    
+    // Create rumor display text (initially hidden)
+    const rumorDisplayText = scene.add.text(centerX, centerY + 60, '', {
+        fontSize: '14px',
+        fill: '#ffff00',
+        wordWrap: { width: panelWidth - 60 },
+        align: 'center',
+        fontStyle: 'italic'
+    }).setScrollFactor(0).setDepth(403).setOrigin(0.5, 0.5);
+    rumorDisplayText.setVisible(false);
+    
+    const rumorAction = () => {
+        const randomRumor = rumors[Math.floor(Math.random() * rumors.length)];
+        rumorDisplayText.setText(randomRumor);
+        rumorDisplayText.setVisible(true);
+        addChatMessage(randomRumor, 0xffff00, '💬');
+        
+        // Hide after 5 seconds
+        scene.time.delayedCall(5000, () => {
+            if (rumorDisplayText && rumorDisplayText.active) {
+                rumorDisplayText.setVisible(false);
+            }
+        });
+    };
+    
+    rumorButtonBg.on('pointerdown', rumorAction);
+    rumorButtonText.setInteractive({ useHandCursor: true });
+    rumorButtonText.on('pointerdown', rumorAction);
+    
+    // Hover effects
+    rumorButtonBg.on('pointerover', () => {
+        rumorButtonBg.setFillStyle(0x5a5a5a, 1);
+    });
+    rumorButtonBg.on('pointerout', () => {
+        rumorButtonBg.setFillStyle(0x4a4a4a, 1);
+    });
+    
+    buildingPanel = {
+        bg: bg,
+        title: title,
+        closeText: closeText,
+        buttons: [...itemButtons, { bg: rumorButtonBg, text: rumorButtonText }],
+        textElements: [welcomeText, rumorDisplayText],
+        // Tavern-specific: store item buttons for proper cleanup
+        itemButtons: itemButtons
+    };
 }
 
 // ============================================
@@ -9081,10 +11266,41 @@ function loadGame() {
             dungeonLevel = saveData.dungeonLevel;
         }
         
-        // Restore map if in dungeon
-        if (saveData.currentMap === 'dungeon') {
-            // Will be handled by transitionToMap if needed
-            currentMap = 'dungeon';
+        // Restore map and recreate if needed
+        // IMPORTANT: Use saveData.currentMap (where player saved) not current currentMap (where player is now)
+        const savedMap = saveData.currentMap;
+        if (savedMap) {
+            // Always use transitionToMap to ensure proper cleanup, even if we're already on that map
+            // This ensures buildings/NPCs from previous map are properly destroyed
+            const savedLevel = saveData.dungeonLevel || 1;
+            
+            // Store player position before transition (transitionToMap might move player)
+            const savedPlayerPos = saveData.playerPosition ? {
+                x: saveData.playerPosition.x,
+                y: saveData.playerPosition.y
+            } : null;
+            
+            // Transition to the saved map (this will clean up everything)
+            transitionToMap(savedMap, savedLevel);
+            
+            // Restore player position after map transition
+            if (savedPlayerPos) {
+                player.x = savedPlayerPos.x;
+                player.y = savedPlayerPos.y;
+            }
+            
+            // For town, also ensure NPCs are initialized
+            if (savedMap === 'town') {
+                initializeNPCs();
+            }
+            
+            // For wilderness, spawn monsters
+            if (savedMap === 'wilderness') {
+                const scene = game.scene.scenes[0];
+                if (scene && scene.mapWidth && scene.mapHeight && scene.tileSize) {
+                    spawnInitialMonsters.call(scene, scene.mapWidth * scene.tileSize, scene.mapHeight * scene.tileSize);
+                }
+            }
         }
         
         // Update player stats (recalculate attack/defense from equipment)

@@ -101,6 +101,7 @@ let playerStats = {
     // Quest system
     quests: {
         active: [],      // Active quests
+        available: [],   // Available quests (rejected/cancelled)
         completed: []    // Completed quest IDs
     },
     questStats: {        // Track quest progress
@@ -131,6 +132,7 @@ let comboText = null; // Combo counter display
 let hideTooltipTimeout = null; // Timeout for hiding equipment tooltip
 let comboIndicator = null; // Combo visual indicator
 let attackSpeedIndicator = null; // Attack speed bonus indicator
+let weaponSprite = null; // Weapon sprite that follows player
 
 // System chat box
 let systemChatBox = null;
@@ -410,6 +412,15 @@ function preload() {
     
     // Now load the images
     this.load.image('item_weapon', 'assets/images/pixellab-medieval-short-sword-1765494973241.png');
+    // Weapon sprites for in-game display (48x48)
+    // For now, we'll use the same sprite for all weapons, but structure allows for weapon-specific sprites
+    this.load.image('weapon_sword', 'assets/images/pixellab-medieval-short-sword-1765494973241.png');
+    this.load.image('weapon_axe', 'assets/images/basic-axe.png');
+    this.load.image('weapon_bow', 'assets/images/basic-bow.png');
+    this.load.image('weapon_mace', 'assets/images/basic-mace.png');
+    this.load.image('weapon_dagger', 'assets/images/basic-dagger.png');
+    this.load.image('weapon_staff', 'assets/images/basic-staff.png');
+    this.load.image('weapon_crossbow', 'assets/images/basic-crossbow.png');
     this.load.image('item_armor', 'assets/images/pixellab-medieval-cloth-chest-armor-1765494738527.png');
     this.load.image('item_helmet', 'assets/images/pixellab-medieval-leather-helmet-1765494658638.png');
     this.load.image('item_amulet', 'assets/images/pixellab-medieval-jeweled-amulet-1765494933856.png');
@@ -491,6 +502,24 @@ function preload() {
         frameHeight: 48
     });
     
+    // Goblin attack animations (48x48 frames)
+    this.load.spritesheet('monster_goblin_attack_south', 'assets/animations/monster_goblin_attack_south.png', {
+        frameWidth: 48,
+        frameHeight: 48
+    });
+    this.load.spritesheet('monster_goblin_attack_north', 'assets/animations/monster_goblin_attack_north.png', {
+        frameWidth: 48,
+        frameHeight: 48
+    });
+    this.load.spritesheet('monster_goblin_attack_east', 'assets/animations/monster_goblin_attack_east.png', {
+        frameWidth: 48,
+        frameHeight: 48
+    });
+    this.load.spritesheet('monster_goblin_attack_west', 'assets/animations/monster_goblin_attack_west.png', {
+        frameWidth: 48,
+        frameHeight: 48
+    });
+    
     // Orc walking animations (48x48 frames, 6 frames per direction)
     this.load.spritesheet('monster_orc_walk_south', 'assets/animations/monster_orc_walk_south.png', {
         frameWidth: 48,
@@ -505,6 +534,24 @@ function preload() {
         frameHeight: 48
     });
     this.load.spritesheet('monster_orc_walk_west', 'assets/animations/monster_orc_walk_west.png', {
+        frameWidth: 48,
+        frameHeight: 48
+    });
+    
+    // Orc attack animations (48x48 frames)
+    this.load.spritesheet('monster_orc_attack_south', 'assets/animations/monster_orc_attack_south.png', {
+        frameWidth: 48,
+        frameHeight: 48
+    });
+    this.load.spritesheet('monster_orc_attack_north', 'assets/animations/monster_orc_attack_north.png', {
+        frameWidth: 48,
+        frameHeight: 48
+    });
+    this.load.spritesheet('monster_orc_attack_east', 'assets/animations/monster_orc_attack_east.png', {
+        frameWidth: 48,
+        frameHeight: 48
+    });
+    this.load.spritesheet('monster_orc_attack_west', 'assets/animations/monster_orc_attack_west.png', {
         frameWidth: 48,
         frameHeight: 48
     });
@@ -527,6 +574,24 @@ function preload() {
         frameHeight: 48
     });
     
+    // Skeleton attack animations (48x48 frames)
+    this.load.spritesheet('monster_skeleton_attack_south', 'assets/animations/monster_skeleton_attack_south.png', {
+        frameWidth: 48,
+        frameHeight: 48
+    });
+    this.load.spritesheet('monster_skeleton_attack_north', 'assets/animations/monster_skeleton_attack_north.png', {
+        frameWidth: 48,
+        frameHeight: 48
+    });
+    this.load.spritesheet('monster_skeleton_attack_east', 'assets/animations/monster_skeleton_attack_east.png', {
+        frameWidth: 48,
+        frameHeight: 48
+    });
+    this.load.spritesheet('monster_skeleton_attack_west', 'assets/animations/monster_skeleton_attack_west.png', {
+        frameWidth: 48,
+        frameHeight: 48
+    });
+    
     // Wolf walking animations (48x48 frames, 6 frames per direction)
     this.load.spritesheet('monster_wolf_walk_south', 'assets/animations/monster_wolf_walk_south.png', {
         frameWidth: 48,
@@ -541,6 +606,24 @@ function preload() {
         frameHeight: 48
     });
     this.load.spritesheet('monster_wolf_walk_west', 'assets/animations/monster_wolf_walk_west.png', {
+        frameWidth: 48,
+        frameHeight: 48
+    });
+    
+    // Wolf attack animations (48x48 frames)
+    this.load.spritesheet('monster_wolf_attack_south', 'assets/animations/monster_wolf_attack_south.png', {
+        frameWidth: 48,
+        frameHeight: 48
+    });
+    this.load.spritesheet('monster_wolf_attack_north', 'assets/animations/monster_wolf_attack_north.png', {
+        frameWidth: 48,
+        frameHeight: 48
+    });
+    this.load.spritesheet('monster_wolf_attack_east', 'assets/animations/monster_wolf_attack_east.png', {
+        frameWidth: 48,
+        frameHeight: 48
+    });
+    this.load.spritesheet('monster_wolf_attack_west', 'assets/animations/monster_wolf_attack_west.png', {
         frameWidth: 48,
         frameHeight: 48
     });
@@ -563,6 +646,24 @@ function preload() {
         frameHeight: 48
     });
     
+    // Dragon attack animations (48x48 frames)
+    this.load.spritesheet('monster_dragon_attack_south', 'assets/animations/monster_dragon_attack_south.png', {
+        frameWidth: 48,
+        frameHeight: 48
+    });
+    this.load.spritesheet('monster_dragon_attack_north', 'assets/animations/monster_dragon_attack_north.png', {
+        frameWidth: 48,
+        frameHeight: 48
+    });
+    this.load.spritesheet('monster_dragon_attack_east', 'assets/animations/monster_dragon_attack_east.png', {
+        frameWidth: 48,
+        frameHeight: 48
+    });
+    this.load.spritesheet('monster_dragon_attack_west', 'assets/animations/monster_dragon_attack_west.png', {
+        frameWidth: 48,
+        frameHeight: 48
+    });
+    
     // Slime walking animations (48x48 frames, 6 frames per direction)
     this.load.spritesheet('monster_slime_walk_south', 'assets/animations/monster_slime_walk_south.png', {
         frameWidth: 48,
@@ -581,6 +682,24 @@ function preload() {
         frameHeight: 48
     });
     
+    // Slime attack animations (48x48 frames)
+    this.load.spritesheet('monster_slime_attack_south', 'assets/animations/monster_slime_attack_south.png', {
+        frameWidth: 48,
+        frameHeight: 48
+    });
+    this.load.spritesheet('monster_slime_attack_north', 'assets/animations/monster_slime_attack_north.png', {
+        frameWidth: 48,
+        frameHeight: 48
+    });
+    this.load.spritesheet('monster_slime_attack_east', 'assets/animations/monster_slime_attack_east.png', {
+        frameWidth: 48,
+        frameHeight: 48
+    });
+    this.load.spritesheet('monster_slime_attack_west', 'assets/animations/monster_slime_attack_west.png', {
+        frameWidth: 48,
+        frameHeight: 48
+    });
+    
     // Ghost walking animations (48x48 frames, 6 frames per direction)
     this.load.spritesheet('monster_ghost_walk_south', 'assets/animations/monster_ghost_walk_south.png', {
         frameWidth: 48,
@@ -595,6 +714,24 @@ function preload() {
         frameHeight: 48
     });
     this.load.spritesheet('monster_ghost_walk_west', 'assets/animations/monster_ghost_walk_west.png', {
+        frameWidth: 48,
+        frameHeight: 48
+    });
+    
+    // Ghost attack animations (48x48 frames)
+    this.load.spritesheet('monster_ghost_attack_south', 'assets/animations/monster_ghost_attack_south.png', {
+        frameWidth: 48,
+        frameHeight: 48
+    });
+    this.load.spritesheet('monster_ghost_attack_north', 'assets/animations/monster_ghost_attack_north.png', {
+        frameWidth: 48,
+        frameHeight: 48
+    });
+    this.load.spritesheet('monster_ghost_attack_east', 'assets/animations/monster_ghost_attack_east.png', {
+        frameWidth: 48,
+        frameHeight: 48
+    });
+    this.load.spritesheet('monster_ghost_attack_west', 'assets/animations/monster_ghost_attack_west.png', {
         frameWidth: 48,
         frameHeight: 48
     });
@@ -625,6 +762,7 @@ function preload() {
     // PNG images should automatically preserve transparency
     this.load.image('dungeon_floor_tileset', 'assets/tiles/dungeon/dungeon_floor_tileset.png');
     this.load.image('dungeon_wall_tileset', 'assets/tiles/dungeon/dungeon_wall_tileset.png');
+    this.load.image('dungeon_entrance', 'assets/dungeon_entrance.png');
     this.load.text('dungeon_floor_metadata', 'assets/tiles/dungeon/dungeon_floor_metadata.json');
     this.load.text('dungeon_wall_metadata', 'assets/tiles/dungeon/dungeon_wall_metadata.json');
     
@@ -1937,9 +2075,17 @@ function createDungeonEntrances(mapWidth, mapHeight, tileSize) {
         const x = Phaser.Math.Between(buffer, mapWidth - buffer - 1) * tileSize;
         const y = Phaser.Math.Between(buffer, mapHeight - buffer - 1) * tileSize;
         
-        // Create entrance marker
-        const entrance = scene.add.rectangle(x, y, tileSize * 2, tileSize * 2, 0x444444, 0.8)
-            .setDepth(3).setStrokeStyle(3, 0x888888);
+        // Create entrance marker - use cave entrance image if available, otherwise fallback to rectangle
+        let entrance;
+        if (scene.textures.exists('dungeon_entrance')) {
+            entrance = scene.add.image(x, y, 'dungeon_entrance')
+                .setDepth(3)
+                .setDisplaySize(tileSize * 2, tileSize * 2);
+        } else {
+            // Fallback to rectangle if image didn't load
+            entrance = scene.add.rectangle(x, y, tileSize * 2, tileSize * 2, 0x444444, 0.8)
+                .setDepth(3).setStrokeStyle(3, 0x888888);
+        }
         
         const text = scene.add.text(x, y, 'DUNGEON\nENTRANCE', {
             fontSize: '12px',
@@ -2102,13 +2248,15 @@ function transitionToMap(targetMap, level = 1) {
                     
                     // Try to play
                     const playResult = music.play();
-                    if (playResult) {
+                    if (playResult && typeof playResult.then === 'function') {
+                        // playResult is a Promise
                         playResult.then(() => {
                             console.log(`🎵 Started ${musicName} music successfully`);
                         }).catch(err => {
                             console.warn(`⚠️ Could not play ${musicName} music (may need user interaction):`, err);
                         });
                     } else {
+                        // playResult is not a Promise (or is null/undefined)
                         console.log(`🎵 Started ${musicName} music`);
                     }
                 } catch (e) {
@@ -2187,12 +2335,22 @@ function generateDungeon(level, width, height, seed = null) {
         seed = Date.now() + Math.floor(Math.random() * 1000000);
     }
     
-    // Simple seeded random function
+    // Simple seeded random function - CRITICAL: Must start from the same seed each time for determinism
+    // Store original seed to ensure we can reset if needed
+    const originalSeed = seed;
     let seedValue = seed;
     const seededRandom = () => {
         seedValue = (seedValue * 9301 + 49297) % 233280;
         return seedValue / 233280;
     };
+    
+    // Reset function to ensure determinism (call this at start of generation)
+    const resetSeed = () => {
+        seedValue = originalSeed;
+    };
+    
+    // Reset seed at start to ensure deterministic generation
+    resetSeed();
     
     // Helper functions using seeded random
     const seededBetween = (min, max) => {
@@ -2520,6 +2678,24 @@ function createDungeonMap(level) {
         const isCompleted = dungeonCompletions[dungeonKey] || false;
         
         console.log(`🏗️ Creating dungeon level ${level}...`);
+        console.log(`🔍 Current dungeon cache state:`, {
+            dungeonKey,
+            cacheExists: !!dungeonCache[dungeonKey],
+            cacheHasSeed: !!(dungeonCache[dungeonKey] && dungeonCache[dungeonKey].seed),
+            cacheSeed: dungeonCache[dungeonKey]?.seed,
+            isCompleted,
+            currentDungeonExists: !!currentDungeon,
+            currentDungeonSeed: currentDungeon?.seed
+        });
+        
+        // Debug: Log cache state
+        console.log(`🔍 Dungeon cache check for ${dungeonKey}:`, {
+            exists: !!dungeonCache[dungeonKey],
+            hasSeed: !!(dungeonCache[dungeonKey] && dungeonCache[dungeonKey].seed),
+            seed: dungeonCache[dungeonKey]?.seed,
+            isCompleted: isCompleted,
+            cacheKeys: Object.keys(dungeonCache)
+        });
         
         if (isCompleted) {
             // Generate new dungeon (boss was defeated, reset it)
@@ -2528,22 +2704,40 @@ function createDungeonMap(level) {
             dungeonCache[dungeonKey] = currentDungeon;
         } else if (dungeonCache[dungeonKey] && dungeonCache[dungeonKey].seed) {
             // Regenerate from saved seed
-            console.log(`📦 Regenerating dungeon level ${level} from seed ${dungeonCache[dungeonKey].seed}...`);
-            currentDungeon = generateDungeon(
-                level,
-                40, 40,
-                dungeonCache[dungeonKey].seed
-            );
-            dungeonCache[dungeonKey] = currentDungeon;
+            const savedSeed = dungeonCache[dungeonKey].seed;
+            console.log(`📦 Regenerating dungeon level ${level} from seed ${savedSeed}...`);
+            
+            // CRITICAL: Ensure we use the exact same seed value (convert to number if needed)
+            const numericSeed = typeof savedSeed === 'number' ? savedSeed : parseInt(savedSeed, 10);
+            if (isNaN(numericSeed)) {
+                console.error(`❌ Invalid seed value: ${savedSeed}, generating new dungeon`);
+                currentDungeon = generateDungeon(level, 40, 40);
+                dungeonCache[dungeonKey] = currentDungeon;
+            } else {
+                currentDungeon = generateDungeon(
+                    level,
+                    40, 40,
+                    numericSeed
+                );
+                if (!currentDungeon) {
+                    console.error('❌ generateDungeon returned null when using seed');
+                    return;
+                }
+                // Ensure seed is preserved in cache (use the numeric seed we passed in)
+                currentDungeon.seed = numericSeed;
+                dungeonCache[dungeonKey] = currentDungeon;
+                console.log(`✅ Regenerated dungeon with seed ${numericSeed}, confirmed seed: ${currentDungeon.seed}`);
+            }
         } else {
             // Generate new dungeon
-            console.log(`🆕 Generating new dungeon level ${level}...`);
+            console.log(`🆕 Generating new dungeon level ${level} (no seed found in cache)...`);
             currentDungeon = generateDungeon(level, 40, 40);
             if (!currentDungeon) {
                 console.error('❌ generateDungeon returned null');
                 return;
             }
             dungeonCache[dungeonKey] = currentDungeon;
+            console.log(`✅ Generated new dungeon with seed ${currentDungeon.seed}`);
         }
         
         if (!currentDungeon || !currentDungeon.mapData) {
@@ -2651,16 +2845,29 @@ function createDungeonMap(level) {
  * For wall tiles, process to make white pixels transparent
  */
 function createTilesetFrames(tilesetKey, metadata, type) {
+    console.log(`🔧 createTilesetFrames called: tilesetKey=${tilesetKey}, type=${type}`);
     if (!metadata || !metadata.tileset_data || !metadata.tileset_data.tiles) {
+        console.warn(`⚠️ createTilesetFrames: No metadata or tiles for ${tilesetKey}`);
         return;
     }
     
     const tiles = metadata.tileset_data.tiles;
+    console.log(`📦 Processing ${tiles.length} tiles for ${type} tileset`);
     const sourceTexture = this.textures.get(tilesetKey);
+    
+    if (!sourceTexture) {
+        console.error(`❌ Source texture ${tilesetKey} not found!`);
+        return;
+    }
     
     tiles.forEach(tile => {
         const bbox = tile.bounding_box;
         const frameKey = `dungeon_${type}_${tile.id}`;
+        
+        // Remove existing texture if it exists to force reprocessing
+        if (this.textures.exists(frameKey)) {
+            this.textures.remove(frameKey);
+        }
         
         // Process both floor and wall tilesets to remove green/white pixels
         if (type === 'wall' || type === 'floor') {
@@ -2686,6 +2893,10 @@ function createTilesetFrames(tilesetKey, metadata, type) {
                         // Process pixels: make white (or near-white) pixels transparent
                         const imageData = ctx.getImageData(0, 0, bbox.width, bbox.height);
                         const data = imageData.data;
+                        
+                        if (type === 'wall' && tile.id === 0) {
+                            console.log(`🎨 Processing first wall tile ${frameKey}, imageData size: ${data.length}, pixels: ${data.length / 4}`);
+                        }
                         let transparentCount = 0;
                         
                         for (let i = 0; i < data.length; i += 4) {
@@ -2694,10 +2905,11 @@ function createTilesetFrames(tilesetKey, metadata, type) {
                             const b = data[i + 2];
                             const avg = (r + g + b) / 3;
                             
-                            // For walls: remove white/light pixels
+                            // For walls: remove white/light pixels (new tileset is already dark, no green processing needed)
                             // For floors: remove green pixels (bright green that shouldn't be there)
                             if (type === 'wall') {
                                 // Make pixels transparent if they're very light (threshold 220 for faint patterns)
+                                // New dark tileset shouldn't have bright green, so we only need to handle white/light pixels
                                 if (avg > 220 || (r > 220 && g > 220 && b > 220)) {
                                     data[i + 3] = 0; // Set alpha to 0 (transparent)
                                     transparentCount++;
@@ -2895,33 +3107,76 @@ function createDungeonTile(x, y, tileType, tileSize) {
                         tile = scene.add.image(x * tileSize, y * tileSize, frameKey);
                         tile.setOrigin(0);
                         tile.setDisplaySize(tileSize, tileSize);
-                    } else if (scene.textures.exists('dungeon_wall_tileset') && 
-                               scene.textures.get('dungeon_wall_tileset').has(frameKey)) {
-                        // Fallback: use frame from tileset
-                        tile = scene.add.image(x * tileSize, y * tileSize, 'dungeon_wall_tileset', frameKey);
-                        tile.setOrigin(0);
-                        tile.setDisplaySize(tileSize, tileSize);
+                        // Apply dark tint for dungeon-like appearance
+                        tile.setTint(0x1a1a1a); // Very dark gray tint
                     } else {
-                        // Fallback: use crop method
-                        tile = scene.add.image(x * tileSize, y * tileSize, 'dungeon_wall_tileset');
-                        tile.setOrigin(0);
-                        tile.setCrop(bbox.x, bbox.y, bbox.width, bbox.height);
-                        tile.setDisplaySize(tileSize, tileSize);
+                        // Fallback: use crop method - process pixels directly to remove green
+                        const sourceTexture = scene.textures.get('dungeon_wall_tileset');
+                        const sourceImage = sourceTexture.getSourceImage();
+                        
+                        if (sourceImage) {
+                            // Create a canvas to process the tile region
+                            const canvas = document.createElement('canvas');
+                            canvas.width = bbox.width;
+                            canvas.height = bbox.height;
+                            const ctx = canvas.getContext('2d');
+                            
+                            // Draw the tile region
+                            ctx.drawImage(sourceImage, bbox.x, bbox.y, bbox.width, bbox.height, 0, 0, bbox.width, bbox.height);
+                            
+                            // Process pixels to remove white/light pixels (new dark tileset shouldn't need green processing)
+                            const imageData = ctx.getImageData(0, 0, bbox.width, bbox.height);
+                            const data = imageData.data;
+                            
+                            for (let i = 0; i < data.length; i += 4) {
+                                const r = data[i];
+                                const g = data[i + 1];
+                                const b = data[i + 2];
+                                const avg = (r + g + b) / 3;
+                                
+                                // Remove very light pixels (white/light backgrounds)
+                                if (avg > 220 || (r > 220 && g > 220 && b > 220)) {
+                                    data[i + 3] = 0; // Make transparent
+                                }
+                            }
+                            
+                            ctx.putImageData(imageData, 0, 0);
+                            
+                            // Create texture from processed canvas
+                            const processedKey = `dungeon_wall_processed_${tileData.id}_${bbox.x}_${bbox.y}`;
+                            if (!scene.textures.exists(processedKey)) {
+                                scene.textures.addCanvas(processedKey, canvas);
+                            }
+                            
+                            tile = scene.add.image(x * tileSize, y * tileSize, processedKey);
+                            tile.setOrigin(0);
+                            tile.setDisplaySize(tileSize, tileSize);
+                            // Apply dark tint for dungeon-like appearance
+                            tile.setTint(0x1a1a1a); // Very dark gray tint
+                        } else {
+                            // Ultimate fallback: use crop method without processing
+                            tile = scene.add.image(x * tileSize, y * tileSize, 'dungeon_wall_tileset');
+                            tile.setOrigin(0);
+                            tile.setCrop(bbox.x, bbox.y, bbox.width, bbox.height);
+                            tile.setDisplaySize(tileSize, tileSize);
+                            // Apply dark tint for dungeon-like appearance
+                            tile.setTint(0x1a1a1a); // Very dark gray tint
+                        }
                     }
                 } catch (e) {
                     console.warn(`Failed to create wall tile at (${x}, ${y}):`, e);
-                    // Fallback to solid color
-                    tile = scene.add.rectangle(x * tileSize, y * tileSize, tileSize, tileSize, 0x2a2a2a, 1.0)
+                    // Fallback to solid color - dark and dank dungeon color
+                    tile = scene.add.rectangle(x * tileSize, y * tileSize, tileSize, tileSize, 0x151515, 1.0)
                         .setOrigin(0);
                 }
             } else {
-                // Fallback to solid color if lookup failed
-                tile = scene.add.rectangle(x * tileSize, y * tileSize, tileSize, tileSize, 0x2a2a2a, 1.0)
+                // Fallback to solid color if lookup failed - dark and dank dungeon color
+                tile = scene.add.rectangle(x * tileSize, y * tileSize, tileSize, tileSize, 0x151515, 1.0)
                     .setOrigin(0);
             }
         } else {
-            // Fallback: use dark colored rectangle (stone-like)
-            tile = scene.add.rectangle(x * tileSize, y * tileSize, tileSize, tileSize, 0x2a2a2a, 1.0)
+            // Fallback: use dark colored rectangle (stone-like) - dark and dank dungeon color
+            tile = scene.add.rectangle(x * tileSize, y * tileSize, tileSize, tileSize, 0x151515, 1.0)
                 .setOrigin(0);
         }
         
@@ -3296,6 +3551,7 @@ function dropBossLoot(x, y, level) {
  * Create game objects (like pygame initialization)
  */
 function create() {
+    console.log('🚀 CREATE FUNCTION CALLED - Starting tileset processing');
     // Parse dungeon tileset metadata and create texture frames
     try {
         if (this.cache.text.exists('dungeon_floor_metadata')) {
@@ -3317,15 +3573,24 @@ function create() {
         }
         
         if (this.cache.text.exists('dungeon_wall_metadata')) {
+            console.log('📋 Found dungeon_wall_metadata in cache');
             const wallMetadataText = this.cache.text.get('dungeon_wall_metadata');
             dungeonTilesets.wallMetadata = JSON.parse(wallMetadataText);
+            console.log('📋 Parsed wall metadata, tiles:', dungeonTilesets.wallMetadata?.tileset_data?.tiles?.length || 0);
             
             // Create texture frames for wall tiles
             if (this.textures.exists('dungeon_wall_tileset')) {
-                createTilesetFrames.call(this, 'dungeon_wall_tileset', dungeonTilesets.wallMetadata, 'wall');
+                console.log('🔨 About to call createTilesetFrames for wall tileset');
+                console.log('🔨 Texture exists check passed');
+                try {
+                    createTilesetFrames.call(this, 'dungeon_wall_tileset', dungeonTilesets.wallMetadata, 'wall');
+                    console.log('✅ createTilesetFrames completed for wall tileset');
+                } catch (e) {
+                    console.error('❌ Error in createTilesetFrames:', e);
+                }
                 console.log('✅ Dungeon wall tileset image loaded and frames created');
             } else {
-                console.warn('⚠️ Dungeon wall tileset image not found');
+                console.warn('⚠️ Dungeon wall tileset image not found in textures');
             }
             
             buildDungeonTileLookup('wall');
@@ -3491,6 +3756,22 @@ function create() {
         .setDepth(15).setOrigin(0.5, 0.5).setScrollFactor(1);
     player.hpBar = this.add.rectangle(0, 0, playerHpBarWidth - 2, playerHpBarHeight - 2, 0xff0000)
         .setDepth(16).setOrigin(0, 0.5).setScrollFactor(1);
+    
+    // Create weapon sprite (initially hidden, shown when weapon is equipped)
+    weaponSprite = this.add.sprite(player.x, player.y, 'weapon_sword');
+    // Scale weapon sprite to 48x48 (adjust scale based on actual image size)
+    // If source image is 32x32, scale = 48/32 = 1.5
+    // If source image is already 48x48, scale = 1.0
+    // For now, set to 1.0 and adjust if needed
+    weaponSprite.setScale(1.0);
+    weaponSprite.setDepth(11); // Above player (10) but below UI elements
+    weaponSprite.setVisible(false); // Hidden until weapon is equipped
+    // Origin will be set based on direction in updateWeaponPosition (handle position)
+    weaponSprite.setOrigin(0.5, 1.0); // Default: center horizontally, bottom vertically (handle)
+    weaponSprite.isAnimating = false; // Flag to prevent position updates during animation
+    
+    // Initialize weapon sprite based on current equipment
+    updateWeaponSprite();
     
     // Initialize NPCs in town
     initializeNPCs();
@@ -3818,6 +4099,11 @@ function update(time, delta) {
                 }
             }
         }
+    }
+    
+    // Update weapon sprite position to follow player
+    if (weaponSprite && weaponSprite.visible) {
+        updateWeaponPosition();
     }
     
     // Check building collisions (only in town) - allow sliding along walls (using dungeon wall logic)
@@ -4869,10 +5155,14 @@ function playerAttack(time) {
     // Get weapon quality for trail color
     const equippedWeapon = stats.equipment.weapon;
     const weaponQuality = equippedWeapon ? (equippedWeapon.quality || 'Common') : 'Common';
+    const weaponType = equippedWeapon ? (equippedWeapon.weaponType || 'Sword') : 'Sword';
     
     // Create weapon swing trail
     const facingDirection = player.facingDirection || 'south';
     createWeaponSwingTrail(player.x, player.y, facingDirection, weaponQuality);
+    
+    // Animate weapon sprite during attack
+    animateWeaponStrike(facingDirection, weaponType);
     
     // Play attack animation if available
     if (scene.anims.exists('attack')) {
@@ -4962,7 +5252,9 @@ function playerAttack(time) {
         const damageColor = isCritical ? 0xff0000 : 0xffff00; // Red for critical, yellow for normal
         const damageText = isCritical ? `-${damage} CRIT!` : `-${damage}`;
         showDamageNumber(closestMonster.x, closestMonster.y - 20, damageText, damageColor, isCritical, 'physical');
-        addChatMessage(damageText, isCritical ? 0xff0000 : 0xffff00, '⚔️');
+        const monsterName = closestMonster.monsterType || 'Monster';
+        const chatMessage = isCritical ? `${damageText} on ${monsterName}` : `Hit ${monsterName} for ${damage} damage`;
+        addChatMessage(chatMessage, isCritical ? 0xff0000 : 0xffff00, '⚔️');
         playSound('hit_monster');
         
         // Enhanced visual feedback - flash monster with color
@@ -4987,6 +5279,18 @@ function monsterAttackPlayer(monster, time) {
     
     monster.lastAttackTime = time;
     
+    // Determine direction monster is facing player
+    const dx = player.x - monster.x;
+    const dy = player.y - monster.y;
+    if (Math.abs(dy) > Math.abs(dx)) {
+        monster.facingDirection = dy > 0 ? 'south' : 'north';
+    } else {
+        monster.facingDirection = dx > 0 ? 'east' : 'west';
+    }
+    
+    // Play attack animation
+    playMonsterAttackAnimation(monster);
+    
     // Calculate damage
     const baseDamage = monster.attack;
     const defense = playerStats.defense;
@@ -4999,12 +5303,16 @@ function monsterAttackPlayer(monster, time) {
     // Create hit effects on player (red particles - physical damage)
     createHitEffects(player.x, player.y, false, 'physical');
     
+    // Play sound effect when player is hit
+    playSound('hit_player');
+    
     // Light screen shake when player takes damage
     shakeCamera(150, 0.008);
     
         // Show damage number
         showDamageNumber(player.x, player.y - 20, `-${actualDamage}`, 0xff0000, false, 'physical');
-        addChatMessage(`Took ${actualDamage} damage`, 0xff6b6b, '🛡️');
+        const monsterName = monster.monsterType || 'Monster';
+        addChatMessage(`Took ${actualDamage} damage from ${monsterName}`, 0xff6b6b, '🛡️');
         
         // Enhanced visual feedback - flash player red
         player.setTint(0xff0000);
@@ -5100,6 +5408,336 @@ function createHitEffects(x, y, isCritical = false, damageType = 'physical') {
             }
         }
     });
+}
+
+/**
+ * Update weapon sprite based on equipped weapon
+ */
+function updateWeaponSprite() {
+    if (!weaponSprite) return;
+    
+    const equippedWeapon = playerStats.equipment.weapon;
+    
+    if (!equippedWeapon) {
+        weaponSprite.setVisible(false);
+        console.log('⚠️ No weapon equipped - hiding weapon sprite');
+        return;
+    }
+    
+    // Get weapon type from item name or type
+    const weaponType = equippedWeapon.weaponType || 'Sword';
+    const weaponKey = `weapon_${weaponType.toLowerCase()}`;
+    
+    // Check if weapon sprite exists, fallback to sword
+    const scene = game.scene.scenes[0];
+    if (scene.textures.exists(weaponKey)) {
+        weaponSprite.setTexture(weaponKey);
+    } else {
+        weaponSprite.setTexture('weapon_sword'); // Fallback
+    }
+    
+    weaponSprite.setVisible(true);
+    updateWeaponPosition();
+    console.log(`✅ Weapon sprite updated: ${weaponType} (${weaponKey})`);
+}
+
+/**
+ * Update weapon sprite position based on player facing direction
+ */
+function updateWeaponPosition() {
+    if (!weaponSprite || !weaponSprite.visible || !player) return;
+    
+    // Don't update rotation during animation (but still update position)
+    const skipRotation = weaponSprite.isAnimating;
+    
+    const facingDirection = player.facingDirection || 'south';
+    
+    // Get weapon type for weapon-specific positioning
+    const equippedWeapon = playerStats.equipment.weapon;
+    const weaponType = equippedWeapon ? (equippedWeapon.weaponType || 'Sword') : 'Sword';
+    
+    const offsetX = 0;
+    const offsetY = 0;
+    
+    // Position weapon relative to player based on facing direction
+    // Adjust these offsets to position the weapon correctly
+    let x = player.x + offsetX;
+    let y = player.y + offsetY;
+    
+    // Adjust position based on direction (weapon appears in front of player)
+    switch(facingDirection) {
+        case 'north':
+            y -= 20; // Weapon above player
+            break;
+        case 'south':
+            y += 8; // Weapon closer to player (hand level, not too far below)
+            x -= 8; // Offset left so handle aligns with character's right hand
+            break;
+        case 'east':
+            if (weaponType === 'Mace') {
+                x += 12; // Mace closer to player's hand (reduced from 20)
+                y -= 4; // Slightly higher to align handle with hand
+            } else {
+                x += 20; // Weapon to the right
+            }
+            break;
+        case 'west':
+            if (weaponType === 'Mace') {
+                x -= 12; // Mace closer to player's hand (reduced from 20)
+                y -= 4; // Slightly higher to align handle with hand
+            } else {
+                x -= 20; // Weapon to the left
+            }
+            break;
+    }
+    
+    weaponSprite.x = x;
+    weaponSprite.y = y;
+    
+    // Set rotation and flip based on direction (skip during animation)
+    // Origin point is where the handle is (fulcrum for rotation)
+    if (!skipRotation) {
+        switch(facingDirection) {
+            case 'north':
+                weaponSprite.setFlipX(false);
+                weaponSprite.rotation = -Math.PI / 2; // Point up
+                // Handle is at bottom of sprite (which is left when rotated -90°)
+                weaponSprite.setOrigin(1.0, 1.0); // Right edge, bottom (handle position)
+                break;
+            case 'south':
+                weaponSprite.setFlipX(false);
+                weaponSprite.rotation = Math.PI / 2; // Point down (90° clockwise)
+                // Keep same origin as East (handle at bottom)
+                // When rotated 90°, handle moves to left side, blade points down
+                weaponSprite.setOrigin(0.5, 1.0); // Center horizontally, bottom (handle position)
+                break;
+            case 'east':
+                weaponSprite.setFlipX(false); // Normal orientation (sword on right)
+                weaponSprite.rotation = 0; // Point right
+                // Handle is at bottom of sprite
+                weaponSprite.setOrigin(0.5, 1.0); // Center horizontally, bottom (handle)
+                break;
+            case 'west':
+                weaponSprite.setFlipX(true); // Flip horizontally (sword on left, right-side up)
+                weaponSprite.rotation = 0; // No rotation, just flipped
+                // Handle is at bottom of sprite
+                weaponSprite.setOrigin(0.5, 1.0); // Center horizontally, bottom (handle)
+                break;
+        }
+    } else {
+        // During animation, only update origin and flip (not rotation)
+        switch(facingDirection) {
+            case 'north':
+                weaponSprite.setFlipX(false);
+                weaponSprite.setOrigin(1.0, 1.0);
+                break;
+            case 'south':
+                weaponSprite.setFlipX(false);
+                weaponSprite.setOrigin(0.5, 1.0);
+                break;
+            case 'east':
+                weaponSprite.setFlipX(false);
+                weaponSprite.setOrigin(0.5, 1.0);
+                break;
+            case 'west':
+                weaponSprite.setFlipX(true);
+                weaponSprite.setOrigin(0.5, 1.0);
+                break;
+        }
+    }
+}
+
+/**
+ * Animate weapon sprite during attack using rotation/flip
+ * @param {string} direction - Facing direction
+ * @param {string} weaponType - Weapon type (Sword, Axe, Bow, etc.)
+ */
+function animateWeaponStrike(direction, weaponType = 'Sword') {
+    if (!weaponSprite || !weaponSprite.visible) {
+        console.log('⚠️ Weapon sprite not visible - skipping animation');
+        return;
+    }
+    
+    const scene = game.scene.scenes[0];
+    
+    // Get base rotation and flip state for direction FIRST
+    let baseRotation = 0;
+    let isFlipped = false;
+    switch(direction) {
+        case 'north':
+            baseRotation = -Math.PI / 2;
+            isFlipped = false;
+            break;
+        case 'south':
+            baseRotation = Math.PI / 2;
+            isFlipped = false;
+            break;
+        case 'east':
+            baseRotation = 0;
+            isFlipped = false;
+            break;
+        case 'west':
+            baseRotation = 0;
+            isFlipped = true; // Flip horizontally for west
+            break;
+    }
+    
+    // Set animation flag BEFORE updating position (prevents rotation reset)
+    weaponSprite.isAnimating = true;
+    
+    // Reset weapon to base position (this sets the origin/fulcrum point)
+    // The skipRotation flag will prevent it from resetting rotation during animation
+    updateWeaponPosition();
+    
+    console.log(`🎬 Animating weapon strike: ${weaponType} facing ${direction}`);
+    console.log(`   Base rotation: ${baseRotation} (${(baseRotation * 180 / Math.PI).toFixed(1)}°)`);
+    
+    // Set initial flip state
+    weaponSprite.setFlipX(isFlipped);
+    
+    // Different animation styles based on weapon type
+    if (weaponType === 'Bow' || weaponType === 'Crossbow') {
+        // Ranged weapons: Pull back animation
+        const pullBackDistance = 10;
+        let pullX = weaponSprite.x;
+        let pullY = weaponSprite.y;
+        
+        switch(direction) {
+            case 'north':
+                pullY += pullBackDistance;
+                break;
+            case 'south':
+                pullY -= pullBackDistance;
+                break;
+            case 'east':
+                pullX -= pullBackDistance;
+                break;
+            case 'west':
+                pullX += pullBackDistance;
+                break;
+        }
+        
+        // Pull back
+        scene.tweens.add({
+            targets: weaponSprite,
+            x: pullX,
+            y: pullY,
+            duration: 100,
+            ease: 'Power2',
+            onComplete: () => {
+                // Release (snap forward)
+                scene.tweens.add({
+                    targets: weaponSprite,
+                    x: weaponSprite.x + (weaponSprite.x - pullX) * 2,
+                    y: weaponSprite.y + (weaponSprite.y - pullY) * 2,
+                    duration: 50,
+                    ease: 'Power3',
+                    onComplete: () => {
+                        updateWeaponPosition();
+                    }
+                });
+            }
+        });
+    } else {
+        // Melee weapons: 5-step strike animation rotating around handle (fulcrum)
+        // North/South use large 275-degree arcs, East/West use 120-degree arcs
+        let maxSwingAngle;
+        if (direction === 'north' || direction === 'south') {
+            maxSwingAngle = (275 * Math.PI) / 180; // 275 degrees in radians for large arc
+        } else {
+            maxSwingAngle = (120 * Math.PI) / 180; // 120 degrees in radians for East/West
+        }
+        
+        // Determine swing direction based on facing
+        let swingStart, swingEnd;
+        if (direction === 'east') {
+            // East: swing from 0° to 120° (rightward arc)
+            swingStart = baseRotation;
+            swingEnd = baseRotation + maxSwingAngle;
+        } else if (direction === 'west') {
+            // West (flipped): swing from 0° to -120° (leftward arc)
+            swingStart = baseRotation;
+            swingEnd = baseRotation - maxSwingAngle;
+        } else if (direction === 'north') {
+            // North: swing from -90° to -90° - 275° = -365° (large counter-clockwise arc, same style as South)
+            swingStart = baseRotation;
+            swingEnd = baseRotation - maxSwingAngle;
+        } else { // south
+            // South: swing from 90° to 90° + 275° = 365° (large downward arc away from character)
+            swingStart = baseRotation;
+            swingEnd = baseRotation + maxSwingAngle;
+        }
+        
+        // 5-step animation with varying rotation increments
+        const steps = 5;
+        const stepAngles = [
+            0,           // Step 1: 0% (start)
+            0.15,        // Step 2: 15% (wind-up)
+            0.40,        // Step 3: 40% (mid-swing)
+            0.75,        // Step 4: 75% (near impact)
+            1.0          // Step 5: 100% (full swing)
+        ];
+        
+        // Set initial rotation to start position
+        weaponSprite.rotation = swingStart;
+        
+        console.log(`   Swing: ${(swingStart * 180 / Math.PI).toFixed(1)}° → ${(swingEnd * 180 / Math.PI).toFixed(1)}°`);
+        
+        // Create step-based animation
+        let currentStep = 0;
+        const stepDuration = 40; // 40ms per step = 200ms total
+        
+        function animateStep() {
+            if (currentStep >= steps) {
+                // Animation complete - return to base position
+                scene.tweens.add({
+                    targets: weaponSprite,
+                    rotation: baseRotation,
+                    duration: 100,
+                    ease: 'Power1',
+                    onComplete: () => {
+                        weaponSprite.isAnimating = false; // Clear animation flag
+                        updateWeaponPosition();
+                        console.log(`   ✅ Animation complete, returned to base rotation`);
+                    }
+                });
+                return;
+            }
+            
+            // Calculate target rotation for this step
+            const progress = stepAngles[currentStep];
+            const targetRotation = swingStart + (swingEnd - swingStart) * progress;
+            
+            console.log(`   Step ${currentStep + 1}/5: ${(targetRotation * 180 / Math.PI).toFixed(1)}° (${(progress * 100).toFixed(0)}%)`);
+            
+            // Animate to this step
+            scene.tweens.add({
+                targets: weaponSprite,
+                rotation: targetRotation,
+                duration: stepDuration,
+                ease: currentStep < 2 ? 'Power1' : 'Power2', // Faster at start, smoother at impact
+                onComplete: () => {
+                    currentStep++;
+                    animateStep();
+                }
+            });
+        }
+        
+        // Start the step animation
+        animateStep();
+        
+        // Also add slight scale pulse for impact effect (at step 4)
+        scene.time.delayedCall(stepDuration * 3, () => {
+            scene.tweens.add({
+                targets: weaponSprite,
+                scaleX: weaponSprite.scaleX * 1.15,
+                scaleY: weaponSprite.scaleY * 1.15,
+                duration: 30,
+                yoyo: true,
+                ease: 'Power2'
+            });
+        });
+    }
 }
 
 /**
@@ -5808,6 +6446,286 @@ function checkLevelUp() {
     }
 }
 
+// ============================================
+// ENHANCED ITEM SYSTEM - CONSTANTS
+// ============================================
+
+// Weapon types with different stat profiles
+const WEAPON_TYPES = {
+    'Sword': { baseAttack: 1.0, speed: 1.0, critChance: 0.05 },      // Balanced
+    'Axe': { baseAttack: 1.15, speed: 0.9, critChance: 0.08 },       // High damage, slower
+    'Mace': { baseAttack: 1.1, speed: 0.85, critChance: 0.06 },      // High damage, very slow
+    'Dagger': { baseAttack: 0.85, speed: 1.2, critChance: 0.12 },    // Fast, high crit
+    'Staff': { baseAttack: 0.9, speed: 1.1, critChance: 0.07 },     // Magic-focused
+    'Bow': { baseAttack: 0.95, speed: 1.15, critChance: 0.10 },     // Ranged, fast
+    'Crossbow': { baseAttack: 1.05, speed: 0.95, critChance: 0.09 }  // Ranged, powerful
+};
+
+// Material types that affect stats
+const MATERIALS = {
+    'Iron': { multiplier: 1.0, tier: 1 },
+    'Steel': { multiplier: 1.2, tier: 2 },
+    'Silver': { multiplier: 1.4, tier: 3 },
+    'Gold': { multiplier: 1.6, tier: 4 },
+    'Mithril': { multiplier: 1.8, tier: 5 },
+    'Dragonbone': { multiplier: 2.0, tier: 6 }
+};
+
+// Prefixes that modify stats
+const PREFIXES = {
+    'Sharp': { attackBonus: 0.15, quality: ['Common', 'Uncommon'] },
+    'Sturdy': { defenseBonus: 0.15, quality: ['Common', 'Uncommon'] },
+    'Balanced': { attackBonus: 0.1, defenseBonus: 0.1, quality: ['Common', 'Uncommon'] },
+    'Vicious': { attackBonus: 0.25, critBonus: 0.05, quality: ['Uncommon', 'Rare'] },
+    'Reinforced': { defenseBonus: 0.25, hpBonus: 0.1, quality: ['Uncommon', 'Rare'] },
+    'Precise': { critBonus: 0.1, attackBonus: 0.1, quality: ['Uncommon', 'Rare'] },
+    'Soulbound': { attackBonus: 0.2, defenseBonus: 0.2, lifesteal: 0.05, quality: ['Rare', 'Epic'] },
+    'Ethereal': { defenseBonus: 0.3, resistance: { magic: 0.1 }, quality: ['Rare', 'Epic'] },
+    'Celestial': { attackBonus: 0.3, critBonus: 0.15, quality: ['Epic', 'Legendary'] },
+    'Demonic': { attackBonus: 0.35, lifesteal: 0.1, quality: ['Epic', 'Legendary'] },
+    'Divine': { attackBonus: 0.25, defenseBonus: 0.25, hpBonus: 0.2, quality: ['Legendary'] }
+};
+
+// Suffixes that modify stats
+const SUFFIXES = {
+    'of Power': { attackBonus: 0.2, quality: ['Uncommon', 'Rare'] },
+    'of Protection': { defenseBonus: 0.2, quality: ['Uncommon', 'Rare'] },
+    'of Swiftness': { speedBonus: 0.15, critBonus: 0.05, quality: ['Uncommon', 'Rare'] },
+    'of Vitality': { hpBonus: 0.25, quality: ['Uncommon', 'Rare'] },
+    'of the Bear': { hpBonus: 0.3, defenseBonus: 0.15, quality: ['Rare', 'Epic'] },
+    'of the Wolf': { attackBonus: 0.2, speedBonus: 0.2, quality: ['Rare', 'Epic'] },
+    'of the Eagle': { critBonus: 0.15, attackBonus: 0.15, quality: ['Rare', 'Epic'] },
+    'of Life': { lifesteal: 0.08, hpBonus: 0.2, quality: ['Epic', 'Legendary'] },
+    'of Death': { attackBonus: 0.3, critBonus: 0.2, quality: ['Epic', 'Legendary'] },
+    'of Eternity': { attackBonus: 0.25, defenseBonus: 0.25, hpBonus: 0.25, quality: ['Legendary'] }
+};
+
+// Set items - matching pieces grant bonuses
+const ITEM_SETS = {
+    'Warrior': {
+        pieces: ['weapon', 'armor', 'helmet', 'boots', 'gloves'],
+        bonuses: {
+            2: { attackBonus: 0.1 },
+            3: { defenseBonus: 0.1 },
+            4: { hpBonus: 0.15 },
+            5: { attackBonus: 0.15, defenseBonus: 0.15, critBonus: 0.1 }
+        }
+    },
+    'Guardian': {
+        pieces: ['armor', 'helmet', 'boots', 'gloves', 'belt'],
+        bonuses: {
+            2: { defenseBonus: 0.15 },
+            3: { hpBonus: 0.2 },
+            4: { resistance: { physical: 0.1 } },
+            5: { defenseBonus: 0.25, hpBonus: 0.3, resistance: { physical: 0.15 } }
+        }
+    },
+    'Assassin': {
+        pieces: ['weapon', 'helmet', 'boots', 'gloves', 'ring'],
+        bonuses: {
+            2: { critBonus: 0.1 },
+            3: { speedBonus: 0.15 },
+            4: { attackBonus: 0.15 },
+            5: { critBonus: 0.2, attackBonus: 0.2, lifesteal: 0.1 }
+        }
+    }
+};
+
+// Elemental damage types
+const ELEMENTAL_TYPES = ['Fire', 'Ice', 'Lightning', 'Poison', 'Arcane'];
+
+// ============================================
+// ENHANCED ITEM SYSTEM - HELPER FUNCTIONS
+// ============================================
+
+/**
+ * Get material based on quality tier
+ */
+function getMaterialForQuality(quality) {
+    const qualityTiers = {
+        'Common': ['Iron'],
+        'Uncommon': ['Iron', 'Steel'],
+        'Rare': ['Steel', 'Silver'],
+        'Epic': ['Silver', 'Gold', 'Mithril'],
+        'Legendary': ['Gold', 'Mithril', 'Dragonbone']
+    };
+    const available = qualityTiers[quality] || qualityTiers['Common'];
+    return Phaser.Math.RND.pick(available);
+}
+
+/**
+ * Get weapon type based on quality (better quality = more variety)
+ */
+function getWeaponTypeForQuality(quality) {
+    const qualityWeapons = {
+        'Common': ['Sword', 'Axe', 'Mace'],
+        'Uncommon': ['Sword', 'Axe', 'Mace', 'Dagger'],
+        'Rare': ['Sword', 'Axe', 'Mace', 'Dagger', 'Staff', 'Bow'],
+        'Epic': Object.keys(WEAPON_TYPES),
+        'Legendary': Object.keys(WEAPON_TYPES)
+    };
+    const available = qualityWeapons[quality] || qualityWeapons['Common'];
+    return Phaser.Math.RND.pick(available);
+}
+
+/**
+ * Get prefix based on quality
+ */
+function getPrefixForQuality(quality) {
+    const available = Object.keys(PREFIXES).filter(p => 
+        PREFIXES[p].quality.includes(quality)
+    );
+    if (available.length === 0) return null;
+    return Math.random() < 0.4 ? Phaser.Math.RND.pick(available) : null; // 40% chance
+}
+
+/**
+ * Get suffix based on quality
+ */
+function getSuffixForQuality(quality) {
+    const available = Object.keys(SUFFIXES).filter(s => 
+        SUFFIXES[s].quality.includes(quality)
+    );
+    if (available.length === 0) return null;
+    return Math.random() < 0.3 ? Phaser.Math.RND.pick(available) : null; // 30% chance
+}
+
+/**
+ * Generate special properties for item
+ */
+function generateSpecialProperties(item, quality) {
+    const props = {};
+    const qualityLevels = { 'Common': 1, 'Uncommon': 2, 'Rare': 3, 'Epic': 4, 'Legendary': 5 };
+    const qLevel = qualityLevels[quality] || 1;
+    
+    // Higher quality = more likely to have special properties
+    const hasSpecial = Math.random() < (0.1 + qLevel * 0.1); // 10-50% chance
+    
+    if (hasSpecial) {
+        // Critical chance (weapons and rings)
+        if ((item.type === 'weapon' || item.type === 'ring') && Math.random() < 0.3) {
+            props.critChance = 0.02 + (qLevel * 0.01);
+        }
+        
+        // Lifesteal (weapons and amulets)
+        if ((item.type === 'weapon' || item.type === 'amulet') && Math.random() < 0.25) {
+            props.lifesteal = 0.02 + (qLevel * 0.01);
+        }
+        
+        // Elemental damage (weapons only, rare)
+        if (item.type === 'weapon' && qLevel >= 3 && Math.random() < 0.2) {
+            props.elementalDamage = {
+                type: Phaser.Math.RND.pick(ELEMENTAL_TYPES),
+                amount: qLevel * 2
+            };
+        }
+        
+        // Resistances (armor pieces)
+        if (['armor', 'helmet', 'boots', 'gloves', 'belt'].includes(item.type) && Math.random() < 0.3) {
+            const resistanceTypes = ['physical', 'magic', 'fire', 'ice', 'lightning'];
+            const resType = Phaser.Math.RND.pick(resistanceTypes);
+            props.resistance = {};
+            props.resistance[resType] = 0.05 + (qLevel * 0.02);
+        }
+    }
+    
+    return props;
+}
+
+/**
+ * Assign item to a set (rare chance)
+ */
+function assignItemSet(item, quality) {
+    if (quality === 'Common' || quality === 'Uncommon') return null;
+    
+    // Only Epic and Legendary can be set items, and only 30% chance
+    if ((quality === 'Epic' || quality === 'Legendary') && Math.random() < 0.3) {
+        const setNames = Object.keys(ITEM_SETS);
+        const set = Phaser.Math.RND.pick(setNames);
+        if (ITEM_SETS[set].pieces.includes(item.type)) {
+            return set;
+        }
+    }
+    return null;
+}
+
+/**
+ * Build item name with all components
+ */
+function buildItemName(item) {
+    const parts = [];
+    
+    if (item.prefix) parts.push(item.prefix);
+    if (item.material) parts.push(item.material);
+    if (item.weaponType) parts.push(item.weaponType);
+    else if (item.type !== 'weapon') {
+        // For non-weapons, use the type as the base name
+        parts.push(item.type.charAt(0).toUpperCase() + item.type.slice(1));
+    }
+    if (item.suffix) parts.push(item.suffix);
+    
+    return parts.join(' ') || `${item.quality} ${item.type}`;
+}
+
+/**
+ * Calculate final item stats with all modifiers
+ */
+function calculateItemStats(baseItem, quality) {
+    const qualityLevels = { 'Common': 1, 'Uncommon': 2, 'Rare': 3, 'Epic': 4, 'Legendary': 5 };
+    const qLevel = qualityLevels[quality] || 1;
+    
+    let attackPower = baseItem.attackPower || 0;
+    let defense = baseItem.defense || 0;
+    let maxHp = baseItem.maxHp || 0;
+    let speed = baseItem.speed || 0;
+    let critChance = baseItem.critChance || 0;
+    
+    // Apply material multiplier
+    if (baseItem.material && MATERIALS[baseItem.material]) {
+        const mult = MATERIALS[baseItem.material].multiplier;
+        attackPower = Math.floor(attackPower * mult);
+        defense = Math.floor(defense * mult);
+    }
+    
+    // Apply prefix bonuses
+    if (baseItem.prefix && PREFIXES[baseItem.prefix]) {
+        const prefix = PREFIXES[baseItem.prefix];
+        if (prefix.attackBonus) attackPower = Math.floor(attackPower * (1 + prefix.attackBonus));
+        if (prefix.defenseBonus) defense = Math.floor(defense * (1 + prefix.defenseBonus));
+        if (prefix.hpBonus) maxHp = Math.floor(maxHp * (1 + prefix.hpBonus));
+        if (prefix.critBonus) critChance += prefix.critBonus;
+        if (prefix.lifesteal) baseItem.lifesteal = (baseItem.lifesteal || 0) + prefix.lifesteal;
+        if (prefix.resistance) {
+            baseItem.resistance = baseItem.resistance || {};
+            Object.assign(baseItem.resistance, prefix.resistance);
+        }
+    }
+    
+    // Apply suffix bonuses
+    if (baseItem.suffix && SUFFIXES[baseItem.suffix]) {
+        const suffix = SUFFIXES[baseItem.suffix];
+        if (suffix.attackBonus) attackPower = Math.floor(attackPower * (1 + suffix.attackBonus));
+        if (suffix.defenseBonus) defense = Math.floor(defense * (1 + suffix.defenseBonus));
+        if (suffix.hpBonus) maxHp = Math.floor(maxHp * (1 + suffix.hpBonus));
+        if (suffix.speedBonus) speed = Math.floor(speed * (1 + suffix.speedBonus));
+        if (suffix.critBonus) critChance += suffix.critBonus;
+        if (suffix.lifesteal) baseItem.lifesteal = (baseItem.lifesteal || 0) + suffix.lifesteal;
+        if (suffix.resistance) {
+            baseItem.resistance = baseItem.resistance || {};
+            Object.assign(baseItem.resistance, suffix.resistance);
+        }
+    }
+    
+    // Round values
+    attackPower = Math.max(1, Math.floor(attackPower));
+    defense = Math.max(0, Math.floor(defense));
+    maxHp = Math.max(0, Math.floor(maxHp));
+    speed = Math.max(0, Math.floor(speed));
+    critChance = Math.min(0.5, Math.max(0, critChance)); // Cap at 50%
+    
+    return { attackPower, defense, maxHp, speed, critChance };
+}
+
 /**
  * Generate a random item drop
  */
@@ -5850,13 +6768,29 @@ function generateRandomItem() {
         // 15% - Armor
         const qualities = ['Common', 'Uncommon'];
         const quality = Phaser.Math.RND.pick(qualities);
-        const defense = quality === 'Common' ? Phaser.Math.Between(3, 6) : Phaser.Math.Between(6, 10);
-        return {
+        const material = getMaterialForQuality(quality);
+        const baseDefense = quality === 'Common' ? Phaser.Math.Between(3, 6) : Phaser.Math.Between(6, 10);
+        
+        const prefix = getPrefixForQuality(quality);
+        const suffix = getSuffixForQuality(quality);
+        
+        const item = {
             type: 'armor',
-            name: `${quality} Armor`,
             quality: quality,
-            defense: defense
+            material: material,
+            prefix: prefix,
+            suffix: suffix,
+            defense: baseDefense
         };
+        
+        const specialProps = generateSpecialProperties(item, quality);
+        Object.assign(item, specialProps);
+        item.set = assignItemSet(item, quality);
+        item.name = buildItemName(item);
+        const finalStats = calculateItemStats(item, quality);
+        Object.assign(item, finalStats);
+        
+        return item;
     }
     else if (rand < 0.72) {
         // 12% - Gloves
@@ -5876,54 +6810,111 @@ function generateRandomItem() {
         // 10% - Boots
         const qualities = ['Common', 'Uncommon'];
         const quality = Phaser.Math.RND.pick(qualities);
-        const defense = quality === 'Common' ? Phaser.Math.Between(1, 3) : Phaser.Math.Between(3, 5);
-        return {
+        const material = getMaterialForQuality(quality);
+        const baseDefense = quality === 'Common' ? Phaser.Math.Between(1, 3) : Phaser.Math.Between(3, 5);
+        const baseSpeed = quality === 'Common' ? 5 : 10;
+        
+        const prefix = getPrefixForQuality(quality);
+        const suffix = getSuffixForQuality(quality);
+        
+        const item = {
             type: 'boots',
-            name: `${quality} Boots`,
             quality: quality,
-            defense: defense,
-            speed: quality === 'Common' ? 5 : 10 // Boots give speed bonus
+            material: material,
+            prefix: prefix,
+            suffix: suffix,
+            defense: baseDefense,
+            speed: baseSpeed
         };
-    }
-    else if (rand < 0.90) {
-        // 8% - Helmet
-        const qualities = ['Common', 'Uncommon'];
-        const quality = Phaser.Math.RND.pick(qualities);
-        const defense = quality === 'Common' ? Phaser.Math.Between(2, 4) : Phaser.Math.Between(4, 7);
-        return {
-            type: 'helmet',
-            name: `${quality} Helmet`,
-            quality: quality,
-            defense: defense
-        };
+        
+        const specialProps = generateSpecialProperties(item, quality);
+        Object.assign(item, specialProps);
+        item.set = assignItemSet(item, quality);
+        item.name = buildItemName(item);
+        const finalStats = calculateItemStats(item, quality);
+        Object.assign(item, finalStats);
+        
+        return item;
     }
     else if (rand < 0.95) {
         // 5% - Weapon
         const qualities = ['Common', 'Uncommon', 'Rare'];
         const quality = Phaser.Math.RND.pick(qualities);
-        const attackPower = quality === 'Common' ? Phaser.Math.Between(5, 10) :
-                           quality === 'Uncommon' ? Phaser.Math.Between(10, 15) :
-                           Phaser.Math.Between(15, 20);
-        return {
+        
+        // Get weapon type and material
+        const weaponType = getWeaponTypeForQuality(quality);
+        const material = getMaterialForQuality(quality);
+        const weaponData = WEAPON_TYPES[weaponType];
+        
+        // Base attack power based on quality
+        const baseAttack = quality === 'Common' ? Phaser.Math.Between(5, 10) :
+                          quality === 'Uncommon' ? Phaser.Math.Between(10, 15) :
+                          Phaser.Math.Between(15, 20);
+        
+        // Apply weapon type modifier
+        let attackPower = Math.floor(baseAttack * weaponData.baseAttack);
+        let critChance = weaponData.critChance;
+        
+        // Get prefix and suffix
+        const prefix = getPrefixForQuality(quality);
+        const suffix = getSuffixForQuality(quality);
+        
+        // Create base item
+        const item = {
             type: 'weapon',
-            name: `${quality} Sword`,
             quality: quality,
-            attackPower: attackPower
+            weaponType: weaponType,
+            material: material,
+            prefix: prefix,
+            suffix: suffix,
+            attackPower: attackPower,
+            critChance: critChance,
+            speed: weaponData.speed
         };
+        
+        // Add special properties
+        const specialProps = generateSpecialProperties(item, quality);
+        Object.assign(item, specialProps);
+        
+        // Assign set
+        item.set = assignItemSet(item, quality);
+        
+        // Build name and calculate final stats
+        item.name = buildItemName(item);
+        const finalStats = calculateItemStats(item, quality);
+        Object.assign(item, finalStats);
+        
+        return item;
     }
     else if (rand < 0.98) {
         // 3% - Belt
         const qualities = ['Common', 'Uncommon'];
         const quality = Phaser.Math.RND.pick(qualities);
-        const defense = quality === 'Common' ? Phaser.Math.Between(2, 4) : Phaser.Math.Between(4, 6);
-        const maxHp = quality === 'Common' ? 10 : 15;
-        return {
+        const material = getMaterialForQuality(quality);
+        const baseDefense = quality === 'Common' ? Phaser.Math.Between(2, 4) : Phaser.Math.Between(4, 6);
+        const baseHp = quality === 'Common' ? 10 : 15;
+        
+        const prefix = getPrefixForQuality(quality);
+        const suffix = getSuffixForQuality(quality);
+        
+        const item = {
             type: 'belt',
-            name: `${quality} Belt`,
             quality: quality,
-            defense: defense,
-            maxHp: maxHp
+            material: material,
+            prefix: prefix,
+            suffix: suffix,
+            defense: baseDefense,
+            maxHp: baseHp
         };
+        
+        const specialProps = generateSpecialProperties(item, quality);
+        Object.assign(item, specialProps);
+        item.set = assignItemSet(item, quality);
+        item.name = buildItemName(item);
+        const finalStats = calculateItemStats(item, quality);
+        Object.assign(item, finalStats);
+        
+        return item;
     }
     else if (rand < 0.995) {
         // 1.5% - Ring
@@ -5944,21 +6935,38 @@ function generateRandomItem() {
         // 0.5% - Amulet (rarest)
         const qualities = ['Common', 'Uncommon', 'Rare'];
         const quality = Phaser.Math.RND.pick(qualities);
-        const defenseBonus = quality === 'Common' ? Phaser.Math.Between(2, 4) :
-                            quality === 'Uncommon' ? Phaser.Math.Between(4, 6) :
-                            Phaser.Math.Between(6, 10);
-        return {
+        const material = getMaterialForQuality(quality);
+        const baseDefense = quality === 'Common' ? Phaser.Math.Between(2, 4) :
+                           quality === 'Uncommon' ? Phaser.Math.Between(4, 6) :
+                           Phaser.Math.Between(6, 10);
+        const baseHp = quality === 'Common' ? 10 : quality === 'Uncommon' ? 20 : 30;
+        
+        const prefix = getPrefixForQuality(quality);
+        const suffix = getSuffixForQuality(quality);
+        
+        const item = {
             type: 'amulet',
-            name: `${quality} Amulet`,
             quality: quality,
-            defense: defenseBonus,
-            maxHp: quality === 'Common' ? 10 : quality === 'Uncommon' ? 20 : 30 // Amulets boost HP
+            material: material,
+            prefix: prefix,
+            suffix: suffix,
+            defense: baseDefense,
+            maxHp: baseHp
         };
+        
+        const specialProps = generateSpecialProperties(item, quality);
+        Object.assign(item, specialProps);
+        item.set = assignItemSet(item, quality);
+        item.name = buildItemName(item);
+        const finalStats = calculateItemStats(item, quality);
+        Object.assign(item, finalStats);
+        
+        return item;
     }
 }
 
 /**
- * Generate random item of specific type and quality
+ * Generate random item of specific type and quality (enhanced version)
  */
 function generateRandomItemOfType(itemType, quality = 'Common') {
     const qualityLevels = {
@@ -5970,54 +6978,131 @@ function generateRandomItemOfType(itemType, quality = 'Common') {
     };
     
     const qLevel = qualityLevels[quality] || 1;
+    const material = getMaterialForQuality(quality);
+    const prefix = getPrefixForQuality(quality);
+    const suffix = getSuffixForQuality(quality);
+    
+    let item = {};
     
     switch(itemType) {
         case 'weapon':
-            const weaponPower = 5 + (qLevel * 5) + Phaser.Math.Between(0, 5);
-            return {
+            const weaponType = getWeaponTypeForQuality(quality);
+            const weaponData = WEAPON_TYPES[weaponType];
+            const baseAttack = 5 + (qLevel * 5) + Phaser.Math.Between(0, 5);
+            let attackPower = Math.floor(baseAttack * weaponData.baseAttack);
+            
+            item = {
                 type: 'weapon',
-                name: `${quality} Sword`,
                 quality: quality,
-                attackPower: weaponPower
+                weaponType: weaponType,
+                material: material,
+                prefix: prefix,
+                suffix: suffix,
+                attackPower: attackPower,
+                critChance: weaponData.critChance,
+                speed: weaponData.speed
             };
+            break;
         case 'armor':
             const armorDefense = 3 + (qLevel * 3) + Phaser.Math.Between(0, 3);
-            return {
+            item = {
                 type: 'armor',
-                name: `${quality} Armor`,
                 quality: quality,
+                material: material,
+                prefix: prefix,
+                suffix: suffix,
                 defense: armorDefense
             };
+            break;
         case 'helmet':
             const helmetDefense = 2 + (qLevel * 2) + Phaser.Math.Between(0, 2);
-            return {
+            item = {
                 type: 'helmet',
-                name: `${quality} Helmet`,
                 quality: quality,
+                material: material,
+                prefix: prefix,
+                suffix: suffix,
                 defense: helmetDefense
             };
+            break;
+        case 'boots':
+            const bootsDefense = 1 + (qLevel * 2) + Phaser.Math.Between(0, 2);
+            item = {
+                type: 'boots',
+                quality: quality,
+                material: material,
+                prefix: prefix,
+                suffix: suffix,
+                defense: bootsDefense,
+                speed: 5 + (qLevel * 2)
+            };
+            break;
+        case 'gloves':
+            const glovesDefense = 1 + (qLevel * 2) + Phaser.Math.Between(0, 2);
+            const glovesAttack = 1 + (qLevel * 1) + Phaser.Math.Between(0, 2);
+            item = {
+                type: 'gloves',
+                quality: quality,
+                material: material,
+                prefix: prefix,
+                suffix: suffix,
+                defense: glovesDefense,
+                attackPower: glovesAttack
+            };
+            break;
+        case 'belt':
+            const beltDefense = 2 + (qLevel * 2) + Phaser.Math.Between(0, 2);
+            item = {
+                type: 'belt',
+                quality: quality,
+                material: material,
+                prefix: prefix,
+                suffix: suffix,
+                defense: beltDefense,
+                maxHp: 10 + (qLevel * 5)
+            };
+            break;
         case 'ring':
             const ringAttack = 1 + (qLevel * 2) + Phaser.Math.Between(0, 2);
-            return {
+            item = {
                 type: 'ring',
-                name: `${quality} Ring`,
                 quality: quality,
+                material: material,
+                prefix: prefix,
+                suffix: suffix,
                 attackPower: ringAttack,
                 defense: Math.floor(ringAttack / 2)
             };
+            break;
         case 'amulet':
             const amuletDefense = 2 + (qLevel * 2) + Phaser.Math.Between(0, 2);
-            const amuletHp = 10 + (qLevel * 10);
-            return {
+            item = {
                 type: 'amulet',
-                name: `${quality} Amulet`,
                 quality: quality,
+                material: material,
+                prefix: prefix,
+                suffix: suffix,
                 defense: amuletDefense,
-                maxHp: amuletHp
+                maxHp: 10 + (qLevel * 10)
             };
+            break;
         default:
             return generateRandomItem(); // Fallback
     }
+    
+    // Add special properties
+    const specialProps = generateSpecialProperties(item, quality);
+    Object.assign(item, specialProps);
+    
+    // Assign set
+    item.set = assignItemSet(item, quality);
+    
+    // Build name and calculate final stats
+    item.name = buildItemName(item);
+    const finalStats = calculateItemStats(item, quality);
+    Object.assign(item, finalStats);
+    
+    return item;
 }
 
 /**
@@ -6254,8 +7339,17 @@ function updateInventoryItems() {
         
         // Get item sprite key
         let spriteKey = 'item_weapon';
-        if (item.type === 'weapon') spriteKey = 'item_weapon';
-        else if (item.type === 'armor') spriteKey = 'item_armor';
+        if (item.type === 'weapon') {
+            // For weapons, use weapon-specific sprite based on weaponType
+            const weaponType = item.weaponType || 'Sword';
+            const weaponKey = `weapon_${weaponType.toLowerCase()}`;
+            // Check if weapon-specific sprite exists, otherwise fallback to item_weapon
+            if (scene.textures.exists(weaponKey)) {
+                spriteKey = weaponKey;
+            } else {
+                spriteKey = 'item_weapon'; // Fallback
+            }
+        } else if (item.type === 'armor') spriteKey = 'item_armor';
         else if (item.type === 'helmet') spriteKey = 'item_helmet';
         else if (item.type === 'ring') spriteKey = 'item_ring';
         else if (item.type === 'amulet') spriteKey = 'item_amulet';
@@ -6389,9 +7483,19 @@ function showItemTooltip(item, x, y) {
         tooltipLines.push(`Type: ${item.type.charAt(0).toUpperCase() + item.type.slice(1)}`);
     }
     
+    // Show material and weapon type if applicable
+    if (item.material) {
+        tooltipLines.push(`Material: ${item.material}`);
+    }
+    if (item.weaponType) {
+        tooltipLines.push(`Weapon Type: ${item.weaponType}`);
+    }
+    
     // Show relevant stats for each item type
     if (item.type === 'weapon') {
         if (item.attackPower) tooltipLines.push(`Attack: +${item.attackPower}`);
+        if (item.critChance) tooltipLines.push(`Crit Chance: +${(item.critChance * 100).toFixed(1)}%`);
+        if (item.speed) tooltipLines.push(`Speed: ${(item.speed * 100).toFixed(0)}%`);
     } else if (item.type === 'armor') {
         if (item.defense) tooltipLines.push(`Defense: +${item.defense}`);
     } else if (item.type === 'helmet') {
@@ -6399,9 +7503,11 @@ function showItemTooltip(item, x, y) {
     } else if (item.type === 'ring') {
         if (item.attackPower) tooltipLines.push(`Attack: +${item.attackPower}`);
         if (item.defense) tooltipLines.push(`Defense: +${item.defense}`);
+        if (item.critChance) tooltipLines.push(`Crit Chance: +${(item.critChance * 100).toFixed(1)}%`);
     } else if (item.type === 'amulet') {
         if (item.defense) tooltipLines.push(`Defense: +${item.defense}`);
         if (item.maxHp) tooltipLines.push(`Max HP: +${item.maxHp}`);
+        if (item.lifesteal) tooltipLines.push(`Lifesteal: +${(item.lifesteal * 100).toFixed(1)}%`);
     } else if (item.type === 'boots') {
         if (item.defense) tooltipLines.push(`Defense: +${item.defense}`);
         if (item.speed) tooltipLines.push(`Speed: +${item.speed}`);
@@ -6413,6 +7519,47 @@ function showItemTooltip(item, x, y) {
         if (item.maxHp) tooltipLines.push(`Max HP: +${item.maxHp}`);
     } else if (item.type === 'consumable') {
         if (item.healAmount) tooltipLines.push(`Heal: +${item.healAmount} HP`);
+    }
+    
+    // Show special properties
+    if (item.lifesteal && item.type !== 'amulet') {
+        tooltipLines.push(`Lifesteal: +${(item.lifesteal * 100).toFixed(1)}%`);
+    }
+    if (item.elementalDamage) {
+        tooltipLines.push(`${item.elementalDamage.type} Damage: +${item.elementalDamage.amount}`);
+    }
+    if (item.resistance) {
+        Object.keys(item.resistance).forEach(resType => {
+            tooltipLines.push(`${resType.charAt(0).toUpperCase() + resType.slice(1)} Resist: +${(item.resistance[resType] * 100).toFixed(1)}%`);
+        });
+    }
+    
+    // Show set information
+    if (item.set) {
+        tooltipLines.push('');
+        tooltipLines.push(`Set: ${item.set}`);
+        const setInfo = ITEM_SETS[item.set];
+        if (setInfo) {
+            const pieceCount = setInfo.pieces.length;
+            Object.keys(setInfo.bonuses).forEach(count => {
+                if (parseInt(count) <= pieceCount) {
+                    const bonus = setInfo.bonuses[count];
+                    const bonusText = Object.keys(bonus).map(key => {
+                        if (key === 'attackBonus') return `+${(bonus[key] * 100).toFixed(0)}% Attack`;
+                        if (key === 'defenseBonus') return `+${(bonus[key] * 100).toFixed(0)}% Defense`;
+                        if (key === 'hpBonus') return `+${(bonus[key] * 100).toFixed(0)}% HP`;
+                        if (key === 'critBonus') return `+${(bonus[key] * 100).toFixed(0)}% Crit`;
+                        if (key === 'speedBonus') return `+${(bonus[key] * 100).toFixed(0)}% Speed`;
+                        if (key === 'lifesteal') return `+${(bonus[key] * 100).toFixed(0)}% Lifesteal`;
+                        if (key === 'resistance') {
+                            return Object.keys(bonus[key]).map(r => `${r} Resist +${(bonus[key][r] * 100).toFixed(0)}%`).join(', ');
+                        }
+                        return `${key}: ${bonus[key]}`;
+                    }).join(', ');
+                    tooltipLines.push(`(${count} pieces): ${bonusText}`);
+                }
+            });
+        }
     }
     
     // Add action hint based on item type
@@ -6622,6 +7769,11 @@ function equipItemFromInventory(item, inventoryIndex) {
     // Show feedback
     showDamageNumber(player.x, player.y - 40, `Equipped ${item.name}`, 0x00ffff);
     console.log(`Equipped ${item.name} in ${slot} slot`);
+    
+    // Update weapon sprite if weapon was equipped
+    if (slot === 'weapon') {
+        updateWeaponSprite();
+    }
 }
 
 /**
@@ -6676,6 +7828,11 @@ function unequipItem(slot) {
     // Show feedback
     showDamageNumber(player.x, player.y - 40, `Unequipped ${item.name}`, 0xffff00);
     console.log(`Unequipped ${item.name} from ${slot} slot`);
+    
+    // Update weapon sprite if weapon was unequipped
+    if (slot === 'weapon') {
+        updateWeaponSprite();
+    }
 }
 
 /**
@@ -6688,21 +7845,31 @@ function updatePlayerStats() {
     let maxHpBonus = 0;
     let speedBonus = 0;
     
+    // Reset special properties
+    playerStats.critChance = 0;
+    playerStats.lifesteal = 0;
+    playerStats.elementalDamage = null;
+    playerStats.resistances = {};
+    playerStats.attackSpeedMultiplier = 1.0;
+    
+    // Track set pieces for set bonuses
+    const setPieces = {};
+    
     // Add bonuses from all equipment
     Object.values(playerStats.equipment).forEach(item => {
         if (!item) return;
         
-        // Attack bonuses (weapon, ring)
+        // Attack bonuses (weapon, ring, gloves)
         if (item.attackPower) {
             playerStats.attack += item.attackPower;
         }
         
-        // Defense bonuses (armor, helmet, ring, amulet, boots)
+        // Defense bonuses (armor, helmet, ring, amulet, boots, gloves, belt)
         if (item.defense) {
             playerStats.defense += item.defense;
         }
         
-        // Max HP bonus (amulet)
+        // Max HP bonus (amulet, belt)
         if (item.maxHp) {
             maxHpBonus += item.maxHp;
         }
@@ -6711,7 +7878,86 @@ function updatePlayerStats() {
         if (item.speed) {
             speedBonus += item.speed;
         }
+        
+        // Weapon speed multiplier
+        if (item.type === 'weapon' && item.speed) {
+            playerStats.attackSpeedMultiplier = item.speed;
+        }
+        
+        // Special properties
+        if (item.critChance) {
+            playerStats.critChance += item.critChance;
+        }
+        if (item.lifesteal) {
+            playerStats.lifesteal += item.lifesteal;
+        }
+        if (item.elementalDamage) {
+            // If multiple elemental damages, use the highest
+            if (!playerStats.elementalDamage || item.elementalDamage.amount > playerStats.elementalDamage.amount) {
+                playerStats.elementalDamage = { ...item.elementalDamage };
+            }
+        }
+        if (item.resistance) {
+            Object.keys(item.resistance).forEach(resType => {
+                playerStats.resistances[resType] = (playerStats.resistances[resType] || 0) + item.resistance[resType];
+            });
+        }
+        
+        // Track set pieces
+        if (item.set) {
+            if (!setPieces[item.set]) {
+                setPieces[item.set] = [];
+            }
+            setPieces[item.set].push(item.type);
+        }
     });
+    
+    // Apply set bonuses
+    Object.keys(setPieces).forEach(setName => {
+        const setInfo = ITEM_SETS[setName];
+        if (!setInfo) return;
+        
+        const equippedPieces = setPieces[setName];
+        const pieceCount = equippedPieces.length;
+        
+        // Find the highest bonus tier we qualify for
+        const bonusTiers = Object.keys(setInfo.bonuses).map(Number).sort((a, b) => b - a);
+        for (const tier of bonusTiers) {
+            if (pieceCount >= tier) {
+                const bonus = setInfo.bonuses[tier];
+                
+                // Apply percentage bonuses
+                if (bonus.attackBonus) {
+                    playerStats.attack = Math.floor(playerStats.attack * (1 + bonus.attackBonus));
+                }
+                if (bonus.defenseBonus) {
+                    playerStats.defense = Math.floor(playerStats.defense * (1 + bonus.defenseBonus));
+                }
+                if (bonus.hpBonus) {
+                    maxHpBonus = Math.floor(maxHpBonus * (1 + bonus.hpBonus));
+                }
+                if (bonus.critBonus) {
+                    playerStats.critChance += bonus.critBonus;
+                }
+                if (bonus.speedBonus) {
+                    speedBonus = Math.floor(speedBonus * (1 + bonus.speedBonus));
+                }
+                if (bonus.lifesteal) {
+                    playerStats.lifesteal += bonus.lifesteal;
+                }
+                if (bonus.resistance) {
+                    Object.keys(bonus.resistance).forEach(resType => {
+                        playerStats.resistances[resType] = (playerStats.resistances[resType] || 0) + bonus.resistance[resType];
+                    });
+                }
+                
+                break; // Only apply the highest tier
+            }
+        }
+    });
+    
+    // Cap crit chance at 50%
+    playerStats.critChance = Math.min(0.5, playerStats.critChance);
     
     // Apply max HP bonus (increase max HP, but don't reduce current HP if it would go below 1)
     if (maxHpBonus > 0) {
@@ -6722,9 +7968,6 @@ function updatePlayerStats() {
             playerStats.hp = playerStats.maxHp;
         }
     }
-    
-    // Speed bonus is stored but not used yet (could affect movement speed)
-    // playerStats.speedBonus = speedBonus;
     
     // Store speed bonus for attack speed calculation
     playerStats.speedBonus = speedBonus;
@@ -7180,8 +8423,17 @@ function updateEquipmentInventoryItems() {
         
         // Get item sprite key based on type
         let spriteKey = 'item_weapon';
-        if (item.type === 'weapon') spriteKey = 'item_weapon';
-        else if (item.type === 'armor') spriteKey = 'item_armor';
+        if (item.type === 'weapon') {
+            // For weapons, use weapon-specific sprite based on weaponType
+            const weaponType = item.weaponType || 'Sword';
+            const weaponKey = `weapon_${weaponType.toLowerCase()}`;
+            // Check if weapon-specific sprite exists, otherwise fallback to item_weapon
+            if (scene.textures.exists(weaponKey)) {
+                spriteKey = weaponKey;
+            } else {
+                spriteKey = 'item_weapon'; // Fallback
+            }
+        } else if (item.type === 'armor') spriteKey = 'item_armor';
         else if (item.type === 'helmet') spriteKey = 'item_helmet';
         else if (item.type === 'ring') spriteKey = 'item_ring';
         else if (item.type === 'amulet') spriteKey = 'item_amulet';
@@ -7415,8 +8667,23 @@ function createEquipmentSlot(slotName, x, y, size) {
     if (item) {
         // Get item sprite key based on type
         let spriteKey = 'item_weapon';
-        if (item.type === 'weapon') spriteKey = 'item_weapon';
-        else if (item.type === 'armor') spriteKey = 'item_armor';
+        if (item.type === 'weapon') {
+            // For weapons, use weapon-specific sprite based on weaponType
+            const weaponType = item.weaponType || 'Sword';
+            const weaponKey = `weapon_${weaponType.toLowerCase()}`;
+            console.log(`🔍 Equipment screen - Weapon: ${item.name}, weaponType: ${weaponType}, weaponKey: ${weaponKey}`);
+            console.log(`   Full item object:`, JSON.stringify(item, null, 2));
+            // Check if weapon-specific sprite exists, otherwise fallback to item_weapon
+            const textureExists = scene.textures.exists(weaponKey);
+            console.log(`   Texture ${weaponKey} exists: ${textureExists}`);
+            if (textureExists) {
+                spriteKey = weaponKey;
+                console.log(`✅ Using weapon sprite: ${weaponKey}`);
+            } else {
+                console.log(`⚠️ Weapon sprite ${weaponKey} not found, using fallback item_weapon`);
+                spriteKey = 'item_weapon'; // Fallback
+            }
+        } else if (item.type === 'armor') spriteKey = 'item_armor';
         else if (item.type === 'helmet') spriteKey = 'item_helmet';
         else if (item.type === 'ring') spriteKey = 'item_ring';
         else if (item.type === 'amulet') spriteKey = 'item_amulet';
@@ -8043,6 +9310,11 @@ function initializeQuests() {
         playerStats.quests.completedQuests = [];
     }
     
+    // Initialize available quests array if it doesn't exist
+    if (!playerStats.quests.available) {
+        playerStats.quests.available = [];
+    }
+    
     playerStats.quests.active = starterQuests;
     console.log('✅ Quests initialized:', starterQuests.length, 'active quests');
 }
@@ -8267,21 +9539,34 @@ function createQuestLogUI() {
         fill: '#aaaaaa'
     }).setScrollFactor(0).setDepth(301).setOrigin(1, 0);
     
-    // Tab buttons
+    // Tab buttons (three tabs: Current, Available, Completed)
     const tabY = centerY - panelHeight/2 + 60;
-    const currentTabBtn = scene.add.rectangle(centerX - 100, tabY, 150, 35, 0x333333, 0.9)
+    const tabWidth = 140;
+    const tabSpacing = 10;
+    const totalTabWidth = (tabWidth * 3) + (tabSpacing * 2);
+    const tabStartX = centerX - totalTabWidth / 2 + tabWidth / 2;
+    
+    const currentTabBtn = scene.add.rectangle(tabStartX, tabY, tabWidth, 35, 0x333333, 0.9)
         .setScrollFactor(0).setDepth(301).setStrokeStyle(2, 0xffffff).setInteractive({ useHandCursor: true });
     
-    const currentTabText = scene.add.text(centerX - 100, tabY, 'Current Quests', {
+    const currentTabText = scene.add.text(tabStartX, tabY, 'Current', {
         fontSize: '16px',
         fill: '#ffffff',
         fontStyle: 'bold'
     }).setScrollFactor(0).setDepth(302).setOrigin(0.5, 0.5);
     
-    const completedTabBtn = scene.add.rectangle(centerX + 100, tabY, 150, 35, 0x333333, 0.9)
+    const availableTabBtn = scene.add.rectangle(tabStartX + tabWidth + tabSpacing, tabY, tabWidth, 35, 0x333333, 0.9)
         .setScrollFactor(0).setDepth(301).setStrokeStyle(2, 0x666666).setInteractive({ useHandCursor: true });
     
-    const completedTabText = scene.add.text(centerX + 100, tabY, 'Completed Quests', {
+    const availableTabText = scene.add.text(tabStartX + tabWidth + tabSpacing, tabY, 'Available', {
+        fontSize: '16px',
+        fill: '#aaaaaa'
+    }).setScrollFactor(0).setDepth(302).setOrigin(0.5, 0.5);
+    
+    const completedTabBtn = scene.add.rectangle(tabStartX + (tabWidth + tabSpacing) * 2, tabY, tabWidth, 35, 0x333333, 0.9)
+        .setScrollFactor(0).setDepth(301).setStrokeStyle(2, 0x666666).setInteractive({ useHandCursor: true });
+    
+    const completedTabText = scene.add.text(tabStartX + (tabWidth + tabSpacing) * 2, tabY, 'Completed', {
         fontSize: '16px',
         fill: '#aaaaaa'
     }).setScrollFactor(0).setDepth(302).setOrigin(0.5, 0.5);
@@ -8289,6 +9574,13 @@ function createQuestLogUI() {
     // Tab click handlers
     const switchToCurrent = () => {
         questLogTab = 'current';
+        selectedQuestIndex = 0; // Reset selection
+        updateTabButtons();
+        updateQuestLogItems();
+    };
+    
+    const switchToAvailable = () => {
+        questLogTab = 'available';
         selectedQuestIndex = 0; // Reset selection
         updateTabButtons();
         updateQuestLogItems();
@@ -8302,14 +9594,22 @@ function createQuestLogUI() {
     };
     
     const updateTabButtons = () => {
+        // Reset all tabs to inactive style
+        currentTabBtn.setStrokeStyle(2, 0x666666);
+        currentTabText.setStyle({ fill: '#aaaaaa', fontStyle: 'normal' });
+        availableTabBtn.setStrokeStyle(2, 0x666666);
+        availableTabText.setStyle({ fill: '#aaaaaa', fontStyle: 'normal' });
+        completedTabBtn.setStrokeStyle(2, 0x666666);
+        completedTabText.setStyle({ fill: '#aaaaaa', fontStyle: 'normal' });
+        
+        // Set active tab style
         if (questLogTab === 'current') {
             currentTabBtn.setStrokeStyle(2, 0xffffff);
             currentTabText.setStyle({ fill: '#ffffff', fontStyle: 'bold' });
-            completedTabBtn.setStrokeStyle(2, 0x666666);
-            completedTabText.setStyle({ fill: '#aaaaaa', fontStyle: 'normal' });
-        } else {
-            currentTabBtn.setStrokeStyle(2, 0x666666);
-            currentTabText.setStyle({ fill: '#aaaaaa', fontStyle: 'normal' });
+        } else if (questLogTab === 'available') {
+            availableTabBtn.setStrokeStyle(2, 0xffffff);
+            availableTabText.setStyle({ fill: '#ffffff', fontStyle: 'bold' });
+        } else if (questLogTab === 'completed') {
             completedTabBtn.setStrokeStyle(2, 0xffffff);
             completedTabText.setStyle({ fill: '#ffffff', fontStyle: 'bold' });
         }
@@ -8318,6 +9618,10 @@ function createQuestLogUI() {
     currentTabBtn.on('pointerdown', switchToCurrent);
     currentTabText.setInteractive({ useHandCursor: true });
     currentTabText.on('pointerdown', switchToCurrent);
+    
+    availableTabBtn.on('pointerdown', switchToAvailable);
+    availableTabText.setInteractive({ useHandCursor: true });
+    availableTabText.on('pointerdown', switchToAvailable);
     
     completedTabBtn.on('pointerdown', switchToCompleted);
     completedTabText.setInteractive({ useHandCursor: true });
@@ -8334,6 +9638,8 @@ function createQuestLogUI() {
         closeText: closeText,
         currentTabBtn: currentTabBtn,
         currentTabText: currentTabText,
+        availableTabBtn: availableTabBtn,
+        availableTabText: availableTabText,
         completedTabBtn: completedTabBtn,
         completedTabText: completedTabText,
         divider: divider,
@@ -8388,6 +9694,9 @@ function updateQuestLogItems() {
     let quests = [];
     if (questLogTab === 'current') {
         quests = playerStats.quests.active;
+    } else if (questLogTab === 'available') {
+        // Get available quests (rejected/cancelled)
+        quests = playerStats.quests.available || [];
     } else {
         // Get completed quests
         quests = playerStats.quests.completedQuests || [];
@@ -8403,8 +9712,14 @@ function updateQuestLogItems() {
     
     // Quest list on left
     if (quests.length === 0) {
+        let noQuestsMessage = 'No active quests';
+        if (questLogTab === 'available') {
+            noQuestsMessage = 'No available quests';
+        } else if (questLogTab === 'completed') {
+            noQuestsMessage = 'No completed quests';
+        }
         const noQuestsText = scene.add.text(listStartX + listWidth/2, listStartY + listHeight/2, 
-            questLogTab === 'current' ? 'No active quests' : 'No completed quests', {
+            noQuestsMessage, {
             fontSize: '16px',
             fill: '#888888',
             fontStyle: 'italic'
@@ -8556,6 +9871,51 @@ function updateQuestLogItems() {
             fill: '#ffd700'
         }).setScrollFactor(0).setDepth(302).setOrigin(0, 0);
         questPanel.questDetailElements.push(rewards);
+        
+        // Accept button for available quests
+        if (questLogTab === 'available') {
+            detailY += 60;
+            const acceptBtn = scene.add.rectangle(detailStartX + (detailWidth - 20) / 2, detailY, 200, 40, 0x00aa00, 0.9)
+                .setScrollFactor(0).setDepth(301).setStrokeStyle(2, 0x00ff00).setInteractive({ useHandCursor: true });
+            
+            const acceptBtnText = scene.add.text(detailStartX + (detailWidth - 20) / 2, detailY, 'Accept Quest', {
+                fontSize: '18px',
+                fill: '#ffffff',
+                fontStyle: 'bold'
+            }).setScrollFactor(0).setDepth(302).setOrigin(0.5, 0.5);
+            
+            const acceptQuest = () => {
+                // Move quest from available to active
+                const questIndex = playerStats.quests.available.findIndex(q => q.id === quest.id);
+                if (questIndex !== -1) {
+                    const questToAccept = playerStats.quests.available[questIndex];
+                    playerStats.quests.available.splice(questIndex, 1);
+                    
+                    // Initialize active array if needed
+                    if (!playerStats.quests.active) {
+                        playerStats.quests.active = [];
+                    }
+                    
+                    // Reset quest progress when accepting
+                    questToAccept.progress = 0;
+                    
+                    // Only add to active if not already there
+                    if (!playerStats.quests.active.find(q => q.id === questToAccept.id)) {
+                        playerStats.quests.active.push(questToAccept);
+                    }
+                    
+                    // Refresh quest log display
+                    updateQuestLogItems();
+                    playSound('item_pickup');
+                }
+            };
+            
+            acceptBtn.on('pointerdown', acceptQuest);
+            acceptBtnText.setInteractive({ useHandCursor: true });
+            acceptBtnText.on('pointerdown', acceptQuest);
+            
+            questPanel.questDetailElements.push(acceptBtn, acceptBtnText);
+        }
     } else if (quests.length === 0) {
         // No quests message already shown in list
     }
@@ -8589,7 +9949,10 @@ function destroyQuestLogUI() {
         if (questPanel.closeText) questPanel.closeText.destroy();
         if (questPanel.currentTabBtn) questPanel.currentTabBtn.destroy();
         if (questPanel.currentTabText) questPanel.currentTabText.destroy();
+        if (questPanel.availableTabBtn) questPanel.availableTabBtn.destroy();
+        if (questPanel.availableTabText) questPanel.availableTabText.destroy();
         if (questPanel.completedTabBtn) questPanel.completedTabBtn.destroy();
+        if (questPanel.completedTabText) questPanel.completedTabText.destroy();
         if (questPanel.completedTabText) questPanel.completedTabText.destroy();
         if (questPanel.divider) questPanel.divider.destroy();
         
@@ -8759,6 +10122,15 @@ function showNewQuestModal(quest) {
         return;
     }
     
+    // CRITICAL: Don't show if quest completed modal is still open
+    // Wait for it to close first
+    if (questCompletedModal) {
+        console.log('⏳ Quest completed modal is open, queuing new quest modal');
+        // Store it to show after completed modal closes
+        pendingNewQuest = quest;
+        return;
+    }
+    
     const scene = game.scene.scenes[0];
     
     // Hide any existing modal
@@ -8853,10 +10225,21 @@ function showNewQuestModal(quest) {
     
     // Cancel handler
     const cancelQuest = () => {
-        // Remove quest from active list
+        // Remove quest from active list and move to available
         const questIndex = playerStats.quests.active.findIndex(q => q.id === questRef.id);
         if (questIndex !== -1) {
+            const quest = playerStats.quests.active[questIndex];
             playerStats.quests.active.splice(questIndex, 1);
+            
+            // Initialize available array if needed
+            if (!playerStats.quests.available) {
+                playerStats.quests.available = [];
+            }
+            
+            // Only add to available if not already there
+            if (!playerStats.quests.available.find(q => q.id === quest.id)) {
+                playerStats.quests.available.push(quest);
+            }
         }
         hideNewQuestModal();
     };
@@ -10410,8 +11793,17 @@ function updateShopInventoryItems() {
         
         // Get item sprite key based on type
         let spriteKey = 'item_weapon';
-        if (item.type === 'weapon') spriteKey = 'item_weapon';
-        else if (item.type === 'armor') spriteKey = 'item_armor';
+        if (item.type === 'weapon') {
+            // For weapons, use weapon-specific sprite based on weaponType
+            const weaponType = item.weaponType || 'Sword';
+            const weaponKey = `weapon_${weaponType.toLowerCase()}`;
+            // Check if weapon-specific sprite exists, otherwise fallback to item_weapon
+            if (scene.textures.exists(weaponKey)) {
+                spriteKey = weaponKey;
+            } else {
+                spriteKey = 'item_weapon'; // Fallback
+            }
+        } else if (item.type === 'armor') spriteKey = 'item_armor';
         else if (item.type === 'helmet') spriteKey = 'item_helmet';
         else if (item.type === 'ring') spriteKey = 'item_ring';
         else if (item.type === 'amulet') spriteKey = 'item_amulet';
@@ -11250,12 +12642,17 @@ function loadGame() {
         
         // Restore dungeon state
         if (saveData.dungeonSeeds) {
+            console.log('📦 Restoring dungeon seeds from save:', saveData.dungeonSeeds);
             // Rebuild cache from seeds (lazy - only store seeds, regenerate when needed)
             Object.keys(saveData.dungeonSeeds).forEach(key => {
                 const seed = saveData.dungeonSeeds[key];
                 const level = parseInt(key.replace('level_', ''));
                 dungeonCache[key] = { seed: seed, level: level };
+                console.log(`  - ${key}: seed=${seed}, level=${level}`);
             });
+            console.log('📦 Dungeon cache after restore:', Object.keys(dungeonCache));
+        } else {
+            console.warn('⚠️ No dungeon seeds found in save data');
         }
         
         if (saveData.dungeonCompletions) {
@@ -11273,6 +12670,19 @@ function loadGame() {
             // Always use transitionToMap to ensure proper cleanup, even if we're already on that map
             // This ensures buildings/NPCs from previous map are properly destroyed
             const savedLevel = saveData.dungeonLevel || 1;
+            
+            // IMPORTANT: For dungeons, ensure cache is properly set up before transition
+            if (savedMap === 'dungeon' && saveData.dungeonSeeds) {
+                const dungeonKey = `level_${savedLevel}`;
+                // Double-check that the seed is in cache before transitioning
+                if (saveData.dungeonSeeds[dungeonKey] && (!dungeonCache[dungeonKey] || !dungeonCache[dungeonKey].seed)) {
+                    console.log(`🔧 Ensuring seed is in cache for ${dungeonKey} before transition...`);
+                    dungeonCache[dungeonKey] = { 
+                        seed: saveData.dungeonSeeds[dungeonKey], 
+                        level: savedLevel 
+                    };
+                }
+            }
             
             // Store player position before transition (transitionToMap might move player)
             const savedPlayerPos = saveData.playerPosition ? {
@@ -11310,6 +12720,9 @@ function loadGame() {
         refreshInventory();
         refreshEquipment();
         refreshQuestLog();
+        
+        // Update weapon sprite to show equipped weapon
+        updateWeaponSprite();
         
         showDamageNumber(player.x, player.y - 40, 'Game Loaded!', 0x00ff00);
         console.log('✅ Game loaded from localStorage');
@@ -11562,7 +12975,8 @@ function castAbility(abilityId, time) {
                 
                 // Show magic damage number
                 showDamageNumber(monster.x, monster.y - 20, `-${damage}`, 0x4400ff, false, 'magic');
-                addChatMessage(`Fireball hit for ${damage} damage`, 0x4400ff, '⚡');
+                const monsterName = monster.monsterType || 'Monster';
+                addChatMessage(`Fireball hit ${monsterName} for ${damage} damage`, 0x4400ff, '⚡');
                 
                 // Visual effect
                 createFireballEffect(monster.x, monster.y);
@@ -12858,17 +14272,24 @@ function createMonsterAnimations() {
             });
         }
         
-        // Attack animation
-        const attackTextureKey = `monster_${type}_attack`;
-        const attackAnimKey = `${type}_attack`;
-        if (scene.textures.exists(attackTextureKey)) {
-            scene.anims.create({
-                key: attackAnimKey,
-                frames: scene.anims.generateFrameNumbers(attackTextureKey, { start: 0, end: -1 }),
-                frameRate: 10, // Faster for attack
-                repeat: 0 // Play once
-            });
-        }
+        // Attack animations (4 directions) - check for sprite sheets first
+        ['south', 'north', 'east', 'west'].forEach(direction => {
+            const attackSpriteSheetKey = `monster_${type}_attack_${direction}`;
+            const attackAnimKey = `${type}_attack_${direction}`;
+            
+            // Check for animated sprite sheet first
+            if (scene.textures.exists(attackSpriteSheetKey)) {
+                scene.anims.create({
+                    key: attackAnimKey,
+                    frames: scene.anims.generateFrameNumbers(attackSpriteSheetKey, { start: 0, end: -1 }),
+                    frameRate: 12, // Faster for attack
+                    repeat: 0 // Play once
+                });
+                console.log(`✅ Created attack animation: ${attackAnimKey} from ${attackSpriteSheetKey}`);
+            } else {
+                console.log(`⚠️ Attack spritesheet not found: ${attackSpriteSheetKey}`);
+            }
+        });
         
         // Death animation
         const deathTextureKey = `monster_${type}_death`;
@@ -12985,11 +14406,18 @@ function playMonsterAttackAnimation(monster) {
     if (!monster || !monster.active) return;
     
     const monsterType = (monster.monsterType || 'goblin').toLowerCase();
-    const attackAnimKey = `${monsterType}_attack`;
+    
+    // Get the direction the monster is facing (default to south if not set)
+    const direction = monster.facingDirection || 'south';
+    const attackAnimKey = `${monsterType}_attack_${direction}`;
     
     monster.animationState = 'attacking';
     
+    console.log(`🎬 Attempting to play attack animation: ${attackAnimKey} for ${monsterType} facing ${direction}`);
+    
+    // Try directional attack animation first
     if (scene.anims.exists(attackAnimKey)) {
+        console.log(`✅ Found directional attack animation: ${attackAnimKey}`);
         monster.play(attackAnimKey);
         
         // Return to walking/idle after attack completes
@@ -12999,6 +14427,28 @@ function playMonsterAttackAnimation(monster) {
                 updateMonsterAnimation(monster, 0); // Update to correct state
             }
         });
+    } else {
+        // Fallback: try non-directional attack animation
+        const fallbackAttackKey = `${monsterType}_attack`;
+        console.log(`⚠️ Directional animation not found, trying fallback: ${fallbackAttackKey}`);
+        if (scene.anims.exists(fallbackAttackKey)) {
+            monster.play(fallbackAttackKey);
+            monster.once('animationcomplete', (animation) => {
+                if (animation && animation.key === fallbackAttackKey) {
+                    monster.animationState = 'idle';
+                    updateMonsterAnimation(monster, 0);
+                }
+            });
+        } else {
+            console.log(`❌ No attack animation found for ${monsterType}`);
+            // No attack animation available, just reset state after a short delay
+            scene.time.delayedCall(300, () => {
+                if (monster && monster.active) {
+                    monster.animationState = 'idle';
+                    updateMonsterAnimation(monster, 0);
+                }
+            });
+        }
     }
 }
 

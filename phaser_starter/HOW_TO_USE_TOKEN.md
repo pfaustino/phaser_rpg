@@ -49,3 +49,5 @@ To https://github.com/pfaustino/phaser_rpg.git
 ✅ **Safe:** Using credential helper (Windows saves it securely)  
 ✅ **Safe:** Token in URL for one-time push (not stored)  
 ❌ **Not recommended:** Hardcoding token in files or scripts
+
+

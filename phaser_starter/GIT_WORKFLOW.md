@@ -101,3 +101,5 @@ git diff game.js
 - Always commit with descriptive messages
 - Push regularly to backup your work
 - Use `git status` before committing to see what will be included
+
+

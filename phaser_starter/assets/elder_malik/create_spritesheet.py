@@ -39,3 +39,5 @@ if len(images) == 4:
     print(f'Spritesheet created: {output_path} ({spritesheet_width}x{spritesheet_height})')
 else:
     print(f'Error: Expected 4 images, found {len(images)}')
+
+

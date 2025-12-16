@@ -55,3 +55,5 @@ To get a classic token:
 
 - ✅ Starts with `ghp_` = Classic token
 - ❌ Starts with `github_pat_` = Fine-grained token
+
+

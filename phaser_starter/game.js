@@ -4708,11 +4708,24 @@ function update(time, delta) {
     
     // ESC key - close any open interface
     if (settingsKey && Phaser.Input.Keyboard.JustDown(settingsKey)) {
-        // Check if any interface is open
-        if (inventoryVisible || equipmentVisible || questVisible || shopVisible || settingsVisible) {
+        // Check if any interface is open (including dialogs, building panels, and quest modals)
+        const anyInterfaceOpen = inventoryVisible || equipmentVisible || questVisible || shopVisible || settingsVisible || dialogVisible || buildingPanelVisible || questCompletedModal || newQuestModal;
+        
+        if (anyInterfaceOpen) {
+            // Close all interfaces - don't open settings
             closeAllInterfaces();
+            // Also close dialog and building panel if they're open
+            // (closeDialog() and closeBuildingUI() will set their visibility flags)
+            if (dialogVisible) {
+                closeDialog(); // This sets dialogVisible = false internally
+            }
+            if (buildingPanelVisible) {
+                closeBuildingUI(); // This sets buildingPanelVisible = false internally
+            }
+            // Quest modals have their own ESC handlers that will close them
+            // We just need to prevent Settings from opening
         } else {
-            // If no interface is open, toggle settings
+            // Only open settings if NO interface is open
             toggleSettings();
         }
     }
@@ -8034,15 +8047,15 @@ function createEquipmentUI() {
     // Need enough space for first item icon (60px) + text label below (20px) + padding
     // When scrollPosition = minScroll (-20), container is at: inventoryStartY - containerOffset - (-20)
     // = inventoryStartY - containerOffset + 20
-    // To show first item fully, we need: inventoryStartY - containerOffset + 20 + itemTop = inventoryStartY - someMargin
-    // So: containerOffset = 20 + itemHeight + margin
-    const containerOffset = 80; // Offset to show full first row (icon 60px + label 20px)
+    // Container offset: at minScroll, we want items at startY to appear at inventoryStartY
+    // Similar calculation to shop - using larger offset for better visibility
+    const containerOffset = 70; // Increased to ensure first row is fully visible
     const inventoryContainer = scene.add.container(rightPanelX, inventoryStartY - containerOffset);
     inventoryContainer.setScrollFactor(0).setDepth(301);
     
     // Create mask for the scrollable area (visible area in right panel)
     // Start mask well above inventoryStartY to prevent clipping of first row
-    const maskTopOffset = 20; // Large offset to prevent clipping
+    const maskTopOffset = 40; // Increased further to show entire first row sprites
     const inventoryMask = scene.make.graphics();
     inventoryMask.fillStyle(0xffffff);
     inventoryMask.fillRect(rightPanelX - panelWidth/2, inventoryStartY - maskTopOffset, panelWidth, inventoryVisibleHeight + maskTopOffset);
@@ -8068,7 +8081,7 @@ function createEquipmentUI() {
     // At scrollPosition = minScroll (negative), container moves up more to show first items
     // At scrollPosition = 0, container is at inventoryStartY - containerOffset
     // At scrollPosition = maxScroll, container moves up: y = inventoryStartY - containerOffset - maxScroll
-    const minScroll = -20; // Allow negative scroll to show first items fully (increased for better visibility)
+    const minScroll = -40; // Increased to show items with top padding at correct position
     let scrollPosition = minScroll; // Start at minScroll to show first items
     let maxScroll = 0;
     let isDragging = false;
@@ -8394,14 +8407,13 @@ function updateEquipmentInventoryItems() {
     // Calculate grid width and center it in the right panel
     const gridWidth = itemsPerRow * itemSize + (itemsPerRow - 1) * spacing;
     const startX = -gridWidth / 2 + itemSize / 2; // Relative to container center
-    // Items need to start at a position that's clearly below the mask edge
-    // Container is at: inventoryStartY - containerOffset (e.g., 90 - 80 = 10)
-    // Mask starts at: inventoryStartY - maskTopOffset (e.g., 90 - 20 = 70)
-    // Items at y=containerOffset (80) relative to container are at world y=10+80=90
-    // But mask starts at 70, so items would be clipped. Start items lower.
-    // Start items at containerOffset + padding to ensure they're below mask edge
-    const itemTopPadding = 15; // Padding to ensure items are well below mask edge
-    const startY = containerOffset + itemTopPadding; // Start items below mask edge to prevent clipping
+    // Items start position: similar to shop, use topPadding to ensure first row is visible
+    // At minScroll (-50), container is at: inventoryStartY - containerOffset - minScroll = 90 - 70 - (-50) = 70
+    // We want items at startY to appear at or near inventoryStartY (90)
+    // So: containerY + startY ≈ inventoryStartY, startY ≈ inventoryStartY - containerY = 90 - 70 = 20
+    // But we use topPadding approach like shop for consistency
+    const topPadding = 10; // Top padding to ensure first row isn't cut off
+    const startY = topPadding; // Items start below top padding
     
     // Define equippable types once for the function
     const equippableTypes = ['weapon', 'armor', 'helmet', 'ring', 'amulet', 'boots', 'gloves', 'belt'];
@@ -8556,10 +8568,8 @@ function updateEquipmentInventoryItems() {
         // But we use offset to allow scrolling up. So: container = inventoryStartY - containerOffset when at top
         const rightPanelXValue = equipmentPanel.rightBg ? equipmentPanel.rightBg.x : 768;
         equipmentPanel.inventoryContainer.x = rightPanelXValue;
-        // Position container so items at y=0 are at the top of visible area when scrolled to top
-        // When at minScroll (-20), container should be at: inventoryStartY - containerOffset - (-20) = inventoryStartY - containerOffset + 20
-        // But we want items at y=0 to be at inventoryStartY, so: container = inventoryStartY when at top
-        // Actually, let's use the original calculation but ensure items start at the right Y
+        // Position container: at minScroll (-40), container is at inventoryStartY - containerOffset - (-40)
+        // Container position is managed by setScrollPosition, but we ensure it's initialized correctly
         equipmentPanel.inventoryContainer.y = inventoryStartY - containerOffset;
         console.log(`📦 Equipment panel container positioned at (${equipmentPanel.inventoryContainer.x}, ${equipmentPanel.inventoryContainer.y})`);
         console.log(`   startY: ${inventoryStartY}, offset: ${containerOffset}, rightPanelX: ${rightPanelXValue}`);
@@ -11247,14 +11257,22 @@ function createShopUI(npc) {
     const inventoryStartY = 100; // Start below title
     const inventoryEndY = gameHeight - 20; // Leave some space at bottom
     const inventoryVisibleHeight = inventoryEndY - inventoryStartY;
-    const containerOffset = 80; // Offset to show first items fully
+    // Container offset: at minScroll, we want items at startY (10px) to appear at inventoryStartY (100)
+    // containerY = inventoryStartY - offset - minScroll
+    // We want: containerY + startY = inventoryStartY
+    // So: inventoryStartY - offset - minScroll + startY = inventoryStartY
+    // Simplifying: offset = startY - minScroll = 10 - (-40) = 50
+    // But we add extra margin to ensure visibility
+    const containerOffset = 60;
     const inventoryContainer = scene.add.container(rightPanelX, inventoryStartY - containerOffset);
     inventoryContainer.setScrollFactor(0).setDepth(401);
     
     // Create mask for the scrollable area
+    // Start mask higher to prevent clipping of first row (similar to equipment screen)
+    const maskTopOffset = 30; // Offset to show first items fully
     const inventoryMask = scene.make.graphics();
     inventoryMask.fillStyle(0xffffff);
-    inventoryMask.fillRect(rightPanelX - panelWidth/2, inventoryStartY, panelWidth, inventoryVisibleHeight);
+    inventoryMask.fillRect(rightPanelX - panelWidth/2, inventoryStartY - maskTopOffset, panelWidth, inventoryVisibleHeight + maskTopOffset);
     inventoryMask.setScrollFactor(0).setDepth(401);
     const maskGeometry = inventoryMask.createGeometryMask();
     
@@ -11271,7 +11289,8 @@ function createShopUI(npc) {
         .setInteractive({ useHandCursor: true });
     
     // Scroll state for inventory
-    const minScroll = -20;
+    // Allow more negative scroll to show first items fully (accounts for top padding)
+    const minScroll = -30; // Increased from -20 to show items with top padding
     let inventoryScrollPosition = minScroll;
     let inventoryMaxScroll = 0;
     let isDraggingInventory = false;
@@ -11402,8 +11421,8 @@ function createShopUI(npc) {
         }
     };
     
-    // Show current gold - positioned in left panel
-    shopPanel.goldText = scene.add.text(leftPanelX - panelWidth/2 + 20, 60, `Gold: ${playerStats.gold}`, {
+    // Show current gold - positioned in left panel (moved up to avoid overlap with title)
+    shopPanel.goldText = scene.add.text(leftPanelX - panelWidth/2 + 20, 15, `Gold: ${playerStats.gold}`, {
         fontSize: '20px',
         fill: '#ffd700',
         fontStyle: 'bold'
@@ -11446,8 +11465,8 @@ function updateShopItems() {
     const panelWidth = 512; // Half of 1024
     const panelHeight = 768;
     
-    // Gold display - positioned in left panel
-    shopPanel.goldText = scene.add.text(leftPanelX - panelWidth/2 + 20, 60, 
+    // Gold display - positioned in left panel (moved up to avoid overlap with title)
+    shopPanel.goldText = scene.add.text(leftPanelX - panelWidth/2 + 20, 15, 
         `Gold: ${playerStats.gold}`, {
         fontSize: '20px',
         fill: '#ffd700',
@@ -11772,24 +11791,74 @@ function updateShopInventoryItems() {
         return;
     }
     
-    // Display items in a grid in right panel
+    // Display items in a grid in right panel with dynamic row heights
     const itemSize = 60;
     const spacing = 15;
     const itemsPerRow = 6;
     const gridWidth = itemsPerRow * itemSize + (itemsPerRow - 1) * spacing;
     const startX = -gridWidth / 2 + itemSize / 2; // Relative to container center
-    const startY = 0; // Items start at container origin
+    const topPadding = 10; // Add padding at top so first row isn't cut off
+    const startY = topPadding; // Items start below top padding
     
-    // Calculate total content height
-    const totalRows = Math.ceil(inventoryItems.length / itemsPerRow);
-    const rowHeight = itemSize + spacing + 20; // itemSize + spacing + text space
-    const totalContentHeight = totalRows * rowHeight;
-    
+    // First, create all items and measure their heights
+    const itemData = [];
     inventoryItems.forEach((item, index) => {
         const row = Math.floor(index / itemsPerRow);
         const col = index % itemsPerRow;
         const x = startX + col * (itemSize + spacing);
-        const y = startY + row * (itemSize + spacing + 20);
+        
+        // Create temporary text to measure height (we'll recreate it properly below)
+        const tempNameText = scene.add.text(0, 0, item.name, {
+            fontSize: '11px',
+            fill: '#ffffff',
+            wordWrap: { width: itemSize + 10 }
+        });
+        const nameTextHeight = tempNameText.height;
+        tempNameText.destroy();
+        
+        // Calculate total item height: sprite + name + price + spacing
+        const spriteHeight = itemSize;
+        const nameStartOffset = 5;
+        const priceHeight = 10;
+        const priceSpacing = 4; // Reduced from 8 to 4 for tighter spacing between label and price
+        const itemTotalHeight = spriteHeight + nameStartOffset + nameTextHeight + priceSpacing + priceHeight;
+        
+        itemData.push({
+            item: item,
+            row: row,
+            col: col,
+            x: x,
+            nameTextHeight: nameTextHeight,
+            itemTotalHeight: itemTotalHeight
+        });
+    });
+    
+    // Group items by row and find the tallest item in each row
+    const rowHeights = {};
+    const totalRows = Math.ceil(inventoryItems.length / itemsPerRow);
+    
+    for (let r = 0; r < totalRows; r++) {
+        const rowItems = itemData.filter(data => data.row === r);
+        const maxHeight = Math.max(...rowItems.map(data => data.itemTotalHeight));
+        rowHeights[r] = maxHeight;
+    }
+    
+    // Calculate cumulative Y positions for each row
+    const rowYPositions = {};
+    let currentY = startY;
+    for (let r = 0; r < totalRows; r++) {
+        rowYPositions[r] = currentY;
+        currentY += rowHeights[r] + spacing; // Add spacing between rows
+    }
+    
+    // Calculate total content height based on actual row heights
+    // Include top padding in total height calculation
+    const totalContentHeight = currentY - spacing; // Remove last spacing, includes topPadding
+    
+    // Now create items with proper positioning
+    itemData.forEach((data, index) => {
+        const { item, row, col, x, nameTextHeight } = data;
+        const y = rowYPositions[row];
         
         // Get item sprite key based on type
         let spriteKey = 'item_weapon';
@@ -11838,7 +11907,10 @@ function updateShopInventoryItems() {
         
         // Calculate sell price (typically 50% of buy price, or a base value)
         const sellPrice = item.price ? Math.floor(item.price * 0.5) : calculateItemSellPrice(item);
-        const priceText = scene.add.text(x, y + itemSize/2 + 18, `${sellPrice}G`, {
+        // Position price below item name using actual measured height
+        // Start of name (5px below sprite center) + actual name height + reduced spacing
+        const priceY = y + itemSize/2 + 5 + nameTextHeight + 4; // Reduced from 8 to 4 for tighter spacing
+        const priceText = scene.add.text(x, priceY, `${sellPrice}G`, {
             fontSize: '10px',
             fill: '#ffd700'
         }).setScrollFactor(0).setDepth(402).setOrigin(0.5, 0);
@@ -11905,13 +11977,13 @@ function updateShopInventoryItems() {
     
     // Calculate and update scroll limits
     const visibleHeight = shopPanel.inventoryVisibleHeight;
-    const containerOffset = shopPanel.containerOffset || 80;
+    const containerOffset = shopPanel.containerOffset || 70; // Match the offset used in createShopUI (70)
     const maxScrollValue = Math.max(0, totalContentHeight - visibleHeight - containerOffset);
     shopPanel.setInventoryMaxScroll(maxScrollValue);
     
     // Reset scroll position to top when items are updated
     if (shopPanel.setInventoryScrollPosition) {
-        shopPanel.setInventoryScrollPosition(shopPanel.minScroll || -20);
+        shopPanel.setInventoryScrollPosition(shopPanel.minScroll || -40);
     }
 }
 

@@ -7537,8 +7537,6 @@ function showTooltip(item, x, y, context = 'inventory') {
     const tooltipText = tooltipLines.join('\n');
     const qualityColor = (QUALITY_COLORS && QUALITY_COLORS[item.quality]) ? QUALITY_COLORS[item.quality] : 0xffffff;
 
-    console.log(`🔍 showTooltip: Lines count=${tooltipLines.length}, text length=${tooltipText.length}`);
-
     // Create text object
     const text = scene.add.text(0, 0, tooltipText, {
         fontSize: '14px',

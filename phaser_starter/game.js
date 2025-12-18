@@ -129,7 +129,7 @@ let statsText;
 let goldText;
 let damageNumbers = []; // Array of {x, y, text, timer, color, textObject}
 let comboText = null; // Combo counter display
-let hideTooltipTimeout = null; // Timeout for hiding equipment tooltip
+
 let comboIndicator = null; // Combo visual indicator
 let attackSpeedIndicator = null; // Attack speed bonus indicator
 let weaponSprite = null; // Weapon sprite that follows player
@@ -144,13 +144,15 @@ let inventoryVisible = false;
 let inventoryKey;
 let inventoryPanel = null;
 let inventoryItems = []; // Array of item display objects
-let inventoryTooltip = null;
+// Tooltip state
+let currentTooltip = null;
+let tooltipHideTimer = null;
 
 // Equipment UI
 let equipmentVisible = false;
 let equipmentKey;
 let equipmentPanel = null;
-let equipmentTooltip = null;
+
 
 // Settings UI
 let settingsVisible = false;
@@ -225,10 +227,10 @@ const QUALITY_COLORS = {
 function preload() {
     // Try to load actual images first, fall back to generated graphics if they don't exist
     // NOTE: For GitHub Pages, images must be in assets/ folder relative to index.html
-    
+
     console.log('🚀🚀🚀 PRELOAD FUNCTION CALLED 🚀🚀🚀');
     console.trace('PRELOAD CALL STACK');
-    
+
     // Add load event listeners for debugging - MUST be before load calls
     this.load.on('filecomplete', (key, type, data) => {
         if (key === 'grass') {
@@ -244,7 +246,7 @@ function preload() {
             this.grassLoadedSuccessfully = true;
         }
     });
-    
+
     this.load.on('loaderror', (file) => {
         if (file.key === 'grass') {
             console.error('❌❌❌ Grass spritesheet FAILED to load!');
@@ -254,7 +256,7 @@ function preload() {
             this.grassLoadedSuccessfully = false;
         }
     });
-    
+
     // Try loading images (will fail silently if files don't exist - that's OK!)
     // Load player walking animations as sprite sheets
     // Using 48x48 pixel frames
@@ -274,7 +276,7 @@ function preload() {
         frameWidth: 48,
         frameHeight: 48
     });
-    
+
     // Load NPC spritesheets
     this.load.spritesheet('npc_lysa', 'assets/animations/Lysa.png', {
         frameWidth: 64,
@@ -288,7 +290,7 @@ function preload() {
         frameWidth: 64,
         frameHeight: 64
     });
-    
+
     // Try loading other images (will fail silently if files don't exist - that's OK!)
     // Load grass as a spritesheet for variety (96x96 frames)
     // Try relative path first (works better with local server)
@@ -297,17 +299,17 @@ function preload() {
     console.log('🔄 PRELOAD: Attempting to load grass spritesheet from:', grassPath);
     console.log('🔄 PRELOAD: Full resolved path:', fullGrassPath);
     console.log('🔄 PRELOAD: Current working directory context:', window.location.href);
-    
+
     // Initialize load success flag
     this.grassSpritesheetLoaded = false;
-    
+
     this.load.spritesheet('grass', grassPath, {
         frameWidth: 96,
         frameHeight: 96
     });
-    
+
     console.log('🔄 PRELOAD: load.spritesheet() called for grass');
-    
+
     // Track if grass spritesheet loaded successfully
     this.load.once('filecomplete-spritesheet-grass', (key, type, data) => {
         console.log('✅ Grass spritesheet loaded successfully!');
@@ -319,7 +321,7 @@ function preload() {
         }
         this.grassSpritesheetLoaded = true;
     });
-    
+
     this.load.on('loaderror', (file) => {
         if (file.key === 'grass') {
             console.error('❌ Grass spritesheet FAILED to load!');
@@ -357,7 +359,7 @@ function preload() {
             console.error('❌ Custom consumable image failed to load');
         }
     });
-    
+
     // Load custom item images
     // Track which custom images loaded successfully
     this.customItemImagesLoaded = {
@@ -371,7 +373,7 @@ function preload() {
         ring: false,
         consumable: false
     };
-    
+
     // Track successful image loads (set up handlers BEFORE loading)
     this.load.on('filecomplete-image-item_weapon', () => {
         this.customItemImagesLoaded.weapon = true;
@@ -409,7 +411,7 @@ function preload() {
         this.customItemImagesLoaded.consumable = true;
         console.log('✅ Custom consumable image loaded');
     });
-    
+
     // Now load the images
     this.load.image('item_weapon', 'assets/images/pixellab-medieval-short-sword-1765494973241.png');
     // Weapon sprites for in-game display (48x48)
@@ -429,60 +431,60 @@ function preload() {
     this.load.image('item_belt', 'assets/images/pixellab-medieval-belt---just-the-belt-1765494612990.png');
     this.load.image('item_ring', 'assets/images/pixellab-golden-ring-1765494525925.png');
     this.load.image('item_consumable', 'assets/images/pixellab-red-simple-health-potion-1765494342318.png');
-    
+
     // Load player and monster base images
     this.load.image('player', 'assets/player.png');
     this.load.image('monster', 'assets/monster.png');
-    
+
     // Load monster directional sprites (from PixelLab) - static images for fallback
     // Goblin
     this.load.image('monster_goblin_south', 'assets/animations/monster_goblin_south.png');
     this.load.image('monster_goblin_north', 'assets/animations/monster_goblin_north.png');
     this.load.image('monster_goblin_east', 'assets/animations/monster_goblin_east.png');
     this.load.image('monster_goblin_west', 'assets/animations/monster_goblin_west.png');
-    
+
     // Orc
     this.load.image('monster_orc_south', 'assets/animations/monster_orc_south.png');
     this.load.image('monster_orc_north', 'assets/animations/monster_orc_north.png');
     this.load.image('monster_orc_east', 'assets/animations/monster_orc_east.png');
     this.load.image('monster_orc_west', 'assets/animations/monster_orc_west.png');
-    
+
     // Skeleton
     this.load.image('monster_skeleton_south', 'assets/animations/monster_skeleton_south.png');
     this.load.image('monster_skeleton_north', 'assets/animations/monster_skeleton_north.png');
     this.load.image('monster_skeleton_east', 'assets/animations/monster_skeleton_east.png');
     this.load.image('monster_skeleton_west', 'assets/animations/monster_skeleton_west.png');
-    
+
     // Slime
     this.load.image('monster_slime_south', 'assets/animations/monster_slime_south.png');
     this.load.image('monster_slime_north', 'assets/animations/monster_slime_north.png');
     this.load.image('monster_slime_east', 'assets/animations/monster_slime_east.png');
     this.load.image('monster_slime_west', 'assets/animations/monster_slime_west.png');
-    
+
     // Wolf
     this.load.image('monster_wolf_south', 'assets/animations/monster_wolf_south.png');
     this.load.image('monster_wolf_north', 'assets/animations/monster_wolf_north.png');
     this.load.image('monster_wolf_east', 'assets/animations/monster_wolf_east.png');
     this.load.image('monster_wolf_west', 'assets/animations/monster_wolf_west.png');
-    
+
     // Dragon
     this.load.image('monster_dragon_south', 'assets/animations/monster_dragon_south.png');
     this.load.image('monster_dragon_north', 'assets/animations/monster_dragon_north.png');
     this.load.image('monster_dragon_east', 'assets/animations/monster_dragon_east.png');
     this.load.image('monster_dragon_west', 'assets/animations/monster_dragon_west.png');
-    
+
     // Ghost
     this.load.image('monster_ghost_south', 'assets/animations/monster_ghost_south.png');
     this.load.image('monster_ghost_north', 'assets/animations/monster_ghost_north.png');
     this.load.image('monster_ghost_east', 'assets/animations/monster_ghost_east.png');
     this.load.image('monster_ghost_west', 'assets/animations/monster_ghost_west.png');
-    
+
     // Spider (quadruped version)
     this.load.image('monster_spider_south', 'assets/animations/monster_spider_south.png');
     this.load.image('monster_spider_north', 'assets/animations/monster_spider_north.png');
     this.load.image('monster_spider_east', 'assets/animations/monster_spider_east.png');
     this.load.image('monster_spider_west', 'assets/animations/monster_spider_west.png');
-    
+
     // Load animated sprite sheets for walking (Goblin, Orc, Skeleton, Wolf, Dragon, Slime, Ghost, and Spider)
     // Goblin walking animations (48x48 frames, 6 frames per direction)
     this.load.spritesheet('monster_goblin_walk_south', 'assets/animations/monster_goblin_walk_south.png', {
@@ -501,7 +503,7 @@ function preload() {
         frameWidth: 48,
         frameHeight: 48
     });
-    
+
     // Goblin attack animations (48x48 frames)
     this.load.spritesheet('monster_goblin_attack_south', 'assets/animations/monster_goblin_attack_south.png', {
         frameWidth: 48,
@@ -519,7 +521,7 @@ function preload() {
         frameWidth: 48,
         frameHeight: 48
     });
-    
+
     // Orc walking animations (48x48 frames, 6 frames per direction)
     this.load.spritesheet('monster_orc_walk_south', 'assets/animations/monster_orc_walk_south.png', {
         frameWidth: 48,
@@ -537,7 +539,7 @@ function preload() {
         frameWidth: 48,
         frameHeight: 48
     });
-    
+
     // Orc attack animations (48x48 frames)
     this.load.spritesheet('monster_orc_attack_south', 'assets/animations/monster_orc_attack_south.png', {
         frameWidth: 48,
@@ -555,7 +557,7 @@ function preload() {
         frameWidth: 48,
         frameHeight: 48
     });
-    
+
     // Skeleton walking animations (48x48 frames, 6 frames per direction)
     this.load.spritesheet('monster_skeleton_walk_south', 'assets/animations/monster_skeleton_walk_south.png', {
         frameWidth: 48,
@@ -573,7 +575,7 @@ function preload() {
         frameWidth: 48,
         frameHeight: 48
     });
-    
+
     // Skeleton attack animations (48x48 frames)
     this.load.spritesheet('monster_skeleton_attack_south', 'assets/animations/monster_skeleton_attack_south.png', {
         frameWidth: 48,
@@ -591,7 +593,7 @@ function preload() {
         frameWidth: 48,
         frameHeight: 48
     });
-    
+
     // Wolf walking animations (48x48 frames, 6 frames per direction)
     this.load.spritesheet('monster_wolf_walk_south', 'assets/animations/monster_wolf_walk_south.png', {
         frameWidth: 48,
@@ -609,7 +611,7 @@ function preload() {
         frameWidth: 48,
         frameHeight: 48
     });
-    
+
     // Wolf attack animations (48x48 frames)
     this.load.spritesheet('monster_wolf_attack_south', 'assets/animations/monster_wolf_attack_south.png', {
         frameWidth: 48,
@@ -627,7 +629,7 @@ function preload() {
         frameWidth: 48,
         frameHeight: 48
     });
-    
+
     // Dragon walking animations (48x48 frames, 6 frames per direction)
     this.load.spritesheet('monster_dragon_walk_south', 'assets/animations/monster_dragon_walk_south.png', {
         frameWidth: 48,
@@ -645,7 +647,7 @@ function preload() {
         frameWidth: 48,
         frameHeight: 48
     });
-    
+
     // Dragon attack animations (48x48 frames)
     this.load.spritesheet('monster_dragon_attack_south', 'assets/animations/monster_dragon_attack_south.png', {
         frameWidth: 48,
@@ -663,7 +665,7 @@ function preload() {
         frameWidth: 48,
         frameHeight: 48
     });
-    
+
     // Slime walking animations (48x48 frames, 6 frames per direction)
     this.load.spritesheet('monster_slime_walk_south', 'assets/animations/monster_slime_walk_south.png', {
         frameWidth: 48,
@@ -681,7 +683,7 @@ function preload() {
         frameWidth: 48,
         frameHeight: 48
     });
-    
+
     // Slime attack animations (48x48 frames)
     this.load.spritesheet('monster_slime_attack_south', 'assets/animations/monster_slime_attack_south.png', {
         frameWidth: 48,
@@ -699,7 +701,7 @@ function preload() {
         frameWidth: 48,
         frameHeight: 48
     });
-    
+
     // Ghost walking animations (48x48 frames, 6 frames per direction)
     this.load.spritesheet('monster_ghost_walk_south', 'assets/animations/monster_ghost_walk_south.png', {
         frameWidth: 48,
@@ -717,7 +719,7 @@ function preload() {
         frameWidth: 48,
         frameHeight: 48
     });
-    
+
     // Ghost attack animations (48x48 frames)
     this.load.spritesheet('monster_ghost_attack_south', 'assets/animations/monster_ghost_attack_south.png', {
         frameWidth: 48,
@@ -735,7 +737,7 @@ function preload() {
         frameWidth: 48,
         frameHeight: 48
     });
-    
+
     // Spider walking animations (48x48 frames, 6 frames per direction)
     this.load.spritesheet('monster_spider_walk_south', 'assets/animations/monster_spider_walk_south.png', {
         frameWidth: 48,
@@ -753,11 +755,11 @@ function preload() {
         frameWidth: 48,
         frameHeight: 48
     });
-    
+
     this.load.image('dirt', 'assets/tiles/tile_floor_dirt.png');
     this.load.image('stone', 'assets/tiles/tile_floor_stone.png');
     this.load.image('wall', 'assets/tiles/wall.png');
-    
+
     // Load dungeon tilesets with alpha support
     // PNG images should automatically preserve transparency
     this.load.image('dungeon_floor_tileset', 'assets/tiles/dungeon/dungeon_floor_tileset.png');
@@ -765,9 +767,9 @@ function preload() {
     this.load.image('dungeon_entrance', 'assets/dungeon_entrance.png');
     this.load.text('dungeon_floor_metadata', 'assets/tiles/dungeon/dungeon_floor_metadata.json');
     this.load.text('dungeon_wall_metadata', 'assets/tiles/dungeon/dungeon_wall_metadata.json');
-    
+
     // Generate fallback graphics (always created - used if images don't load)
-    
+
     // Create fallback player sprite (yellow circle with border) - only if animations don't load
     this.add.graphics()
         .fillStyle(0xffff00)
@@ -775,27 +777,27 @@ function preload() {
         .lineStyle(2, 0x000000)
         .strokeCircle(16, 16, 14)
         .generateTexture('player', 32, 32);
-    
+
     // Procedural monster generation - create different monster types with unique appearances
     generateProceduralMonsters.call(this);
-    
+
     // Create grass tile (green with pattern) - only if spritesheet failed to load
     // Wait longer for the texture to load, then check
     this.time.delayedCall(500, () => {
         console.log('🔍 Checking grass texture after load delay...');
         console.log('  grassLoadedSuccessfully flag:', this.grassLoadedSuccessfully);
-        
+
         if (this.textures.exists('grass')) {
             const grassTexture = this.textures.get('grass');
             console.log('  Texture exists:', true);
             console.log('  Frame total:', grassTexture.frameTotal);
             console.log('  Source:', grassTexture.source);
-            
+
             // Check if it's a real spritesheet (has frames and source image) or just a placeholder
             const hasRealSource = grassTexture.source && grassTexture.source[0] && grassTexture.source[0].image;
             const sourceImage = hasRealSource ? grassTexture.source[0].image : null;
             const hasFrames = grassTexture.frameTotal && grassTexture.frameTotal > 0;
-            
+
             // Check if source image has a valid src (not just a canvas)
             let hasValidImageSrc = false;
             if (sourceImage) {
@@ -806,7 +808,7 @@ function preload() {
                 console.log('  Is canvas:', isCanvas);
                 console.log('  Has valid image src:', hasValidImageSrc);
             }
-            
+
             // If load failed or texture is a canvas (generated), create fallback
             if (this.grassLoadedSuccessfully === false || !hasRealSource || !hasFrames || !hasValidImageSrc || (sourceImage && sourceImage.isCanvas)) {
                 // Remove the failed/placeholder texture and create fallback
@@ -849,7 +851,7 @@ function preload() {
             console.log('✅ Created fallback grass texture');
         }
     });
-    
+
     // Create wall tile (dark gray with border)
     this.add.graphics()
         .fillStyle(0x505050)
@@ -860,7 +862,7 @@ function preload() {
         .fillRect(2, 2, 28, 2)
         .fillRect(2, 2, 2, 28)
         .generateTexture('wall', 32, 32);
-    
+
     // Create dirt tile (brown)
     this.add.graphics()
         .fillStyle(0x8b4513)
@@ -870,7 +872,7 @@ function preload() {
         .fillStyle(0x9d5a2a)
         .fillRect(8, 8, 16, 16)
         .generateTexture('dirt', 32, 32);
-    
+
     // Create stone tile (light gray checkerboard pattern)
     this.add.graphics()
         .fillStyle(0x808080)
@@ -882,7 +884,7 @@ function preload() {
         .fillRect(16, 0, 16, 16)
         .fillRect(0, 16, 16, 16)
         .generateTexture('stone', 32, 32);
-    
+
     // Create fallback item sprites - wait for images to load first, then create fallbacks if needed
     // Check after a delay to allow custom images to load
     this.time.delayedCall(500, () => {
@@ -895,13 +897,13 @@ function preload() {
                 const source = texture.source[0];
                 if (source.image) {
                     // Check if it's not a canvas (generated texture)
-                    return !source.image.isCanvas && 
-                           (source.image.src || source.image.currentSrc || '').includes('.png');
+                    return !source.image.isCanvas &&
+                        (source.image.src || source.image.currentSrc || '').includes('.png');
                 }
             }
             return false;
         };
-        
+
         // Only create fallbacks if custom images didn't load (check both flag and texture)
         if (!this.customItemImagesLoaded.weapon && !isLoadedImage('item_weapon')) {
             console.log('⚠️ Creating fallback for item_weapon (custom image not loaded)');
@@ -918,7 +920,7 @@ function preload() {
                 .fillRect(12, 8, 8, 4)  // Cross guard
                 .generateTexture('item_weapon', 32, 32);
         }
-        
+
         if (!this.customItemImagesLoaded.armor) {
             console.log('⚠️ Creating fallback for item_armor (custom image not loaded)');
             if (this.textures.exists('item_armor')) {
@@ -934,7 +936,7 @@ function preload() {
                 .fillRect(14, 6, 4, 4)   // Top decoration
                 .generateTexture('item_armor', 32, 32);
         }
-        
+
         if (!this.customItemImagesLoaded.helmet) {
             console.log('⚠️ Creating fallback for item_helmet (custom image not loaded)');
             if (this.textures.exists('item_helmet')) {
@@ -950,7 +952,7 @@ function preload() {
                 .fillRect(12, 4, 8, 4)  // Crown points
                 .generateTexture('item_helmet', 32, 32);
         }
-        
+
         if (!this.customItemImagesLoaded.amulet) {
             console.log('⚠️ Creating fallback for item_amulet (custom image not loaded)');
             if (this.textures.exists('item_amulet')) {
@@ -966,7 +968,7 @@ function preload() {
                 .fillRect(14, 6, 4, 4)  // Chain link
                 .generateTexture('item_amulet', 32, 32);
         }
-        
+
         if (!this.customItemImagesLoaded.boots) {
             console.log('⚠️ Creating fallback for item_boots (custom image not loaded)');
             if (this.textures.exists('item_boots')) {
@@ -982,7 +984,7 @@ function preload() {
                 .fillRect(8, 24, 16, 4)  // Sole
                 .generateTexture('item_boots', 32, 32);
         }
-        
+
         if (!this.customItemImagesLoaded.gloves) {
             console.log('⚠️ Creating fallback for item_gloves (custom image not loaded)');
             if (this.textures.exists('item_gloves')) {
@@ -997,7 +999,7 @@ function preload() {
                 .fillRect(8, 8, 16, 16) // Glove shape
                 .generateTexture('item_gloves', 32, 32);
         }
-        
+
         if (!this.customItemImagesLoaded.belt) {
             console.log('⚠️ Creating fallback for item_belt (custom image not loaded)');
             if (this.textures.exists('item_belt')) {
@@ -1012,7 +1014,7 @@ function preload() {
                 .fillRect(6, 12, 20, 8) // Belt body
                 .generateTexture('item_belt', 32, 32);
         }
-        
+
         if (!this.customItemImagesLoaded.ring && !isLoadedImage('item_ring')) {
             console.log('⚠️ Creating fallback for item_ring (custom image not loaded)');
             if (this.textures.exists('item_ring')) {
@@ -1027,7 +1029,7 @@ function preload() {
                 .fillRect(12, 12, 8, 8) // Ring center
                 .generateTexture('item_ring', 32, 32);
         }
-        
+
         if (!this.customItemImagesLoaded.consumable && !isLoadedImage('item_consumable')) {
             console.log('⚠️ Creating fallback for item_consumable (custom image not loaded)');
             if (this.textures.exists('item_consumable')) {
@@ -1043,14 +1045,14 @@ function preload() {
                 .fillRect(14, 4, 4, 4)     // Potion neck
                 .generateTexture('item_consumable', 32, 32);
         }
-        
+
         console.log('✅ Fallback textures check complete. Custom images loaded:', this.customItemImagesLoaded);
     });
-    
+
     // Create fallbacks only if custom images didn't load (will be checked in delayed call)
     // For now, don't create immediate fallbacks for ring and consumable since we have custom images
     // The delayed call will create fallbacks if the custom images fail to load
-    
+
     // Gold coin (yellow circle) - always create since there's no custom image
     this.add.graphics()
         .fillStyle(0xffd700)
@@ -1060,7 +1062,7 @@ function preload() {
         .fillStyle(0xffed4e)
         .fillCircle(16, 16, 8)
         .generateTexture('item_gold', 32, 32);
-    
+
     // NPC sprite (cyan circle to distinguish from player/monsters)
     this.add.graphics()
         .fillStyle(0x00ffff)
@@ -1070,26 +1072,26 @@ function preload() {
         .fillStyle(0x00cccc)
         .fillCircle(16, 16, 10)
         .generateTexture('npc', 32, 32);
-    
+
     // Create particle textures for hit effects
     // Hit spark texture (small yellow/orange particle)
     this.add.graphics()
         .fillStyle(0xffd700)
         .fillCircle(2, 2, 2)
         .generateTexture('hit_spark', 4, 4);
-    
+
     // Impact particle texture (slightly larger)
     this.add.graphics()
         .fillStyle(0xff8800)
         .fillCircle(3, 3, 3)
         .generateTexture('impact_particle', 6, 6);
-    
+
     // Death particle texture (red/orange)
     this.add.graphics()
         .fillStyle(0xff4444)
         .fillCircle(4, 4, 4)
         .generateTexture('death_particle', 8, 8);
-    
+
     // Ability effect sprites
     // Fireball effect (orange/red circle)
     this.add.graphics()
@@ -1100,7 +1102,7 @@ function preload() {
         .fillStyle(0xffffff)
         .fillCircle(16, 16, 4)
         .generateTexture('fireball_effect', 32, 32);
-    
+
     // Heal effect (green cross/circle)
     this.add.graphics()
         .fillStyle(0x00ff00)
@@ -1109,7 +1111,7 @@ function preload() {
         .fillRect(14, 8, 4, 16)
         .fillRect(8, 14, 16, 4)
         .generateTexture('heal_effect', 32, 32);
-    
+
     // Shield effect (blue circle with border)
     this.add.graphics()
         .lineStyle(3, 0x0088ff)
@@ -1119,7 +1121,7 @@ function preload() {
         .fillStyle(0x0088ff, 0.3)
         .fillCircle(16, 16, 12)
         .generateTexture('shield_effect', 32, 32);
-    
+
     // Load sound files (optional - will work without them)
     // Note: Phaser will show warnings if files don't exist, but won't crash
     this.load.audio('attack_swing', 'assets/audio/attack_swing.wav');
@@ -1130,13 +1132,13 @@ function preload() {
     this.load.audio('level_up', 'assets/audio/level_up.wav');
     this.load.audio('fireball_cast', 'assets/audio/fireball_cast.wav');
     this.load.audio('heal_cast', 'assets/audio/heal_cast.wav');
-    
+
     // Load background music for all areas
     this.load.audio('village_music', 'assets/audio/music/Village_Hearth_FULL_SONG_MusicGPT.mp3');
     this.load.audio('wilderness_music', 'assets/audio/music/Wilderness_of_Arcana_FULL_SONG_MusicGPT.mp3');
     this.load.audio('dungeon_music', 'assets/audio/music/Dungeon_of_Arcana_FULL_SONG_MusicGPT.mp3');
     console.log('🎵 Loading music files...');
-    
+
     // Listen for music file load completion
     this.load.once('filecomplete-audio-village_music', () => {
         console.log('✅ Village music file loaded successfully');
@@ -1147,15 +1149,15 @@ function preload() {
     this.load.once('filecomplete-audio-dungeon_music', () => {
         console.log('✅ Dungeon music file loaded successfully');
     });
-    
+
     this.load.on('loaderror', (file) => {
         if (file.key === 'village_music' || file.key === 'wilderness_music' || file.key === 'dungeon_music') {
             console.error(`❌ Failed to load music file: ${file.key}`, file.src);
         }
     });
-    
+
     console.log('📢 Attempting to load sound files from assets/audio/');
-    
+
     console.log('✅ Assets loaded: player (yellow), procedural monsters, grass (green), wall (gray), dirt (brown), stone (light gray)');
     console.log('✅ Item sprites created: weapon (blue), armor (green), consumable (red), gold (yellow)');
     console.log('✅ NPC sprite created: npc (cyan)');
@@ -1169,7 +1171,7 @@ function preload() {
 function generateProceduralMonsters() {
     const size = 32;
     const center = size / 2;
-    
+
     // Define monster types with visual characteristics
     const monsterDefs = [
         {
@@ -1246,18 +1248,18 @@ function generateProceduralMonsters() {
             alpha: 0.7
         }
     ];
-    
+
     // Generate texture for each monster type
     monsterDefs.forEach(def => {
         const g = this.add.graphics();
         const scale = def.size;
         const radius = (size / 2) * scale;
         const alpha = def.alpha !== undefined ? def.alpha : 1.0;
-        
+
         // Shadow
         g.fillStyle(0x000000, 0.3);
         g.fillCircle(center + 1, center + 1, radius);
-        
+
         // Main body based on shape
         if (def.shape === 'circle') {
             g.fillStyle(def.bodyColor, alpha);
@@ -1285,7 +1287,7 @@ function generateProceduralMonsters() {
             g.lineStyle(2, def.accentColor, alpha);
             g.strokeCircle(center, center, radius);
         }
-        
+
         // Add features
         if (def.features.includes('eyes')) {
             // Two eyes
@@ -1296,7 +1298,7 @@ function generateProceduralMonsters() {
             g.fillCircle(center - radius * 0.3, center - radius * 0.2, radius * 0.08);
             g.fillCircle(center + radius * 0.3, center - radius * 0.2, radius * 0.08);
         }
-        
+
         if (def.features.includes('ears')) {
             // Pointed ears
             g.fillStyle(def.bodyColor, alpha);
@@ -1311,31 +1313,31 @@ function generateProceduralMonsters() {
                 center + radius * 0.2, center - radius * 0.4
             );
         }
-        
+
         if (def.features.includes('tusks')) {
             // Orc tusks
             g.fillStyle(0xffffff, alpha);
             g.fillRect(center - radius * 0.4, center + radius * 0.3, radius * 0.15, radius * 0.2);
             g.fillRect(center + radius * 0.25, center + radius * 0.3, radius * 0.15, radius * 0.2);
         }
-        
+
         if (def.features.includes('bones')) {
             // Skeleton bones
             g.lineStyle(2, def.accentColor, alpha);
             // Ribs
             for (let i = -2; i <= 2; i++) {
-                g.lineBetween(center + i * radius * 0.2, center - radius * 0.3, 
-                              center + i * radius * 0.2, center + radius * 0.3);
+                g.lineBetween(center + i * radius * 0.2, center - radius * 0.3,
+                    center + i * radius * 0.2, center + radius * 0.3);
             }
         }
-        
+
         if (def.features.includes('skull')) {
             // Skull details
             g.lineStyle(1, def.accentColor, alpha);
             // Jaw line
             g.strokeEllipse(center, center + radius * 0.4, radius * 0.6, radius * 0.3);
         }
-        
+
         if (def.features.includes('legs')) {
             // Spider legs (8 legs)
             g.lineStyle(2, def.accentColor, alpha);
@@ -1348,7 +1350,7 @@ function generateProceduralMonsters() {
                 g.lineBetween(startX, startY, endX, endY);
             }
         }
-        
+
         if (def.features.includes('wings')) {
             // Dragon wings
             g.fillStyle(def.accentColor, alpha * 0.6);
@@ -1363,7 +1365,7 @@ function generateProceduralMonsters() {
                 center + radius * 1.2, center + radius * 0.5
             );
         }
-        
+
         if (def.features.includes('spikes')) {
             // Spikes on back
             g.fillStyle(def.accentColor, alpha);
@@ -1375,24 +1377,24 @@ function generateProceduralMonsters() {
                 );
             }
         }
-        
+
         if (def.features.includes('snout')) {
             // Wolf snout
             g.fillStyle(def.accentColor, alpha);
             g.fillEllipse(center, center + radius * 0.4, radius * 0.3, radius * 0.2);
         }
-        
+
         if (def.features.includes('glow')) {
             // Glowing effect
             g.fillStyle(def.bodyColor, alpha * 0.3);
             g.fillCircle(center, center, radius * 1.3);
         }
-        
+
         // Generate texture
         g.generateTexture(def.key, size, size);
         g.destroy();
     });
-    
+
     // Store monster definitions globally for use in creation
     if (typeof window !== 'undefined') {
         window.monsterDefinitions = monsterDefs;
@@ -1407,15 +1409,15 @@ function createTownMap() {
     const tileSize = 32;
     const mapWidth = 40;
     const mapHeight = 40;
-    
+
     // Clear existing buildings and markers
     buildings = [];
     transitionMarkers = [];
-    
+
     // Create base grass tiles using spritesheet for variety
     let grassFrameCount = 1;
     let useFrames = false;
-    
+
     if (scene.textures.exists('grass')) {
         const grassTexture = scene.textures.get('grass');
         if (grassTexture && grassTexture.frameTotal && grassTexture.frameTotal > 0) {
@@ -1423,14 +1425,14 @@ function createTownMap() {
             useFrames = true;
         }
     }
-    
+
     for (let y = 0; y < mapHeight; y++) {
         for (let x = 0; x < mapWidth; x++) {
             // Add medium green background behind each grass tile
             const bgRect = scene.add.rectangle(x * tileSize, y * tileSize, tileSize, tileSize, 0x59BD59, 1.0);
             bgRect.setOrigin(0);
             bgRect.setDepth(-1); // Behind the grass tile
-            
+
             // Use random frame from spritesheet if available, otherwise use default
             // Scale 96x96 frames down to 32x32 tiles
             const scaleFactor = 32 / 96; // 0.333...
@@ -1447,11 +1449,11 @@ function createTownMap() {
             }
         }
     }
-    
+
     // Create main streets (cross pattern through center)
     const centerX = Math.floor(mapWidth / 2);
     const centerY = Math.floor(mapHeight / 2);
-    
+
     // Horizontal main street (5 tiles wide)
     for (let x = 0; x < mapWidth; x++) {
         for (let dy = -2; dy <= 2; dy++) {
@@ -1462,7 +1464,7 @@ function createTownMap() {
             }
         }
     }
-    
+
     // Vertical main street (5 tiles wide)
     for (let y = 0; y < mapHeight; y++) {
         for (let dx = -2; dx <= 2; dx++) {
@@ -1473,18 +1475,18 @@ function createTownMap() {
             }
         }
     }
-    
+
     // Define player spawn and exit positions (before placing buildings)
     const entranceX = centerX * tileSize;
     const entranceY = (mapHeight - 3) * tileSize; // Exit marker position
     const playerSpawnX = entranceX;
     const playerSpawnY = entranceY - 50; // Player spawns above exit
-    
+
     // Helper function to check if a building would block player spawn or exit
     function wouldBlockPlayerOrExit(buildingX, buildingY, buildingWidth, buildingHeight) {
         // Very large buffer zone to ensure clear path (12 tiles = 384 pixels)
         const buffer = 12 * tileSize;
-        
+
         // Player spawn area (much larger protected zone)
         const spawnArea = {
             x: playerSpawnX - buffer,
@@ -1492,7 +1494,7 @@ function createTownMap() {
             width: buffer * 2,
             height: buffer * 2
         };
-        
+
         // Exit marker area (much larger protected zone)
         const exitArea = {
             x: entranceX - buffer,
@@ -1500,7 +1502,7 @@ function createTownMap() {
             width: buffer * 2,
             height: buffer * 2
         };
-        
+
         // Check if building overlaps spawn area (any part of building)
         if (buildingX < spawnArea.x + spawnArea.width &&
             buildingX + buildingWidth > spawnArea.x &&
@@ -1508,7 +1510,7 @@ function createTownMap() {
             buildingY + buildingHeight > spawnArea.y) {
             return true;
         }
-        
+
         // Check if building overlaps exit area (any part of building)
         if (buildingX < exitArea.x + exitArea.width &&
             buildingX + buildingWidth > exitArea.x &&
@@ -1516,24 +1518,24 @@ function createTownMap() {
             buildingY + buildingHeight > exitArea.y) {
             return true;
         }
-        
+
         // Also check if building would create a dead-end by blocking access from spawn to exit
         // Create a path corridor between spawn and exit
         const corridorWidth = 8 * tileSize; // 8 tiles wide corridor (wider)
         const corridorX = Math.min(playerSpawnX, entranceX) - corridorWidth / 2;
         const corridorY = Math.min(playerSpawnY, entranceY);
         const corridorHeight = Math.abs(playerSpawnY - entranceY) + buffer;
-        
+
         if (buildingX < corridorX + corridorWidth &&
             buildingX + buildingWidth > corridorX &&
             buildingY < corridorY + corridorHeight &&
             buildingY + buildingHeight > corridorY) {
             return true;
         }
-        
+
         return false;
     }
-    
+
     // Building colors
     const buildingColors = {
         inn: 0x8B4513,        // Brown
@@ -1543,12 +1545,12 @@ function createTownMap() {
         house: 0xCD853F,       // Peru
         market: 0xFFA500       // Orange
     };
-    
+
     // Place important buildings with quadrant restrictions
     // Upper left quadrant (x < centerX, y < centerY): Only Inn
     // Other 3 quadrants: All other buildings
     // This ensures player spawn area (bottom center) stays clear
-    
+
     // Helper function to check if building is in upper left quadrant
     function isInUpperLeftQuadrant(buildingX, buildingY, buildingWidth, buildingHeight) {
         // Check if any part of building is in upper left (x < centerX, y < centerY)
@@ -1556,7 +1558,7 @@ function createTownMap() {
         const buildingMaxY = buildingY + buildingHeight;
         return buildingMaxX <= centerX * tileSize && buildingMaxY <= centerY * tileSize;
     }
-    
+
     // Helper function to check if building is in other 3 quadrants (not upper left)
     function isInOtherQuadrants(buildingX, buildingY, buildingWidth, buildingHeight) {
         // Check if building is NOT entirely in upper left
@@ -1564,7 +1566,7 @@ function createTownMap() {
         const buildingMaxY = buildingY + buildingHeight;
         return !(buildingMaxX <= centerX * tileSize && buildingMaxY <= centerY * tileSize);
     }
-    
+
     const buildingData = [
         // Inn: Upper left quadrant only - positioned near center for easier access
         { type: 'inn', x: 5, y: 8, width: 6, height: 5, color: buildingColors.inn, quadrant: 'upperLeft' },
@@ -1580,21 +1582,21 @@ function createTownMap() {
         // Market: Near center, upper area
         { type: 'market', x: centerX + 2, y: centerY - 4, width: 3, height: 3, color: buildingColors.market, quadrant: 'other' }
     ];
-    
+
     // Filter out buildings that would block spawn/exit or violate quadrant rules
     const validBuildings = buildingData.filter(building => {
         const buildingX = building.x * tileSize;
         const buildingY = building.y * tileSize;
         const buildingWidth = building.width * tileSize;
         const buildingHeight = building.height * tileSize;
-        
+
         // Check spawn/exit blocking
         const wouldBlock = wouldBlockPlayerOrExit(buildingX, buildingY, buildingWidth, buildingHeight);
         if (wouldBlock) {
             console.log(`⚠️ Skipping ${building.type} at (${building.x}, ${building.y}) - would block spawn/exit`);
             return false;
         }
-        
+
         // Check quadrant restrictions
         if (building.quadrant === 'upperLeft') {
             // Inn must be in upper left quadrant
@@ -1609,17 +1611,17 @@ function createTownMap() {
                 return false;
             }
         }
-        
+
         return true;
     });
-    
+
     // Place buildings (only valid ones that don't block spawn/exit)
     console.log(`🏗️ Placing ${validBuildings.length} valid buildings out of ${buildingData.length} total`);
     validBuildings.forEach(building => {
         const buildingCenterX = building.x * tileSize + (building.width * tileSize) / 2;
         const buildingCenterY = building.y * tileSize + (building.height * tileSize) / 2;
         console.log(`✅ Creating building: ${building.type} at tile (${building.x}, ${building.y}) = pixel (${buildingCenterX}, ${buildingCenterY})`);
-        
+
         // Create building rectangle
         const buildingRect = scene.add.rectangle(
             buildingCenterX,
@@ -1629,7 +1631,7 @@ function createTownMap() {
             building.color,
             0.9
         ).setDepth(1).setStrokeStyle(2, 0x000000);
-        
+
         // Add building to collision list with interaction properties
         buildings.push({
             x: building.x * tileSize,
@@ -1644,7 +1646,7 @@ function createTownMap() {
             interactionIndicator: null,
             showIndicator: false
         });
-        
+
         // Add building label with better visibility
         const label = scene.add.text(
             buildingCenterX,
@@ -1658,7 +1660,7 @@ function createTownMap() {
                 strokeThickness: 2
             }
         ).setDepth(2).setOrigin(0.5, 0.5);
-        
+
         // Special debug for blacksmith
         if (building.type === 'blacksmith') {
             console.log(`🔨 BLACKSMITH created at pixel position (${buildingCenterX}, ${buildingCenterY})`);
@@ -1675,7 +1677,7 @@ function createTownMap() {
             }
         }
     });
-    
+
     // Place some regular houses around the edges (avoiding spawn/exit)
     // Exclude bottom center area where spawn/exit are - make it EXTREMELY large
     const protectedBottomArea = {
@@ -1684,24 +1686,24 @@ function createTownMap() {
         minY: mapHeight - 20, // 20 tiles from bottom (extremely tall protection)
         maxY: mapHeight
     };
-    
+
     for (let i = 0; i < 8; i++) {
         let houseX, houseY, houseW, houseH;
         let attempts = 0;
         let valid = false;
-        
+
         while (!valid && attempts < 50) {
             houseW = Phaser.Math.Between(4, 6);
             houseH = Phaser.Math.Between(4, 6);
             houseX = Phaser.Math.Between(2, mapWidth - houseW - 2);
             houseY = Phaser.Math.Between(2, mapHeight - houseH - 2);
-            
+
             // Check if not on street or overlapping buildings
             valid = true;
             if (Math.abs(houseY - centerY) <= 2 || Math.abs(houseX - centerX) <= 2) {
                 valid = false;
             }
-            
+
             // Check if in protected bottom area (spawn/exit zone)
             // Check if ANY part of building overlaps protected area (not just center)
             if (valid) {
@@ -1709,7 +1711,7 @@ function createTownMap() {
                 const buildingMaxX = houseX + houseW;
                 const buildingMinY = houseY;
                 const buildingMaxY = houseY + houseH;
-                
+
                 // Check if building overlaps protected area
                 if (buildingMaxX >= protectedBottomArea.minX &&
                     buildingMinX <= protectedBottomArea.maxX &&
@@ -1718,7 +1720,7 @@ function createTownMap() {
                     valid = false;
                 }
             }
-            
+
             // Check if in upper left quadrant (reserved for Inn only)
             if (valid) {
                 const buildingMaxX = houseX + houseW;
@@ -1728,7 +1730,7 @@ function createTownMap() {
                     valid = false;
                 }
             }
-            
+
             // Check if would block player spawn or exit (using helper function)
             if (valid) {
                 const buildingX = houseX * tileSize;
@@ -1740,7 +1742,7 @@ function createTownMap() {
                     // Don't log here - too many attempts
                 }
             }
-            
+
             // Check if overlapping existing buildings
             if (valid) {
                 for (const b of buildings) {
@@ -1753,7 +1755,7 @@ function createTownMap() {
             }
             attempts++;
         }
-        
+
         if (valid) {
             const houseRect = scene.add.rectangle(
                 houseX * tileSize + (houseW * tileSize) / 2,
@@ -1763,11 +1765,11 @@ function createTownMap() {
                 buildingColors.house,
                 0.8
             ).setDepth(1).setStrokeStyle(2, 0x000000);
-            
+
             // Calculate house center for interaction
             const houseCenterX = (houseX * tileSize) + (houseW * tileSize) / 2;
             const houseCenterY = (houseY * tileSize) + (houseH * tileSize) / 2;
-            
+
             buildings.push({
                 x: houseX * tileSize,
                 y: houseY * tileSize,
@@ -1783,18 +1785,18 @@ function createTownMap() {
             });
         }
     }
-    
+
     // Create town entrance marker (at bottom edge, center) - make it very visible
     // Note: entranceX and entranceY are already defined above
-    
+
     // Create a more prominent marker with multiple visual elements
     const entranceMarker = scene.add.rectangle(entranceX, entranceY, tileSize * 4, tileSize * 4, 0x00ff00, 0.7)
         .setDepth(25).setStrokeStyle(5, 0x00ff00); // Very high depth, thicker stroke
-    
+
     // Add a pulsing glow effect
     const glowMarker = scene.add.rectangle(entranceX, entranceY, tileSize * 5, tileSize * 5, 0x00ff00, 0.3)
         .setDepth(24).setStrokeStyle(3, 0x00ff00);
-    
+
     const entranceText = scene.add.text(entranceX, entranceY, 'TOWN\nEXIT\n[F]', {
         fontSize: '16px',
         fill: '#ffffff',
@@ -1811,7 +1813,7 @@ function createTownMap() {
             fill: true
         }
     }).setDepth(26).setOrigin(0.5, 0.5); // Highest depth to ensure visibility
-    
+
     // Store glow for animation
     transitionMarkers.push({
         x: entranceX,
@@ -1822,7 +1824,7 @@ function createTownMap() {
         glow: glowMarker,
         text: entranceText
     });
-    
+
     transitionMarkers.push({
         x: entranceX,
         y: entranceY,
@@ -1831,12 +1833,12 @@ function createTownMap() {
         marker: entranceMarker,
         text: entranceText
     });
-    
+
     // Store map info
     scene.mapWidth = mapWidth;
     scene.mapHeight = mapHeight;
     scene.tileSize = tileSize;
-    
+
     // Set world bounds
     const playerSize = 32;
     const worldWidth = mapWidth * tileSize;
@@ -1847,7 +1849,7 @@ function createTownMap() {
         worldWidth - playerSize,
         worldHeight - playerSize
     );
-    
+
     // Position player at town center (near entrance) - ensure it's clear of buildings
     // Check spawn position AFTER all buildings are placed
     function isPositionInBuilding(x, y, playerSize) {
@@ -1861,19 +1863,19 @@ function createTownMap() {
         }
         return false;
     }
-    
+
     if (player) {
         const playerSize = 16; // Half of player sprite size
         let safeSpawnX = entranceX;
         let safeSpawnY = entranceY - 50; // Default spawn position
         let spawnFound = false;
-        
+
         console.log(`🔍 Searching for safe spawn. Default: (${safeSpawnX}, ${safeSpawnY})`);
         console.log(`   Total buildings placed: ${buildings.length}`);
         buildings.forEach((b, i) => {
             console.log(`   Building ${i}: (${b.x}, ${b.y}, ${b.width}, ${b.height})`);
         });
-        
+
         // Check if default spawn is clear
         if (!isPositionInBuilding(safeSpawnX, safeSpawnY, playerSize)) {
             spawnFound = true;
@@ -1884,7 +1886,7 @@ function createTownMap() {
             for (let offset = 64; offset <= 500 && !spawnFound; offset += 32) {
                 const testX = entranceX;
                 const testY = entranceY - offset;
-                
+
                 if (!isPositionInBuilding(testX, testY, playerSize)) {
                     safeSpawnX = testX;
                     safeSpawnY = testY;
@@ -1892,14 +1894,14 @@ function createTownMap() {
                     console.log(`✅ Found safe spawn at offset ${offset}: (${testX}, ${testY})`);
                 }
             }
-            
+
             // If still not found, try positions to the left/right of exit - wider search
             if (!spawnFound) {
                 for (let offset = -200; offset <= 200 && !spawnFound; offset += 32) {
                     for (let yOffset = 50; yOffset <= 300 && !spawnFound; yOffset += 32) {
                         const testX = entranceX + offset;
                         const testY = entranceY - yOffset;
-                        
+
                         if (!isPositionInBuilding(testX, testY, playerSize)) {
                             safeSpawnX = testX;
                             safeSpawnY = testY;
@@ -1910,12 +1912,12 @@ function createTownMap() {
                 }
             }
         }
-        
+
         player.x = safeSpawnX;
         player.y = safeSpawnY;
         console.log(`✅ Player spawned at: (${Math.floor(safeSpawnX)}, ${Math.floor(safeSpawnY)})`);
         console.log(`   Spawn area protected: X=${playerSpawnX - 16 * tileSize} to ${playerSpawnX + 16 * tileSize}, Y=${playerSpawnY - 16 * tileSize} to ${playerSpawnY + 16 * tileSize}`);
-        
+
         // Verify spawn is actually clear
         if (isPositionInBuilding(safeSpawnX, safeSpawnY, playerSize)) {
             console.error('❌ ERROR: Player spawned inside a building!');
@@ -1932,12 +1934,12 @@ function createTownMap() {
                 }
             }
         }
-        
+
         if (!spawnFound) {
             console.warn('⚠️ Could not find completely clear spawn position, using default');
         }
     }
-    
+
     console.log('✅ Town map created with', buildings.length, 'buildings');
 }
 
@@ -1949,15 +1951,15 @@ function createWildernessMap() {
     const tileSize = 32;
     const mapWidth = 50;
     const mapHeight = 50;
-    
+
     // Clear existing buildings and markers
     buildings = [];
     transitionMarkers = [];
-    
+
     // Check for grass spritesheet frames for variety
     let grassFrameCount = 1;
     let useFrames = false;
-    
+
     if (scene.textures.exists('grass')) {
         const grassTexture = scene.textures.get('grass');
         if (grassTexture && grassTexture.frameTotal && grassTexture.frameTotal > 0) {
@@ -1965,12 +1967,12 @@ function createWildernessMap() {
             useFrames = true;
         }
     }
-    
+
     // Create tilemap with variety
     for (let y = 0; y < mapHeight; y++) {
         for (let x = 0; x < mapWidth; x++) {
             let tileType = 'grass';
-            
+
             // Create walls around edges
             if (x === 0 || x === mapWidth - 1 || y === 0 || y === mapHeight - 1) {
                 tileType = 'wall';
@@ -1984,14 +1986,14 @@ function createWildernessMap() {
                 }
                 // else grass (default)
             }
-            
+
             // Add medium green background behind grass tiles
             if (tileType === 'grass') {
                 const bgRect = scene.add.rectangle(x * tileSize, y * tileSize, tileSize, tileSize, 0x59BD59, 1.0);
                 bgRect.setOrigin(0);
                 bgRect.setDepth(-1); // Behind the grass tile
             }
-            
+
             // Add tiles to a static group for better performance
             // Use random frame from spritesheet if available for grass tiles
             const scaleFactor = 32 / 96; // 0.333...
@@ -2010,21 +2012,21 @@ function createWildernessMap() {
             tile.setDepth(0); // Background layer
         }
     }
-    
+
     // Create wilderness exit marker (at top center)
     const exitX = (mapWidth / 2) * tileSize;
     const exitY = 2 * tileSize;
-    
+
     const exitMarker = scene.add.rectangle(exitX, exitY, tileSize * 2, tileSize * 2, 0x00ff00, 0.5)
         .setDepth(3).setStrokeStyle(3, 0x00ff00);
-    
+
     const exitText = scene.add.text(exitX, exitY, 'RETURN\nTO TOWN', {
         fontSize: '12px',
         fill: '#ffffff',
         fontStyle: 'bold',
         align: 'center'
     }).setDepth(4).setOrigin(0.5, 0.5);
-    
+
     transitionMarkers.push({
         x: exitX,
         y: exitY,
@@ -2033,12 +2035,12 @@ function createWildernessMap() {
         marker: exitMarker,
         text: exitText
     });
-    
+
     // Store map info
     scene.mapWidth = mapWidth;
     scene.mapHeight = mapHeight;
     scene.tileSize = tileSize;
-    
+
     // Set world bounds
     const playerSize = 32;
     const worldWidth = mapWidth * tileSize;
@@ -2049,16 +2051,16 @@ function createWildernessMap() {
         worldWidth - playerSize,
         worldHeight - playerSize
     );
-    
+
     // Position player near exit marker
     if (player) {
         player.x = exitX;
         player.y = exitY + 50;
     }
-    
+
     // Create dungeon entrance markers (2-3 scattered around map)
     createDungeonEntrances(mapWidth, mapHeight, tileSize);
-    
+
     console.log('✅ Wilderness map created');
 }
 
@@ -2068,13 +2070,13 @@ function createWildernessMap() {
 function createDungeonEntrances(mapWidth, mapHeight, tileSize) {
     const scene = game.scene.scenes[0];
     const numEntrances = Phaser.Math.Between(2, 3);
-    
+
     for (let i = 0; i < numEntrances; i++) {
         // Place away from edges (buffer zone)
         const buffer = 5;
         const x = Phaser.Math.Between(buffer, mapWidth - buffer - 1) * tileSize;
         const y = Phaser.Math.Between(buffer, mapHeight - buffer - 1) * tileSize;
-        
+
         // Create entrance marker - use cave entrance image if available, otherwise fallback to rectangle
         let entrance;
         if (scene.textures.exists('dungeon_entrance')) {
@@ -2086,14 +2088,14 @@ function createDungeonEntrances(mapWidth, mapHeight, tileSize) {
             entrance = scene.add.rectangle(x, y, tileSize * 2, tileSize * 2, 0x444444, 0.8)
                 .setDepth(3).setStrokeStyle(3, 0x888888);
         }
-        
+
         const text = scene.add.text(x, y, 'DUNGEON\nENTRANCE', {
             fontSize: '12px',
             fill: '#ffffff',
             fontStyle: 'bold',
             align: 'center'
         }).setDepth(4).setOrigin(0.5, 0.5);
-        
+
         transitionMarkers.push({
             x: x,
             y: y,
@@ -2111,7 +2113,7 @@ function createDungeonEntrances(mapWidth, mapHeight, tileSize) {
  */
 function transitionToMap(targetMap, level = 1) {
     const scene = game.scene.scenes[0];
-    
+
     // Clear monsters when leaving wilderness or dungeon
     if (currentMap === 'wilderness' || currentMap === 'dungeon') {
         monsters.forEach(m => {
@@ -2124,12 +2126,12 @@ function transitionToMap(targetMap, level = 1) {
         });
         monsters = [];
     }
-    
+
     // Clear dungeon walls when leaving dungeon
     if (currentMap === 'dungeon') {
         dungeonWalls = [];
     }
-    
+
     // Clear NPCs (will be repositioned)
     npcs.forEach(npc => {
         // Clean up indicators before destroying NPC
@@ -2140,13 +2142,13 @@ function transitionToMap(targetMap, level = 1) {
         if (npc && npc.active) npc.destroy();
     });
     npcs = [];
-    
+
     // Clear buildings and transition markers
     // Close building UI if open
     if (buildingPanelVisible) {
         closeBuildingUI();
     }
-    
+
     // Clean up building indicators
     buildings.forEach(b => {
         if (b.interactionIndicator && b.interactionIndicator.active) {
@@ -2155,14 +2157,14 @@ function transitionToMap(targetMap, level = 1) {
         if (b.rect && b.rect.active) b.rect.destroy();
     });
     buildings = [];
-    
+
     transitionMarkers.forEach(m => {
         if (m.marker && m.marker.active) m.marker.destroy();
         if (m.glow && m.glow.active) m.glow.destroy();
         if (m.text && m.text.active) m.text.destroy();
     });
     transitionMarkers = [];
-    
+
     // Clear all tiles (depth 0-4) - but only if NOT transitioning to dungeon
     // (dungeon will clear its own tiles)
     if (targetMap !== 'dungeon') {
@@ -2186,7 +2188,7 @@ function transitionToMap(targetMap, level = 1) {
             }
         }
     }
-    
+
     // Handle background music - stop all music first
     if (villageMusic && villageMusic.isPlaying) {
         villageMusic.stop();
@@ -2206,12 +2208,12 @@ function transitionToMap(targetMap, level = 1) {
         dungeonMusic = null;
         console.log('🎵 Stopped dungeon music');
     }
-    
+
     // Start appropriate music for the target map
     if (musicEnabled && scene.sound) {
         let musicKey = null;
         let musicName = '';
-        
+
         if (targetMap === 'town') {
             musicKey = 'village_music';
             musicName = 'village';
@@ -2222,21 +2224,21 @@ function transitionToMap(targetMap, level = 1) {
             musicKey = 'dungeon_music';
             musicName = 'dungeon';
         }
-        
+
         if (musicKey) {
             console.log(`🎵 Attempting to start ${musicName} music...`);
             console.log('   - Sound system exists:', !!scene.sound);
             console.log('   - Audio cache exists:', !!scene.cache.audio);
             console.log(`   - ${musicName} music in cache:`, scene.cache.audio.exists(musicKey));
-            
+
             if (scene.cache.audio.exists(musicKey)) {
                 try {
-                    const music = scene.sound.add(musicKey, { 
-                        volume: 0.5, 
+                    const music = scene.sound.add(musicKey, {
+                        volume: 0.5,
                         loop: true,
                         seek: 0
                     });
-                    
+
                     // Store reference based on map type
                     if (targetMap === 'town') {
                         villageMusic = music;
@@ -2245,7 +2247,7 @@ function transitionToMap(targetMap, level = 1) {
                     } else if (targetMap === 'dungeon') {
                         dungeonMusic = music;
                     }
-                    
+
                     // Try to play
                     const playResult = music.play();
                     if (playResult && typeof playResult.then === 'function') {
@@ -2269,7 +2271,7 @@ function transitionToMap(targetMap, level = 1) {
     } else if (!musicEnabled) {
         console.log('🎵 Music is disabled, skipping background music');
     }
-    
+
     // Create new map
     if (targetMap === 'town') {
         createTownMap();
@@ -2306,15 +2308,15 @@ function transitionToMap(targetMap, level = 1) {
         createWildernessMap();
         spawnInitialMonsters.call(scene, scene.mapWidth * scene.tileSize, scene.mapHeight * scene.tileSize);
     }
-    
+
     currentMap = targetMap;
-    
+
     // Update camera bounds for new map
     const worldWidth = scene.mapWidth * scene.tileSize;
     const worldHeight = scene.mapHeight * scene.tileSize;
     scene.cameras.main.setBounds(0, 0, worldWidth, worldHeight);
     scene.cameras.main.startFollow(player);
-    
+
     console.log('✅ Transitioned to', targetMap);
 }
 
@@ -2334,7 +2336,7 @@ function generateDungeon(level, width, height, seed = null) {
         // Generate new random seed
         seed = Date.now() + Math.floor(Math.random() * 1000000);
     }
-    
+
     // Simple seeded random function - CRITICAL: Must start from the same seed each time for determinism
     // Store original seed to ensure we can reset if needed
     const originalSeed = seed;
@@ -2343,24 +2345,24 @@ function generateDungeon(level, width, height, seed = null) {
         seedValue = (seedValue * 9301 + 49297) % 233280;
         return seedValue / 233280;
     };
-    
+
     // Reset function to ensure determinism (call this at start of generation)
     const resetSeed = () => {
         seedValue = originalSeed;
     };
-    
+
     // Reset seed at start to ensure deterministic generation
     resetSeed();
-    
+
     // Helper functions using seeded random
     const seededBetween = (min, max) => {
         return Math.floor(seededRandom() * (max - min + 1)) + min;
     };
-    
+
     const seededPick = (array) => {
         return array[Math.floor(seededRandom() * array.length)];
     };
-    
+
     const dungeon = {
         level: level,
         seed: seed,
@@ -2375,7 +2377,7 @@ function generateDungeon(level, width, height, seed = null) {
         seededBetween: seededBetween,
         seededPick: seededPick
     };
-    
+
     // Initialize mapData with all floors (0 = wall, 1 = floor)
     // Start with floor everywhere, then add walls where needed
     for (let y = 0; y < height; y++) {
@@ -2384,31 +2386,31 @@ function generateDungeon(level, width, height, seed = null) {
             dungeon.mapData[y][x] = 1; // Floor (base layer)
         }
     }
-    
+
     // Step 1: Generate rooms
     const roomCount = seededBetween(8, 12);
     console.log(`  Generating ${roomCount} rooms...`);
     dungeon.rooms = generateRooms(dungeon, roomCount);
     console.log(`  Generated ${dungeon.rooms.length} rooms`);
-    
+
     if (dungeon.rooms.length === 0) {
         console.error('❌ No rooms generated!');
         return null;
     }
-    
+
     // Step 2: Connect rooms with corridors
     console.log('  Connecting rooms...');
     dungeon.corridors = connectRooms(dungeon);
-    
+
     // Step 3: Since we start with all floors, we need to add walls
     // First, mark rooms and corridors as floor (they already are, but this ensures they stay floor)
     // Then add walls around the perimeter and in empty areas
     console.log('  Adding walls to map...');
     addWallsToDungeon(dungeon);
-    
+
     // Step 4: Place entrance and exit
     placeDungeonFeatures(dungeon);
-    
+
     console.log(`  ✅ Dungeon generated: ${dungeon.rooms.length} rooms, ${dungeon.corridors.length} corridors`);
     return dungeon;
 }
@@ -2421,36 +2423,36 @@ function generateRooms(dungeon, count) {
     const minRoomSize = 3;
     const maxRoomSize = 8;
     const maxAttempts = 200;
-    
+
     // Use dungeon's seeded random functions
     const seededBetween = dungeon.seededBetween || Phaser.Math.Between;
-    
+
     // Ensure we have valid bounds
     if (dungeon.width < maxRoomSize + 4 || dungeon.height < maxRoomSize + 4) {
         console.warn('Dungeon too small for room generation');
         return rooms;
     }
-    
+
     for (let i = 0; i < count; i++) {
         let attempts = 0;
         let placed = false;
-        
+
         while (!placed && attempts < maxAttempts) {
             const width = seededBetween(minRoomSize, maxRoomSize);
             const height = seededBetween(minRoomSize, maxRoomSize);
-            
+
             // Ensure valid bounds
             const maxX = Math.max(2, dungeon.width - width - 2);
             const maxY = Math.max(2, dungeon.height - height - 2);
-            
+
             if (maxX <= 2 || maxY <= 2) {
                 // Can't place more rooms
                 break;
             }
-            
+
             const x = seededBetween(2, maxX);
             const y = seededBetween(2, maxY);
-            
+
             const newRoom = {
                 x: x,
                 y: y,
@@ -2460,7 +2462,7 @@ function generateRooms(dungeon, count) {
                 centerY: y + Math.floor(height / 2),
                 type: 'normal'
             };
-            
+
             // Check for overlaps
             if (!rooms.some(room => roomsOverlap(newRoom, room))) {
                 rooms.push(newRoom);
@@ -2468,14 +2470,14 @@ function generateRooms(dungeon, count) {
             }
             attempts++;
         }
-        
+
         // If we couldn't place this room, stop trying
         if (!placed) {
             console.log(`⚠️ Could only place ${rooms.length} of ${count} rooms`);
             break;
         }
     }
-    
+
     // Ensure we have at least 2 rooms (entrance and exit)
     if (rooms.length < 2) {
         console.warn('Not enough rooms generated, creating minimal dungeon');
@@ -2484,7 +2486,7 @@ function generateRooms(dungeon, count) {
         rooms.push({ x: 5, y: 5, width: 5, height: 5, centerX: 7, centerY: 7, type: 'normal' });
         rooms.push({ x: dungeon.width - 10, y: dungeon.height - 10, width: 5, height: 5, centerX: dungeon.width - 7, centerY: dungeon.height - 7, type: 'normal' });
     }
-    
+
     return rooms;
 }
 
@@ -2493,9 +2495,9 @@ function generateRooms(dungeon, count) {
  */
 function roomsOverlap(room1, room2) {
     return room1.x < room2.x + room2.width &&
-           room1.x + room1.width > room2.x &&
-           room1.y < room2.y + room2.height &&
-           room1.y + room1.height > room2.y;
+        room1.x + room1.width > room2.x &&
+        room1.y < room2.y + room2.height &&
+        room1.y + room1.height > room2.y;
 }
 
 /**
@@ -2503,21 +2505,21 @@ function roomsOverlap(room1, room2) {
  */
 function connectRooms(dungeon) {
     const corridors = [];
-    
+
     // Simple: Connect each room to the next (creates a path)
     for (let i = 0; i < dungeon.rooms.length - 1; i++) {
         const room1 = dungeon.rooms[i];
         const room2 = dungeon.rooms[i + 1];
-        
+
         // Create L-shaped corridor
         const corridor = createLShapedCorridor(
             room1.centerX, room1.centerY,
             room2.centerX, room2.centerY
         );
-        
+
         corridors.push(corridor);
     }
-    
+
     // Also connect first room to last room (creates a loop)
     if (dungeon.rooms.length > 2) {
         const firstRoom = dungeon.rooms[0];
@@ -2528,7 +2530,7 @@ function connectRooms(dungeon) {
         );
         corridors.push(corridor);
     }
-    
+
     return corridors;
 }
 
@@ -2538,13 +2540,13 @@ function connectRooms(dungeon) {
 function createLShapedCorridor(x1, y1, x2, y2) {
     const path = [];
     const corridorWidth = 3; // Make corridors 3 tiles wide
-    
+
     // Horizontal first, then vertical
     const startX = Math.min(x1, x2);
     const endX = Math.max(x1, x2);
     const startY = Math.min(y1, y2);
     const endY = Math.max(y1, y2);
-    
+
     // Horizontal segment - create width
     for (let x = startX; x <= endX; x++) {
         // Add center line and one tile on each side
@@ -2552,7 +2554,7 @@ function createLShapedCorridor(x1, y1, x2, y2) {
             path.push({ x: x, y: y1 + offset });
         }
     }
-    
+
     // Vertical segment - create width
     for (let y = startY; y <= endY; y++) {
         // Add center line and one tile on each side
@@ -2564,7 +2566,7 @@ function createLShapedCorridor(x1, y1, x2, y2) {
             }
         }
     }
-    
+
     return { path: path };
 }
 
@@ -2590,7 +2592,7 @@ function carveRooms(dungeon) {
 function addWallsToDungeon(dungeon) {
     // Create a set of all floor positions (rooms + corridors)
     const floorPositions = new Set();
-    
+
     // Mark all room positions as floor
     dungeon.rooms.forEach(room => {
         for (let y = room.y; y < room.y + room.height; y++) {
@@ -2601,7 +2603,7 @@ function addWallsToDungeon(dungeon) {
             }
         }
     });
-    
+
     // Mark all corridor positions as floor
     dungeon.corridors.forEach(corridor => {
         if (corridor.path) {
@@ -2612,7 +2614,7 @@ function addWallsToDungeon(dungeon) {
             });
         }
     });
-    
+
     // Now mark everything as wall except the floor positions
     for (let y = 0; y < dungeon.height; y++) {
         for (let x = 0; x < dungeon.width; x++) {
@@ -2631,7 +2633,7 @@ function addWallsToDungeon(dungeon) {
 function carveCorridors(dungeon) {
     dungeon.corridors.forEach(corridor => {
         corridor.path.forEach(point => {
-            if (point.x >= 0 && point.x < dungeon.width && 
+            if (point.x >= 0 && point.x < dungeon.width &&
                 point.y >= 0 && point.y < dungeon.height) {
                 dungeon.mapData[point.y][point.x] = 1; // Floor
             }
@@ -2644,14 +2646,14 @@ function carveCorridors(dungeon) {
  */
 function placeDungeonFeatures(dungeon) {
     if (dungeon.rooms.length === 0) return;
-    
+
     // Entrance in first room
     const entranceRoom = dungeon.rooms[0];
     dungeon.entrance = {
         x: entranceRoom.centerX,
         y: entranceRoom.centerY
     };
-    
+
     // Exit in last room
     const exitRoom = dungeon.rooms[dungeon.rooms.length - 1];
     dungeon.exit = {
@@ -2669,14 +2671,14 @@ function createDungeonMap(level) {
         console.error('❌ Scene not available for dungeon creation');
         return;
     }
-    
+
     const tileSize = 32;
-    
+
     try {
         // Check if dungeon already exists in cache or needs regeneration
         const dungeonKey = `level_${level}`;
         const isCompleted = dungeonCompletions[dungeonKey] || false;
-        
+
         console.log(`🏗️ Creating dungeon level ${level}...`);
         console.log(`🔍 Current dungeon cache state:`, {
             dungeonKey,
@@ -2687,7 +2689,7 @@ function createDungeonMap(level) {
             currentDungeonExists: !!currentDungeon,
             currentDungeonSeed: currentDungeon?.seed
         });
-        
+
         // Debug: Log cache state
         console.log(`🔍 Dungeon cache check for ${dungeonKey}:`, {
             exists: !!dungeonCache[dungeonKey],
@@ -2696,7 +2698,7 @@ function createDungeonMap(level) {
             isCompleted: isCompleted,
             cacheKeys: Object.keys(dungeonCache)
         });
-        
+
         if (isCompleted) {
             // Generate new dungeon (boss was defeated, reset it)
             console.log(`🔄 Dungeon level ${level} was completed, generating new one...`);
@@ -2706,7 +2708,7 @@ function createDungeonMap(level) {
             // Regenerate from saved seed
             const savedSeed = dungeonCache[dungeonKey].seed;
             console.log(`📦 Regenerating dungeon level ${level} from seed ${savedSeed}...`);
-            
+
             // CRITICAL: Ensure we use the exact same seed value (convert to number if needed)
             const numericSeed = typeof savedSeed === 'number' ? savedSeed : parseInt(savedSeed, 10);
             if (isNaN(numericSeed)) {
@@ -2739,12 +2741,12 @@ function createDungeonMap(level) {
             dungeonCache[dungeonKey] = currentDungeon;
             console.log(`✅ Generated new dungeon with seed ${currentDungeon.seed}`);
         }
-        
+
         if (!currentDungeon || !currentDungeon.mapData) {
             console.error('❌ Failed to generate dungeon - no mapData');
             return;
         }
-        
+
         console.log(`✅ Dungeon generated successfully: ${currentDungeon.width}x${currentDungeon.height}, ${currentDungeon.rooms.length} rooms`);
     } catch (e) {
         console.error('❌ Error generating dungeon:', e);
@@ -2752,7 +2754,7 @@ function createDungeonMap(level) {
         // Don't return here - let the error propagate so transitionToMap can handle it
         throw e;
     }
-    
+
     try {
         // Clear previous tiles (create a copy of the list to avoid modification during iteration)
         const toDestroy = [];
@@ -2776,11 +2778,11 @@ function createDungeonMap(level) {
                 }
             }
         }
-        
+
         // Set dungeon background to dark blue-grey (similar to floor tiles)
         // This color matches the dark stone floor appearance
         scene.cameras.main.setBackgroundColor('#1a1a2e');
-        
+
         // Create tiles from dungeon.mapData - ensure EVERY cell gets a tile
         console.log(`🎨 Rendering dungeon tiles (${currentDungeon.width}x${currentDungeon.height})...`);
         let tileCount = 0;
@@ -2806,7 +2808,7 @@ function createDungeonMap(level) {
         console.error(e.stack);
         throw e; // Propagate error
     }
-    
+
     // Create entrance and exit markers
     try {
         createDungeonMarkers(tileSize);
@@ -2814,12 +2816,12 @@ function createDungeonMap(level) {
         console.error('❌ Error creating dungeon markers:', e);
         // Don't throw - markers are not critical
     }
-    
+
     // Store map info
     scene.mapWidth = currentDungeon.width;
     scene.mapHeight = currentDungeon.height;
     scene.tileSize = tileSize;
-    
+
     // Set world bounds
     const playerSize = 32;
     const worldWidth = currentDungeon.width * tileSize;
@@ -2830,13 +2832,13 @@ function createDungeonMap(level) {
         worldWidth - playerSize,
         worldHeight - playerSize
     );
-    
+
     // Position player at entrance
     if (player && currentDungeon.entrance) {
         player.x = currentDungeon.entrance.x * tileSize;
         player.y = currentDungeon.entrance.y * tileSize;
     }
-    
+
     console.log(`✅ Dungeon level ${level} created (seed: ${currentDungeon.seed}, rooms: ${currentDungeon.rooms.length})`);
 }
 
@@ -2850,25 +2852,25 @@ function createTilesetFrames(tilesetKey, metadata, type) {
         console.warn(`⚠️ createTilesetFrames: No metadata or tiles for ${tilesetKey}`);
         return;
     }
-    
+
     const tiles = metadata.tileset_data.tiles;
     console.log(`📦 Processing ${tiles.length} tiles for ${type} tileset`);
     const sourceTexture = this.textures.get(tilesetKey);
-    
+
     if (!sourceTexture) {
         console.error(`❌ Source texture ${tilesetKey} not found!`);
         return;
     }
-    
+
     tiles.forEach(tile => {
         const bbox = tile.bounding_box;
         const frameKey = `dungeon_${type}_${tile.id}`;
-        
+
         // Remove existing texture if it exists to force reprocessing
         if (this.textures.exists(frameKey)) {
             this.textures.remove(frameKey);
         }
-        
+
         // Process both floor and wall tilesets to remove green/white pixels
         if (type === 'wall' || type === 'floor') {
             // For wall tiles, process to make white pixels transparent
@@ -2878,33 +2880,33 @@ function createTilesetFrames(tilesetKey, metadata, type) {
                 canvas.width = bbox.width;
                 canvas.height = bbox.height;
                 const ctx = canvas.getContext('2d');
-                
+
                 // Get the source image - try different methods to access it
                 let sourceImage = sourceTexture.getSourceImage();
                 if (!sourceImage && sourceTexture.source) {
                     sourceImage = sourceTexture.source[0]?.image || sourceTexture.source[0]?.canvas;
                 }
-                
+
                 if (sourceImage) {
                     // Draw the tile region to canvas
                     if (sourceImage instanceof HTMLImageElement || sourceImage instanceof HTMLCanvasElement || sourceImage instanceof ImageBitmap) {
                         ctx.drawImage(sourceImage, bbox.x, bbox.y, bbox.width, bbox.height, 0, 0, bbox.width, bbox.height);
-                        
+
                         // Process pixels: make white (or near-white) pixels transparent
                         const imageData = ctx.getImageData(0, 0, bbox.width, bbox.height);
                         const data = imageData.data;
-                        
+
                         if (type === 'wall' && tile.id === 0) {
                             console.log(`🎨 Processing first wall tile ${frameKey}, imageData size: ${data.length}, pixels: ${data.length / 4}`);
                         }
                         let transparentCount = 0;
-                        
+
                         for (let i = 0; i < data.length; i += 4) {
                             const r = data[i];
                             const g = data[i + 1];
                             const b = data[i + 2];
                             const avg = (r + g + b) / 3;
-                            
+
                             // For walls: remove white/light pixels (new tileset is already dark, no green processing needed)
                             // For floors: remove green pixels (bright green that shouldn't be there)
                             if (type === 'wall') {
@@ -2928,13 +2930,13 @@ function createTilesetFrames(tilesetKey, metadata, type) {
                                 }
                             }
                         }
-                        
+
                         if (transparentCount > 0) {
                             console.log(`Processed ${type} tile ${frameKey}: made ${transparentCount} pixels transparent`);
                         }
-                        
+
                         ctx.putImageData(imageData, 0, 0);
-                        
+
                         // Create texture from processed canvas
                         this.textures.addCanvas(frameKey, canvas);
                     } else {
@@ -2955,7 +2957,7 @@ function createTilesetFrames(tilesetKey, metadata, type) {
             sourceTexture.add(frameKey, 0, bbox.x, bbox.y, bbox.width, bbox.height);
         }
     });
-    
+
     console.log(`✅ Created ${tiles.length} texture frames for ${type} tileset`);
 }
 
@@ -2968,10 +2970,10 @@ function buildDungeonTileLookup(type) {
         console.warn(`⚠️ No metadata tiles found for ${type}`);
         return;
     }
-    
+
     const lookup = type === 'floor' ? dungeonTilesets.floorTileLookup : dungeonTilesets.wallTileLookup;
     const tiles = metadata.tileset_data.tiles;
-    
+
     // Build lookup: corner pattern string -> tile data
     tiles.forEach(tile => {
         const corners = tile.corners;
@@ -2983,7 +2985,7 @@ function buildDungeonTileLookup(type) {
             corners: corners
         };
     });
-    
+
     console.log(`✅ Built ${type} tile lookup with ${Object.keys(lookup).length} patterns`);
 }
 
@@ -3001,7 +3003,7 @@ function buildDungeonTileLookup(type) {
 function getCornerTerrain(cellX, cellY, corner, mapData, width, height, isFloorTileset) {
     let checkX = cellX;
     let checkY = cellY;
-    
+
     // Adjust coordinates based on which corner we're checking
     if (corner === 'NE' || corner === 'SE') {
         checkX = cellX + 1;
@@ -3009,14 +3011,14 @@ function getCornerTerrain(cellX, cellY, corner, mapData, width, height, isFloorT
     if (corner === 'SE' || corner === 'SW') {
         checkY = cellY + 1;
     }
-    
+
     // Clamp to map bounds (treat out-of-bounds as wall)
     if (checkX < 0 || checkX >= width || checkY < 0 || checkY >= height) {
         return isFloorTileset ? 'lower' : 'upper'; // Out of bounds: floor tileset uses lower, wall uses upper
     }
-    
+
     const tileType = mapData[checkY][checkX];
-    
+
     if (isFloorTileset) {
         // For floor tileset: "lower" = dark stone, "upper" = lighter stone (both are floor types)
         // Use only "lower" (dark stone) for consistent floor appearance
@@ -3033,26 +3035,26 @@ function getCornerTerrain(cellX, cellY, corner, mapData, width, height, isFloorT
  */
 function getWangTile(x, y, mapData, width, height, type) {
     const isFloorTileset = type === 'floor';
-    
+
     // Get corner terrain types (NW, NE, SE, SW) for cell at (x, y)
     const nw = getCornerTerrain(x, y, 'NW', mapData, width, height, isFloorTileset);
     const ne = getCornerTerrain(x, y, 'NE', mapData, width, height, isFloorTileset);
     const se = getCornerTerrain(x, y, 'SE', mapData, width, height, isFloorTileset);
     const sw = getCornerTerrain(x, y, 'SW', mapData, width, height, isFloorTileset);
-    
+
     // Create pattern key
     const patternKey = `${nw}_${ne}_${se}_${sw}`;
-    
+
     // Look up tile
     const lookup = type === 'floor' ? dungeonTilesets.floorTileLookup : dungeonTilesets.wallTileLookup;
     let tileData = lookup[patternKey];
-    
+
     if (!tileData) {
         // Try fallback: use base tile (all corners same type)
         const allLower = patternKey.split('_').every(c => c === 'lower');
         const fallbackKey = allLower ? 'lower_lower_lower_lower' : 'upper_upper_upper_upper';
         tileData = lookup[fallbackKey];
-        
+
         // If still no match, try to find any tile with mostly matching corners
         if (!tileData) {
             // Find the first available tile as ultimate fallback
@@ -3060,7 +3062,7 @@ function getWangTile(x, y, mapData, width, height, type) {
             tileData = firstKey ? lookup[firstKey] : null;
         }
     }
-    
+
     return tileData;
 }
 
@@ -3070,15 +3072,15 @@ function getWangTile(x, y, mapData, width, height, type) {
 function createDungeonTile(x, y, tileType, tileSize) {
     const scene = game.scene.scenes[0];
     let tile;
-    
+
     // Check if tilesets are loaded and working
     const floorTilesetLoaded = scene.textures.exists('dungeon_floor_tileset');
     const wallTilesetLoaded = scene.textures.exists('dungeon_wall_tileset');
     const hasMetadata = dungeonTilesets.floorMetadata && dungeonTilesets.wallMetadata;
-    const hasLookups = Object.keys(dungeonTilesets.floorTileLookup).length > 0 && 
-                       Object.keys(dungeonTilesets.wallTileLookup).length > 0;
+    const hasLookups = Object.keys(dungeonTilesets.floorTileLookup).length > 0 &&
+        Object.keys(dungeonTilesets.wallTileLookup).length > 0;
     const useTilesets = floorTilesetLoaded && wallTilesetLoaded && hasMetadata && hasLookups;
-    
+
     // Debug: log once to see what's happening
     if (x === 0 && y === 0 && tileType === 1 && !useTilesets) {
         console.warn('⚠️ Dungeon tilesets not available, using fallback colors:', {
@@ -3090,7 +3092,7 @@ function createDungeonTile(x, y, tileType, tileSize) {
             wallLookupSize: Object.keys(dungeonTilesets.wallTileLookup).length
         });
     }
-    
+
     if (tileType === 0) {
         // Wall
         if (useTilesets) {
@@ -3113,41 +3115,41 @@ function createDungeonTile(x, y, tileType, tileSize) {
                         // Fallback: use crop method - process pixels directly to remove green
                         const sourceTexture = scene.textures.get('dungeon_wall_tileset');
                         const sourceImage = sourceTexture.getSourceImage();
-                        
+
                         if (sourceImage) {
                             // Create a canvas to process the tile region
                             const canvas = document.createElement('canvas');
                             canvas.width = bbox.width;
                             canvas.height = bbox.height;
                             const ctx = canvas.getContext('2d');
-                            
+
                             // Draw the tile region
                             ctx.drawImage(sourceImage, bbox.x, bbox.y, bbox.width, bbox.height, 0, 0, bbox.width, bbox.height);
-                            
+
                             // Process pixels to remove white/light pixels (new dark tileset shouldn't need green processing)
                             const imageData = ctx.getImageData(0, 0, bbox.width, bbox.height);
                             const data = imageData.data;
-                            
+
                             for (let i = 0; i < data.length; i += 4) {
                                 const r = data[i];
                                 const g = data[i + 1];
                                 const b = data[i + 2];
                                 const avg = (r + g + b) / 3;
-                                
+
                                 // Remove very light pixels (white/light backgrounds)
                                 if (avg > 220 || (r > 220 && g > 220 && b > 220)) {
                                     data[i + 3] = 0; // Make transparent
                                 }
                             }
-                            
+
                             ctx.putImageData(imageData, 0, 0);
-                            
+
                             // Create texture from processed canvas
                             const processedKey = `dungeon_wall_processed_${tileData.id}_${bbox.x}_${bbox.y}`;
                             if (!scene.textures.exists(processedKey)) {
                                 scene.textures.addCanvas(processedKey, canvas);
                             }
-                            
+
                             tile = scene.add.image(x * tileSize, y * tileSize, processedKey);
                             tile.setOrigin(0);
                             tile.setDisplaySize(tileSize, tileSize);
@@ -3179,7 +3181,7 @@ function createDungeonTile(x, y, tileType, tileSize) {
             tile = scene.add.rectangle(x * tileSize, y * tileSize, tileSize, tileSize, 0x151515, 1.0)
                 .setOrigin(0);
         }
-        
+
         // Add wall to collision array
         dungeonWalls.push({
             x: x * tileSize,
@@ -3204,8 +3206,8 @@ function createDungeonTile(x, y, tileType, tileSize) {
                         tile = scene.add.image(x * tileSize, y * tileSize, frameKey);
                         tile.setOrigin(0);
                         tile.setDisplaySize(tileSize, tileSize);
-                    } else if (scene.textures.exists('dungeon_floor_tileset') && 
-                               scene.textures.get('dungeon_floor_tileset').has(frameKey)) {
+                    } else if (scene.textures.exists('dungeon_floor_tileset') &&
+                        scene.textures.get('dungeon_floor_tileset').has(frameKey)) {
                         // Fallback: use frame from tileset
                         tile = scene.add.image(x * tileSize, y * tileSize, 'dungeon_floor_tileset', frameKey);
                         tile.setOrigin(0);
@@ -3234,7 +3236,7 @@ function createDungeonTile(x, y, tileType, tileSize) {
                 .setOrigin(0);
         }
     }
-    
+
     // Ensure tile is created and has proper depth
     if (tile) {
         tile.setDepth(0);
@@ -3252,22 +3254,22 @@ function createDungeonTile(x, y, tileType, tileSize) {
 function createDungeonMarkers(tileSize) {
     const scene = game.scene.scenes[0];
     transitionMarkers = [];
-    
+
     // Entrance marker (exit to wilderness)
     if (currentDungeon.entrance) {
         const entranceX = currentDungeon.entrance.x * tileSize;
         const entranceY = currentDungeon.entrance.y * tileSize;
-        
+
         const entranceMarker = scene.add.rectangle(entranceX, entranceY, tileSize * 2, tileSize * 2, 0x00ff00, 0.5)
             .setDepth(3).setStrokeStyle(3, 0x00ff00);
-        
+
         const entranceText = scene.add.text(entranceX, entranceY, 'EXIT\nTO SURFACE', {
             fontSize: '12px',
             fill: '#ffffff',
             fontStyle: 'bold',
             align: 'center'
         }).setDepth(4).setOrigin(0.5, 0.5);
-        
+
         transitionMarkers.push({
             x: entranceX,
             y: entranceY,
@@ -3277,22 +3279,22 @@ function createDungeonMarkers(tileSize) {
             text: entranceText
         });
     }
-    
+
     // Exit marker (stairs to next level)
     if (currentDungeon.exit) {
         const exitX = currentDungeon.exit.x * tileSize;
         const exitY = currentDungeon.exit.y * tileSize;
-        
+
         const exitMarker = scene.add.rectangle(exitX, exitY, tileSize * 2, tileSize * 2, 0xff8800, 0.5)
             .setDepth(3).setStrokeStyle(3, 0xff8800);
-        
+
         const exitText = scene.add.text(exitX, exitY, `STAIRS\nLEVEL ${dungeonLevel + 1}`, {
             fontSize: '12px',
             fill: '#ffffff',
             fontStyle: 'bold',
             align: 'center'
         }).setDepth(4).setOrigin(0.5, 0.5);
-        
+
         transitionMarkers.push({
             x: exitX,
             y: exitY,
@@ -3311,40 +3313,40 @@ function createDungeonMarkers(tileSize) {
 function spawnDungeonMonsters() {
     const scene = game.scene.scenes[0];
     if (!currentDungeon || !currentDungeon.rooms) return;
-    
+
     // Spawn monsters in rooms (not entrance room, not exit room)
     const combatRooms = currentDungeon.rooms.slice(1, -1); // Skip first and last room
-    
+
     combatRooms.forEach(room => {
         // Spawn 1-3 monsters per room
         const monsterCount = Phaser.Math.Between(1, 3);
-        
+
         for (let i = 0; i < monsterCount; i++) {
             const x = (room.x + Phaser.Math.Between(1, room.width - 1)) * scene.tileSize;
             const y = (room.y + Phaser.Math.Between(1, room.height - 1)) * scene.tileSize;
-            
+
             // Spawn random monster type (scaled by level)
             const dungeonMonsterTypes = [
                 { name: 'Goblin', textureKey: 'monster_goblin', hp: 30, attack: 5, speed: 50, xp: 10 },
                 { name: 'Orc', textureKey: 'monster_orc', hp: 50, attack: 8, speed: 40, xp: 20 },
                 { name: 'Skeleton', textureKey: 'monster_skeleton', hp: 25, attack: 6, speed: 60, xp: 15 }
             ];
-            
+
             const selectedType = Phaser.Utils.Array.GetRandom(dungeonMonsterTypes);
             const scaledHp = selectedType.hp + (dungeonLevel * 10);
             const scaledAttack = selectedType.attack + (dungeonLevel * 2);
             const scaledXp = selectedType.xp + (dungeonLevel * 5);
-            
+
             spawnMonsterScaled(x, y, selectedType, scaledHp, scaledAttack, scaledXp);
         }
     });
-    
+
     // Spawn boss in exit room
     if (currentDungeon.exit && currentDungeon.rooms.length > 0) {
         const bossRoom = currentDungeon.rooms[currentDungeon.rooms.length - 1];
         const bossX = bossRoom.centerX * scene.tileSize;
         const bossY = bossRoom.centerY * scene.tileSize;
-        
+
         spawnBossMonster(bossX, bossY, dungeonLevel);
     }
 }
@@ -3354,7 +3356,7 @@ function spawnDungeonMonsters() {
  */
 function spawnBossMonster(x, y, level) {
     const scene = game.scene.scenes[0];
-    
+
     // Use a specific monster type for boss (dragon is the most powerful, or use orc as fallback)
     // Try to use dragon texture if available, otherwise use orc
     let bossTexture = 'monster_dragon_south';
@@ -3368,7 +3370,7 @@ function spawnBossMonster(x, y, level) {
             bossType = 'goblin';
         }
     }
-    
+
     // Create boss with enhanced stats
     const boss = scene.physics.add.sprite(x, y, bossTexture);
     boss.setScale(1.5); // Bigger than normal monsters
@@ -3386,18 +3388,18 @@ function spawnBossMonster(x, y, level) {
     boss.facingDirection = 'south'; // Initialize direction
     boss.isMoving = false;
     boss.animationState = 'idle';
-    
+
     // Boss visual indicator
     boss.setTint(0xff0000); // Red tint for boss
-    
+
     monsters.push(boss);
-    
+
     // Create HP bar for boss
     const hpBarBg = scene.add.rectangle(x, y - 25, 40, 4, 0x000000, 0.8).setDepth(15);
     const hpBar = scene.add.rectangle(x - 20, y - 25, 40, 2, 0xff0000).setDepth(16).setOrigin(0, 0.5);
     boss.hpBarBg = hpBarBg;
     boss.hpBar = hpBar;
-    
+
     console.log(`👹 Boss spawned at level ${level}`);
 }
 
@@ -3406,22 +3408,22 @@ function spawnBossMonster(x, y, level) {
  */
 function onBossDefeated(level, x, y) {
     const dungeonKey = `level_${level}`;
-    
+
     // Mark dungeon as completed
     dungeonCompletions[dungeonKey] = true;
-    
+
     // Clear dungeon from cache (force regeneration on next entry)
     delete dungeonCache[dungeonKey];
     currentDungeon = null;
-    
+
     // Drop boss loot
     dropBossLoot(x, y, level);
-    
+
     // Show completion message
     showDamageNumber(player.x, player.y - 40, 'Dungeon Cleared!', 0x00ffff);
     addChatMessage(`Dungeon Level ${level} Cleared!`, 0x00ffff, '🏆');
     console.log(`✅ Dungeon level ${level} completed - will reset on next entry`);
-    
+
     // Auto-save
     saveGame();
 }
@@ -3431,11 +3433,11 @@ function onBossDefeated(level, x, y) {
  */
 function dropBossLoot(x, y, level) {
     const scene = game.scene.scenes[0];
-    
+
     // Boss drops 2-4 items, with better quality based on level
     const numItems = 2 + Math.floor(level / 2); // 2 items at level 1, 3 at level 2, 4+ at higher levels
     const qualityRoll = Math.random();
-    
+
     // Quality distribution: Higher level = better items
     let quality = 'Common';
     if (level >= 3) {
@@ -3445,13 +3447,13 @@ function dropBossLoot(x, y, level) {
     } else {
         quality = qualityRoll < 0.5 ? 'Rare' : qualityRoll < 0.8 ? 'Uncommon' : 'Common';
     }
-    
+
     const itemTypes = ['weapon', 'armor', 'helmet', 'ring', 'amulet'];
-    
+
     for (let i = 0; i < numItems; i++) {
         // Random item type
         const itemType = itemTypes[Math.floor(Math.random() * itemTypes.length)];
-        
+
         // Slightly randomize quality per item (boss can drop mix)
         let itemQuality = quality;
         const qualityVariation = Math.random();
@@ -3463,9 +3465,9 @@ function dropBossLoot(x, y, level) {
                 itemQuality = qualityTiers[currentIndex + 1];
             }
         }
-        
+
         const item = generateRandomItemOfType(itemType, itemQuality);
-        
+
         // Create item sprite
         let spriteKey = 'item_gold';
         if (item.type === 'weapon') spriteKey = 'item_weapon';
@@ -3473,30 +3475,30 @@ function dropBossLoot(x, y, level) {
         else if (item.type === 'helmet') spriteKey = 'item_helmet';
         else if (item.type === 'ring') spriteKey = 'item_ring';
         else if (item.type === 'amulet') spriteKey = 'item_amulet';
-        
+
         // Find a valid walkable position for the item
         const tileSize = 32;
         let itemX = x;
         let itemY = y;
         let attempts = 0;
         const maxAttempts = 20;
-        
+
         // Spread items around boss location, ensuring they're on walkable tiles
         const angle = (i / numItems) * Math.PI * 2;
         const baseRadius = 30 + (i * 5);
-        
+
         while (attempts < maxAttempts) {
             const radius = baseRadius + (attempts * 5); // Expand search radius if needed
             itemX = x + Math.cos(angle) * radius;
             itemY = y + Math.sin(angle) * radius;
-            
+
             // Check if position is walkable (in dungeon)
             if (currentDungeon && currentDungeon.mapData) {
                 const tileX = Math.floor(itemX / tileSize);
                 const tileY = Math.floor(itemY / tileSize);
-                
+
                 // Check bounds
-                if (tileX >= 0 && tileX < currentDungeon.width && 
+                if (tileX >= 0 && tileX < currentDungeon.width &&
                     tileY >= 0 && tileY < currentDungeon.height) {
                     const tileType = currentDungeon.mapData[tileY][tileX];
                     if (tileType === 1) { // Floor tile (walkable)
@@ -3507,7 +3509,7 @@ function dropBossLoot(x, y, level) {
                 // Not in dungeon, just use the position
                 break;
             }
-            
+
             attempts++;
             // Try a slightly different angle if we haven't found a valid spot
             if (attempts < maxAttempts) {
@@ -3516,15 +3518,15 @@ function dropBossLoot(x, y, level) {
                 itemY = y + Math.sin(newAngle) * radius;
             }
         }
-        
+
         const itemSprite = scene.add.sprite(itemX, itemY, spriteKey);
         itemSprite.setDepth(8);
-        
+
         // Store item data (match structure used by dropItemsFromMonster)
         item.sprite = itemSprite;
         item.x = itemSprite.x;
         item.y = itemSprite.y;
-        
+
         // Pulsing animation (more noticeable for boss loot)
         scene.tweens.add({
             targets: itemSprite,
@@ -3535,15 +3537,15 @@ function dropBossLoot(x, y, level) {
             repeat: -1,
             ease: 'Sine.easeInOut'
         });
-        
+
         items.push(item);
     }
-    
+
     // Also drop gold
     const goldAmount = 50 + (level * 25);
     playerStats.gold += goldAmount;
     showDamageNumber(x, y - 20, `+${goldAmount} Gold`, 0xffd700);
-    
+
     console.log(`💰 Boss dropped ${numItems} items (quality: ${quality})`);
 }
 
@@ -3557,7 +3559,7 @@ function create() {
         if (this.cache.text.exists('dungeon_floor_metadata')) {
             const floorMetadataText = this.cache.text.get('dungeon_floor_metadata');
             dungeonTilesets.floorMetadata = JSON.parse(floorMetadataText);
-            
+
             // Create texture frames for floor tiles
             if (this.textures.exists('dungeon_floor_tileset')) {
                 createTilesetFrames.call(this, 'dungeon_floor_tileset', dungeonTilesets.floorMetadata, 'floor');
@@ -3565,19 +3567,19 @@ function create() {
             } else {
                 console.warn('⚠️ Dungeon floor tileset image not found');
             }
-            
+
             buildDungeonTileLookup('floor');
             console.log('✅ Dungeon floor tileset metadata loaded');
         } else {
             console.warn('⚠️ Dungeon floor metadata not found in cache');
         }
-        
+
         if (this.cache.text.exists('dungeon_wall_metadata')) {
             console.log('📋 Found dungeon_wall_metadata in cache');
             const wallMetadataText = this.cache.text.get('dungeon_wall_metadata');
             dungeonTilesets.wallMetadata = JSON.parse(wallMetadataText);
             console.log('📋 Parsed wall metadata, tiles:', dungeonTilesets.wallMetadata?.tileset_data?.tiles?.length || 0);
-            
+
             // Create texture frames for wall tiles
             if (this.textures.exists('dungeon_wall_tileset')) {
                 console.log('🔨 About to call createTilesetFrames for wall tileset');
@@ -3592,7 +3594,7 @@ function create() {
             } else {
                 console.warn('⚠️ Dungeon wall tileset image not found in textures');
             }
-            
+
             buildDungeonTileLookup('wall');
             console.log('✅ Dungeon wall tileset metadata loaded');
         } else {
@@ -3602,25 +3604,25 @@ function create() {
         console.warn('⚠️ Could not load dungeon tileset metadata:', e);
         console.error(e.stack);
     }
-    
+
     // Start with town map
     createTownMap();
-    
+
     // Start village music on initial load
     console.log('🎵 Checking for village music...');
     console.log('   - Sound system exists:', !!this.sound);
     console.log('   - Audio cache exists:', !!this.cache.audio);
     console.log('   - Village music in cache:', this.cache.audio.exists('village_music'));
-    
+
     // Start music on initial load (game starts in town)
     if (musicEnabled && this.sound && this.cache.audio.exists('village_music')) {
         try {
-            villageMusic = this.sound.add('village_music', { 
-                volume: 0.5, 
+            villageMusic = this.sound.add('village_music', {
+                volume: 0.5,
                 loop: true,
                 seek: 0
             });
-            
+
             // Try to play - may fail due to browser autoplay policy
             const playResult = villageMusic.play();
             if (playResult && typeof playResult.then === 'function') {
@@ -3645,16 +3647,16 @@ function create() {
             console.warn('   Available audio keys:', Object.keys(this.cache.audio.entries || {}));
         }
     }
-    
+
     // Create player (positioned by createTownMap)
     const tileSize = this.tileSize || 32;
-    
+
     // Create walking animations if sprite sheets are loaded
     if (this.textures.exists('player_walk_south')) {
         // Create animations for each direction
         // Frame rate controls animation speed - adjust for smoother animation
         const frameRate = 8; // Animation speed (frames per second) - lower = slower, smoother
-        
+
         // Create smooth looping animations
         this.anims.create({
             key: 'walk_south',
@@ -3663,7 +3665,7 @@ function create() {
             repeat: -1, // Loop infinitely
             yoyo: false // Don't reverse, just loop
         });
-        
+
         this.anims.create({
             key: 'walk_north',
             frames: this.anims.generateFrameNumbers('player_walk_north', { start: 0, end: -1 }),
@@ -3671,7 +3673,7 @@ function create() {
             repeat: -1,
             yoyo: false
         });
-        
+
         this.anims.create({
             key: 'walk_east',
             frames: this.anims.generateFrameNumbers('player_walk_east', { start: 0, end: -1 }),
@@ -3679,7 +3681,7 @@ function create() {
             repeat: -1,
             yoyo: false
         });
-        
+
         this.anims.create({
             key: 'walk_west',
             frames: this.anims.generateFrameNumbers('player_walk_west', { start: 0, end: -1 }),
@@ -3687,13 +3689,13 @@ function create() {
             repeat: -1,
             yoyo: false
         });
-        
+
         console.log('✅ Player walking animations created');
     }
-    
+
     // Create monster animations (will be loaded from PixelLab assets)
     createMonsterAnimations.call(this);
-    
+
     // Create attack and fireball animations if sprite sheets are loaded
     if (this.textures.exists('player_attack')) {
         const attackFrames = this.anims.generateFrameNumbers('player_attack', { start: 0, end: -1 });
@@ -3708,7 +3710,7 @@ function create() {
     } else {
         console.warn('⚠️ player_attack texture not found');
     }
-    
+
     if (this.textures.exists('player_fireball')) {
         const fireballFrames = this.anims.generateFrameNumbers('player_fireball', { start: 0, end: -1 });
         console.log('Fireball frames generated:', fireballFrames.length, 'frames');
@@ -3722,33 +3724,33 @@ function create() {
     } else {
         console.warn('⚠️ player_fireball texture not found');
     }
-    
+
     // Try to use animated sprite, fallback to generated sprite
     let playerTexture = 'player_walk_south'; // Default direction
     if (!this.textures.exists('player_walk_south')) {
         playerTexture = 'player'; // Fallback to generated sprite
         console.log('⚠️ Player animations not found, using fallback sprite');
     }
-    
+
     player = this.physics.add.sprite(400, 300, playerTexture);
-    
+
     // Scale player to 64x64 (source is 48x48, so scale = 64/48 = 1.333...)
     player.setScale(64 / 48);
-    
+
     // Store current facing direction and movement state
     player.facingDirection = 'south'; // 'north', 'south', 'east', 'west'
     player.isMoving = false;
-    
+
     // Track player movement for exploration quests
     let lastPlayerTileX = Math.floor(player.x / tileSize);
     let lastPlayerTileY = Math.floor(player.y / tileSize);
-    
+
     player.setCollideWorldBounds(true);
     player.setDepth(10); // Player on top
-    
+
     // Initialize player stats on sprite
     player.stats = playerStats;
-    
+
     // Create player HP bar above sprite
     const playerHpBarWidth = 40;
     const playerHpBarHeight = 4;
@@ -3756,7 +3758,7 @@ function create() {
         .setDepth(15).setOrigin(0.5, 0.5).setScrollFactor(1);
     player.hpBar = this.add.rectangle(0, 0, playerHpBarWidth - 2, playerHpBarHeight - 2, 0xff0000)
         .setDepth(16).setOrigin(0, 0.5).setScrollFactor(1);
-    
+
     // Create weapon sprite (initially hidden, shown when weapon is equipped)
     weaponSprite = this.add.sprite(player.x, player.y, 'weapon_sword');
     // Scale weapon sprite to 48x48 (adjust scale based on actual image size)
@@ -3769,47 +3771,47 @@ function create() {
     // Origin will be set based on direction in updateWeaponPosition (handle position)
     weaponSprite.setOrigin(0.5, 1.0); // Default: center horizontally, bottom vertically (handle)
     weaponSprite.isAnimating = false; // Flag to prevent position updates during animation
-    
+
     // Initialize weapon sprite based on current equipment
     updateWeaponSprite();
-    
+
     // Initialize NPCs in town
     initializeNPCs();
-    
+
     // Create UI bars (HP, Mana, Stamina, XP)
     const barWidth = 200;
     const barHeight = 20;
     const barSpacing = 25;
     const barX = 20;
     let barY = 20;
-    
+
     // HP Bar
-    hpBarBg = this.add.rectangle(barX + barWidth/2, barY, barWidth, barHeight, 0x000000, 0.7)
+    hpBarBg = this.add.rectangle(barX + barWidth / 2, barY, barWidth, barHeight, 0x000000, 0.7)
         .setScrollFactor(0).setDepth(100).setStrokeStyle(2, 0xffffff);
     hpBar = this.add.rectangle(barX + 2, barY, barWidth - 4, barHeight - 4, 0xff0000)
         .setScrollFactor(0).setDepth(101).setOrigin(0, 0.5);
-    
+
     // Mana Bar
     barY += barSpacing;
-    manaBarBg = this.add.rectangle(barX + barWidth/2, barY, barWidth, barHeight, 0x000000, 0.7)
+    manaBarBg = this.add.rectangle(barX + barWidth / 2, barY, barWidth, barHeight, 0x000000, 0.7)
         .setScrollFactor(0).setDepth(100).setStrokeStyle(2, 0xffffff);
     manaBar = this.add.rectangle(barX + 2, barY, barWidth - 4, barHeight - 4, 0x0000ff)
         .setScrollFactor(0).setDepth(101).setOrigin(0, 0.5);
-    
+
     // Stamina Bar
     barY += barSpacing;
-    staminaBarBg = this.add.rectangle(barX + barWidth/2, barY, barWidth, barHeight, 0x000000, 0.7)
+    staminaBarBg = this.add.rectangle(barX + barWidth / 2, barY, barWidth, barHeight, 0x000000, 0.7)
         .setScrollFactor(0).setDepth(100).setStrokeStyle(2, 0xffffff);
     staminaBar = this.add.rectangle(barX + 2, barY, barWidth - 4, barHeight - 4, 0x00ff00)
         .setScrollFactor(0).setDepth(101).setOrigin(0, 0.5);
-    
+
     // XP Bar
     barY += barSpacing;
-    xpBarBg = this.add.rectangle(barX + barWidth/2, barY, barWidth, barHeight, 0x000000, 0.7)
+    xpBarBg = this.add.rectangle(barX + barWidth / 2, barY, barWidth, barHeight, 0x000000, 0.7)
         .setScrollFactor(0).setDepth(100).setStrokeStyle(2, 0xffffff);
     xpBar = this.add.rectangle(barX + 2, barY, barWidth - 4, barHeight - 4, 0xb478ff)
         .setScrollFactor(0).setDepth(101).setOrigin(0, 0.5);
-    
+
     // Stats text
     statsText = this.add.text(barX, barY + barSpacing, '', {
         fontSize: '16px',
@@ -3817,7 +3819,7 @@ function create() {
         backgroundColor: '#000000',
         padding: { x: 5, y: 3 }
     }).setScrollFactor(0).setDepth(100);
-    
+
     // Debug text (player position)
     this.debugText = this.add.text(barX, barY + barSpacing + 25, '', {
         fontSize: '14px',
@@ -3825,7 +3827,7 @@ function create() {
         backgroundColor: '#000000',
         padding: { x: 5, y: 3 }
     }).setScrollFactor(0).setDepth(100);
-    
+
     // Gold text
     goldText = this.add.text(barX, barY + barSpacing + 45, 'Gold: 0', {
         fontSize: '16px',
@@ -3833,41 +3835,41 @@ function create() {
         backgroundColor: '#000000',
         padding: { x: 5, y: 3 }
     }).setScrollFactor(0).setDepth(100);
-    
+
     // Controls text (toggleable) - default to short version
     const fullControlsText = 'WASD: Move | SPACE: Attack/Pickup | 1-3: Abilities | I: Inventory | E: Equipment | Q: Quests | F: Interact | F5: Save | F9: Load | H: Help | CTRL+A: Assets';
     const shortControlsText = 'H: Help';
-    
+
     let controlsText = this.add.text(barX, barY + barSpacing + 70, shortControlsText, {
         fontSize: '14px',
         fill: '#ffffff',
         backgroundColor: '#000000',
         padding: { x: 10, y: 5 }
     }).setScrollFactor(0).setDepth(100);
-    
+
     // Store controls text reference for toggling
     this.controlsText = controlsText;
     this.controlsFullText = fullControlsText;
     this.controlsShortText = shortControlsText;
     this.controlsExpanded = false; // Start with short version
-    
+
     // Create system chat box (bottom left)
     createSystemChatBox.call(this);
-    
+
     // Add mouse wheel scrolling for chat box
     this.input.on('wheel', (pointer, gameObjects, deltaX, deltaY, deltaZ) => {
         if (!systemChatBox) return;
-        
+
         // Get mouse position in screen coordinates (chat box uses scrollFactor 0, so it's in screen space)
         const mouseX = pointer.x;
         const mouseY = pointer.y;
-        
+
         // Get chat box bounds (bg is centered, so calculate corners)
         const chatX = systemChatBox.bg.x - systemChatBox.bg.width / 2;
         const chatY = systemChatBox.bg.y - systemChatBox.bg.height / 2;
         const chatWidth = systemChatBox.bg.width;
         const chatHeight = systemChatBox.bg.height;
-        
+
         // Check if mouse is over chat box area
         if (mouseX >= chatX && mouseX <= chatX + chatWidth &&
             mouseY >= chatY && mouseY <= chatY + chatHeight) {
@@ -3878,75 +3880,75 @@ function create() {
             scrollChat(scrollAmount);
         }
     });
-    
+
     // Create ability bar
     createAbilityBar();
-    
+
     // Set up input (like pygame keyboard)
     cursors = this.input.keyboard.createCursorKeys();
-    
+
     // Add WASD keys
     this.wasd = this.input.keyboard.addKeys('W,S,A,D');
-    
+
     // Add Spacebar for attack
     spaceKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
-    
+
     // Add 'I' key for inventory
     inventoryKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.I);
-    
+
     // Add 'E' key for equipment
     equipmentKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.E);
-    
+
     // Add 'Q' key for quest log
     questKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.Q);
-    
+
     // Add 'F' key for interaction
     interactKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.F);
-    
+
     // Add 'ESC' key for settings
     settingsKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ESC);
-    
+
     // Add save/load keys
     this.saveKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.F5);
     this.loadKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.F9);
-    
+
     // Add 'H' key for help/controls toggle
     this.helpKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.H);
-    
+
     // Add ability keys (1, 2, 3)
     this.abilityOneKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ONE);
     this.abilityTwoKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.TWO);
     this.abilityThreeKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.THREE);
-    
+
     // Add CTRL+A for assets window
     assetsKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A);
     this.ctrlKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.CTRL);
-    
+
     // Add CTRL+M for grass debug window
     grassDebugKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.M);
     console.log('✅ Grass debug key (M) initialized:', grassDebugKey);
-    
+
     // Initialize starting quests
     initializeQuests();
-    
+
     // Initialize NPCs
     initializeNPCs();
-    
+
     // Check for auto-load
     checkAutoLoad();
-    
+
     // Camera follows player - set bounds to allow camera to show full map
     // Camera can scroll to show the entire map, including edges
     const worldWidth = this.mapWidth * this.tileSize;
     const worldHeight = this.mapHeight * this.tileSize;
     this.cameras.main.setBounds(0, 0, worldWidth, worldHeight);
     this.cameras.main.startFollow(player);
-    
+
     // Store map dimensions for debug display (already set above)
-    
+
     // Initialize sounds after assets load
     initializeSounds();
-    
+
     // Unlock audio on first user interaction (browser requirement)
     const unlockAudio = () => {
         if (!audioUnlocked && this.sound) {
@@ -3956,11 +3958,11 @@ function create() {
             console.log('🔓 Audio context unlocked');
         }
     };
-    
+
     // Unlock on any key press or click
     this.input.keyboard.on('keydown', unlockAudio);
     this.input.on('pointerdown', unlockAudio);
-    
+
     // Set up mouse wheel event listener for shop scrolling (left panel only)
     this.input.on('wheel', (pointer, gameObjects, deltaX, deltaY, deltaZ) => {
         if (shopVisible && shopPanel && shopPanel.maxScrollY > 0) {
@@ -3978,7 +3980,7 @@ function create() {
             }
         }
     });
-    
+
     console.log('Game created');
 }
 
@@ -3987,10 +3989,10 @@ function create() {
  */
 function update(time, delta) {
     const speed = 200; // pixels per second
-    
+
     // Update damage numbers
     updateDamageNumbers(time, delta);
-    
+
     // Update combo timer
     playerStats.comboTimer += delta;
     if (playerStats.comboTimer >= playerStats.comboResetTime) {
@@ -4003,24 +4005,24 @@ function update(time, delta) {
         // Update combo display
         updateComboDisplay();
     }
-    
+
     // Calculate attack speed bonus (from combos and equipment)
     // Higher combos = faster attacks (reduced cooldown)
     const comboAttackSpeedBonus = Math.min(playerStats.comboCount * 0.05, 0.3); // Max 30% reduction at 6+ combo
     const equipmentSpeedBonus = (playerStats.speedBonus || 0) * 0.01; // 1% per speed point
     playerStats.attackSpeedBonus = comboAttackSpeedBonus + equipmentSpeedBonus;
-    
+
     // Apply attack speed bonus to cooldown
     const baseCooldown = 500;
     playerStats.attackCooldown = Math.max(200, baseCooldown * (1 - playerStats.attackSpeedBonus));
-    
+
     // Update attack speed indicator
     updateAttackSpeedIndicator();
-    
+
     // Player movement (like your movement system)
     // Don't allow movement when shop/inventory/dialog/settings/building is open
     player.setVelocity(0);
-    
+
     if (shopVisible || inventoryVisible || dialogVisible || settingsVisible || buildingPanelVisible) {
         // Don't process movement when UI is open, but continue with other updates
         // (monsters, UI updates, etc. still need to run)
@@ -4028,7 +4030,7 @@ function update(time, delta) {
         // Normal movement processing
         let moving = false;
         let newDirection = player.facingDirection; // Default to current direction
-        
+
         if (cursors.left.isDown || this.wasd.A.isDown) {
             player.setVelocityX(-speed);
             newDirection = 'west';
@@ -4038,7 +4040,7 @@ function update(time, delta) {
             newDirection = 'east';
             moving = true;
         }
-        
+
         if (cursors.up.isDown || this.wasd.W.isDown) {
             player.setVelocityY(-speed);
             newDirection = 'north';
@@ -4048,7 +4050,7 @@ function update(time, delta) {
             newDirection = 'south';
             moving = true;
         }
-        
+
         // Normalize diagonal movement
         if (player.body.velocity.x !== 0 && player.body.velocity.y !== 0) {
             player.body.velocity.normalize().scale(speed);
@@ -4059,17 +4061,17 @@ function update(time, delta) {
                 newDirection = player.body.velocity.x < 0 ? 'west' : 'east';
             }
         }
-        
+
         // Update player animation based on direction and movement state
         // Don't override if attack or fireball animation is playing
         const currentAnim = player.anims.currentAnim;
         const isPlayingActionAnim = currentAnim && (currentAnim.key === 'attack' || currentAnim.key === 'fireball_cast');
-        
+
         if (!isPlayingActionAnim) {
             if (newDirection !== player.facingDirection || moving !== player.isMoving) {
                 player.facingDirection = newDirection;
                 player.isMoving = moving;
-                
+
                 if (moving) {
                     // Play walking animation for current direction
                     const animKey = `walk_${newDirection}`;
@@ -4100,51 +4102,51 @@ function update(time, delta) {
             }
         }
     }
-    
+
     // Update weapon sprite position to follow player
     if (weaponSprite && weaponSprite.visible) {
         updateWeaponPosition();
     }
-    
+
     // Check building collisions (only in town) - allow sliding along walls (using dungeon wall logic)
     if (currentMap === 'town' && buildings.length > 0) {
         const playerSize = 12; // Smaller collision box for easier navigation (matches dungeon)
         const deltaTime = delta / 1000;
-        
+
         // Store original velocities before collision check
         const originalVelX = player.body.velocity.x;
         const originalVelY = player.body.velocity.y;
-        
+
         // Check if player is currently overlapping with any buildings
         let isTouchingBuilding = false;
         let touchingBuildings = [];
-        
+
         for (const building of buildings) {
             const overlap = player.x + playerSize > building.x &&
-                           player.x - playerSize < building.x + building.width &&
-                           player.y + playerSize > building.y &&
-                           player.y - playerSize < building.y + building.height;
-            
+                player.x - playerSize < building.x + building.width &&
+                player.y + playerSize > building.y &&
+                player.y - playerSize < building.y + building.height;
+
             if (overlap) {
                 isTouchingBuilding = true;
                 touchingBuildings.push(building);
             }
         }
-        
+
         // First, check if player is stuck inside a building and push them out immediately
         for (const building of buildings) {
             const isInside = player.x + playerSize > building.x &&
-                            player.x - playerSize < building.x + building.width &&
-                            player.y + playerSize > building.y &&
-                            player.y - playerSize < building.y + building.height;
-            
+                player.x - playerSize < building.x + building.width &&
+                player.y + playerSize > building.y &&
+                player.y - playerSize < building.y + building.height;
+
             if (isInside) {
                 // Player is stuck inside building - push them out to the nearest edge
                 const buildingCenterX = building.x + building.width / 2;
                 const buildingCenterY = building.y + building.height / 2;
                 const distX = player.x - buildingCenterX;
                 const distY = player.y - buildingCenterY;
-                
+
                 // Push to nearest edge (whichever is closer)
                 if (Math.abs(distX) > Math.abs(distY)) {
                     // Push horizontally
@@ -4169,16 +4171,16 @@ function update(time, delta) {
                 break;
             }
         }
-        
+
         // Check collisions separately for X and Y to allow sliding
         let canMoveX = true;
         let canMoveY = true;
-        
+
         // Test X movement (keep Y fixed at current position)
         if (originalVelX !== 0) {
             const testX = player.x + originalVelX * deltaTime;
             const testY = player.y; // Use current Y position
-            
+
             for (const building of buildings) {
                 if (testX + playerSize > building.x &&
                     testX - playerSize < building.x + building.width &&
@@ -4189,12 +4191,12 @@ function update(time, delta) {
                 }
             }
         }
-        
+
         // Test Y movement (keep X fixed at current position)
         if (originalVelY !== 0) {
             const testX = player.x; // Use current X position
             const testY = player.y + originalVelY * deltaTime;
-            
+
             for (const building of buildings) {
                 if (testX + playerSize > building.x &&
                     testX - playerSize < building.x + building.width &&
@@ -4205,22 +4207,22 @@ function update(time, delta) {
                 }
             }
         }
-        
+
         // If touching a building, allow sliding along it OR moving away from it
         if (isTouchingBuilding && touchingBuildings.length > 0) {
             // Check if we're actually overlapping (stuck inside) vs just touching
             let isActuallyStuck = false;
             for (const building of touchingBuildings) {
                 const overlap = player.x + playerSize > building.x &&
-                               player.x - playerSize < building.x + building.width &&
-                               player.y + playerSize > building.y &&
-                               player.y - playerSize < building.y + building.height;
+                    player.x - playerSize < building.x + building.width &&
+                    player.y + playerSize > building.y &&
+                    player.y - playerSize < building.y + building.height;
                 if (overlap) {
                     isActuallyStuck = true;
                     break;
                 }
             }
-            
+
             // Only apply special sliding/moving away logic if we're actually stuck inside
             if (isActuallyStuck) {
                 for (const building of touchingBuildings) {
@@ -4230,19 +4232,19 @@ function update(time, delta) {
                     const buildingBottom = building.y + building.height;
                     const isHorizontalBuilding = building.width >= building.height;
                     const isVerticalBuilding = building.height >= building.width;
-                    
+
                     // For vertical buildings: allow Y movement (sliding along) OR X movement away from building
                     if (isVerticalBuilding) {
                         const isOverlapping = player.x + playerSize > building.x &&
-                                            player.x - playerSize < building.x + building.width &&
-                                            player.y + playerSize > building.y &&
-                                            player.y - playerSize < building.y + building.height;
-                        
+                            player.x - playerSize < building.x + building.width &&
+                            player.y + playerSize > building.y &&
+                            player.y - playerSize < building.y + building.height;
+
                         const buildingCenterX = building.x + building.width / 2;
                         const currentDistX = Math.abs(player.x - buildingCenterX);
                         const newX = player.x + originalVelX * deltaTime;
                         const newDistX = Math.abs(newX - buildingCenterX);
-                        
+
                         // If moving X away from the building (distance increases) AND we're overlapping, allow it
                         if (originalVelX !== 0 && isOverlapping && newDistX > currentDistX) {
                             // Moving away from vertical building - check if it would collide with other buildings
@@ -4281,19 +4283,19 @@ function update(time, delta) {
                             }
                         }
                     }
-                    
+
                     // For horizontal buildings: allow X movement (sliding along) OR Y movement away from building
                     if (isHorizontalBuilding) {
                         const buildingCenterY = building.y + building.height / 2;
                         const currentDistY = Math.abs(player.y - buildingCenterY);
                         const newY = player.y + originalVelY * deltaTime;
                         const newDistY = Math.abs(newY - buildingCenterY);
-                        
+
                         const isOverlapping = player.x + playerSize > building.x &&
-                                            player.x - playerSize < building.x + building.width &&
-                                            player.y + playerSize > building.y &&
-                                            player.y - playerSize < building.y + building.height;
-                        
+                            player.x - playerSize < building.x + building.width &&
+                            player.y + playerSize > building.y &&
+                            player.y - playerSize < building.y + building.height;
+
                         // If moving Y away from the building (distance increases) AND we're overlapping, allow it
                         if (originalVelY !== 0 && isOverlapping && newDistY > currentDistY) {
                             // Moving away from horizontal building - allow Y movement
@@ -4335,7 +4337,7 @@ function update(time, delta) {
                 }
             }
         }
-        
+
         // Apply movement restrictions - only block the axis that collides
         // This allows sliding along buildings when moving diagonally
         if (!canMoveX) {
@@ -4344,7 +4346,7 @@ function update(time, delta) {
         if (!canMoveY) {
             player.setVelocityY(0);
         }
-        
+
         // Final check: if one axis is blocked but the other isn't, ensure the non-blocked axis can still move
         // This handles the case where diagonal movement hits a building - allow sliding along it
         if (!canMoveX && canMoveY && originalVelY !== 0) {
@@ -4356,46 +4358,46 @@ function update(time, delta) {
             player.setVelocityX(originalVelX);
         }
     }
-    
+
     // Check dungeon wall collisions - allow sliding along walls
     if (currentMap === 'dungeon' && dungeonWalls.length > 0) {
         const playerSize = 12; // Smaller collision box for easier navigation (was 16)
         const deltaTime = delta / 1000;
-        
+
         // Store original velocities before collision check
         const originalVelX = player.body.velocity.x;
         const originalVelY = player.body.velocity.y;
-        
+
         // Check if player is currently overlapping with any walls
         let isTouchingWall = false;
         let touchingWalls = [];
-        
+
         for (const wall of dungeonWalls) {
             const overlap = player.x + playerSize > wall.x &&
-                           player.x - playerSize < wall.x + wall.width &&
-                           player.y + playerSize > wall.y &&
-                           player.y - playerSize < wall.y + wall.height;
-            
+                player.x - playerSize < wall.x + wall.width &&
+                player.y + playerSize > wall.y &&
+                player.y - playerSize < wall.y + wall.height;
+
             if (overlap) {
                 isTouchingWall = true;
                 touchingWalls.push(wall);
             }
         }
-        
+
         // First, check if player is stuck inside a wall and push them out immediately
         for (const wall of dungeonWalls) {
             const isInside = player.x + playerSize > wall.x &&
-                            player.x - playerSize < wall.x + wall.width &&
-                            player.y + playerSize > wall.y &&
-                            player.y - playerSize < wall.y + wall.height;
-            
+                player.x - playerSize < wall.x + wall.width &&
+                player.y + playerSize > wall.y &&
+                player.y - playerSize < wall.y + wall.height;
+
             if (isInside) {
                 // Player is stuck inside wall - push them out to the nearest edge
                 const wallCenterX = wall.x + wall.width / 2;
                 const wallCenterY = wall.y + wall.height / 2;
                 const distX = player.x - wallCenterX;
                 const distY = player.y - wallCenterY;
-                
+
                 // Push to nearest edge (whichever is closer)
                 if (Math.abs(distX) > Math.abs(distY)) {
                     // Push horizontally
@@ -4421,16 +4423,16 @@ function update(time, delta) {
                 break;
             }
         }
-        
+
         // Check collisions separately for X and Y to allow sliding
         let canMoveX = true;
         let canMoveY = true;
-        
+
         // Test X movement (keep Y fixed at current position)
         if (originalVelX !== 0) {
             const testX = player.x + originalVelX * deltaTime;
             const testY = player.y; // Use current Y position
-            
+
             for (const wall of dungeonWalls) {
                 if (testX + playerSize > wall.x &&
                     testX - playerSize < wall.x + wall.width &&
@@ -4441,12 +4443,12 @@ function update(time, delta) {
                 }
             }
         }
-        
+
         // Test Y movement (keep X fixed at current position)
         if (originalVelY !== 0) {
             const testX = player.x; // Use current X position
             const testY = player.y + originalVelY * deltaTime;
-            
+
             for (const wall of dungeonWalls) {
                 if (testX + playerSize > wall.x &&
                     testX - playerSize < wall.x + wall.width &&
@@ -4457,7 +4459,7 @@ function update(time, delta) {
                 }
             }
         }
-        
+
         // If touching a wall, allow sliding along it OR moving away from it
         // BUT: Only apply special logic if we're actually overlapping (stuck), otherwise use normal collision
         if (isTouchingWall && touchingWalls.length > 0) {
@@ -4465,59 +4467,59 @@ function update(time, delta) {
             let isActuallyStuck = false;
             for (const wall of touchingWalls) {
                 const overlap = player.x + playerSize > wall.x &&
-                               player.x - playerSize < wall.x + wall.width &&
-                               player.y + playerSize > wall.y &&
-                               player.y - playerSize < wall.y + wall.height;
+                    player.x - playerSize < wall.x + wall.width &&
+                    player.y + playerSize > wall.y &&
+                    player.y - playerSize < wall.y + wall.height;
                 if (overlap) {
                     isActuallyStuck = true;
                     break;
                 }
             }
-            
+
             // Only apply special sliding/moving away logic if we're actually stuck inside
             // Otherwise, use normal collision detection (which should prevent entry)
             if (isActuallyStuck) {
                 for (const wall of touchingWalls) {
-                const wallLeft = wall.x;
-                const wallRight = wall.x + wall.width;
-                const wallTop = wall.y;
-                const wallBottom = wall.y + wall.height;
-                const isHorizontalWall = wall.width >= wall.height;
-                const isVerticalWall = wall.height >= wall.width;
-                
-                // For vertical walls: allow Y movement (sliding along) OR X movement away from wall
-                if (isVerticalWall) {
-                    // Check if player is currently overlapping with this specific wall
-                    const isOverlapping = player.x + playerSize > wall.x &&
-                                        player.x - playerSize < wall.x + wall.width &&
-                                        player.y + playerSize > wall.y &&
-                                        player.y - playerSize < wall.y + wall.height;
-                    
-                    const wallCenterX = wall.x + wall.width / 2;
-                    const currentDistX = Math.abs(player.x - wallCenterX);
-                    const newX = player.x + originalVelX * deltaTime;
-                    const newDistX = Math.abs(newX - wallCenterX);
-                    
-                    // If moving X away from the wall (distance increases) AND we're overlapping, allow it
-                    // But still check collisions with other walls
-                    if (originalVelX !== 0 && isOverlapping && newDistX > currentDistX) {
-                        // Moving away from vertical wall - check if it would collide with other walls
-                        const testX = player.x + originalVelX * deltaTime;
-                        let wouldCollideWithOther = false;
-                        for (const otherWall of dungeonWalls) {
-                            if (otherWall === wall) continue;
-                            if (testX + playerSize > otherWall.x &&
-                                testX - playerSize < otherWall.x + otherWall.width &&
-                                player.y + playerSize > otherWall.y &&
-                                player.y - playerSize < otherWall.y + otherWall.height) {
-                                wouldCollideWithOther = true;
-                                break;
+                    const wallLeft = wall.x;
+                    const wallRight = wall.x + wall.width;
+                    const wallTop = wall.y;
+                    const wallBottom = wall.y + wall.height;
+                    const isHorizontalWall = wall.width >= wall.height;
+                    const isVerticalWall = wall.height >= wall.width;
+
+                    // For vertical walls: allow Y movement (sliding along) OR X movement away from wall
+                    if (isVerticalWall) {
+                        // Check if player is currently overlapping with this specific wall
+                        const isOverlapping = player.x + playerSize > wall.x &&
+                            player.x - playerSize < wall.x + wall.width &&
+                            player.y + playerSize > wall.y &&
+                            player.y - playerSize < wall.y + wall.height;
+
+                        const wallCenterX = wall.x + wall.width / 2;
+                        const currentDistX = Math.abs(player.x - wallCenterX);
+                        const newX = player.x + originalVelX * deltaTime;
+                        const newDistX = Math.abs(newX - wallCenterX);
+
+                        // If moving X away from the wall (distance increases) AND we're overlapping, allow it
+                        // But still check collisions with other walls
+                        if (originalVelX !== 0 && isOverlapping && newDistX > currentDistX) {
+                            // Moving away from vertical wall - check if it would collide with other walls
+                            const testX = player.x + originalVelX * deltaTime;
+                            let wouldCollideWithOther = false;
+                            for (const otherWall of dungeonWalls) {
+                                if (otherWall === wall) continue;
+                                if (testX + playerSize > otherWall.x &&
+                                    testX - playerSize < otherWall.x + otherWall.width &&
+                                    player.y + playerSize > otherWall.y &&
+                                    player.y - playerSize < otherWall.y + otherWall.height) {
+                                    wouldCollideWithOther = true;
+                                    break;
+                                }
                             }
-                        }
-                        if (!wouldCollideWithOther) {
-                            canMoveX = true;
-                        }
-                    } else if (originalVelY !== 0) {
+                            if (!wouldCollideWithOther) {
+                                canMoveX = true;
+                            }
+                        } else if (originalVelY !== 0) {
                             // Not moving away, so allow sliding along wall (Y movement)
                             const slidePlayerSize = playerSize - 2;
                             const testY = player.y + originalVelY * deltaTime;
@@ -4535,84 +4537,84 @@ function update(time, delta) {
                             if (!yWouldCollide) {
                                 canMoveY = true;
                             }
-                    } else if (originalVelY !== 0 && !isOverlapping) {
-                        // Only Y movement and not overlapping - allow sliding along wall
-                        const slidePlayerSize = playerSize - 2;
-                        const testY = player.y + originalVelY * deltaTime;
-                        let yWouldCollide = false;
-                        for (const otherWall of dungeonWalls) {
-                            if (otherWall === wall) continue;
-                            if (player.x + slidePlayerSize > otherWall.x &&
-                                player.x - slidePlayerSize < otherWall.x + otherWall.width &&
-                                testY + slidePlayerSize > otherWall.y &&
-                                testY - slidePlayerSize < otherWall.y + otherWall.height) {
-                                yWouldCollide = true;
-                                break;
+                        } else if (originalVelY !== 0 && !isOverlapping) {
+                            // Only Y movement and not overlapping - allow sliding along wall
+                            const slidePlayerSize = playerSize - 2;
+                            const testY = player.y + originalVelY * deltaTime;
+                            let yWouldCollide = false;
+                            for (const otherWall of dungeonWalls) {
+                                if (otherWall === wall) continue;
+                                if (player.x + slidePlayerSize > otherWall.x &&
+                                    player.x - slidePlayerSize < otherWall.x + otherWall.width &&
+                                    testY + slidePlayerSize > otherWall.y &&
+                                    testY - slidePlayerSize < otherWall.y + otherWall.height) {
+                                    yWouldCollide = true;
+                                    break;
+                                }
                             }
-                        }
-                        if (!yWouldCollide) {
-                            canMoveY = true;
+                            if (!yWouldCollide) {
+                                canMoveY = true;
+                            }
                         }
                     }
-                }
-                
-                // For horizontal walls: allow X movement (sliding along) OR Y movement away from wall
-                if (isHorizontalWall) {
-                    const wallCenterY = wall.y + wall.height / 2;
-                    const currentDistY = Math.abs(player.y - wallCenterY);
-                    const newY = player.y + originalVelY * deltaTime;
-                    const newDistY = Math.abs(newY - wallCenterY);
-                    
-                    // Only allow moving away if we're actually touching/overlapping the wall
-                    // Check if player is currently overlapping with this specific wall
-                    const isOverlapping = player.x + playerSize > wall.x &&
-                                        player.x - playerSize < wall.x + wall.width &&
-                                        player.y + playerSize > wall.y &&
-                                        player.y - playerSize < wall.y + wall.height;
-                    
-                    // If moving Y away from the wall (distance increases) AND we're overlapping, allow it
-                    if (originalVelY !== 0 && isOverlapping && newDistY > currentDistY) {
-                        // Moving away from horizontal wall - allow Y movement
-                        // But still check if it would collide with other walls
-                        const testY = player.y + originalVelY * deltaTime;
-                        let wouldCollideWithOther = false;
-                        for (const otherWall of dungeonWalls) {
-                            if (otherWall === wall) continue;
-                            if (player.x + playerSize > otherWall.x &&
-                                player.x - playerSize < otherWall.x + otherWall.width &&
-                                testY + playerSize > otherWall.y &&
-                                testY - playerSize < otherWall.y + otherWall.height) {
-                                wouldCollideWithOther = true;
-                                break;
+
+                    // For horizontal walls: allow X movement (sliding along) OR Y movement away from wall
+                    if (isHorizontalWall) {
+                        const wallCenterY = wall.y + wall.height / 2;
+                        const currentDistY = Math.abs(player.y - wallCenterY);
+                        const newY = player.y + originalVelY * deltaTime;
+                        const newDistY = Math.abs(newY - wallCenterY);
+
+                        // Only allow moving away if we're actually touching/overlapping the wall
+                        // Check if player is currently overlapping with this specific wall
+                        const isOverlapping = player.x + playerSize > wall.x &&
+                            player.x - playerSize < wall.x + wall.width &&
+                            player.y + playerSize > wall.y &&
+                            player.y - playerSize < wall.y + wall.height;
+
+                        // If moving Y away from the wall (distance increases) AND we're overlapping, allow it
+                        if (originalVelY !== 0 && isOverlapping && newDistY > currentDistY) {
+                            // Moving away from horizontal wall - allow Y movement
+                            // But still check if it would collide with other walls
+                            const testY = player.y + originalVelY * deltaTime;
+                            let wouldCollideWithOther = false;
+                            for (const otherWall of dungeonWalls) {
+                                if (otherWall === wall) continue;
+                                if (player.x + playerSize > otherWall.x &&
+                                    player.x - playerSize < otherWall.x + otherWall.width &&
+                                    testY + playerSize > otherWall.y &&
+                                    testY - playerSize < otherWall.y + otherWall.height) {
+                                    wouldCollideWithOther = true;
+                                    break;
+                                }
                             }
-                        }
-                        if (!wouldCollideWithOther) {
-                            canMoveY = true;
-                        }
-                    } else if (originalVelX !== 0) {
-                        // Not moving away or moving towards wall, so allow sliding along wall (X movement)
-                        const slidePlayerSize = playerSize - 2;
-                        const testX = player.x + originalVelX * deltaTime;
-                        let xWouldCollide = false;
-                        for (const otherWall of dungeonWalls) {
-                            if (otherWall === wall) continue;
-                            if (testX + slidePlayerSize > otherWall.x &&
-                                testX - slidePlayerSize < otherWall.x + otherWall.width &&
-                                player.y + slidePlayerSize > otherWall.y &&
-                                player.y - slidePlayerSize < otherWall.y + otherWall.height) {
-                                xWouldCollide = true;
-                                break;
+                            if (!wouldCollideWithOther) {
+                                canMoveY = true;
                             }
-                        }
-                        if (!xWouldCollide) {
-                            canMoveX = true;
+                        } else if (originalVelX !== 0) {
+                            // Not moving away or moving towards wall, so allow sliding along wall (X movement)
+                            const slidePlayerSize = playerSize - 2;
+                            const testX = player.x + originalVelX * deltaTime;
+                            let xWouldCollide = false;
+                            for (const otherWall of dungeonWalls) {
+                                if (otherWall === wall) continue;
+                                if (testX + slidePlayerSize > otherWall.x &&
+                                    testX - slidePlayerSize < otherWall.x + otherWall.width &&
+                                    player.y + slidePlayerSize > otherWall.y &&
+                                    player.y - slidePlayerSize < otherWall.y + otherWall.height) {
+                                    xWouldCollide = true;
+                                    break;
+                                }
+                            }
+                            if (!xWouldCollide) {
+                                canMoveX = true;
+                            }
                         }
                     }
-                }
                 }
             }
         }
-        
+
         // Apply movement restrictions - only block the axis that collides
         // This allows sliding along walls when moving diagonally
         if (!canMoveX) {
@@ -4621,7 +4623,7 @@ function update(time, delta) {
         if (!canMoveY) {
             player.setVelocityY(0);
         }
-        
+
         // Final check: if one axis is blocked but the other isn't, ensure the non-blocked axis can still move
         // This handles the case where diagonal movement hits a wall - allow sliding along it
         if (!canMoveX && canMoveY && originalVelY !== 0) {
@@ -4633,37 +4635,37 @@ function update(time, delta) {
             player.setVelocityX(originalVelX);
         }
     }
-    
+
     // Player attack or item pickup (Spacebar)
     // Priority: Pick up items if nearby, otherwise attack
     if (Phaser.Input.Keyboard.JustDown(spaceKey)) {
         let itemPickedUp = false;
-        
+
         // Check for nearby items first
         items.forEach((item, index) => {
             if (!item.sprite || !item.sprite.active) return;
-            
+
             const distance = Phaser.Math.Distance.Between(
                 player.x, player.y,
                 item.sprite.x, item.sprite.y
             );
-            
+
             // Pick up item if player is close (within 30 pixels)
             if (distance < 30 && !itemPickedUp) {
                 pickupItem(item, index);
                 itemPickedUp = true; // Only pick up one item per key press
             }
         });
-        
+
         // Only attack if no item was picked up
         if (!itemPickedUp) {
             playerAttack(time);
         }
     }
-    
+
     // Get scene reference (used for multiple things below)
     const scene = game.scene.scenes[0];
-    
+
     // Ability keys (1, 2, 3)
     if (Phaser.Input.Keyboard.JustDown(scene.abilityOneKey)) {
         castAbility('heal', time);
@@ -4674,43 +4676,40 @@ function update(time, delta) {
     if (Phaser.Input.Keyboard.JustDown(scene.abilityThreeKey)) {
         castAbility('shield', time);
     }
-    
+
     // Update ability cooldowns
     updateAbilityCooldowns(time);
-    
+
     // Toggle inventory (I key)
     if (Phaser.Input.Keyboard.JustDown(inventoryKey)) {
         toggleInventory();
     }
-    
+
     // Toggle equipment (E key) - always check, even when panel is open
     if (equipmentKey && Phaser.Input.Keyboard.JustDown(equipmentKey)) {
         toggleEquipment();
     }
-    
+
     // Update inventory if visible
     if (inventoryVisible) {
         updateInventory();
-    } else {
-        // Ensure tooltip is hidden when inventory is closed
-        hideItemTooltip();
     }
-    
+
     // Update equipment if visible
     if (equipmentVisible) {
         updateEquipment();
     }
-    
+
     // Toggle quest log (Q key)
     if (Phaser.Input.Keyboard.JustDown(questKey)) {
         toggleQuestLog();
     }
-    
+
     // ESC key - close any open interface
     if (settingsKey && Phaser.Input.Keyboard.JustDown(settingsKey)) {
         // Check if any interface is open (including dialogs, building panels, and quest modals)
         const anyInterfaceOpen = inventoryVisible || equipmentVisible || questVisible || shopVisible || settingsVisible || dialogVisible || buildingPanelVisible || questCompletedModal || newQuestModal;
-        
+
         if (anyInterfaceOpen) {
             // Close all interfaces - don't open settings
             closeAllInterfaces();
@@ -4729,7 +4728,7 @@ function update(time, delta) {
             toggleSettings();
         }
     }
-    
+
     // Interaction (F key)
     if (Phaser.Input.Keyboard.JustDown(interactKey)) {
         if (shopVisible) {
@@ -4742,13 +4741,13 @@ function update(time, delta) {
                 const distance = Phaser.Math.Distance.Between(player.x, player.y, marker.x, marker.y);
                 if (distance <= marker.radius) {
                     const targetLevel = marker.dungeonLevel || 1;
-                    
+
                     // Check if trying to go to next level - require previous level boss to be defeated
                     if (marker.targetMap === 'dungeon' && targetLevel > 1) {
                         const previousLevel = targetLevel - 1;
                         const previousLevelKey = `level_${previousLevel}`;
                         const previousLevelCompleted = dungeonCompletions[previousLevelKey] || false;
-                        
+
                         if (!previousLevelCompleted) {
                             // Boss not defeated - show message and prevent transition
                             showDamageNumber(player.x, player.y - 40, `Defeat Level ${previousLevel} Boss First!`, 0xff0000);
@@ -4757,7 +4756,7 @@ function update(time, delta) {
                             break;
                         }
                     }
-                    
+
                     console.log(`🚪 Transitioning to ${marker.targetMap} level ${targetLevel}`);
                     try {
                         transitionToMap(marker.targetMap, targetLevel);
@@ -4768,7 +4767,7 @@ function update(time, delta) {
                     break;
                 }
             }
-            
+
             // If not near a marker, check building or NPC interaction
             if (!nearMarker) {
                 // If building UI is open, close it
@@ -4776,7 +4775,7 @@ function update(time, delta) {
                     closeBuildingUI();
                     return;
                 }
-                
+
                 // Check buildings first (in town), then NPCs
                 if (currentMap === 'town') {
                     checkBuildingInteraction();
@@ -4790,12 +4789,12 @@ function update(time, delta) {
             }
         }
     }
-    
+
     // Assets window (CTRL+A)
     if (Phaser.Input.Keyboard.JustDown(assetsKey) && scene.ctrlKey.isDown) {
         toggleAssetsWindow();
     }
-    
+
     // Grass debug window (CTRL+M)
     if (grassDebugKey && scene.ctrlKey) {
         if (Phaser.Input.Keyboard.JustDown(grassDebugKey) && scene.ctrlKey.isDown) {
@@ -4807,7 +4806,7 @@ function update(time, delta) {
         if (!grassDebugKey) console.warn('⚠️ grassDebugKey not initialized');
         if (!scene.ctrlKey) console.warn('⚠️ scene.ctrlKey not initialized');
     }
-    
+
     // Save/Load
     if (Phaser.Input.Keyboard.JustDown(scene.saveKey)) {
         saveGame();
@@ -4815,7 +4814,7 @@ function update(time, delta) {
     if (Phaser.Input.Keyboard.JustDown(scene.loadKey)) {
         loadGame();
     }
-    
+
     // Toggle controls (H key) - switch between short and full text
     if (Phaser.Input.Keyboard.JustDown(scene.helpKey)) {
         if (scene.controlsText) {
@@ -4823,12 +4822,12 @@ function update(time, delta) {
             scene.controlsText.setText(scene.controlsExpanded ? scene.controlsFullText : scene.controlsShortText);
         }
     }
-    
+
     // Update quest log if visible
     if (questVisible) {
         updateQuestLog();
     }
-    
+
     // Track player movement for exploration quests
     const currentTileX = Math.floor(player.x / scene.tileSize);
     const currentTileY = Math.floor(player.y / scene.tileSize);
@@ -4839,20 +4838,20 @@ function update(time, delta) {
     }
     scene.lastPlayerTileX = currentTileX;
     scene.lastPlayerTileY = currentTileY;
-    
+
     // Track survival time
     playerStats.questStats.survivalTime += delta;
-    
+
     // Check quest progress
     checkQuestProgress();
-    
+
     // Monster respawn system - only in wilderness
     if (currentMap === 'wilderness' && monsters.length < MONSTER_RESPAWN_THRESHOLD) {
         const scene = game.scene.scenes[0];
         const mapWidth = scene.mapWidth * scene.tileSize;
         const mapHeight = scene.mapHeight * scene.tileSize;
         const monstersNeeded = MAX_MONSTERS - monsters.length;
-        
+
         const monsterTypes = [
             { name: 'Goblin', textureKey: 'monster_goblin', hp: 30, attack: 5, speed: 50, xp: 10 },
             { name: 'Orc', textureKey: 'monster_orc', hp: 50, attack: 8, speed: 40, xp: 20 },
@@ -4863,13 +4862,13 @@ function update(time, delta) {
             { name: 'Dragon', textureKey: 'monster_dragon', hp: 80, attack: 12, speed: 35, xp: 40 },
             { name: 'Ghost', textureKey: 'monster_ghost', hp: 35, attack: 6, speed: 55, xp: 12 }
         ];
-        
+
         // Spawn monsters away from player
         for (let i = 0; i < monstersNeeded; i++) {
             let spawnX, spawnY;
             let attempts = 0;
             const maxAttempts = 50;
-            
+
             // Find spawn point away from player
             do {
                 spawnX = Phaser.Math.Between(50, mapWidth - 50);
@@ -4879,34 +4878,34 @@ function update(time, delta) {
                 attempts < maxAttempts &&
                 Phaser.Math.Distance.Between(spawnX, spawnY, player.x, player.y) < MONSTER_AGGRO_RADIUS
             );
-            
+
             const typeIndex = Math.floor(Math.random() * monsterTypes.length);
             const type = monsterTypes[typeIndex];
-            
+
             spawnMonster.call(scene, spawnX, spawnY, type);
         }
     }
-    
+
     // Update NPC indicators
     updateNPCIndicators();
-    
+
     // Update building indicators (only in town)
     if (currentMap === 'town') {
         updateBuildingIndicators();
     }
-    
+
     // Update transition marker visibility (pulse effect when near)
     transitionMarkers.forEach(marker => {
         if (marker.marker && marker.marker.active) {
             const distance = Phaser.Math.Distance.Between(player.x, player.y, marker.x, marker.y);
             const pulseSpeed = 300;
             const pulseAmount = 0.3;
-            
+
             // Always pulse the marker
             const baseAlpha = 0.7;
             const pulse = Math.sin(scene.time.now / pulseSpeed) * pulseAmount;
             marker.marker.setAlpha(baseAlpha + pulse);
-            
+
             // Pulse glow if it exists
             if (marker.glow && marker.glow.active) {
                 const glowPulse = Math.sin(scene.time.now / pulseSpeed + Math.PI / 2) * 0.2;
@@ -4915,18 +4914,18 @@ function update(time, delta) {
                 const sizePulse = 1 + Math.sin(scene.time.now / pulseSpeed) * 0.1;
                 marker.glow.setScale(sizePulse);
             }
-            
+
             if (marker.text) marker.text.setAlpha(1.0);
         }
     });
-    
+
     // Handle shop scrolling (only when shop is open)
     // Note: Mouse wheel is handled in the 'wheel' event listener in create()
     // Keyboard scrolling (Up/Down arrows when shop is open)
     // Note: Movement is disabled when shop is open, so arrows only scroll
     if (shopVisible && shopPanel && shopPanel.maxScrollY > 0) {
         let scrollChanged = false;
-        
+
         if (Phaser.Input.Keyboard.JustDown(cursors.up)) {
             const oldScroll = shopPanel.scrollY;
             shopPanel.scrollY = Math.max(0, shopPanel.scrollY - 90); // One item height
@@ -4937,16 +4936,16 @@ function update(time, delta) {
             shopPanel.scrollY = Math.min(shopPanel.maxScrollY, shopPanel.scrollY + 90); // One item height
             scrollChanged = (oldScroll !== shopPanel.scrollY);
         }
-        
+
         // Update display if scroll changed
         if (scrollChanged) {
             updateShopItems();
         }
     }
-    
+
     // Update UI bars
     updateUI();
-    
+
     // Update player HP bar position
     if (player && player.hpBarBg && player.hpBar) {
         const offsetY = -24; // Position above player sprite
@@ -4954,44 +4953,44 @@ function update(time, delta) {
         player.hpBarBg.y = player.y + offsetY;
         player.hpBar.x = player.x - (player.hpBarBg.width / 2) + 1;
         player.hpBar.y = player.y + offsetY;
-        
+
         // Update player HP bar width
         const hpPercent = Math.max(0, Math.min(1, playerStats.hp / playerStats.maxHp));
         player.hpBar.width = (player.hpBarBg.width - 2) * hpPercent;
-        
+
         // Only show if damaged
         const showBar = playerStats.hp < playerStats.maxHp;
         player.hpBarBg.setVisible(showBar);
         player.hpBar.setVisible(showBar);
     }
-    
+
     // Monster AI and combat
     monsters.forEach((monster, index) => {
         const distance = Phaser.Math.Distance.Between(
             player.x, player.y,
             monster.x, monster.y
         );
-        
+
         // Update monster animation based on movement
         updateMonsterAnimation(monster, delta);
-        
+
         // Move towards player if close (use monster's speed stat)
         if (distance < 200 && distance > 32) {
             const monsterSpeed = monster.speed || 50;
             this.physics.moveToObject(monster, player, monsterSpeed);
-            
+
             // Check dungeon wall collisions for monsters
             if (currentMap === 'dungeon' && dungeonWalls.length > 0) {
                 const monsterSize = 12; // Slightly smaller than player for easier pathfinding
                 const deltaTime = delta / 1000;
-                
+
                 // Check if monster's intended position would collide with a wall
                 const intendedX = monster.x + monster.body.velocity.x * deltaTime;
                 const intendedY = monster.y + monster.body.velocity.y * deltaTime;
-                
+
                 let wouldCollideX = false;
                 let wouldCollideY = false;
-                
+
                 // Test X movement
                 if (monster.body.velocity.x !== 0) {
                     for (const wall of dungeonWalls) {
@@ -5004,7 +5003,7 @@ function update(time, delta) {
                         }
                     }
                 }
-                
+
                 // Test Y movement
                 if (monster.body.velocity.y !== 0) {
                     for (const wall of dungeonWalls) {
@@ -5017,7 +5016,7 @@ function update(time, delta) {
                         }
                     }
                 }
-                
+
                 // Stop movement on axis that would collide
                 if (wouldCollideX) {
                     monster.setVelocityX(0);
@@ -5029,12 +5028,12 @@ function update(time, delta) {
         } else {
             monster.setVelocity(0);
         }
-        
+
         // Monster attack player if in range
         if (distance <= monster.attackRange && monster.hp > 0) {
             monsterAttackPlayer(monster, time);
         }
-        
+
         // Update monster HP bar position and visibility
         if (monster.hpBarBg && monster.hpBar && monster.active) {
             const offsetY = -24; // Position above monster sprite
@@ -5042,11 +5041,11 @@ function update(time, delta) {
             monster.hpBarBg.y = monster.y + offsetY;
             monster.hpBar.x = monster.x - (monster.hpBarBg.width / 2) + 1;
             monster.hpBar.y = monster.y + offsetY;
-            
+
             // Update monster HP bar width
             const hpPercent = Math.max(0, Math.min(1, monster.hp / monster.maxHp));
             monster.hpBar.width = (monster.hpBarBg.width - 2) * hpPercent;
-            
+
             // Show HP bar if monster is damaged or player is nearby (in combat)
             const distanceToPlayer = Phaser.Math.Distance.Between(
                 player.x, player.y,
@@ -5056,26 +5055,26 @@ function update(time, delta) {
             monster.hpBarBg.setVisible(showBar);
             monster.hpBar.setVisible(showBar);
         }
-        
+
         // Remove dead monsters
         if (monster.hp <= 0 && !monster.isDead) {
             monster.isDead = true;
-            
+
             // Check if this was a boss in a dungeon
             if (monster.isBoss && currentMap === 'dungeon') {
                 onBossDefeated(dungeonLevel, monster.x, monster.y);
             }
-            
+
             // Destroy HP bars
             if (monster.hpBarBg) monster.hpBarBg.destroy();
             if (monster.hpBar) monster.hpBar.destroy();
-            
+
             // Play death animation
             playMonsterDeathAnimation(monster);
-            
+
             // Create death particle effects
             createDeathEffects(monster.x, monster.y);
-            
+
             // Death animation - fade out and rotate (enhanced)
             this.tweens.add({
                 targets: monster,
@@ -5085,29 +5084,29 @@ function update(time, delta) {
                 duration: 500, // Slightly longer for better effect
                 ease: 'Power2'
             });
-            
+
             // Give XP (based on monster type)
             const xpGain = monster.xpReward || 10;
             playerStats.xp += xpGain;
             showDamageNumber(monster.x, monster.y, `+${xpGain} XP`, 0xffd700, false, 'xp'); // Gold color for XP
             addChatMessage(`Gained ${xpGain} XP`, 0xffd700, '✨');
-            
+
             // Track quest progress - monster killed
             playerStats.questStats.monstersKilled++;
-            
+
             // Add chat message for monster death
             const monsterName = monster.monsterType || 'Monster';
             addChatMessage(`${monsterName} defeated`, 0xff6b6b, '💀');
-            
+
             // Check level up
             checkLevelUp();
-            
+
             // Drop items when monster dies
             dropItemsFromMonster(monster.x, monster.y);
-            
+
             // Play death sound
             playSound('monster_die');
-            
+
             // Remove monster after animation completes
             this.time.delayedCall(300, () => {
                 if (monster && monster.active) {
@@ -5120,10 +5119,10 @@ function update(time, delta) {
             });
         }
     });
-    
+
     // Items are now manually picked up with Spacebar (handled above)
     // No automatic pickup - player must press Spacebar when near items
-    
+
     // Check if combat just ended and show pending quest modals
     const currentlyInCombat = isInCombat();
     if (!currentlyInCombat && (pendingCompletedQuest || pendingNewQuest)) {
@@ -5147,12 +5146,12 @@ function update(time, delta) {
 function playerAttack(time) {
     const stats = playerStats;
     const scene = game.scene.scenes[0];
-    
+
     // Check cooldown
     if (time - stats.lastAttackTime < stats.attackCooldown) {
         return;
     }
-    
+
     // Combo tracking - check if within combo window
     const timeSinceLastAttack = time - stats.lastAttackTime;
     if (timeSinceLastAttack < stats.comboResetTime && stats.comboCount > 0) {
@@ -5164,33 +5163,33 @@ function playerAttack(time) {
     }
     stats.lastAttackTime = time;
     stats.comboTimer = 0; // Reset combo timer
-    
+
     // Get weapon quality for trail color
     const equippedWeapon = stats.equipment.weapon;
     const weaponQuality = equippedWeapon ? (equippedWeapon.quality || 'Common') : 'Common';
     const weaponType = equippedWeapon ? (equippedWeapon.weaponType || 'Sword') : 'Sword';
-    
+
     // Create weapon swing trail
     const facingDirection = player.facingDirection || 'south';
     createWeaponSwingTrail(player.x, player.y, facingDirection, weaponQuality);
-    
+
     // Animate weapon sprite during attack
     animateWeaponStrike(facingDirection, weaponType);
-    
+
     // Play attack animation if available
     if (scene.anims.exists('attack')) {
         // Stop any current animation
         player.anims.stop();
-        
+
         // Set texture to attack sprite sheet if needed
         if (scene.textures.exists('player_attack')) {
             player.setTexture('player_attack');
         }
-        
+
         // Play attack animation
         player.play('attack');
         console.log('Playing attack animation');
-        
+
         // Resume walking animation after attack completes
         player.once('animationcomplete', (animation) => {
             if (animation && animation.key === 'attack') {
@@ -5199,7 +5198,7 @@ function playerAttack(time) {
                 if (scene.textures.exists(walkTextureKey)) {
                     player.setTexture(walkTextureKey);
                 }
-                
+
                 if (player.isMoving && scene.anims.exists(`walk_${player.facingDirection}`)) {
                     player.play(`walk_${player.facingDirection}`);
                 } else {
@@ -5214,45 +5213,45 @@ function playerAttack(time) {
             hasAttackAnim: scene.anims.exists('attack')
         });
     }
-    
+
     // Find nearest monster in attack range
     const attackRange = 50; // pixels
     let closestMonster = null;
     let closestDistance = attackRange;
-    
+
     monsters.forEach(monster => {
         if (monster.hp <= 0) return;
-        
+
         const distance = Phaser.Math.Distance.Between(
             player.x, player.y,
             monster.x, monster.y
         );
-        
+
         if (distance < closestDistance) {
             closestDistance = distance;
             closestMonster = monster;
         }
     });
-    
+
     if (closestMonster) {
         // Calculate damage (with variation) - uses current attack (base + equipment)
         const baseDamage = playerStats.attack; // This includes equipment bonuses
         const variation = Phaser.Math.FloatBetween(0.9, 1.1);
         let damage = Math.max(1, Math.floor(baseDamage * variation));
-        
+
         // Check for critical hit (5% chance, 2x damage)
         const isCritical = Math.random() < 0.05;
         if (isCritical) {
             damage = Math.floor(damage * 2);
         }
-        
+
         // Apply damage
         closestMonster.hp -= damage;
         closestMonster.hp = Math.max(0, closestMonster.hp);
-        
+
         // Create hit particle effects (physical damage)
         createHitEffects(closestMonster.x, closestMonster.y, isCritical, 'physical');
-        
+
         // Screen shake on critical hits
         if (isCritical) {
             shakeCamera(200, 0.01); // Duration 200ms, intensity 0.01
@@ -5260,7 +5259,7 @@ function playerAttack(time) {
             // Light shake for big hits
             shakeCamera(100, 0.005);
         }
-        
+
         // Show damage number with enhanced visuals for criticals
         const damageColor = isCritical ? 0xff0000 : 0xffff00; // Red for critical, yellow for normal
         const damageText = isCritical ? `-${damage} CRIT!` : `-${damage}`;
@@ -5269,7 +5268,7 @@ function playerAttack(time) {
         const chatMessage = isCritical ? `${damageText} on ${monsterName}` : `Hit ${monsterName} for ${damage} damage`;
         addChatMessage(chatMessage, isCritical ? 0xff0000 : 0xffff00, '⚔️');
         playSound('hit_monster');
-        
+
         // Enhanced visual feedback - flash monster with color
         const flashColor = isCritical ? 0xff6666 : 0xffffff; // Red tint for critical
         closestMonster.setTint(flashColor);
@@ -5289,9 +5288,9 @@ function monsterAttackPlayer(monster, time) {
     if (time - monster.lastAttackTime < monster.attackCooldown) {
         return;
     }
-    
+
     monster.lastAttackTime = time;
-    
+
     // Determine direction monster is facing player
     const dx = player.x - monster.x;
     const dy = player.y - monster.y;
@@ -5300,41 +5299,41 @@ function monsterAttackPlayer(monster, time) {
     } else {
         monster.facingDirection = dx > 0 ? 'east' : 'west';
     }
-    
+
     // Play attack animation
     playMonsterAttackAnimation(monster);
-    
+
     // Calculate damage
     const baseDamage = monster.attack;
     const defense = playerStats.defense;
     const actualDamage = Math.max(1, baseDamage - Math.floor(defense / 2));
-    
+
     // Apply damage to player
     playerStats.hp -= actualDamage;
     playerStats.hp = Math.max(0, playerStats.hp);
-    
+
     // Create hit effects on player (red particles - physical damage)
     createHitEffects(player.x, player.y, false, 'physical');
-    
+
     // Play sound effect when player is hit
     playSound('hit_player');
-    
+
     // Light screen shake when player takes damage
     shakeCamera(150, 0.008);
-    
-        // Show damage number
-        showDamageNumber(player.x, player.y - 20, `-${actualDamage}`, 0xff0000, false, 'physical');
-        const monsterName = monster.monsterType || 'Monster';
-        addChatMessage(`Took ${actualDamage} damage from ${monsterName}`, 0xff6b6b, '🛡️');
-        
-        // Enhanced visual feedback - flash player red
-        player.setTint(0xff0000);
+
+    // Show damage number
+    showDamageNumber(player.x, player.y - 20, `-${actualDamage}`, 0xff0000, false, 'physical');
+    const monsterName = monster.monsterType || 'Monster';
+    addChatMessage(`Took ${actualDamage} damage from ${monsterName}`, 0xff6b6b, '🛡️');
+
+    // Enhanced visual feedback - flash player red
+    player.setTint(0xff0000);
     game.scene.scenes[0].time.delayedCall(100, () => {
         if (player && player.active) {
             player.clearTint();
         }
     });
-    
+
     // Check if player is dead
     if (playerStats.hp <= 0) {
         console.log('Player died!');
@@ -5351,35 +5350,35 @@ function monsterAttackPlayer(monster, time) {
  */
 function createHitEffects(x, y, isCritical = false, damageType = 'physical') {
     const scene = game.scene.scenes[0];
-    
+
     // Create particle emitter for hit sparks
     if (!scene.textures.exists('hit_spark')) {
         return; // Particle texture not created yet
     }
-    
+
     const particleCount = isCritical ? 20 : 10; // More particles for critical hits
-    
+
     // Color-coded by damage type
     let colors;
     if (damageType === 'magic') {
         // Blue/purple for magic damage
-        colors = isCritical 
+        colors = isCritical
             ? [0x4400ff, 0x8800ff, 0xaa88ff, 0xffffff] // Purple/blue/white for critical magic
             : [0x4400ff, 0x6600ff, 0x8888ff]; // Blue/purple for normal magic
     } else {
         // Yellow/orange for physical damage
-        colors = isCritical 
+        colors = isCritical
             ? [0xff0000, 0xff8800, 0xffd700, 0xffffff] // Red/orange/gold/white for critical
             : [0xffd700, 0xff8800, 0xffff00]; // Yellow/orange for normal hits
     }
-    
+
     // Create particles manually (Phaser 3 particle system)
     for (let i = 0; i < particleCount; i++) {
         const angle = Phaser.Math.FloatBetween(0, Math.PI * 2);
         const speed = Phaser.Math.FloatBetween(30, 80);
         const distance = Phaser.Math.FloatBetween(0, 20);
         const color = Phaser.Utils.Array.GetRandom(colors);
-        
+
         const particle = scene.add.circle(
             x + Math.cos(angle) * distance,
             y + Math.sin(angle) * distance,
@@ -5387,7 +5386,7 @@ function createHitEffects(x, y, isCritical = false, damageType = 'physical') {
             color,
             0.9
         ).setDepth(201);
-        
+
         // Animate particle
         scene.tweens.add({
             targets: particle,
@@ -5404,11 +5403,11 @@ function createHitEffects(x, y, isCritical = false, damageType = 'physical') {
             }
         });
     }
-    
+
     // Add impact flash (brief white circle)
     const flash = scene.add.circle(x, y, isCritical ? 15 : 10, 0xffffff, 0.8)
         .setDepth(201);
-    
+
     scene.tweens.add({
         targets: flash,
         scale: isCritical ? 2 : 1.5,
@@ -5428,19 +5427,19 @@ function createHitEffects(x, y, isCritical = false, damageType = 'physical') {
  */
 function updateWeaponSprite() {
     if (!weaponSprite) return;
-    
+
     const equippedWeapon = playerStats.equipment.weapon;
-    
+
     if (!equippedWeapon) {
         weaponSprite.setVisible(false);
         console.log('⚠️ No weapon equipped - hiding weapon sprite');
         return;
     }
-    
+
     // Get weapon type from item name or type
     const weaponType = equippedWeapon.weaponType || 'Sword';
     const weaponKey = `weapon_${weaponType.toLowerCase()}`;
-    
+
     // Check if weapon sprite exists, fallback to sword
     const scene = game.scene.scenes[0];
     if (scene.textures.exists(weaponKey)) {
@@ -5448,7 +5447,7 @@ function updateWeaponSprite() {
     } else {
         weaponSprite.setTexture('weapon_sword'); // Fallback
     }
-    
+
     weaponSprite.setVisible(true);
     updateWeaponPosition();
     console.log(`✅ Weapon sprite updated: ${weaponType} (${weaponKey})`);
@@ -5459,26 +5458,26 @@ function updateWeaponSprite() {
  */
 function updateWeaponPosition() {
     if (!weaponSprite || !weaponSprite.visible || !player) return;
-    
+
     // Don't update rotation during animation (but still update position)
     const skipRotation = weaponSprite.isAnimating;
-    
+
     const facingDirection = player.facingDirection || 'south';
-    
+
     // Get weapon type for weapon-specific positioning
     const equippedWeapon = playerStats.equipment.weapon;
     const weaponType = equippedWeapon ? (equippedWeapon.weaponType || 'Sword') : 'Sword';
-    
+
     const offsetX = 0;
     const offsetY = 0;
-    
+
     // Position weapon relative to player based on facing direction
     // Adjust these offsets to position the weapon correctly
     let x = player.x + offsetX;
     let y = player.y + offsetY;
-    
+
     // Adjust position based on direction (weapon appears in front of player)
-    switch(facingDirection) {
+    switch (facingDirection) {
         case 'north':
             y -= 20; // Weapon above player
             break;
@@ -5503,14 +5502,14 @@ function updateWeaponPosition() {
             }
             break;
     }
-    
+
     weaponSprite.x = x;
     weaponSprite.y = y;
-    
+
     // Set rotation and flip based on direction (skip during animation)
     // Origin point is where the handle is (fulcrum for rotation)
     if (!skipRotation) {
-        switch(facingDirection) {
+        switch (facingDirection) {
             case 'north':
                 weaponSprite.setFlipX(false);
                 weaponSprite.rotation = -Math.PI / 2; // Point up
@@ -5539,7 +5538,7 @@ function updateWeaponPosition() {
         }
     } else {
         // During animation, only update origin and flip (not rotation)
-        switch(facingDirection) {
+        switch (facingDirection) {
             case 'north':
                 weaponSprite.setFlipX(false);
                 weaponSprite.setOrigin(1.0, 1.0);
@@ -5570,13 +5569,13 @@ function animateWeaponStrike(direction, weaponType = 'Sword') {
         console.log('⚠️ Weapon sprite not visible - skipping animation');
         return;
     }
-    
+
     const scene = game.scene.scenes[0];
-    
+
     // Get base rotation and flip state for direction FIRST
     let baseRotation = 0;
     let isFlipped = false;
-    switch(direction) {
+    switch (direction) {
         case 'north':
             baseRotation = -Math.PI / 2;
             isFlipped = false;
@@ -5594,28 +5593,28 @@ function animateWeaponStrike(direction, weaponType = 'Sword') {
             isFlipped = true; // Flip horizontally for west
             break;
     }
-    
+
     // Set animation flag BEFORE updating position (prevents rotation reset)
     weaponSprite.isAnimating = true;
-    
+
     // Reset weapon to base position (this sets the origin/fulcrum point)
     // The skipRotation flag will prevent it from resetting rotation during animation
     updateWeaponPosition();
-    
+
     console.log(`🎬 Animating weapon strike: ${weaponType} facing ${direction}`);
     console.log(`   Base rotation: ${baseRotation} (${(baseRotation * 180 / Math.PI).toFixed(1)}°)`);
-    
+
     // Set initial flip state
     weaponSprite.setFlipX(isFlipped);
-    
+
     // Different animation styles based on weapon type
     if (weaponType === 'Bow' || weaponType === 'Crossbow') {
         // Ranged weapons: Pull back animation
         const pullBackDistance = 10;
         let pullX = weaponSprite.x;
         let pullY = weaponSprite.y;
-        
-        switch(direction) {
+
+        switch (direction) {
             case 'north':
                 pullY += pullBackDistance;
                 break;
@@ -5629,7 +5628,7 @@ function animateWeaponStrike(direction, weaponType = 'Sword') {
                 pullX += pullBackDistance;
                 break;
         }
-        
+
         // Pull back
         scene.tweens.add({
             targets: weaponSprite,
@@ -5660,7 +5659,7 @@ function animateWeaponStrike(direction, weaponType = 'Sword') {
         } else {
             maxSwingAngle = (120 * Math.PI) / 180; // 120 degrees in radians for East/West
         }
-        
+
         // Determine swing direction based on facing
         let swingStart, swingEnd;
         if (direction === 'east') {
@@ -5680,7 +5679,7 @@ function animateWeaponStrike(direction, weaponType = 'Sword') {
             swingStart = baseRotation;
             swingEnd = baseRotation + maxSwingAngle;
         }
-        
+
         // 5-step animation with varying rotation increments
         const steps = 5;
         const stepAngles = [
@@ -5690,16 +5689,16 @@ function animateWeaponStrike(direction, weaponType = 'Sword') {
             0.75,        // Step 4: 75% (near impact)
             1.0          // Step 5: 100% (full swing)
         ];
-        
+
         // Set initial rotation to start position
         weaponSprite.rotation = swingStart;
-        
+
         console.log(`   Swing: ${(swingStart * 180 / Math.PI).toFixed(1)}° → ${(swingEnd * 180 / Math.PI).toFixed(1)}°`);
-        
+
         // Create step-based animation
         let currentStep = 0;
         const stepDuration = 40; // 40ms per step = 200ms total
-        
+
         function animateStep() {
             if (currentStep >= steps) {
                 // Animation complete - return to base position
@@ -5716,13 +5715,13 @@ function animateWeaponStrike(direction, weaponType = 'Sword') {
                 });
                 return;
             }
-            
+
             // Calculate target rotation for this step
             const progress = stepAngles[currentStep];
             const targetRotation = swingStart + (swingEnd - swingStart) * progress;
-            
+
             console.log(`   Step ${currentStep + 1}/5: ${(targetRotation * 180 / Math.PI).toFixed(1)}° (${(progress * 100).toFixed(0)}%)`);
-            
+
             // Animate to this step
             scene.tweens.add({
                 targets: weaponSprite,
@@ -5735,10 +5734,10 @@ function animateWeaponStrike(direction, weaponType = 'Sword') {
                 }
             });
         }
-        
+
         // Start the step animation
         animateStep();
-        
+
         // Also add slight scale pulse for impact effect (at step 4)
         scene.time.delayedCall(stepDuration * 3, () => {
             scene.tweens.add({
@@ -5763,12 +5762,12 @@ function animateWeaponStrike(direction, weaponType = 'Sword') {
 function createWeaponSwingTrail(x, y, direction, quality = 'Common') {
     const scene = game.scene.scenes[0];
     const qualityColor = QUALITY_COLORS[quality] || QUALITY_COLORS['Common'];
-    
+
     // Calculate trail direction based on player facing
     let angle = 0;
     let trailLength = 30;
-    
-    switch(direction) {
+
+    switch (direction) {
         case 'north':
             angle = -Math.PI / 2; // Up
             break;
@@ -5796,17 +5795,17 @@ function createWeaponSwingTrail(x, y, direction, quality = 'Common') {
         default:
             angle = 0;
     }
-    
+
     // Create trail particles (arc shape)
     const particleCount = 8;
     for (let i = 0; i < particleCount; i++) {
         const arcOffset = (i / particleCount) * Math.PI * 0.6 - Math.PI * 0.3; // 60 degree arc
         const particleAngle = angle + arcOffset;
         const distance = (i / particleCount) * trailLength;
-        
+
         const particleX = x + Math.cos(particleAngle) * distance;
         const particleY = y + Math.sin(particleAngle) * distance;
-        
+
         // Create trail particle
         const particle = scene.add.circle(
             particleX,
@@ -5815,7 +5814,7 @@ function createWeaponSwingTrail(x, y, direction, quality = 'Common') {
             qualityColor,
             0.8
         ).setDepth(200);
-        
+
         // Animate particle (fade and move outward)
         scene.tweens.add({
             targets: particle,
@@ -5832,21 +5831,21 @@ function createWeaponSwingTrail(x, y, direction, quality = 'Common') {
             }
         });
     }
-    
+
     // Create main swing line (bright line following the arc)
     const lineGraphics = scene.add.graphics();
     lineGraphics.lineStyle(3, qualityColor, 0.9);
     lineGraphics.setDepth(200);
-    
+
     // Draw arc line
     const startAngle = angle - Math.PI * 0.3;
     const endAngle = angle + Math.PI * 0.3;
     const radius = trailLength * 0.7;
-    
+
     lineGraphics.beginPath();
     lineGraphics.arc(x, y, radius, startAngle, endAngle, false);
     lineGraphics.strokePath();
-    
+
     // Fade out the line
     scene.tweens.add({
         targets: lineGraphics,
@@ -5866,16 +5865,16 @@ function createWeaponSwingTrail(x, y, direction, quality = 'Common') {
  */
 function createSparkleEffect(x, y) {
     const scene = game.scene.scenes[0];
-    
+
     const sparkleCount = 8;
     const colors = [0xffd700, 0xffaa00, 0xffff00, 0xffffff]; // Gold/yellow/white
-    
+
     for (let i = 0; i < sparkleCount; i++) {
         const angle = Phaser.Math.FloatBetween(0, Math.PI * 2);
         const distance = Phaser.Math.FloatBetween(5, 15);
         const speed = Phaser.Math.FloatBetween(20, 40);
         const color = Phaser.Utils.Array.GetRandom(colors);
-        
+
         const sparkle = scene.add.circle(
             x + Math.cos(angle) * distance,
             y + Math.sin(angle) * distance,
@@ -5883,7 +5882,7 @@ function createSparkleEffect(x, y) {
             color,
             0.9
         ).setDepth(201);
-        
+
         scene.tweens.add({
             targets: sparkle,
             x: x + Math.cos(angle) * speed,
@@ -5906,18 +5905,18 @@ function createSparkleEffect(x, y) {
  */
 function createDeathEffects(x, y) {
     const scene = game.scene.scenes[0];
-    
+
     const particleCount = 15;
     const colors = [0xff4444, 0xff8800, 0x888888, 0x444444]; // Red/orange/gray for death
-    
+
     for (let i = 0; i < particleCount; i++) {
         const angle = Phaser.Math.FloatBetween(0, Math.PI * 2);
         const speed = Phaser.Math.FloatBetween(40, 100);
         const color = Phaser.Utils.Array.GetRandom(colors);
-        
+
         const particle = scene.add.circle(x, y, Phaser.Math.Between(2, 4), color, 0.9)
             .setDepth(201);
-        
+
         scene.tweens.add({
             targets: particle,
             x: x + Math.cos(angle) * speed,
@@ -5942,17 +5941,17 @@ let cameraShakeTween = null;
 function shakeCamera(duration = 200, intensity = 0.01) {
     const scene = game.scene.scenes[0];
     const camera = scene.cameras.main;
-    
+
     // Cancel existing shake if any
     if (cameraShakeTween) {
         cameraShakeTween.stop();
         camera.setScroll(0, 0);
     }
-    
+
     const originalX = camera.scrollX;
     const originalY = camera.scrollY;
     let elapsed = 0;
-    
+
     const shake = () => {
         if (elapsed < duration) {
             const offsetX = (Math.random() - 0.5) * intensity * camera.width;
@@ -5965,7 +5964,7 @@ function shakeCamera(duration = 200, intensity = 0.01) {
             cameraShakeTween = null;
         }
     };
-    
+
     shake();
 }
 
@@ -5992,15 +5991,15 @@ function createSystemChatBox() {
     const chatHeight = 120;
     const chatX = 10; // Left margin
     const chatY = gameHeight - chatHeight - 10; // Bottom margin
-    
+
     // Create background panel
-    const bg = scene.add.rectangle(chatX + chatWidth/2, chatY + chatHeight/2, chatWidth, chatHeight, 0x000000, 0.85)
+    const bg = scene.add.rectangle(chatX + chatWidth / 2, chatY + chatHeight / 2, chatWidth, chatHeight, 0x000000, 0.85)
         .setScrollFactor(0).setDepth(250).setStrokeStyle(2, 0x666666);
-    
+
     // Create scrollable text container
     const textContainer = scene.add.container(chatX + 5, chatY + 5);
     textContainer.setScrollFactor(0).setDepth(251);
-    
+
     // Create mask for clipping text that goes outside the box
     // Mask is positioned relative to container (0, 0)
     const maskGraphics = scene.make.graphics();
@@ -6010,7 +6009,7 @@ function createSystemChatBox() {
     maskGraphics.setScrollFactor(0);
     const mask = maskGraphics.createGeometryMask();
     textContainer.setMask(mask);
-    
+
     systemChatBox = {
         bg: bg,
         container: textContainer,
@@ -6024,7 +6023,7 @@ function createSystemChatBox() {
         y: chatY + 5,
         padding: 5
     };
-    
+
     chatMessages = [];
     console.log('✅ System chat box created');
 }
@@ -6037,30 +6036,30 @@ function addChatMessage(text, color = 0xffffff, icon = '') {
         console.warn('Chat box not initialized');
         return;
     }
-    
+
     const scene = game.scene.scenes[0];
     const timestamp = new Date().toLocaleTimeString();
     const displayText = icon ? `${icon} ${text}` : text;
-    
+
     // Create message text
     const messageText = scene.add.text(0, 0, `[${timestamp}] ${displayText}`, {
         fontSize: '11px',
         fill: `#${color.toString(16).padStart(6, '0')}`,
         wordWrap: { width: systemChatBox.width - 15 }
     }).setOrigin(0, 0);
-    
+
     // Calculate Y position based on existing messages
     let yOffset = systemChatBox.padding;
     systemChatBox.messages.forEach(msg => {
         yOffset += msg.height + 3; // Small spacing between messages
     });
-    
+
     // Position message
     messageText.setPosition(systemChatBox.padding, yOffset);
-    
+
     // Add to container
     systemChatBox.container.add(messageText);
-    
+
     // Store message reference
     const messageData = {
         text: messageText,
@@ -6069,7 +6068,7 @@ function addChatMessage(text, color = 0xffffff, icon = '') {
     };
     systemChatBox.messages.push(messageData);
     chatMessages.push({ text: displayText, color, timestamp });
-    
+
     // Limit messages (remove oldest if too many)
     if (systemChatBox.messages.length > MAX_CHAT_MESSAGES) {
         const oldMsg = systemChatBox.messages.shift();
@@ -6079,7 +6078,7 @@ function addChatMessage(text, color = 0xffffff, icon = '') {
         // Reposition remaining messages
         repositionChatMessages();
     }
-    
+
     // Auto-scroll to bottom to show latest message
     updateChatScroll();
 }
@@ -6089,7 +6088,7 @@ function addChatMessage(text, color = 0xffffff, icon = '') {
  */
 function repositionChatMessages() {
     if (!systemChatBox) return;
-    
+
     let yOffset = systemChatBox.padding;
     systemChatBox.messages.forEach(msg => {
         if (msg.text && msg.text.active) {
@@ -6105,19 +6104,19 @@ function repositionChatMessages() {
  */
 function updateChatScroll() {
     if (!systemChatBox) return;
-    
+
     // Calculate total height of all messages
     let totalHeight = systemChatBox.padding;
     systemChatBox.messages.forEach(msg => {
         totalHeight += msg.height + 3;
     });
-    
+
     // Update max scroll
     systemChatBox.maxScrollY = Math.max(0, totalHeight - systemChatBox.height);
-    
+
     // Auto-scroll to bottom (show latest messages)
     systemChatBox.scrollY = systemChatBox.maxScrollY;
-    
+
     // Apply scroll offset to container
     systemChatBox.container.y = systemChatBox.y - systemChatBox.scrollY;
 }
@@ -6127,13 +6126,13 @@ function updateChatScroll() {
  */
 function scrollChat(delta) {
     if (!systemChatBox) return;
-    
+
     // Update scroll position
     systemChatBox.scrollY += delta;
-    
+
     // Clamp scroll position to valid range
     systemChatBox.scrollY = Math.max(0, Math.min(systemChatBox.maxScrollY, systemChatBox.scrollY));
-    
+
     // Apply scroll offset to container
     systemChatBox.container.y = systemChatBox.y - systemChatBox.scrollY;
 }
@@ -6141,7 +6140,7 @@ function scrollChat(delta) {
 function showDamageNumber(x, y, text, color, isCritical = false, type = 'physical') {
     const scene = game.scene.scenes[0];
     const colorHex = `#${color.toString(16).padStart(6, '0')}`;
-    
+
     // Add icons/symbols based on type
     let displayText = text;
     if (type === 'healing') {
@@ -6153,10 +6152,10 @@ function showDamageNumber(x, y, text, color, isCritical = false, type = 'physica
     } else if (type === 'physical') {
         displayText = `⚔ ${text}`; // Sword for physical
     }
-    
+
     const fontSize = isCritical ? '28px' : '20px';
     const strokeThickness = isCritical ? 4 : 2;
-    
+
     const textObj = scene.add.text(x, y, displayText, {
         fontSize: fontSize,
         fill: colorHex,
@@ -6164,7 +6163,7 @@ function showDamageNumber(x, y, text, color, isCritical = false, type = 'physica
         strokeThickness: strokeThickness,
         fontStyle: 'bold'
     }).setOrigin(0.5).setDepth(200);
-    
+
     // Add bounce effect for critical hits
     if (isCritical) {
         scene.tweens.add({
@@ -6175,12 +6174,12 @@ function showDamageNumber(x, y, text, color, isCritical = false, type = 'physica
             ease: 'Bounce'
         });
     }
-    
+
     // Create sparkle effect for XP
     if (type === 'xp') {
         createSparkleEffect(x, y);
     }
-    
+
     damageNumbers.push({
         x: x,
         y: y,
@@ -6201,7 +6200,7 @@ function updateDamageNumbers(time, delta) {
 
     damageNumbers.forEach((dn, index) => {
         dn.timer -= deltaSeconds;
-        
+
         // Different movement based on type
         let floatSpeed;
         if (dn.type === 'healing') {
@@ -6222,7 +6221,7 @@ function updateDamageNumbers(time, delta) {
             const fadeDuration = dn.isCritical ? 2.0 : 1.4;
             const alpha = Math.min(1, dn.timer / fadeDuration);
             dn.textObject.setAlpha(alpha);
-            
+
             // Add subtle pulsing effect for critical hits
             if (dn.isCritical && dn.timer > 0.5) {
                 const pulse = 1 + Math.sin(time * 0.02) * 0.1;
@@ -6245,7 +6244,7 @@ function updateDamageNumbers(time, delta) {
 function updateComboDisplay() {
     const scene = game.scene.scenes[0];
     const comboCount = playerStats.comboCount;
-    
+
     if (comboCount <= 0) {
         // Hide combo display
         if (comboText && comboText.active) {
@@ -6268,7 +6267,7 @@ function updateComboDisplay() {
         }
         return;
     }
-    
+
     // Create or update combo text (position on right side to avoid overlap)
     const gameWidth = scene.cameras.main.width;
     if (!comboText || !comboText.active) {
@@ -6280,7 +6279,7 @@ function updateComboDisplay() {
             fontStyle: 'bold'
         }).setScrollFactor(0).setDepth(310).setOrigin(1, 0); // Right-aligned
     }
-    
+
     // Determine combo color based on count
     let comboColor = '#ffffff';
     let comboSize = '24px';
@@ -6293,10 +6292,10 @@ function updateComboDisplay() {
     } else {
         comboColor = '#ffff00'; // Yellow for low combos
     }
-    
+
     comboText.setText(`${comboCount}x COMBO!`);
     comboText.setStyle({ fontSize: comboSize, fill: comboColor });
-    
+
     // Add pulsing effect for high combos (only if not already tweening)
     if (comboCount >= 5 && !comboText.comboTween) {
         comboText.comboTween = scene.tweens.add({
@@ -6313,22 +6312,22 @@ function updateComboDisplay() {
         comboText.comboTween = null;
         comboText.setScale(1);
     }
-    
+
     // Create combo indicator (glowing effect)
     if (!comboIndicator || !comboIndicator.active) {
         comboIndicator = scene.add.circle(comboText.x - comboText.width / 2, comboText.y + comboText.height / 2, 30, 0xffffff, 0.3)
             .setScrollFactor(0).setDepth(309);
     }
-    
+
     // Update indicator position (since text is right-aligned)
     comboIndicator.x = comboText.x - comboText.width / 2;
     comboIndicator.y = comboText.y + comboText.height / 2;
-    
+
     // Update indicator color and size based on combo
     const indicatorColor = comboCount >= 10 ? 0xff00ff : (comboCount >= 5 ? 0xff8800 : 0xffff00);
     comboIndicator.setFillStyle(indicatorColor, comboCount >= 5 ? 0.4 : 0.2);
     comboIndicator.setRadius(20 + comboCount * 2);
-    
+
     // Pulse indicator (only if not already tweening)
     if (!comboIndicator.indicatorTween) {
         comboIndicator.indicatorTween = scene.tweens.add({
@@ -6349,10 +6348,10 @@ function updateComboDisplay() {
  */
 function updateAttackSpeedIndicator() {
     const scene = game.scene.scenes[0];
-    
+
     // Only show indicator for combo-based bonuses (temporary), not equipment (permanent)
     const comboAttackSpeedBonus = Math.min(playerStats.comboCount * 0.05, 0.3); // Max 30% reduction at 6+ combo
-    
+
     if (comboAttackSpeedBonus <= 0) {
         // Hide indicator if no combo bonus
         if (attackSpeedIndicator && attackSpeedIndicator.active) {
@@ -6366,7 +6365,7 @@ function updateAttackSpeedIndicator() {
         }
         return;
     }
-    
+
     // Create or update indicator (position on right side, below combo)
     const gameWidth = scene.cameras.main.width;
     if (!attackSpeedIndicator || !attackSpeedIndicator.active) {
@@ -6378,10 +6377,10 @@ function updateAttackSpeedIndicator() {
             fontStyle: 'bold'
         }).setScrollFactor(0).setDepth(310).setOrigin(1, 0); // Right-aligned
     }
-    
+
     const speedPercent = Math.round(comboAttackSpeedBonus * 100);
     attackSpeedIndicator.setText(`⚡ Attack Speed +${speedPercent}%`);
-    
+
     // Pulse effect (only if not already tweening)
     if (!attackSpeedIndicator.speedTween) {
         attackSpeedIndicator.speedTween = scene.tweens.add({
@@ -6402,33 +6401,33 @@ function updateUI() {
     const stats = playerStats;
     const maxBarWidth = 200 - 4; // Consistent max width for all bars
     const scene = game.scene.scenes[0];
-    
+
     // Update HP bar
     const hpPercent = Math.max(0, Math.min(1, stats.hp / stats.maxHp));
     hpBar.width = maxBarWidth * hpPercent;
-    
+
     // Update Mana bar
     const manaPercent = Math.max(0, Math.min(1, stats.mana / stats.maxMana));
     manaBar.width = maxBarWidth * manaPercent;
-    
+
     // Update Stamina bar
     const staminaPercent = Math.max(0, Math.min(1, stats.stamina / stats.maxStamina));
     staminaBar.width = maxBarWidth * staminaPercent;
-    
+
     // Update XP bar (simplified - 100 XP per level for now)
     const xpForNextLevel = playerStats.level * 100;
     const currentLevelXP = stats.xp % xpForNextLevel;
     const xpPercent = Math.max(0, Math.min(1, currentLevelXP / xpForNextLevel));
     xpBar.width = maxBarWidth * xpPercent;
-    
+
     // Update stats text
     statsText.setText(`Level ${stats.level} | HP: ${Math.ceil(stats.hp)}/${stats.maxHp} | XP: ${stats.xp}`);
-    
+
     // Update gold text
     if (goldText) {
         goldText.setText(`Gold: ${stats.gold}`);
     }
-    
+
     // Update debug text (player position)
     if (player && scene.debugText) {
         const tileX = Math.floor(player.x / scene.tileSize);
@@ -6443,7 +6442,7 @@ function updateUI() {
 function checkLevelUp() {
     const stats = playerStats;
     const xpNeeded = stats.level * 100;
-    
+
     if (stats.xp >= xpNeeded) {
         stats.level++;
         stats.maxHp += 20;
@@ -6452,7 +6451,7 @@ function checkLevelUp() {
         stats.mana = stats.maxMana;
         stats.attack += 2;
         stats.defense += 1;
-        
+
         showDamageNumber(player.x, player.y - 40, 'LEVEL UP!', 0x00ffff);
         addChatMessage(`Level Up! Now Level ${stats.level}`, 0x00ffff, '⭐');
         console.log(`Level up! Now level ${stats.level}`);
@@ -6585,7 +6584,7 @@ function getWeaponTypeForQuality(quality) {
  * Get prefix based on quality
  */
 function getPrefixForQuality(quality) {
-    const available = Object.keys(PREFIXES).filter(p => 
+    const available = Object.keys(PREFIXES).filter(p =>
         PREFIXES[p].quality.includes(quality)
     );
     if (available.length === 0) return null;
@@ -6596,7 +6595,7 @@ function getPrefixForQuality(quality) {
  * Get suffix based on quality
  */
 function getSuffixForQuality(quality) {
-    const available = Object.keys(SUFFIXES).filter(s => 
+    const available = Object.keys(SUFFIXES).filter(s =>
         SUFFIXES[s].quality.includes(quality)
     );
     if (available.length === 0) return null;
@@ -6610,21 +6609,21 @@ function generateSpecialProperties(item, quality) {
     const props = {};
     const qualityLevels = { 'Common': 1, 'Uncommon': 2, 'Rare': 3, 'Epic': 4, 'Legendary': 5 };
     const qLevel = qualityLevels[quality] || 1;
-    
+
     // Higher quality = more likely to have special properties
     const hasSpecial = Math.random() < (0.1 + qLevel * 0.1); // 10-50% chance
-    
+
     if (hasSpecial) {
         // Critical chance (weapons and rings)
         if ((item.type === 'weapon' || item.type === 'ring') && Math.random() < 0.3) {
             props.critChance = 0.02 + (qLevel * 0.01);
         }
-        
+
         // Lifesteal (weapons and amulets)
         if ((item.type === 'weapon' || item.type === 'amulet') && Math.random() < 0.25) {
             props.lifesteal = 0.02 + (qLevel * 0.01);
         }
-        
+
         // Elemental damage (weapons only, rare)
         if (item.type === 'weapon' && qLevel >= 3 && Math.random() < 0.2) {
             props.elementalDamage = {
@@ -6632,7 +6631,7 @@ function generateSpecialProperties(item, quality) {
                 amount: qLevel * 2
             };
         }
-        
+
         // Resistances (armor pieces)
         if (['armor', 'helmet', 'boots', 'gloves', 'belt'].includes(item.type) && Math.random() < 0.3) {
             const resistanceTypes = ['physical', 'magic', 'fire', 'ice', 'lightning'];
@@ -6641,7 +6640,7 @@ function generateSpecialProperties(item, quality) {
             props.resistance[resType] = 0.05 + (qLevel * 0.02);
         }
     }
-    
+
     return props;
 }
 
@@ -6650,7 +6649,7 @@ function generateSpecialProperties(item, quality) {
  */
 function assignItemSet(item, quality) {
     if (quality === 'Common' || quality === 'Uncommon') return null;
-    
+
     // Only Epic and Legendary can be set items, and only 30% chance
     if ((quality === 'Epic' || quality === 'Legendary') && Math.random() < 0.3) {
         const setNames = Object.keys(ITEM_SETS);
@@ -6667,7 +6666,7 @@ function assignItemSet(item, quality) {
  */
 function buildItemName(item) {
     const parts = [];
-    
+
     if (item.prefix) parts.push(item.prefix);
     if (item.material) parts.push(item.material);
     if (item.weaponType) parts.push(item.weaponType);
@@ -6676,7 +6675,7 @@ function buildItemName(item) {
         parts.push(item.type.charAt(0).toUpperCase() + item.type.slice(1));
     }
     if (item.suffix) parts.push(item.suffix);
-    
+
     return parts.join(' ') || `${item.quality} ${item.type}`;
 }
 
@@ -6686,20 +6685,20 @@ function buildItemName(item) {
 function calculateItemStats(baseItem, quality) {
     const qualityLevels = { 'Common': 1, 'Uncommon': 2, 'Rare': 3, 'Epic': 4, 'Legendary': 5 };
     const qLevel = qualityLevels[quality] || 1;
-    
+
     let attackPower = baseItem.attackPower || 0;
     let defense = baseItem.defense || 0;
     let maxHp = baseItem.maxHp || 0;
     let speed = baseItem.speed || 0;
     let critChance = baseItem.critChance || 0;
-    
+
     // Apply material multiplier
     if (baseItem.material && MATERIALS[baseItem.material]) {
         const mult = MATERIALS[baseItem.material].multiplier;
         attackPower = Math.floor(attackPower * mult);
         defense = Math.floor(defense * mult);
     }
-    
+
     // Apply prefix bonuses
     if (baseItem.prefix && PREFIXES[baseItem.prefix]) {
         const prefix = PREFIXES[baseItem.prefix];
@@ -6713,7 +6712,7 @@ function calculateItemStats(baseItem, quality) {
             Object.assign(baseItem.resistance, prefix.resistance);
         }
     }
-    
+
     // Apply suffix bonuses
     if (baseItem.suffix && SUFFIXES[baseItem.suffix]) {
         const suffix = SUFFIXES[baseItem.suffix];
@@ -6728,14 +6727,14 @@ function calculateItemStats(baseItem, quality) {
             Object.assign(baseItem.resistance, suffix.resistance);
         }
     }
-    
+
     // Round values
     attackPower = Math.max(1, Math.floor(attackPower));
     defense = Math.max(0, Math.floor(defense));
     maxHp = Math.max(0, Math.floor(maxHp));
     speed = Math.max(0, Math.floor(speed));
     critChance = Math.min(0.5, Math.max(0, critChance)); // Cap at 50%
-    
+
     return { attackPower, defense, maxHp, speed, critChance };
 }
 
@@ -6744,7 +6743,7 @@ function calculateItemStats(baseItem, quality) {
  */
 function generateRandomItem() {
     const rand = Math.random();
-    
+
     // Drop rates in order (highest to lowest):
     // 1. Coin (Gold): 25%
     // 2. Consumable: 20%
@@ -6757,7 +6756,7 @@ function generateRandomItem() {
     // 9. Ring: 1.5%
     // 10. Amulet: 0.5%
     // Total: 100%
-    
+
     if (rand < 0.25) {
         // 25% - Coin (Gold)
         const goldAmount = Phaser.Math.Between(5, 25);
@@ -6783,10 +6782,10 @@ function generateRandomItem() {
         const quality = Phaser.Math.RND.pick(qualities);
         const material = getMaterialForQuality(quality);
         const baseDefense = quality === 'Common' ? Phaser.Math.Between(3, 6) : Phaser.Math.Between(6, 10);
-        
+
         const prefix = getPrefixForQuality(quality);
         const suffix = getSuffixForQuality(quality);
-        
+
         const item = {
             type: 'armor',
             quality: quality,
@@ -6795,14 +6794,14 @@ function generateRandomItem() {
             suffix: suffix,
             defense: baseDefense
         };
-        
+
         const specialProps = generateSpecialProperties(item, quality);
         Object.assign(item, specialProps);
         item.set = assignItemSet(item, quality);
         item.name = buildItemName(item);
         const finalStats = calculateItemStats(item, quality);
         Object.assign(item, finalStats);
-        
+
         return item;
     }
     else if (rand < 0.72) {
@@ -6826,10 +6825,10 @@ function generateRandomItem() {
         const material = getMaterialForQuality(quality);
         const baseDefense = quality === 'Common' ? Phaser.Math.Between(1, 3) : Phaser.Math.Between(3, 5);
         const baseSpeed = quality === 'Common' ? 5 : 10;
-        
+
         const prefix = getPrefixForQuality(quality);
         const suffix = getSuffixForQuality(quality);
-        
+
         const item = {
             type: 'boots',
             quality: quality,
@@ -6839,39 +6838,39 @@ function generateRandomItem() {
             defense: baseDefense,
             speed: baseSpeed
         };
-        
+
         const specialProps = generateSpecialProperties(item, quality);
         Object.assign(item, specialProps);
         item.set = assignItemSet(item, quality);
         item.name = buildItemName(item);
         const finalStats = calculateItemStats(item, quality);
         Object.assign(item, finalStats);
-        
+
         return item;
     }
     else if (rand < 0.95) {
         // 5% - Weapon
         const qualities = ['Common', 'Uncommon', 'Rare'];
         const quality = Phaser.Math.RND.pick(qualities);
-        
+
         // Get weapon type and material
         const weaponType = getWeaponTypeForQuality(quality);
         const material = getMaterialForQuality(quality);
         const weaponData = WEAPON_TYPES[weaponType];
-        
+
         // Base attack power based on quality
         const baseAttack = quality === 'Common' ? Phaser.Math.Between(5, 10) :
-                          quality === 'Uncommon' ? Phaser.Math.Between(10, 15) :
-                          Phaser.Math.Between(15, 20);
-        
+            quality === 'Uncommon' ? Phaser.Math.Between(10, 15) :
+                Phaser.Math.Between(15, 20);
+
         // Apply weapon type modifier
         let attackPower = Math.floor(baseAttack * weaponData.baseAttack);
         let critChance = weaponData.critChance;
-        
+
         // Get prefix and suffix
         const prefix = getPrefixForQuality(quality);
         const suffix = getSuffixForQuality(quality);
-        
+
         // Create base item
         const item = {
             type: 'weapon',
@@ -6884,19 +6883,19 @@ function generateRandomItem() {
             critChance: critChance,
             speed: weaponData.speed
         };
-        
+
         // Add special properties
         const specialProps = generateSpecialProperties(item, quality);
         Object.assign(item, specialProps);
-        
+
         // Assign set
         item.set = assignItemSet(item, quality);
-        
+
         // Build name and calculate final stats
         item.name = buildItemName(item);
         const finalStats = calculateItemStats(item, quality);
         Object.assign(item, finalStats);
-        
+
         return item;
     }
     else if (rand < 0.98) {
@@ -6906,10 +6905,10 @@ function generateRandomItem() {
         const material = getMaterialForQuality(quality);
         const baseDefense = quality === 'Common' ? Phaser.Math.Between(2, 4) : Phaser.Math.Between(4, 6);
         const baseHp = quality === 'Common' ? 10 : 15;
-        
+
         const prefix = getPrefixForQuality(quality);
         const suffix = getSuffixForQuality(quality);
-        
+
         const item = {
             type: 'belt',
             quality: quality,
@@ -6919,14 +6918,14 @@ function generateRandomItem() {
             defense: baseDefense,
             maxHp: baseHp
         };
-        
+
         const specialProps = generateSpecialProperties(item, quality);
         Object.assign(item, specialProps);
         item.set = assignItemSet(item, quality);
         item.name = buildItemName(item);
         const finalStats = calculateItemStats(item, quality);
         Object.assign(item, finalStats);
-        
+
         return item;
     }
     else if (rand < 0.995) {
@@ -6934,8 +6933,8 @@ function generateRandomItem() {
         const qualities = ['Common', 'Uncommon', 'Rare'];
         const quality = Phaser.Math.RND.pick(qualities);
         const attackBonus = quality === 'Common' ? Phaser.Math.Between(1, 3) :
-                           quality === 'Uncommon' ? Phaser.Math.Between(3, 5) :
-                           Phaser.Math.Between(5, 8);
+            quality === 'Uncommon' ? Phaser.Math.Between(3, 5) :
+                Phaser.Math.Between(5, 8);
         return {
             type: 'ring',
             name: `${quality} Ring`,
@@ -6950,13 +6949,13 @@ function generateRandomItem() {
         const quality = Phaser.Math.RND.pick(qualities);
         const material = getMaterialForQuality(quality);
         const baseDefense = quality === 'Common' ? Phaser.Math.Between(2, 4) :
-                           quality === 'Uncommon' ? Phaser.Math.Between(4, 6) :
-                           Phaser.Math.Between(6, 10);
+            quality === 'Uncommon' ? Phaser.Math.Between(4, 6) :
+                Phaser.Math.Between(6, 10);
         const baseHp = quality === 'Common' ? 10 : quality === 'Uncommon' ? 20 : 30;
-        
+
         const prefix = getPrefixForQuality(quality);
         const suffix = getSuffixForQuality(quality);
-        
+
         const item = {
             type: 'amulet',
             quality: quality,
@@ -6966,14 +6965,14 @@ function generateRandomItem() {
             defense: baseDefense,
             maxHp: baseHp
         };
-        
+
         const specialProps = generateSpecialProperties(item, quality);
         Object.assign(item, specialProps);
         item.set = assignItemSet(item, quality);
         item.name = buildItemName(item);
         const finalStats = calculateItemStats(item, quality);
         Object.assign(item, finalStats);
-        
+
         return item;
     }
 }
@@ -6989,21 +6988,21 @@ function generateRandomItemOfType(itemType, quality = 'Common') {
         'Epic': 4,
         'Legendary': 5
     };
-    
+
     const qLevel = qualityLevels[quality] || 1;
     const material = getMaterialForQuality(quality);
     const prefix = getPrefixForQuality(quality);
     const suffix = getSuffixForQuality(quality);
-    
+
     let item = {};
-    
-    switch(itemType) {
+
+    switch (itemType) {
         case 'weapon':
             const weaponType = getWeaponTypeForQuality(quality);
             const weaponData = WEAPON_TYPES[weaponType];
             const baseAttack = 5 + (qLevel * 5) + Phaser.Math.Between(0, 5);
             let attackPower = Math.floor(baseAttack * weaponData.baseAttack);
-            
+
             item = {
                 type: 'weapon',
                 quality: quality,
@@ -7102,19 +7101,19 @@ function generateRandomItemOfType(itemType, quality = 'Common') {
         default:
             return generateRandomItem(); // Fallback
     }
-    
+
     // Add special properties
     const specialProps = generateSpecialProperties(item, quality);
     Object.assign(item, specialProps);
-    
+
     // Assign set
     item.set = assignItemSet(item, quality);
-    
+
     // Build name and calculate final stats
     item.name = buildItemName(item);
     const finalStats = calculateItemStats(item, quality);
     Object.assign(item, finalStats);
-    
+
     return item;
 }
 
@@ -7123,11 +7122,11 @@ function generateRandomItemOfType(itemType, quality = 'Common') {
  */
 function dropItemsFromMonster(x, y) {
     const scene = game.scene.scenes[0];
-    
+
     // 70% chance to drop something
     if (Math.random() < 0.7) {
         const item = generateRandomItem();
-        
+
         // Create item sprite on ground
         let spriteKey = 'item_gold';
         if (item.type === 'weapon') spriteKey = 'item_weapon';
@@ -7139,14 +7138,14 @@ function dropItemsFromMonster(x, y) {
         else if (item.type === 'gloves') spriteKey = 'item_gloves';
         else if (item.type === 'belt') spriteKey = 'item_belt';
         else if (item.type === 'consumable') spriteKey = 'item_consumable';
-        
+
         const itemSprite = scene.add.sprite(x, y, spriteKey);
         itemSprite.setDepth(8); // Above tiles, below monsters
-        
+
         // Add slight random offset so items don't stack exactly
         itemSprite.x += Phaser.Math.Between(-10, 10);
         itemSprite.y += Phaser.Math.Between(-10, 10);
-        
+
         // Add pulsing animation to make items noticeable
         scene.tweens.add({
             targets: itemSprite,
@@ -7157,14 +7156,14 @@ function dropItemsFromMonster(x, y) {
             repeat: -1,
             ease: 'Sine.easeInOut'
         });
-        
+
         // Store item data
         item.sprite = itemSprite;
         item.x = itemSprite.x;
         item.y = itemSprite.y;
-        
+
         items.push(item);
-        
+
         // Add chat message for loot drop
         const qualityColor = {
             'Common': 0xcccccc,
@@ -7182,7 +7181,7 @@ function dropItemsFromMonster(x, y) {
  */
 function pickupItem(item, index) {
     const scene = game.scene.scenes[0];
-    
+
     if (item.type === 'gold') {
         // Add gold directly
         playerStats.gold += item.amount;
@@ -7200,11 +7199,11 @@ function pickupItem(item, index) {
         showDamageNumber(item.sprite.x, item.sprite.y, `Picked up ${item.name}`, 0x00ff00);
         playSound('item_pickup');
         console.log(`Picked up: ${item.name} (Inventory: ${playerStats.inventory.length} items)`);
-        
+
         // Refresh inventory UI if open - this will update the display with the new item
         refreshInventory();
     }
-    
+
     // Remove item from ground
     if (item.sprite && item.sprite.active) {
         item.sprite.destroy();
@@ -7245,17 +7244,17 @@ function closeAllInterfaces() {
  */
 function toggleInventory() {
     const scene = game.scene.scenes[0];
-    
+
     // If already open, close it
     if (inventoryVisible) {
         inventoryVisible = false;
         destroyInventoryUI();
         return;
     }
-    
+
     // Close all other interfaces before opening
     closeAllInterfaces();
-    
+
     // Now open inventory
     inventoryVisible = true;
     createInventoryUI();
@@ -7266,30 +7265,30 @@ function toggleInventory() {
  */
 function createInventoryUI() {
     const scene = game.scene.scenes[0];
-    
+
     // Create background panel (centered on screen)
     // Width calculated for 6 columns: 6 slots (60px) + 5 spacings (10px) + padding = ~450px, using 650px for comfortable spacing
     const panelWidth = 650;
     const panelHeight = 600;
     const centerX = scene.cameras.main.width / 2;
     const centerY = scene.cameras.main.height / 2;
-    
+
     // Background
     inventoryPanel = {
         bg: scene.add.rectangle(centerX, centerY, panelWidth, panelHeight, 0x1a1a1a, 0.95)
             .setScrollFactor(0).setDepth(300).setStrokeStyle(3, 0xffffff),
-        title: scene.add.text(centerX, centerY - panelHeight/2 + 20, 'INVENTORY', {
+        title: scene.add.text(centerX, centerY - panelHeight / 2 + 20, 'INVENTORY', {
             fontSize: '28px',
             fill: '#ffffff',
             fontStyle: 'bold'
         }).setScrollFactor(0).setDepth(301).setOrigin(0.5, 0),
-        closeText: scene.add.text(centerX + panelWidth/2 - 20, centerY - panelHeight/2 + 20, 'Press I to Close', {
+        closeText: scene.add.text(centerX + panelWidth / 2 - 20, centerY - panelHeight / 2 + 20, 'Press I to Close', {
             fontSize: '14px',
             fill: '#aaaaaa'
         }).setScrollFactor(0).setDepth(301).setOrigin(1, 0),
         items: []
     };
-    
+
     // Show items
     updateInventoryItems();
 }
@@ -7303,31 +7302,31 @@ function updateInventoryItems() {
         console.warn('⚠️ updateInventoryItems: inventoryPanel is null');
         return;
     }
-    
+
     console.log(`📦 updateInventoryItems: Displaying ${playerStats.inventory.length} items`);
-    
+
     // Always hide tooltip when refreshing inventory items
-    hideItemTooltip();
-    
-        // Clear existing item displays and remove event listeners
-        inventoryPanel.items.forEach(item => {
-            if (item.sprite && item.sprite.active) {
-                // Remove event listeners before destroying
-                if (item.sprite._tooltipHandlers) {
-                    item.sprite.off('pointerover', item.sprite._tooltipHandlers.onPointerOver);
-                    item.sprite.off('pointerout', item.sprite._tooltipHandlers.onPointerOut);
-                    item.sprite._tooltipHandlers = null;
-                }
-                item.sprite.destroy();
+    hideTooltip(true);
+
+    // Clear existing item displays and remove event listeners
+    inventoryPanel.items.forEach(item => {
+        if (item.sprite && item.sprite.active) {
+            // Remove event listeners before destroying
+            if (item.sprite._tooltipHandlers) {
+                item.sprite.off('pointerover', item.sprite._tooltipHandlers.onPointerOver);
+                item.sprite.off('pointerout', item.sprite._tooltipHandlers.onPointerOut);
+                item.sprite._tooltipHandlers = null;
             }
-            if (item.text && item.text.active) item.text.destroy();
-            if (item.borderRect && item.borderRect.active) item.borderRect.destroy();
-        });
+            item.sprite.destroy();
+        }
+        if (item.text && item.text.active) item.text.destroy();
+        if (item.borderRect && item.borderRect.active) item.borderRect.destroy();
+    });
     inventoryPanel.items = [];
-    
+
     // Ensure tooltip is cleared after destroying items
-    hideItemTooltip();
-    
+    hideTooltip(true);
+
     const slotSize = 60;
     const slotsPerRow = 6;
     const spacing = 10;
@@ -7335,12 +7334,12 @@ function updateInventoryItems() {
     const panelHeight = inventoryPanel.bg.height;
     const panelCenterX = inventoryPanel.bg.x;
     const panelCenterY = inventoryPanel.bg.y;
-    
+
     // Calculate grid start position (centered in panel)
     const gridWidth = slotsPerRow * slotSize + (slotsPerRow - 1) * spacing;
     const startX = panelCenterX - gridWidth / 2 + slotSize / 2;
     const startY = panelCenterY - panelHeight / 2 + 80;
-    
+
     // Display items
     console.log(`📦 Rendering ${playerStats.inventory.length} items in inventory UI`);
     playerStats.inventory.forEach((item, index) => {
@@ -7349,7 +7348,7 @@ function updateInventoryItems() {
         const col = index % slotsPerRow;
         const x = startX + col * (slotSize + spacing);
         const y = startY + row * (slotSize + spacing);
-        
+
         // Get item sprite key
         let spriteKey = 'item_weapon';
         if (item.type === 'weapon') {
@@ -7371,11 +7370,11 @@ function updateInventoryItems() {
         else if (item.type === 'belt') spriteKey = 'item_belt';
         else if (item.type === 'consumable') spriteKey = 'item_consumable';
         else if (item.type === 'gold') spriteKey = 'item_gold';
-        
+
         // Create item sprite
         const itemSprite = scene.add.sprite(x, y, spriteKey);
         itemSprite.setScrollFactor(0).setDepth(302).setScale(0.8);
-        
+
         // Add quality border around the sprite
         const qualityColor = QUALITY_COLORS[item.quality] || QUALITY_COLORS['Common'];
         const borderWidth = 2;
@@ -7384,58 +7383,56 @@ function updateInventoryItems() {
             .setStrokeStyle(borderWidth, qualityColor)
             .setScrollFactor(0)
             .setDepth(300.5); // Above inventory panel bg but below sprite
-        
+
         // Create item name text (small, below sprite)
-        const itemText = scene.add.text(x, y + slotSize/2 + 5, item.name, {
+        const itemText = scene.add.text(x, y + slotSize / 2 + 5, item.name, {
             fontSize: '10px',
             fill: '#ffffff',
             wordWrap: { width: slotSize }
         }).setScrollFactor(0).setDepth(302).setOrigin(0.5, 0);
-        
+
         // Make items interactive for tooltips
         itemSprite.setInteractive({ useHandCursor: true });
-        
+
         // Store display item object for cleanup
         const displayItem = {
             sprite: itemSprite,
             text: itemText,
             borderRect: borderRect
         };
-        
+
         // Store cleanup function on sprite for proper removal
         const onPointerOver = () => {
-            // Hide any existing tooltip first
-            hideItemTooltip();
-            // Show new tooltip (now includes action hints)
-            showItemTooltip(item, x, y);
+            // Show new unified tooltip (includes action hints)
+            showTooltip(item, x, y, 'inventory');
         };
-        
+
         const onPointerOut = () => {
-            hideItemTooltip();
+            hideTooltip();
         };
-        
+
         itemSprite.on('pointerover', onPointerOver);
         itemSprite.on('pointerout', onPointerOut);
-        
+
         // Store cleanup handlers
         itemSprite._tooltipHandlers = { onPointerOver, onPointerOut };
-        
+
         // Click to equip (only for equippable items)
         const equippableTypes = ['weapon', 'armor', 'helmet', 'ring', 'amulet', 'boots', 'gloves', 'belt'];
         if (equippableTypes.includes(item.type)) {
             itemSprite.on('pointerdown', () => {
                 equipItemFromInventory(item, index);
-                hideItemTooltip(); // Hide tooltip after equipping
+                hideTooltip(true); // Hide tooltip immediately after equipping
             });
         }
         // Click to use consumables
         else if (item.type === 'consumable' && item.healAmount) {
             itemSprite.on('pointerdown', () => {
                 useConsumable(item, index);
-                hideItemTooltip(); // Hide tooltip after using
+                hideTooltip(true); // Hide tooltip immediately after using
             });
         }
-        
+
         inventoryPanel.items.push({
             sprite: itemSprite,
             text: itemText,
@@ -7443,7 +7440,7 @@ function updateInventoryItems() {
             item: item
         });
     });
-    
+
     // Show empty message if no items
     if (playerStats.inventory.length === 0) {
         const emptyText = scene.add.text(
@@ -7461,232 +7458,164 @@ function updateInventoryItems() {
 }
 
 /**
- * Show item tooltip
+ * showTooltip - Unified tooltip system for Inventory, Equipment, and Shop
+ * @param {Object} item - The item data object
+ * @param {number} x - Pointer X coordinate
+ * @param {number} y - Pointer Y coordinate
+ * @param {string} context - 'inventory', 'equipment', 'shop_buy', or 'shop_sell'
  */
-function showItemTooltip(item, x, y) {
+function showTooltip(item, x, y, context = 'inventory') {
     const scene = game.scene.scenes[0];
-    
-    // Only show tooltips when inventory is visible
-    if (!inventoryVisible || !inventoryPanel) {
-        return;
+    if (!item) return;
+
+
+
+    // Clear any existing tooltip or hide timer immediately
+    if (tooltipHideTimer) {
+        scene.time.removeEvent(tooltipHideTimer);
+        tooltipHideTimer = null;
     }
-    
-    // Always hide any existing tooltip first
-    if (inventoryTooltip) {
-        hideItemTooltip();
-    }
-    
-    // Build tooltip text - always show basic info
+    hideTooltip(true); // Force immediate hide of previous
+
     let tooltipLines = [];
-    
-    // Always add name if it exists
-    if (item.name) {
-        tooltipLines.push(item.name);
-    } else {
-        tooltipLines.push('Unknown Item');
-    }
-    
-    // Always add quality if it exists
+
+    // 1. Header: Name
+    tooltipLines.push(item.name || 'Unknown Item');
+
+    // 2. Sub-header: Quality and Type
     if (item.quality) {
         tooltipLines.push(`Quality: ${item.quality}`);
     }
-    
-    // Always add type if it exists
     if (item.type) {
-        tooltipLines.push(`Type: ${item.type.charAt(0).toUpperCase() + item.type.slice(1)}`);
+        const typeStr = item.type.charAt(0).toUpperCase() + item.type.slice(1);
+        tooltipLines.push(`Type: ${typeStr}`);
     }
-    
-    // Show material and weapon type if applicable
-    if (item.material) {
-        tooltipLines.push(`Material: ${item.material}`);
-    }
-    if (item.weaponType) {
-        tooltipLines.push(`Weapon Type: ${item.weaponType}`);
-    }
-    
-    // Show relevant stats for each item type
-    if (item.type === 'weapon') {
-        if (item.attackPower) tooltipLines.push(`Attack: +${item.attackPower}`);
-        if (item.critChance) tooltipLines.push(`Crit Chance: +${(item.critChance * 100).toFixed(1)}%`);
-        if (item.speed) tooltipLines.push(`Speed: ${(item.speed * 100).toFixed(0)}%`);
-    } else if (item.type === 'armor') {
-        if (item.defense) tooltipLines.push(`Defense: +${item.defense}`);
-    } else if (item.type === 'helmet') {
-        if (item.defense) tooltipLines.push(`Defense: +${item.defense}`);
-    } else if (item.type === 'ring') {
-        if (item.attackPower) tooltipLines.push(`Attack: +${item.attackPower}`);
-        if (item.defense) tooltipLines.push(`Defense: +${item.defense}`);
-        if (item.critChance) tooltipLines.push(`Crit Chance: +${(item.critChance * 100).toFixed(1)}%`);
-    } else if (item.type === 'amulet') {
-        if (item.defense) tooltipLines.push(`Defense: +${item.defense}`);
-        if (item.maxHp) tooltipLines.push(`Max HP: +${item.maxHp}`);
-        if (item.lifesteal) tooltipLines.push(`Lifesteal: +${(item.lifesteal * 100).toFixed(1)}%`);
-    } else if (item.type === 'boots') {
-        if (item.defense) tooltipLines.push(`Defense: +${item.defense}`);
-        if (item.speed) tooltipLines.push(`Speed: +${item.speed}`);
-    } else if (item.type === 'gloves') {
-        if (item.defense) tooltipLines.push(`Defense: +${item.defense}`);
-        if (item.attackPower) tooltipLines.push(`Attack: +${item.attackPower}`);
-    } else if (item.type === 'belt') {
-        if (item.defense) tooltipLines.push(`Defense: +${item.defense}`);
-        if (item.maxHp) tooltipLines.push(`Max HP: +${item.maxHp}`);
-    } else if (item.type === 'consumable') {
-        if (item.healAmount) tooltipLines.push(`Heal: +${item.healAmount} HP`);
-    }
-    
-    // Show special properties
-    if (item.lifesteal && item.type !== 'amulet') {
-        tooltipLines.push(`Lifesteal: +${(item.lifesteal * 100).toFixed(1)}%`);
-    }
-    if (item.elementalDamage) {
-        tooltipLines.push(`${item.elementalDamage.type} Damage: +${item.elementalDamage.amount}`);
-    }
-    if (item.resistance) {
-        Object.keys(item.resistance).forEach(resType => {
-            tooltipLines.push(`${resType.charAt(0).toUpperCase() + resType.slice(1)} Resist: +${(item.resistance[resType] * 100).toFixed(1)}%`);
-        });
-    }
-    
-    // Show set information
-    if (item.set) {
+
+    // 3. Stats
+    if (item.attackPower) tooltipLines.push(`Attack: +${item.attackPower}`);
+    if (item.defense) tooltipLines.push(`Defense: +${item.defense}`);
+    if (item.maxHp) tooltipLines.push(`Max HP: +${item.maxHp}`);
+    if (item.healAmount) tooltipLines.push(`Heal: ${item.healAmount} HP`);
+    if (item.speed) tooltipLines.push(`Speed: +${item.speed}`);
+    if (item.critChance) tooltipLines.push(`Crit: +${(item.critChance * 100).toFixed(1)}%`);
+    if (item.lifesteal) tooltipLines.push(`Lifesteal: +${(item.lifesteal * 100).toFixed(1)}%`);
+
+    // 4. Set Info
+    if (item.set && ITEM_SETS && ITEM_SETS[item.set]) {
         tooltipLines.push('');
         tooltipLines.push(`Set: ${item.set}`);
         const setInfo = ITEM_SETS[item.set];
-        if (setInfo) {
-            const pieceCount = setInfo.pieces.length;
-            Object.keys(setInfo.bonuses).forEach(count => {
-                if (parseInt(count) <= pieceCount) {
-                    const bonus = setInfo.bonuses[count];
-                    const bonusText = Object.keys(bonus).map(key => {
-                        if (key === 'attackBonus') return `+${(bonus[key] * 100).toFixed(0)}% Attack`;
-                        if (key === 'defenseBonus') return `+${(bonus[key] * 100).toFixed(0)}% Defense`;
-                        if (key === 'hpBonus') return `+${(bonus[key] * 100).toFixed(0)}% HP`;
-                        if (key === 'critBonus') return `+${(bonus[key] * 100).toFixed(0)}% Crit`;
-                        if (key === 'speedBonus') return `+${(bonus[key] * 100).toFixed(0)}% Speed`;
-                        if (key === 'lifesteal') return `+${(bonus[key] * 100).toFixed(0)}% Lifesteal`;
-                        if (key === 'resistance') {
-                            return Object.keys(bonus[key]).map(r => `${r} Resist +${(bonus[key][r] * 100).toFixed(0)}%`).join(', ');
-                        }
-                        return `${key}: ${bonus[key]}`;
-                    }).join(', ');
-                    tooltipLines.push(`(${count} pieces): ${bonusText}`);
-                }
-            });
+        if (setInfo && setInfo.pieces) {
+            tooltipLines.push(`Pieces: ${setInfo.pieces.join(', ')}`);
         }
     }
-    
-    // Add action hint based on item type
-    const equippableTypes = ['weapon', 'armor', 'helmet', 'ring', 'amulet', 'boots', 'gloves', 'belt'];
-    if (equippableTypes.includes(item.type)) {
-        tooltipLines.push(''); // Empty line
-        tooltipLines.push('Click to equip');
-    } else if (item.type === 'consumable') {
-        tooltipLines.push(''); // Empty line
-        tooltipLines.push('Click to use');
+
+    // 5. Context-Specific Actions & Prices
+    if (context === 'inventory') {
+        const equippableTypes = ['weapon', 'armor', 'helmet', 'ring', 'amulet', 'boots', 'gloves', 'belt'];
+        if (equippableTypes.includes(item.type)) {
+            tooltipLines.push('');
+            tooltipLines.push('Click to Equip');
+        } else if (item.type === 'consumable') {
+            tooltipLines.push('');
+            tooltipLines.push('Click to Use');
+        }
+    } else if (context === 'equipment') {
+        tooltipLines.push('');
+        tooltipLines.push('Click to Unequip');
+    } else if (context === 'shop_buy') {
+        tooltipLines.push('');
+        tooltipLines.push(`Price: ${item.price || 0} Gold`);
+        tooltipLines.push('Click to Buy');
+    } else if (context === 'shop_sell') {
+        const sellPrice = item.price ? Math.floor(item.price * 0.5) : (typeof calculateItemSellPrice === 'function' ? calculateItemSellPrice(item) : 0);
+        tooltipLines.push('');
+        tooltipLines.push(`Value: ${sellPrice} Gold`);
+        tooltipLines.push('Click to Sell');
     }
-    
+
     const tooltipText = tooltipLines.join('\n');
-    const qualityColor = QUALITY_COLORS[item.quality] || QUALITY_COLORS['Common'];
-    
-    // Create tooltip text first to measure size
-    const tooltip = scene.add.text(0, 0, tooltipText, {
+    const qualityColor = (QUALITY_COLORS && QUALITY_COLORS[item.quality]) ? QUALITY_COLORS[item.quality] : 0xffffff;
+
+    console.log(`🔍 showTooltip: Lines count=${tooltipLines.length}, text length=${tooltipText.length}`);
+
+    // Create text object
+    const text = scene.add.text(0, 0, tooltipText, {
         fontSize: '14px',
         fill: '#ffffff',
-        wordWrap: { width: 180 },
-        align: 'left'
-    }).setScrollFactor(0).setDepth(311);
-    
-    // Get text bounds
-    const textBounds = tooltip.getBounds();
-    const padding = 10;
-    const tooltipWidth = textBounds.width + padding * 2;
-    const tooltipHeight = textBounds.height + padding * 2;
-    
-    // Position tooltip to the right of item, but keep on screen
-    let tooltipX = x + 50;
-    let tooltipY = y;
-    
-    // Adjust if tooltip would go off screen
-    if (tooltipX + tooltipWidth > scene.cameras.main.width) {
-        tooltipX = x - tooltipWidth - 10; // Show to the left instead
+        padding: { x: 10, y: 10 },
+        wordWrap: { width: 220 }
+    }).setScrollFactor(0).setDepth(1001).setOrigin(0);
+
+
+    // Position logic
+    const bounds = text.getBounds();
+    let tx = x + 20;
+    let ty = y + 20;
+
+    // Boundary checks
+    if (tx + bounds.width > scene.cameras.main.width) {
+        tx = x - bounds.width - 20;
     }
-    
-    // Create tooltip background
-    const tooltipBg = scene.add.rectangle(tooltipX + tooltipWidth/2, tooltipY, tooltipWidth, tooltipHeight, 0x000000, 0.95)
-        .setScrollFactor(0).setDepth(310).setStrokeStyle(2, qualityColor);
-    
-    // Position text
-    tooltip.x = tooltipX + padding;
-    tooltip.y = tooltipY;
-    tooltip.setOrigin(0, 0.5);
-    
-    inventoryTooltip = {
-        bg: tooltipBg,
-        text: tooltip
-    };
+    if (ty + bounds.height > scene.cameras.main.height) {
+        ty = y - bounds.height - 20;
+    }
+
+    text.setPosition(tx, ty);
+
+    // Optional background rectangle for better visibility with quality border
+    const bg = scene.add.rectangle(tx + bounds.width / 2, ty + bounds.height / 2, bounds.width, bounds.height, 0x000000, 0.9)
+        .setScrollFactor(0).setDepth(999).setStrokeStyle(2, qualityColor);
+
+    currentTooltip = { text, bg };
 }
 
 /**
- * Hide item tooltip
+ * hideTooltip - Hides the active tooltip
+ * @param {boolean} immediate - If true, destroys immediately without delay
  */
-function hideItemTooltip() {
-    if (inventoryTooltip) {
-        try {
-            if (inventoryTooltip.bg) {
-                if (inventoryTooltip.bg.active) {
-                    inventoryTooltip.bg.destroy();
-                } else {
-                    // Already destroyed, just clear reference
-                }
-            }
-            if (inventoryTooltip.text) {
-                if (inventoryTooltip.text.active) {
-                    inventoryTooltip.text.destroy();
-                } else {
-                    // Already destroyed, just clear reference
-                }
-            }
-        } catch (e) {
-            // Ignore errors if already destroyed
-            console.warn('Error destroying tooltip:', e);
-        }
-        inventoryTooltip = null;
-    }
-    
-    // Also check for any orphaned tooltip text objects in the scene
+function hideTooltip(immediate = false) {
     const scene = game.scene.scenes[0];
-    if (scene) {
-        // Find and destroy any text objects with tooltip-like content that shouldn't be on the map
-        scene.children.list.forEach(child => {
-            if (child.type === 'Text' && child.active && child.depth === 311) {
-                const text = child.text || '';
-                if (text.includes('Attack: +') || text.includes('Defense: +') || text.includes('Heal: +')) {
-                    // This looks like an orphaned tooltip, destroy it
-                    try {
-                        child.destroy();
-                    } catch (e) {
-                        // Ignore
-                    }
-                }
-            }
-        });
+
+    const performHide = () => {
+        if (currentTooltip) {
+            if (currentTooltip.text) currentTooltip.text.destroy();
+            if (currentTooltip.bg) currentTooltip.bg.destroy();
+            currentTooltip = null;
+        }
+    };
+
+    if (immediate) {
+        performHide();
+    } else {
+        // Debounce hide slightly to prevent flickering during rapid movement
+        if (!tooltipHideTimer && scene && scene.time) {
+            tooltipHideTimer = scene.time.delayedCall(50, () => {
+                performHide();
+                tooltipHideTimer = null;
+            });
+        }
     }
 }
+
+// Also check for any orphaned tooltip text objects in the scene
+const scene = game.scene.scenes[0];
+
 
 /**
  * Destroy inventory UI
  */
 function destroyInventoryUI() {
     const scene = game.scene.scenes[0];
-    
+
     // Always hide tooltip first when closing inventory
-    hideItemTooltip();
-    
+    hideTooltip(true);
+
     if (inventoryPanel) {
         if (inventoryPanel.bg && inventoryPanel.bg.active) inventoryPanel.bg.destroy();
         if (inventoryPanel.title && inventoryPanel.title.active) inventoryPanel.title.destroy();
         if (inventoryPanel.closeText && inventoryPanel.closeText.active) inventoryPanel.closeText.destroy();
-        
+
         inventoryPanel.items.forEach(item => {
             if (item.sprite && item.sprite.active) {
                 // Remove event listeners before destroying
@@ -7700,14 +7629,14 @@ function destroyInventoryUI() {
             if (item.text && item.text.active) item.text.destroy();
             if (item.borderRect && item.borderRect.active) item.borderRect.destroy();
         });
-        
+
         inventoryPanel.items = [];
-        
+
         inventoryPanel = null;
     }
-    
+
     // Final cleanup - ensure tooltip is gone
-    hideItemTooltip();
+    hideTooltip(true);
     inventoryVisible = false;
 }
 
@@ -7732,17 +7661,17 @@ let lastInventoryCount = 0;
  */
 function refreshInventory() {
     console.log(`🔄 refreshInventory called - inventoryVisible: ${inventoryVisible}, equipmentVisible: ${equipmentVisible}, items: ${playerStats.inventory.length}`);
-    
+
     // Refresh "I" inventory panel if open
     if (inventoryVisible && inventoryPanel) {
         updateInventoryItems();
     }
-    
+
     // Refresh "E" equipment panel inventory display if open
     if (equipmentVisible && equipmentPanel) {
         updateEquipmentInventoryItems();
     }
-    
+
     lastInventoryCount = playerStats.inventory.length;
 }
 
@@ -7756,33 +7685,33 @@ function equipItemFromInventory(item, inventoryIndex) {
         showDamageNumber(player.x, player.y - 40, 'Cannot equip this item', 0xff0000);
         return;
     }
-    
+
     const slot = item.type; // Slot name matches item type
-    
+
     // If slot already has an item, unequip it first (return to inventory)
     if (playerStats.equipment[slot]) {
         playerStats.inventory.push(playerStats.equipment[slot]);
     }
-    
+
     // Equip the new item
     playerStats.equipment[slot] = item;
-    
+
     // Remove from inventory
     playerStats.inventory.splice(inventoryIndex, 1);
-    
+
     // Update stats
     updatePlayerStats();
-    
+
     // Refresh UIs
     refreshInventory();
     if (equipmentVisible) {
         refreshEquipment();
     }
-    
+
     // Show feedback
     showDamageNumber(player.x, player.y - 40, `Equipped ${item.name}`, 0x00ffff);
     console.log(`Equipped ${item.name} in ${slot} slot`);
-    
+
     // Update weapon sprite if weapon was equipped
     if (slot === 'weapon') {
         updateWeaponSprite();
@@ -7796,26 +7725,26 @@ function useConsumable(item, inventoryIndex) {
     if (item.type !== 'consumable' || !item.healAmount) {
         return;
     }
-    
+
     // Heal the player
     const healAmount = item.healAmount;
     const oldHp = playerStats.hp;
     playerStats.hp = Math.min(playerStats.hp + healAmount, playerStats.maxHp);
     const actualHeal = playerStats.hp - oldHp;
-    
+
     // Remove item from inventory
     playerStats.inventory.splice(inventoryIndex, 1);
-    
+
     // Refresh inventory UI
     refreshInventory();
-    
+
     // Show feedback
     if (actualHeal > 0) {
         showDamageNumber(player.x, player.y - 40, `+${actualHeal} HP`, 0x00ff00, false, 'healing');
     } else {
         showDamageNumber(player.x, player.y - 40, 'HP Full', 0xffff00);
     }
-    
+
     console.log(`Used ${item.name} - healed ${actualHeal} HP`);
 }
 
@@ -7824,24 +7753,24 @@ function useConsumable(item, inventoryIndex) {
  */
 function unequipItem(slot) {
     if (!playerStats.equipment[slot]) return;
-    
+
     const item = playerStats.equipment[slot];
     playerStats.equipment[slot] = null;
-    
+
     // Return to inventory
     playerStats.inventory.push(item);
-    
+
     // Update stats
     updatePlayerStats();
-    
+
     // Refresh UIs
     refreshInventory();
     refreshEquipment();
-    
+
     // Show feedback
     showDamageNumber(player.x, player.y - 40, `Unequipped ${item.name}`, 0xffff00);
     console.log(`Unequipped ${item.name} from ${slot} slot`);
-    
+
     // Update weapon sprite if weapon was unequipped
     if (slot === 'weapon') {
         updateWeaponSprite();
@@ -7857,46 +7786,46 @@ function updatePlayerStats() {
     playerStats.defense = playerStats.baseDefense;
     let maxHpBonus = 0;
     let speedBonus = 0;
-    
+
     // Reset special properties
     playerStats.critChance = 0;
     playerStats.lifesteal = 0;
     playerStats.elementalDamage = null;
     playerStats.resistances = {};
     playerStats.attackSpeedMultiplier = 1.0;
-    
+
     // Track set pieces for set bonuses
     const setPieces = {};
-    
+
     // Add bonuses from all equipment
     Object.values(playerStats.equipment).forEach(item => {
         if (!item) return;
-        
+
         // Attack bonuses (weapon, ring, gloves)
         if (item.attackPower) {
             playerStats.attack += item.attackPower;
         }
-        
+
         // Defense bonuses (armor, helmet, ring, amulet, boots, gloves, belt)
         if (item.defense) {
             playerStats.defense += item.defense;
         }
-        
+
         // Max HP bonus (amulet, belt)
         if (item.maxHp) {
             maxHpBonus += item.maxHp;
         }
-        
+
         // Speed bonus (boots)
         if (item.speed) {
             speedBonus += item.speed;
         }
-        
+
         // Weapon speed multiplier
         if (item.type === 'weapon' && item.speed) {
             playerStats.attackSpeedMultiplier = item.speed;
         }
-        
+
         // Special properties
         if (item.critChance) {
             playerStats.critChance += item.critChance;
@@ -7915,7 +7844,7 @@ function updatePlayerStats() {
                 playerStats.resistances[resType] = (playerStats.resistances[resType] || 0) + item.resistance[resType];
             });
         }
-        
+
         // Track set pieces
         if (item.set) {
             if (!setPieces[item.set]) {
@@ -7924,21 +7853,21 @@ function updatePlayerStats() {
             setPieces[item.set].push(item.type);
         }
     });
-    
+
     // Apply set bonuses
     Object.keys(setPieces).forEach(setName => {
         const setInfo = ITEM_SETS[setName];
         if (!setInfo) return;
-        
+
         const equippedPieces = setPieces[setName];
         const pieceCount = equippedPieces.length;
-        
+
         // Find the highest bonus tier we qualify for
         const bonusTiers = Object.keys(setInfo.bonuses).map(Number).sort((a, b) => b - a);
         for (const tier of bonusTiers) {
             if (pieceCount >= tier) {
                 const bonus = setInfo.bonuses[tier];
-                
+
                 // Apply percentage bonuses
                 if (bonus.attackBonus) {
                     playerStats.attack = Math.floor(playerStats.attack * (1 + bonus.attackBonus));
@@ -7963,15 +7892,15 @@ function updatePlayerStats() {
                         playerStats.resistances[resType] = (playerStats.resistances[resType] || 0) + bonus.resistance[resType];
                     });
                 }
-                
+
                 break; // Only apply the highest tier
             }
         }
     });
-    
+
     // Cap crit chance at 50%
     playerStats.critChance = Math.min(0.5, playerStats.critChance);
-    
+
     // Apply max HP bonus (increase max HP, but don't reduce current HP if it would go below 1)
     if (maxHpBonus > 0) {
         const oldMaxHp = playerStats.maxHp;
@@ -7981,7 +7910,7 @@ function updatePlayerStats() {
             playerStats.hp = playerStats.maxHp;
         }
     }
-    
+
     // Store speed bonus for attack speed calculation
     playerStats.speedBonus = speedBonus;
 }
@@ -7991,17 +7920,17 @@ function updatePlayerStats() {
  */
 function toggleEquipment() {
     const scene = game.scene.scenes[0];
-    
+
     // If already open, close it
     if (equipmentVisible) {
         equipmentVisible = false;
         destroyEquipmentUI();
         return;
     }
-    
+
     // Close all other interfaces before opening
     closeAllInterfaces();
-    
+
     // Now open equipment
     equipmentVisible = true;
     createEquipmentUI();
@@ -8012,7 +7941,7 @@ function toggleEquipment() {
  */
 function createEquipmentUI() {
     const scene = game.scene.scenes[0];
-    
+
     // Calculate panel dimensions - each panel is half the game width
     const gameWidth = 1024;
     const gameHeight = 768;
@@ -8021,27 +7950,27 @@ function createEquipmentUI() {
     const leftPanelX = panelWidth / 2;
     const rightPanelX = panelWidth + panelWidth / 2;
     const centerY = gameHeight / 2;
-    
+
     // Left panel - Equipment
     const leftBg = scene.add.rectangle(leftPanelX, centerY, panelWidth, panelHeight, 0x1a1a1a, 0.95)
         .setScrollFactor(0).setDepth(300).setStrokeStyle(3, 0xffffff);
-    
+
     // Right panel - Inventory
     const rightBg = scene.add.rectangle(rightPanelX, centerY, panelWidth, panelHeight, 0x1a1a1a, 0.95)
         .setScrollFactor(0).setDepth(300).setStrokeStyle(3, 0xffffff);
-    
+
     // Divider line between panels (using graphics for reliability)
     const dividerGraphics = scene.add.graphics();
     dividerGraphics.lineStyle(2, 0xffffff, 0.5);
     dividerGraphics.lineBetween(panelWidth, 0, panelWidth, gameHeight);
     dividerGraphics.setScrollFactor(0).setDepth(301);
     const divider = dividerGraphics;
-    
+
     // Define scrollable area dimensions first
     const inventoryStartY = 90; // Start below title (reduced for less padding)
     const inventoryEndY = gameHeight - 20; // Leave some space at bottom
     const inventoryVisibleHeight = inventoryEndY - inventoryStartY;
-    
+
     // Create scrollable container for inventory items
     // Container starts higher to show first items fully when scrollPosition = minScroll
     // Need enough space for first item icon (60px) + text label below (20px) + padding
@@ -8052,29 +7981,29 @@ function createEquipmentUI() {
     const containerOffset = 70; // Increased to ensure first row is fully visible
     const inventoryContainer = scene.add.container(rightPanelX, inventoryStartY - containerOffset);
     inventoryContainer.setScrollFactor(0).setDepth(301);
-    
+
     // Create mask for the scrollable area (visible area in right panel)
     // Start mask well above inventoryStartY to prevent clipping of first row
     const maskTopOffset = 40; // Increased further to show entire first row sprites
     const inventoryMask = scene.make.graphics();
     inventoryMask.fillStyle(0xffffff);
-    inventoryMask.fillRect(rightPanelX - panelWidth/2, inventoryStartY - maskTopOffset, panelWidth, inventoryVisibleHeight + maskTopOffset);
+    inventoryMask.fillRect(rightPanelX - panelWidth / 2, inventoryStartY - maskTopOffset, panelWidth, inventoryVisibleHeight + maskTopOffset);
     inventoryMask.setScrollFactor(0).setDepth(301);
     const maskGeometry = inventoryMask.createGeometryMask();
-    
+
     // Create scrollbar
     const scrollbarWidth = 12;
-    const scrollbarX = rightPanelX + panelWidth/2 - scrollbarWidth - 10;
-    const scrollbarTrack = scene.add.rectangle(scrollbarX, inventoryStartY + inventoryVisibleHeight/2, scrollbarWidth, inventoryVisibleHeight, 0x333333, 0.8)
+    const scrollbarX = rightPanelX + panelWidth / 2 - scrollbarWidth - 10;
+    const scrollbarTrack = scene.add.rectangle(scrollbarX, inventoryStartY + inventoryVisibleHeight / 2, scrollbarWidth, inventoryVisibleHeight, 0x333333, 0.8)
         .setScrollFactor(0).setDepth(303).setStrokeStyle(1, 0x555555)
         .setInteractive({ useHandCursor: true });
-    
+
     const scrollbarThumbHeight = 40; // Will be adjusted based on content
     // Thumb starts at the top of the track (will be repositioned when content is loaded)
-    const scrollbarThumb = scene.add.rectangle(scrollbarX, inventoryStartY + scrollbarThumbHeight/2, scrollbarWidth - 4, scrollbarThumbHeight, 0x666666, 1)
+    const scrollbarThumb = scene.add.rectangle(scrollbarX, inventoryStartY + scrollbarThumbHeight / 2, scrollbarWidth - 4, scrollbarThumbHeight, 0x666666, 1)
         .setScrollFactor(0).setDepth(304).setStrokeStyle(1, 0x888888)
         .setInteractive({ useHandCursor: true });
-    
+
     // Scroll state
     // Allow negative scroll to bring first items fully into view
     // Container starts at inventoryStartY - containerOffset
@@ -8087,7 +8016,7 @@ function createEquipmentUI() {
     let isDragging = false;
     let dragStartY = 0;
     let dragStartScroll = 0;
-    
+
     // Scrollbar drag handlers (only when equipment panel is visible)
     const handlePointerDown = (pointer) => {
         if (equipmentVisible) {
@@ -8107,7 +8036,7 @@ function createEquipmentUI() {
             }
         }
     };
-    
+
     const handlePointerMove = (pointer) => {
         if (equipmentVisible && isDragging && pointer.isDown) {
             const deltaY = pointer.y - dragStartY;
@@ -8121,11 +8050,11 @@ function createEquipmentUI() {
             }
         }
     };
-    
+
     const handlePointerUp = () => {
         isDragging = false;
     };
-    
+
     const handleWheel = (pointer, gameObjects, deltaX, deltaY, deltaZ) => {
         if (equipmentVisible && maxScroll > 0) {
             // Check if pointer is over the right panel (inventory area)
@@ -8137,22 +8066,22 @@ function createEquipmentUI() {
             }
         }
     };
-    
+
     scene.input.on('pointerdown', handlePointerDown);
     scene.input.on('pointermove', handlePointerMove);
     scene.input.on('pointerup', handlePointerUp);
     scene.input.on('wheel', handleWheel);
-    
+
     // Function to update scroll position
     function setScrollPosition(newPosition) {
         // Allow slight negative scroll to bring first item fully into view
         const oldScrollPosition = scrollPosition;
         scrollPosition = Math.max(minScroll, Math.min(maxScroll, newPosition));
-        
+
         // Update container position
         const offset = equipmentPanel ? equipmentPanel.containerOffset : containerOffset;
         inventoryContainer.y = inventoryStartY - offset - scrollPosition;
-        
+
         // Update scrollbar thumb position
         if (maxScroll > 0) {
             // Map scrollPosition from [minScroll, maxScroll] to [0, 1] for thumb positioning
@@ -8160,25 +8089,25 @@ function createEquipmentUI() {
             const normalizedScroll = scrollRange > 0 ? (scrollPosition - minScroll) / scrollRange : 0;
             const scrollRatio = Math.min(1, Math.max(0, normalizedScroll));
             const availableTrackHeight = inventoryVisibleHeight - scrollbarThumb.height;
-            
+
             // Position thumb: when scrollRatio = 0 (at minScroll), thumb at top
             // when scrollRatio = 1 (at maxScroll), thumb at bottom
             const thumbY = inventoryStartY + scrollRatio * availableTrackHeight;
-            let thumbCenterY = thumbY + scrollbarThumb.height/2;
-            
+            let thumbCenterY = thumbY + scrollbarThumb.height / 2;
+
             // Ensure thumb reaches absolute top when at or near minScroll
             if (scrollPosition <= minScroll + 0.5) {
                 // Force thumb to absolute top of track
-                thumbCenterY = inventoryStartY + scrollbarThumb.height/2;
+                thumbCenterY = inventoryStartY + scrollbarThumb.height / 2;
             }
-            
+
             scrollbarThumb.y = thumbCenterY;
         } else {
             // Reset thumb to top when no scrolling needed
-            scrollbarThumb.y = inventoryStartY + scrollbarThumb.height/2;
+            scrollbarThumb.y = inventoryStartY + scrollbarThumb.height / 2;
         }
     }
-    
+
     equipmentPanel = {
         leftBg: leftBg,
         rightBg: rightBg,
@@ -8219,10 +8148,10 @@ function createEquipmentUI() {
             wheel: handleWheel
         }
     };
-    
+
     // Show equipment slots in left panel
     updateEquipmentSlots();
-    
+
     // Show inventory items in right panel
     updateEquipmentInventoryItems();
 }
@@ -8233,7 +8162,7 @@ function createEquipmentUI() {
 function updateEquipmentSlots() {
     const scene = game.scene.scenes[0];
     if (!equipmentPanel) return;
-    
+
     // Clear existing slot displays (including backgrounds)
     Object.values(equipmentPanel.slots).forEach(slot => {
         if (slot.bg) slot.bg.destroy();
@@ -8249,72 +8178,72 @@ function updateEquipmentSlots() {
         }
     });
     equipmentPanel.slots = {};
-    
+
     // Position slots in left panel
     const leftPanelX = equipmentPanel.leftBg.x;
     const centerY = equipmentPanel.leftBg.y;
     const slotSize = 80;
     const startY = 150; // Start below title (increased from 120 to 150 for more padding)
-    
+
     // Equipment slots in a grid layout (2 columns for better fit)
     const slotsPerRow = 2;
     const slotSpacing = 120;
     const rowSpacing = 140;
     const startX = leftPanelX - slotSpacing / 2;
-    
+
     // Row 1: Helmet, Amulet
     const helmetSlot = createEquipmentSlot('helmet', startX, startY, slotSize);
     equipmentPanel.slots.helmet = helmetSlot;
-    
+
     const amuletSlot = createEquipmentSlot('amulet', startX + slotSpacing, startY, slotSize);
     equipmentPanel.slots.amulet = amuletSlot;
-    
+
     // Row 2: Armor, Weapon
     const armorSlot = createEquipmentSlot('armor', startX, startY + rowSpacing, slotSize);
     equipmentPanel.slots.armor = armorSlot;
-    
+
     const weaponSlot = createEquipmentSlot('weapon', startX + slotSpacing, startY + rowSpacing, slotSize);
     equipmentPanel.slots.weapon = weaponSlot;
-    
+
     // Row 3: Gloves, Ring
     const glovesSlot = createEquipmentSlot('gloves', startX, startY + rowSpacing * 2, slotSize);
     equipmentPanel.slots.gloves = glovesSlot;
-    
+
     const ringSlot = createEquipmentSlot('ring', startX + slotSpacing, startY + rowSpacing * 2, slotSize);
     equipmentPanel.slots.ring = ringSlot;
-    
+
     // Row 4: Belt, Boots
     const beltSlot = createEquipmentSlot('belt', startX, startY + rowSpacing * 3, slotSize);
     equipmentPanel.slots.belt = beltSlot;
-    
+
     const bootsSlot = createEquipmentSlot('boots', startX + slotSpacing, startY + rowSpacing * 3, slotSize);
     equipmentPanel.slots.boots = bootsSlot;
-    
+
     // Show current stats with bonuses at bottom of left panel
     const statsY = 680;
     let attackBonus = 0;
     let defenseBonus = 0;
     let maxHpBonus = 0;
-    
+
     Object.values(playerStats.equipment).forEach(item => {
         if (!item) return;
         if (item.attackPower) attackBonus += item.attackPower;
         if (item.defense) defenseBonus += item.defense;
         if (item.maxHp) maxHpBonus += item.maxHp;
     });
-    
+
     let statsText = `Attack: ${playerStats.baseAttack}`;
     if (attackBonus > 0) statsText += ` + ${attackBonus}`;
     statsText += ` = ${playerStats.attack}\n`;
-    
+
     statsText += `Defense: ${playerStats.baseDefense}`;
     if (defenseBonus > 0) statsText += ` + ${defenseBonus}`;
     statsText += ` = ${playerStats.defense}`;
-    
+
     if (maxHpBonus > 0) {
         statsText += `\nMax HP: 100 + ${maxHpBonus} = ${playerStats.maxHp}`;
     }
-    
+
     if (equipmentPanel.statsText) {
         equipmentPanel.statsText.destroy();
     }
@@ -8334,9 +8263,9 @@ function updateEquipmentInventoryItems() {
         console.warn('⚠️ updateEquipmentInventoryItems: equipmentPanel is null');
         return;
     }
-    
+
     console.log(`📦 updateEquipmentInventoryItems: Displaying ${playerStats.inventory.length} items in equipment panel`);
-    
+
     // Clear existing inventory item displays
     equipmentPanel.inventoryItems.forEach(item => {
         // Remove event handlers and disable interactivity before destroying
@@ -8368,23 +8297,23 @@ function updateEquipmentInventoryItems() {
         }
     });
     equipmentPanel.inventoryItems = [];
-    
+
     // Clear container
     if (equipmentPanel.inventoryContainer) {
         equipmentPanel.inventoryContainer.removeAll(true);
     }
-    
+
     // Define container offset and inventory start Y early (needed for item positioning)
-    const containerOffset = (equipmentPanel && typeof equipmentPanel.containerOffset === 'number') 
-        ? equipmentPanel.containerOffset 
+    const containerOffset = (equipmentPanel && typeof equipmentPanel.containerOffset === 'number')
+        ? equipmentPanel.containerOffset
         : 80; // Default fallback value
     const inventoryStartY = (equipmentPanel && typeof equipmentPanel.inventoryStartY === 'number')
         ? equipmentPanel.inventoryStartY
         : 100; // Default fallback
-    
+
     // Show all inventory items (not just equippable ones)
     const inventoryItems = playerStats.inventory;
-    
+
     if (inventoryItems.length === 0) {
         const rightPanelXValue = equipmentPanel.rightBg ? equipmentPanel.rightBg.x : 768;
         const emptyText = scene.add.text(rightPanelXValue, 200, 'Inventory is empty', {
@@ -8398,7 +8327,7 @@ function updateEquipmentInventoryItems() {
         if (equipmentPanel.scrollbarThumb) equipmentPanel.scrollbarThumb.setVisible(false);
         return;
     }
-    
+
     // Display items in a scrollable grid in right panel
     const rightPanelXValue = equipmentPanel.rightBg ? equipmentPanel.rightBg.x : 768;
     const itemSize = 60;
@@ -8414,25 +8343,25 @@ function updateEquipmentInventoryItems() {
     // But we use topPadding approach like shop for consistency
     const topPadding = 10; // Top padding to ensure first row isn't cut off
     const startY = topPadding; // Items start below top padding
-    
+
     // Define equippable types once for the function
     const equippableTypes = ['weapon', 'armor', 'helmet', 'ring', 'amulet', 'boots', 'gloves', 'belt'];
-    
+
     // Calculate total content height
     const totalRows = Math.ceil(inventoryItems.length / itemsPerRow);
     const rowHeight = itemSize + spacing + 20; // itemSize + spacing + text space
     const totalContentHeight = totalRows * rowHeight;
-    
+
     console.log(`📦 Equipment panel: Rendering ${inventoryItems.length} items (${totalRows} rows)`);
     console.log(`   Container exists: ${!!equipmentPanel.inventoryContainer}, active: ${equipmentPanel.inventoryContainer?.active}`);
-    
+
     inventoryItems.forEach((item, index) => {
         console.log(`  - Equipment panel item ${index}: ${item.name} (type: ${item.type})`);
         const row = Math.floor(index / itemsPerRow);
         const col = index % itemsPerRow;
         const x = startX + col * (itemSize + spacing);
         const y = startY + row * (itemSize + spacing + 20); // Extra spacing for text
-        
+
         // Get item sprite key based on type
         let spriteKey = 'item_weapon';
         if (item.type === 'weapon') {
@@ -8458,15 +8387,15 @@ function updateEquipmentInventoryItems() {
             // Use default item sprite for unknown types
             spriteKey = 'item_weapon'; // Fallback
         }
-        
+
         // Create item sprite with background (add to container)
         // Note: Items in container use relative coordinates, and container has setScrollFactor(0)
         const itemBg = scene.add.rectangle(x, y, itemSize, itemSize, 0x222222, 0.8)
             .setScrollFactor(0).setDepth(300).setStrokeStyle(1, 0x444444);
-        
+
         const itemSprite = scene.add.sprite(x, y, spriteKey);
         itemSprite.setScrollFactor(0).setDepth(302).setScale(0.8);
-        
+
         // Add quality border around the sprite
         const qualityColor = QUALITY_COLORS[item.quality] || QUALITY_COLORS['Common'];
         const borderWidth = 2;
@@ -8475,51 +8404,42 @@ function updateEquipmentInventoryItems() {
             .setStrokeStyle(borderWidth, qualityColor)
             .setScrollFactor(0)
             .setDepth(300.5); // Above itemBg but below sprite
-        
+
         // Store border for cleanup
         item.borderRect = borderRect;
-        
+
         // Item name below sprite
-        const itemNameText = scene.add.text(x, y + itemSize/2 + 5, item.name, {
+        const itemNameText = scene.add.text(x, y + itemSize / 2 + 5, item.name, {
             fontSize: '11px',
             fill: '#ffffff',
             wordWrap: { width: itemSize + 10 }
         }).setScrollFactor(0).setDepth(302).setOrigin(0.5, 0);
-        
+
         // Add all items to container
         equipmentPanel.inventoryContainer.add([itemBg, itemSprite, borderRect, itemNameText]);
-        
+
         console.log(`   Added item ${index} to container at relative position (${x}, ${y})`);
-        
+
         // Make clickable - equip if equippable, otherwise show tooltip
         const isEquippable = equippableTypes.includes(item.type);
-        
+
         itemSprite.setInteractive({ useHandCursor: true });
         itemBg.setInteractive({ useHandCursor: true });
-        
+
         // Calculate absolute position for tooltip (container position + item position)
         const getAbsoluteX = () => rightPanelXValue + x;
         const getAbsoluteY = () => equipmentPanel.inventoryContainer.y + y;
-        
-        const showTooltip = (pointer) => {
+
+        const onHoverIn = (pointer) => {
             if (pointer) pointer.event.stopPropagation();
-            // Cancel any pending hide
-            if (hideTooltipTimeout) {
-                const scene = game.scene.scenes[0];
-                if (scene && scene.time) {
-                    scene.time.removeEvent(hideTooltipTimeout);
-                    hideTooltipTimeout = null;
-                }
-            }
-            showEquipmentTooltip(item, getAbsoluteX(), getAbsoluteY(), true);
+            showTooltip(item, getAbsoluteX(), getAbsoluteY(), 'inventory');
         };
-        const hideTooltip = () => {
-            console.log('Item pointerout - scheduling hide');
-            scheduleHideEquipmentTooltip(300); // Delay hide
+        const onHoverOut = () => {
+            hideTooltip();
         };
-        const clickItem = (pointer) => {
+        const onClickItem = (pointer) => {
             if (pointer) pointer.event.stopPropagation();
-            hideEquipmentTooltip(); // Hide tooltip after clicking
+            hideTooltip(true); // Hide tooltip immediately
             if (isEquippable) {
                 // Equip the item
                 const invIndex = playerStats.inventory.indexOf(item);
@@ -8528,14 +8448,14 @@ function updateEquipmentInventoryItems() {
                 }
             }
         };
-        
-        itemSprite.on('pointerover', showTooltip);
-        itemSprite.on('pointerout', hideTooltip);
-        itemSprite.on('pointerdown', clickItem);
-        itemBg.on('pointerover', showTooltip);
-        itemBg.on('pointerout', hideTooltip);
-        itemBg.on('pointerdown', clickItem);
-        
+
+        itemSprite.on('pointerover', onHoverIn);
+        itemSprite.on('pointerout', onHoverOut);
+        itemSprite.on('pointerdown', onClickItem);
+        itemBg.on('pointerover', onHoverIn);
+        itemBg.on('pointerout', onHoverOut);
+        itemBg.on('pointerdown', onClickItem);
+
         equipmentPanel.inventoryItems.push({
             bg: itemBg,
             sprite: itemSprite,
@@ -8544,7 +8464,7 @@ function updateEquipmentInventoryItems() {
             item: item
         });
     });
-    
+
     // Apply mask to container (only if mask exists)
     if (equipmentPanel.inventoryContainer) {
         if (equipmentPanel.maskGeometry) {
@@ -8556,7 +8476,7 @@ function updateEquipmentInventoryItems() {
         // Ensure container is visible
         equipmentPanel.inventoryContainer.setVisible(true);
     }
-    
+
     // Reset container position to show first items (important: reset before setting scroll)
     // Use the same calculation as when container was created
     // (containerOffset and inventoryStartY are already defined at the top of the function)
@@ -8579,7 +8499,7 @@ function updateEquipmentInventoryItems() {
             console.log(`   First child position: (${firstChild.x}, ${firstChild.y}), visible: ${firstChild.visible}`);
         }
     }
-    
+
     // Calculate scroll limits
     // Ensure we can scroll enough to show the last item at the bottom of visible area
     const visibleHeight = equipmentPanel.inventoryVisibleHeight;
@@ -8599,7 +8519,7 @@ function updateEquipmentInventoryItems() {
     // Solving: maxScroll = totalContentHeight - visibleHeight - containerOffset
     const maxScrollValue = Math.max(0, totalContentHeight - visibleHeight - containerOffset);
     equipmentPanel.setMaxScroll(maxScrollValue);
-    
+
     // Reset scroll position to minScroll (top) when items are updated
     // This ensures the first items are fully visible and scrollbar thumb is at top
     if (equipmentPanel.setScrollPosition && equipmentPanel.minScroll !== undefined) {
@@ -8609,20 +8529,20 @@ function updateEquipmentInventoryItems() {
     } else {
         console.warn(`⚠️ Cannot reset scroll - setScrollPosition: ${!!equipmentPanel.setScrollPosition}, minScroll: ${equipmentPanel.minScroll}`);
     }
-    
+
     // Force container to be visible and active
     if (equipmentPanel.inventoryContainer) {
         equipmentPanel.inventoryContainer.setVisible(true);
         equipmentPanel.inventoryContainer.setActive(true);
         console.log(`📦 Container visibility: visible=${equipmentPanel.inventoryContainer.visible}, active=${equipmentPanel.inventoryContainer.active}`);
     }
-    
+
     // Update scrollbar visibility and size
     if (maxScrollValue > 0) {
         // Show scrollbar
         equipmentPanel.scrollbarTrack.setVisible(true);
         equipmentPanel.scrollbarThumb.setVisible(true);
-        
+
         // Calculate thumb size based on visible/content ratio
         // Thumb height should be proportional to how much content is visible
         // Standard formula: thumbHeight = (visibleArea / totalContent) * scrollbarHeight
@@ -8637,7 +8557,7 @@ function updateEquipmentInventoryItems() {
         const calculatedThumbHeight = visibleRatio * trackHeight;
         const thumbHeight = Math.max(20, Math.min(maxThumbHeight, calculatedThumbHeight));
         equipmentPanel.scrollbarThumb.height = thumbHeight;
-        
+
         // Reset scroll position to top (0)
         // Container is already offset, so scrollPosition = 0 shows first items
         equipmentPanel.setScrollPosition(0);
@@ -8654,25 +8574,25 @@ function updateEquipmentInventoryItems() {
 function createEquipmentSlot(slotName, x, y, size) {
     const scene = game.scene.scenes[0];
     const item = playerStats.equipment[slotName];
-    
+
     // Slot background
     const slotBg = scene.add.rectangle(x, y, size, size, 0x333333, 0.8)
         .setScrollFactor(0).setDepth(301).setStrokeStyle(2, 0x666666);
-    
+
     // Make slotBg interactive FIRST (before adding sprite/nameText on top)
     slotBg.setInteractive({ useHandCursor: true });
-    
+
     // Slot label (positioned above slot with more spacing)
-    const label = scene.add.text(x, y - size/2 - 25, slotName.toUpperCase(), {
+    const label = scene.add.text(x, y - size / 2 - 25, slotName.toUpperCase(), {
         fontSize: '14px',
         fill: '#aaaaaa',
         fontStyle: 'bold'
     }).setScrollFactor(0).setDepth(302).setOrigin(0.5, 0.5);
-    
+
     let sprite = null;
     let nameText = null;
     let borderRect = null;
-    
+
     // If item is equipped, show it
     if (item) {
         // Get item sprite key based on type
@@ -8700,11 +8620,11 @@ function createEquipmentSlot(slotName, x, y, size) {
         else if (item.type === 'boots') spriteKey = 'item_boots';
         else if (item.type === 'gloves') spriteKey = 'item_gloves';
         else if (item.type === 'belt') spriteKey = 'item_belt';
-        
+
         // Create item sprite (non-interactive - slotBg handles all interactions)
         sprite = scene.add.sprite(x, y, spriteKey);
         sprite.setScrollFactor(0).setDepth(302).setScale(0.9);
-        
+
         // Add quality border around the sprite (don't tint - preserve original colors)
         const qualityColor = QUALITY_COLORS[item.quality] || QUALITY_COLORS['Common'];
         const borderWidth = 3;
@@ -8713,32 +8633,31 @@ function createEquipmentSlot(slotName, x, y, size) {
             .setStrokeStyle(borderWidth, qualityColor)
             .setScrollFactor(0)
             .setDepth(301.5); // Above slotBg (301) but below sprite (302)
-        
+
         // Item name (positioned below slot, but not too far to avoid overlap with next row)
-        nameText = scene.add.text(x, y + size/2 + 3, item.name, {
+        nameText = scene.add.text(x, y + size / 2 + 3, item.name, {
             fontSize: '10px',
             fill: '#ffffff',
             wordWrap: { width: size + 20 }
         }).setScrollFactor(0).setDepth(302).setOrigin(0.5, 0);
-        
+
         // Make slotBg interactive and add event handlers
         slotBg.setInteractive({ useHandCursor: true });
-        
+
         // Add tooltip handlers for equipped items
         const onPointerOver = () => {
-            hideEquipmentTooltip();
-            showEquipmentTooltip(item, x, y, false);
+            showTooltip(item, x, y, 'equipment');
         };
-        
+
         const onPointerOut = () => {
-            hideEquipmentTooltip();
+            hideTooltip();
         };
-        
+
         slotBg.on('pointerover', onPointerOver);
         slotBg.on('pointerout', onPointerOut);
         slotBg.on('pointerdown', () => {
             unequipItem(slotName);
-            hideEquipmentTooltip();
+            hideTooltip(true);
         });
     } else {
         // Empty slot - show placeholder with tooltip on hover
@@ -8747,12 +8666,12 @@ function createEquipmentSlot(slotName, x, y, size) {
             fill: '#666666',
             fontStyle: 'italic'
         }).setScrollFactor(0).setDepth(302).setOrigin(0.5, 0.5);
-        
+
         // Make empty slot interactive to show tooltip
         slotBg.setInteractive({ useHandCursor: true });
         // Tooltip functionality removed
     }
-    
+
     return {
         bg: slotBg,
         label: label,
@@ -8762,202 +8681,7 @@ function createEquipmentSlot(slotName, x, y, size) {
     };
 }
 
-/**
- * Hide equipment tooltip
- */
-function hideEquipmentTooltip() {
-    if (equipmentTooltip) {
-        try {
-            if (equipmentTooltip.bg) {
-                if (equipmentTooltip.bg.active) {
-                    equipmentTooltip.bg.destroy();
-                }
-            }
-            if (equipmentTooltip.text) {
-                if (equipmentTooltip.text.active) {
-                    equipmentTooltip.text.destroy();
-                }
-            }
-        } catch (e) {
-            // Ignore errors if already destroyed
-            console.warn('Error destroying equipment tooltip:', e);
-        }
-        equipmentTooltip = null;
-    }
-    
-    // Cancel any pending hide timeout
-    if (hideTooltipTimeout) {
-        const scene = game.scene.scenes[0];
-        if (scene && scene.time) {
-            scene.time.removeEvent(hideTooltipTimeout);
-            hideTooltipTimeout = null;
-        }
-    }
-}
 
-/**
- * Schedule tooltip hide with delay
- */
-function scheduleHideEquipmentTooltip(delay = 500) {
-    const scene = game.scene.scenes[0];
-    
-    // Cancel any existing timeout
-    if (hideTooltipTimeout) {
-        if (scene && scene.time) {
-            scene.time.removeEvent(hideTooltipTimeout);
-        }
-        hideTooltipTimeout = null;
-    }
-    
-    // Schedule new hide
-    if (scene && scene.time) {
-        hideTooltipTimeout = scene.time.delayedCall(delay, () => {
-            hideEquipmentTooltip();
-            hideTooltipTimeout = null;
-        });
-    }
-}
-
-/**
- * Update equipment (refresh display)
- */
-function updateEquipment() {
-    // Equipment UI updates when items change
-    // This is handled by refreshEquipment()
-}
-
-/**
- * Force equipment refresh (call when items are equipped/unequipped)
- */
-function refreshEquipment() {
-    if (equipmentVisible && equipmentPanel) {
-        // Remove old stats text
-        if (equipmentPanel.statsText) {
-            equipmentPanel.statsText.destroy();
-        }
-        updateEquipmentSlots();
-        updateEquipmentInventoryItems(); // Refresh available items too
-    }
-}
-
-/**
- * Show equipment tooltip
- */
-function showEquipmentTooltip(item, x, y, isFromInventory = false) {
-    const scene = game.scene.scenes[0];
-    
-    // Only show tooltips when equipment is visible
-    if (!equipmentVisible || !equipmentPanel) {
-        return;
-    }
-    
-    // Always hide any existing tooltip first
-    if (equipmentTooltip) {
-        hideEquipmentTooltip();
-    }
-    
-    // Build tooltip text - always show basic info
-    let tooltipLines = [];
-    
-    // Always add name if it exists
-    if (item.name) {
-        tooltipLines.push(item.name);
-    } else {
-        tooltipLines.push('Unknown Item');
-    }
-    
-    // Always add quality if it exists
-    if (item.quality) {
-        tooltipLines.push(`Quality: ${item.quality}`);
-    }
-    
-    // Always add type if it exists
-    if (item.type) {
-        tooltipLines.push(`Type: ${item.type.charAt(0).toUpperCase() + item.type.slice(1)}`);
-    }
-    
-    // Show relevant stats for each item type
-    if (item.type === 'weapon') {
-        if (item.attackPower) tooltipLines.push(`Attack: +${item.attackPower}`);
-    } else if (item.type === 'armor') {
-        if (item.defense) tooltipLines.push(`Defense: +${item.defense}`);
-    } else if (item.type === 'helmet') {
-        if (item.defense) tooltipLines.push(`Defense: +${item.defense}`);
-    } else if (item.type === 'ring') {
-        if (item.attackPower) tooltipLines.push(`Attack: +${item.attackPower}`);
-        if (item.defense) tooltipLines.push(`Defense: +${item.defense}`);
-    } else if (item.type === 'amulet') {
-        if (item.defense) tooltipLines.push(`Defense: +${item.defense}`);
-        if (item.maxHp) tooltipLines.push(`Max HP: +${item.maxHp}`);
-    } else if (item.type === 'boots') {
-        if (item.defense) tooltipLines.push(`Defense: +${item.defense}`);
-        if (item.speed) tooltipLines.push(`Speed: +${item.speed}`);
-    } else if (item.type === 'gloves') {
-        if (item.defense) tooltipLines.push(`Defense: +${item.defense}`);
-        if (item.attackPower) tooltipLines.push(`Attack: +${item.attackPower}`);
-    } else if (item.type === 'belt') {
-        if (item.defense) tooltipLines.push(`Defense: +${item.defense}`);
-        if (item.maxHp) tooltipLines.push(`Max HP: +${item.maxHp}`);
-    } else if (item.type === 'consumable') {
-        if (item.healAmount) tooltipLines.push(`Heal: +${item.healAmount} HP`);
-    }
-    
-    // Add action hint based on context
-    const equippableTypes = ['weapon', 'armor', 'helmet', 'ring', 'amulet', 'boots', 'gloves', 'belt'];
-    if (isFromInventory) {
-        if (equippableTypes.includes(item.type)) {
-            tooltipLines.push(''); // Empty line
-            tooltipLines.push('Click to equip');
-        } else if (item.type === 'consumable') {
-            tooltipLines.push(''); // Empty line
-            tooltipLines.push('Click to use');
-        }
-    } else {
-        // From equipment slot - show unequip hint
-        tooltipLines.push(''); // Empty line
-        tooltipLines.push('Click to unequip');
-    }
-    
-    const tooltipText = tooltipLines.join('\n');
-    const qualityColor = QUALITY_COLORS[item.quality] || QUALITY_COLORS['Common'];
-    
-    // Create tooltip text first to measure size
-    const tooltip = scene.add.text(0, 0, tooltipText, {
-        fontSize: '14px',
-        fill: '#ffffff',
-        wordWrap: { width: 180 },
-        align: 'left'
-    }).setScrollFactor(0).setDepth(311);
-    
-    // Get text bounds
-    const textBounds = tooltip.getBounds();
-    const padding = 10;
-    const tooltipWidth = textBounds.width + padding * 2;
-    const tooltipHeight = textBounds.height + padding * 2;
-    
-    // Position tooltip to the right of item, but keep on screen
-    let tooltipX = x + 50;
-    let tooltipY = y;
-    
-    // Adjust if tooltip would go off screen
-    if (tooltipX + tooltipWidth > scene.cameras.main.width) {
-        tooltipX = x - tooltipWidth - 10; // Show to the left instead
-    }
-    
-    // Create tooltip background
-    const tooltipBg = scene.add.rectangle(tooltipX + tooltipWidth/2, tooltipY, tooltipWidth, tooltipHeight, 0x000000, 0.95)
-        .setScrollFactor(0).setDepth(310).setStrokeStyle(2, qualityColor);
-    
-    // Position text
-    tooltip.x = tooltipX + padding;
-    tooltip.y = tooltipY;
-    tooltip.setOrigin(0, 0.5);
-    
-    equipmentTooltip = {
-        bg: tooltipBg,
-        text: tooltip
-    };
-}
 
 
 /**
@@ -8987,7 +8711,10 @@ function refreshEquipment() {
  */
 function destroyEquipmentUI() {
     const scene = game.scene.scenes[0];
-    
+
+    // Always hide tooltip first when closing
+    hideTooltip(true);
+
     if (equipmentPanel) {
         // Destroy panel backgrounds
         if (equipmentPanel.leftBg && equipmentPanel.leftBg.active) {
@@ -8999,7 +8726,7 @@ function destroyEquipmentUI() {
         if (equipmentPanel.divider && equipmentPanel.divider.active) {
             equipmentPanel.divider.destroy();
         }
-        
+
         // Destroy titles and text
         if (equipmentPanel.leftTitle && equipmentPanel.leftTitle.active) {
             equipmentPanel.leftTitle.destroy();
@@ -9013,7 +8740,7 @@ function destroyEquipmentUI() {
         if (equipmentPanel.statsText && equipmentPanel.statsText.active) {
             equipmentPanel.statsText.destroy();
         }
-        
+
         // Destroy all slot elements including backgrounds
         Object.values(equipmentPanel.slots).forEach(slot => {
             if (slot.bg && slot.bg.active) {
@@ -9038,7 +8765,7 @@ function destroyEquipmentUI() {
                 }
             }
         });
-        
+
         // Destroy inventory item displays (including label)
         equipmentPanel.inventoryItems.forEach(item => {
             // Remove event handlers and disable interactivity before destroying
@@ -9069,7 +8796,7 @@ function destroyEquipmentUI() {
                 }
             }
         });
-        
+
         // Slot borders are already destroyed in the loop above, but this is a safety check
         Object.values(equipmentPanel.slots).forEach(slot => {
             if (slot.borderRect) {
@@ -9080,7 +8807,7 @@ function destroyEquipmentUI() {
                 }
             }
         });
-        
+
         // Remove scroll event handlers
         if (equipmentPanel.scrollHandlers) {
             scene.input.off('pointerdown', equipmentPanel.scrollHandlers.pointerDown);
@@ -9088,7 +8815,7 @@ function destroyEquipmentUI() {
             scene.input.off('pointerup', equipmentPanel.scrollHandlers.pointerUp);
             scene.input.off('wheel', equipmentPanel.scrollHandlers.wheel);
         }
-        
+
         // Destroy scrollable container and mask
         if (equipmentPanel.inventoryContainer && equipmentPanel.inventoryContainer.active) {
             equipmentPanel.inventoryContainer.destroy();
@@ -9096,7 +8823,7 @@ function destroyEquipmentUI() {
         if (equipmentPanel.inventoryMask && equipmentPanel.inventoryMask.active) {
             equipmentPanel.inventoryMask.destroy();
         }
-        
+
         // Destroy scrollbar
         if (equipmentPanel.scrollbarTrack && equipmentPanel.scrollbarTrack.active) {
             equipmentPanel.scrollbarTrack.destroy();
@@ -9104,14 +8831,14 @@ function destroyEquipmentUI() {
         if (equipmentPanel.scrollbarThumb && equipmentPanel.scrollbarThumb.active) {
             equipmentPanel.scrollbarThumb.destroy();
         }
-        
+
         equipmentPanel.slots = {};
         equipmentPanel.inventoryItems = [];
         equipmentPanel = null;
     }
-    
+
     // Hide any visible tooltips
-    hideEquipmentTooltip();
+    hideTooltip(true);
 }
 
 // ============================================
@@ -9309,22 +9036,22 @@ function initializeQuests() {
             rewards: { xp: 220, gold: 110 }
         }
     ];
-    
+
     // Initialize quest chain tracking
     if (!playerStats.questChains) {
         playerStats.questChains = {};
     }
-    
+
     // Initialize completed quests array if it doesn't exist
     if (!playerStats.quests.completedQuests) {
         playerStats.quests.completedQuests = [];
     }
-    
+
     // Initialize available quests array if it doesn't exist
     if (!playerStats.quests.available) {
         playerStats.quests.available = [];
     }
-    
+
     playerStats.quests.active = starterQuests;
     console.log('✅ Quests initialized:', starterQuests.length, 'active quests');
 }
@@ -9335,7 +9062,7 @@ function initializeQuests() {
 function checkQuestProgress() {
     playerStats.quests.active.forEach((quest, index) => {
         let updated = false;
-        
+
         // Update progress based on quest type
         if (quest.type === 'kill') {
             quest.progress = playerStats.questStats.monstersKilled;
@@ -9356,12 +9083,12 @@ function checkQuestProgress() {
             quest.progress = Math.floor(playerStats.questStats.survivalTime / 1000); // Convert to seconds
             updated = true;
         }
-        
+
         // Cap progress at target
         if (quest.progress > quest.target) {
             quest.progress = quest.target;
         }
-        
+
         // Check if quest is complete
         if (quest.progress >= quest.target && !quest.completed) {
             completeQuest(quest, index);
@@ -9374,7 +9101,7 @@ function checkQuestProgress() {
  */
 function completeQuest(quest, index) {
     quest.completed = true;
-    
+
     // Give rewards
     if (quest.rewards.xp) {
         playerStats.xp += quest.rewards.xp;
@@ -9383,14 +9110,14 @@ function completeQuest(quest, index) {
     if (quest.rewards.gold) {
         playerStats.gold += quest.rewards.gold;
     }
-    
+
     // Handle quest chains
     if (quest.chainId && quest.chainStep) {
         if (!playerStats.questChains[quest.chainId]) {
             playerStats.questChains[quest.chainId] = { currentStep: 0 };
         }
         playerStats.questChains[quest.chainId].currentStep = quest.chainStep;
-        
+
         // Check if next chain quest should be added
         const nextQuest = getNextChainQuest(quest.chainId, quest.chainStep);
         if (nextQuest) {
@@ -9400,7 +9127,7 @@ function completeQuest(quest, index) {
             pendingNewQuest = nextQuest;
         }
     }
-    
+
     // Move to completed (store full quest object, not just ID)
     if (!playerStats.quests.completedQuests) {
         playerStats.quests.completedQuests = [];
@@ -9408,22 +9135,22 @@ function completeQuest(quest, index) {
     playerStats.quests.completedQuests.push(quest);
     playerStats.quests.completed.push(quest.id);
     playerStats.quests.active.splice(index, 1);
-    
+
     // Check level up after XP reward
     checkLevelUp();
-    
+
     // Show quest completed modal (or queue if in combat)
     if (isInCombat()) {
         pendingCompletedQuest = quest;
     } else {
         showQuestCompletedModal(quest);
     }
-    
+
     // Refresh quest log if visible
     if (questVisible) {
         refreshQuestLog();
     }
-    
+
     console.log(`✅ Quest completed: ${quest.title}`);
     playSound('level_up');
 }
@@ -9460,7 +9187,7 @@ function getNextChainQuest(chainId, currentStep) {
             }
         }
     };
-    
+
     const chain = chainQuests[chainId];
     if (chain && chain[currentStep + 1]) {
         return chain[currentStep + 1]; // Return next step
@@ -9475,22 +9202,22 @@ function isInCombat() {
     if (!monsters || monsters.length === 0) {
         return false;
     }
-    
+
     const combatRange = 150; // Distance to consider "in combat" (larger than attack range)
-    
+
     for (const monster of monsters) {
         if (!monster || !monster.active) continue;
-        
+
         const distance = Phaser.Math.Distance.Between(
             player.x, player.y,
             monster.x, monster.y
         );
-        
+
         if (distance <= combatRange) {
             return true;
         }
     }
-    
+
     return false;
 }
 
@@ -9502,19 +9229,19 @@ function toggleQuestLog() {
     if (isInCombat()) {
         return;
     }
-    
+
     const scene = game.scene.scenes[0];
-    
+
     // If already open, close it
     if (questVisible) {
         questVisible = false;
         destroyQuestLogUI();
         return;
     }
-    
+
     // Close all other interfaces before opening
     closeAllInterfaces();
-    
+
     // Now open quest log
     questVisible = true;
     createQuestLogUI();
@@ -9525,62 +9252,62 @@ function toggleQuestLog() {
  */
 function createQuestLogUI() {
     const scene = game.scene.scenes[0];
-    
+
     // Create background panel (centered on screen)
     const panelWidth = 900;
     const panelHeight = 600;
     const centerX = scene.cameras.main.width / 2;
     const centerY = scene.cameras.main.height / 2;
-    
+
     // Background
     const bg = scene.add.rectangle(centerX, centerY, panelWidth, panelHeight, 0x1a1a1a, 0.95)
         .setScrollFactor(0).setDepth(300).setStrokeStyle(3, 0xffffff);
-    
+
     // Title
-    const title = scene.add.text(centerX, centerY - panelHeight/2 + 20, 'QUEST LOG', {
+    const title = scene.add.text(centerX, centerY - panelHeight / 2 + 20, 'QUEST LOG', {
         fontSize: '28px',
         fill: '#ffffff',
         fontStyle: 'bold'
     }).setScrollFactor(0).setDepth(301).setOrigin(0.5, 0);
-    
+
     // Close text
-    const closeText = scene.add.text(centerX + panelWidth/2 - 20, centerY - panelHeight/2 + 20, 'Press Q to Close', {
+    const closeText = scene.add.text(centerX + panelWidth / 2 - 20, centerY - panelHeight / 2 + 20, 'Press Q to Close', {
         fontSize: '14px',
         fill: '#aaaaaa'
     }).setScrollFactor(0).setDepth(301).setOrigin(1, 0);
-    
+
     // Tab buttons (three tabs: Current, Available, Completed)
-    const tabY = centerY - panelHeight/2 + 60;
+    const tabY = centerY - panelHeight / 2 + 60;
     const tabWidth = 140;
     const tabSpacing = 10;
     const totalTabWidth = (tabWidth * 3) + (tabSpacing * 2);
     const tabStartX = centerX - totalTabWidth / 2 + tabWidth / 2;
-    
+
     const currentTabBtn = scene.add.rectangle(tabStartX, tabY, tabWidth, 35, 0x333333, 0.9)
         .setScrollFactor(0).setDepth(301).setStrokeStyle(2, 0xffffff).setInteractive({ useHandCursor: true });
-    
+
     const currentTabText = scene.add.text(tabStartX, tabY, 'Current', {
         fontSize: '16px',
         fill: '#ffffff',
         fontStyle: 'bold'
     }).setScrollFactor(0).setDepth(302).setOrigin(0.5, 0.5);
-    
+
     const availableTabBtn = scene.add.rectangle(tabStartX + tabWidth + tabSpacing, tabY, tabWidth, 35, 0x333333, 0.9)
         .setScrollFactor(0).setDepth(301).setStrokeStyle(2, 0x666666).setInteractive({ useHandCursor: true });
-    
+
     const availableTabText = scene.add.text(tabStartX + tabWidth + tabSpacing, tabY, 'Available', {
         fontSize: '16px',
         fill: '#aaaaaa'
     }).setScrollFactor(0).setDepth(302).setOrigin(0.5, 0.5);
-    
+
     const completedTabBtn = scene.add.rectangle(tabStartX + (tabWidth + tabSpacing) * 2, tabY, tabWidth, 35, 0x333333, 0.9)
         .setScrollFactor(0).setDepth(301).setStrokeStyle(2, 0x666666).setInteractive({ useHandCursor: true });
-    
+
     const completedTabText = scene.add.text(tabStartX + (tabWidth + tabSpacing) * 2, tabY, 'Completed', {
         fontSize: '16px',
         fill: '#aaaaaa'
     }).setScrollFactor(0).setDepth(302).setOrigin(0.5, 0.5);
-    
+
     // Tab click handlers
     const switchToCurrent = () => {
         questLogTab = 'current';
@@ -9588,21 +9315,21 @@ function createQuestLogUI() {
         updateTabButtons();
         updateQuestLogItems();
     };
-    
+
     const switchToAvailable = () => {
         questLogTab = 'available';
         selectedQuestIndex = 0; // Reset selection
         updateTabButtons();
         updateQuestLogItems();
     };
-    
+
     const switchToCompleted = () => {
         questLogTab = 'completed';
         selectedQuestIndex = 0; // Reset selection
         updateTabButtons();
         updateQuestLogItems();
     };
-    
+
     const updateTabButtons = () => {
         // Reset all tabs to inactive style
         currentTabBtn.setStrokeStyle(2, 0x666666);
@@ -9611,7 +9338,7 @@ function createQuestLogUI() {
         availableTabText.setStyle({ fill: '#aaaaaa', fontStyle: 'normal' });
         completedTabBtn.setStrokeStyle(2, 0x666666);
         completedTabText.setStyle({ fill: '#aaaaaa', fontStyle: 'normal' });
-        
+
         // Set active tab style
         if (questLogTab === 'current') {
             currentTabBtn.setStrokeStyle(2, 0xffffff);
@@ -9624,24 +9351,24 @@ function createQuestLogUI() {
             completedTabText.setStyle({ fill: '#ffffff', fontStyle: 'bold' });
         }
     };
-    
+
     currentTabBtn.on('pointerdown', switchToCurrent);
     currentTabText.setInteractive({ useHandCursor: true });
     currentTabText.on('pointerdown', switchToCurrent);
-    
+
     availableTabBtn.on('pointerdown', switchToAvailable);
     availableTabText.setInteractive({ useHandCursor: true });
     availableTabText.on('pointerdown', switchToAvailable);
-    
+
     completedTabBtn.on('pointerdown', switchToCompleted);
     completedTabText.setInteractive({ useHandCursor: true });
     completedTabText.on('pointerdown', switchToCompleted);
-    
+
     // Divider between list and details
-    const dividerX = centerX - panelWidth/2 + 350;
-    const divider = scene.add.line(dividerX, centerY - panelHeight/2 + 90, 0, 0, 0, panelHeight - 180, 0x666666, 1)
+    const dividerX = centerX - panelWidth / 2 + 350;
+    const divider = scene.add.line(dividerX, centerY - panelHeight / 2 + 90, 0, 0, 0, panelHeight - 180, 0x666666, 1)
         .setScrollFactor(0).setDepth(301);
-    
+
     questPanel = {
         bg: bg,
         title: title,
@@ -9657,10 +9384,10 @@ function createQuestLogUI() {
         questListElements: [],
         questDetailElements: []
     };
-    
+
     // Initialize tab buttons
     updateTabButtons();
-    
+
     // Show quests
     updateQuestLogItems();
 }
@@ -9671,35 +9398,35 @@ function createQuestLogUI() {
 function updateQuestLogItems() {
     const scene = game.scene.scenes[0];
     if (!questPanel) return;
-    
+
     // Clear existing quest displays
     questPanel.questListElements.forEach(element => {
         if (element) element.destroy();
     });
     questPanel.questListElements = [];
-    
+
     questPanel.questDetailElements.forEach(element => {
         if (element) element.destroy();
     });
     questPanel.questDetailElements = [];
-    
+
     const centerX = questPanel.bg.x;
     const centerY = questPanel.bg.y;
     const panelWidth = 900;
     const panelHeight = 600;
-    
+
     // Left panel: Quest list
-    const listStartX = centerX - panelWidth/2 + 20;
-    const listStartY = centerY - panelHeight/2 + 100;
+    const listStartX = centerX - panelWidth / 2 + 20;
+    const listStartY = centerY - panelHeight / 2 + 100;
     const listWidth = 310;
     const listHeight = panelHeight - 200;
-    const dividerX = centerX - panelWidth/2 + 350;
-    
+    const dividerX = centerX - panelWidth / 2 + 350;
+
     // Right panel: Quest details
     const detailStartX = dividerX + 20;
     const detailStartY = listStartY;
-    const detailWidth = panelWidth - (detailStartX - (centerX - panelWidth/2)) - 20;
-    
+    const detailWidth = panelWidth - (detailStartX - (centerX - panelWidth / 2)) - 20;
+
     // Get quests based on current tab
     let quests = [];
     if (questLogTab === 'current') {
@@ -9711,7 +9438,7 @@ function updateQuestLogItems() {
         // Get completed quests
         quests = playerStats.quests.completedQuests || [];
     }
-    
+
     // Ensure selectedQuestIndex is valid
     if (selectedQuestIndex >= quests.length) {
         selectedQuestIndex = Math.max(0, quests.length - 1);
@@ -9719,7 +9446,7 @@ function updateQuestLogItems() {
     if (quests.length === 0) {
         selectedQuestIndex = -1;
     }
-    
+
     // Quest list on left
     if (quests.length === 0) {
         let noQuestsMessage = 'No active quests';
@@ -9728,7 +9455,7 @@ function updateQuestLogItems() {
         } else if (questLogTab === 'completed') {
             noQuestsMessage = 'No completed quests';
         }
-        const noQuestsText = scene.add.text(listStartX + listWidth/2, listStartY + listHeight/2, 
+        const noQuestsText = scene.add.text(listStartX + listWidth / 2, listStartY + listHeight / 2,
             noQuestsMessage, {
             fontSize: '16px',
             fill: '#888888',
@@ -9740,25 +9467,25 @@ function updateQuestLogItems() {
         const maxVisibleQuests = Math.floor(listHeight / questItemHeight);
         const startIndex = Math.max(0, selectedQuestIndex - maxVisibleQuests + 1);
         const endIndex = Math.min(quests.length, startIndex + maxVisibleQuests);
-        
+
         for (let i = startIndex; i < endIndex; i++) {
             const quest = quests[i];
             const itemY = listStartY + (i - startIndex) * questItemHeight;
             const isSelected = i === selectedQuestIndex;
-            
+
             // Quest item background
-            const itemBg = scene.add.rectangle(listStartX + listWidth/2, itemY, listWidth - 10, questItemHeight - 5, 
+            const itemBg = scene.add.rectangle(listStartX + listWidth / 2, itemY, listWidth - 10, questItemHeight - 5,
                 isSelected ? 0x444444 : 0x2a2a2a, 0.9)
                 .setScrollFactor(0).setDepth(301).setStrokeStyle(2, isSelected ? 0x00aaff : 0x555555)
                 .setInteractive({ useHandCursor: true });
-            
+
             // Quest title
             const titleText = scene.add.text(listStartX + 10, itemY, quest.title, {
                 fontSize: '16px',
                 fill: isSelected ? '#ffffff' : '#cccccc',
                 fontStyle: 'bold'
             }).setScrollFactor(0).setDepth(302).setOrigin(0, 0.5);
-            
+
             // Progress indicator for current quests
             if (questLogTab === 'current' && quest.progress !== undefined && quest.target !== undefined) {
                 const progressPercent = Math.min(quest.progress / quest.target, 1);
@@ -9774,26 +9501,26 @@ function updateQuestLogItems() {
                 }).setScrollFactor(0).setDepth(302).setOrigin(1, 0.5);
                 questPanel.questListElements.push(completedIcon);
             }
-            
+
             // Click handler
             const selectQuest = () => {
                 selectedQuestIndex = i;
                 updateQuestLogItems();
             };
-            
+
             itemBg.on('pointerdown', selectQuest);
             titleText.setInteractive({ useHandCursor: true });
             titleText.on('pointerdown', selectQuest);
-            
+
             questPanel.questListElements.push(itemBg, titleText);
         }
     }
-    
+
     // Quest details on right
     if (quests.length > 0 && selectedQuestIndex >= 0 && selectedQuestIndex < quests.length && selectedQuestIndex !== -1) {
         const quest = quests[selectedQuestIndex];
         let detailY = detailStartY;
-        
+
         // Quest title
         const detailTitle = scene.add.text(detailStartX, detailY, quest.title, {
             fontSize: '24px',
@@ -9803,7 +9530,7 @@ function updateQuestLogItems() {
         }).setScrollFactor(0).setDepth(302).setOrigin(0, 0);
         questPanel.questDetailElements.push(detailTitle);
         detailY += 35;
-        
+
         // Quest description
         const detailDesc = scene.add.text(detailStartX, detailY, quest.description, {
             fontSize: '16px',
@@ -9812,7 +9539,7 @@ function updateQuestLogItems() {
         }).setScrollFactor(0).setDepth(302).setOrigin(0, 0);
         questPanel.questDetailElements.push(detailDesc);
         detailY += 50;
-        
+
         // Progress section (only for current quests)
         if (questLogTab === 'current' && quest.progress !== undefined && quest.target !== undefined) {
             const progressLabel = scene.add.text(detailStartX, detailY, 'Progress:', {
@@ -9822,7 +9549,7 @@ function updateQuestLogItems() {
             }).setScrollFactor(0).setDepth(302).setOrigin(0, 0);
             questPanel.questDetailElements.push(progressLabel);
             detailY += 30;
-            
+
             // Progress bar background
             const progressBarBgWidth = detailWidth - 20;
             const progressBarBgX = detailStartX + progressBarBgWidth / 2;
@@ -9830,7 +9557,7 @@ function updateQuestLogItems() {
             const progressBarBg = scene.add.rectangle(progressBarBgX, progressBarBgY, progressBarBgWidth, 25, 0x333333, 0.8)
                 .setScrollFactor(0).setDepth(301).setStrokeStyle(2, 0x666666);
             questPanel.questDetailElements.push(progressBarBg);
-            
+
             // Progress bar fill (left-aligned)
             const progressPercent = Math.min(quest.progress / quest.target, 1);
             const progressBarWidth = progressBarBgWidth * progressPercent;
@@ -9845,9 +9572,9 @@ function updateQuestLogItems() {
                 0x00ff00
             ).setScrollFactor(0).setDepth(302).setOrigin(0.5, 0.5);
             questPanel.questDetailElements.push(progressBar);
-            
+
             // Progress text
-            const progressText = scene.add.text(detailStartX + (detailWidth - 20)/2, detailY + 15, 
+            const progressText = scene.add.text(detailStartX + (detailWidth - 20) / 2, detailY + 15,
                 `${quest.progress}/${quest.target}`, {
                 fontSize: '16px',
                 fill: '#ffffff',
@@ -9856,7 +9583,7 @@ function updateQuestLogItems() {
             questPanel.questDetailElements.push(progressText);
             detailY += 50;
         }
-        
+
         // Rewards section
         detailY += 10;
         const rewardsLabel = scene.add.text(detailStartX, detailY, 'Rewards:', {
@@ -9866,7 +9593,7 @@ function updateQuestLogItems() {
         }).setScrollFactor(0).setDepth(302).setOrigin(0, 0);
         questPanel.questDetailElements.push(rewardsLabel);
         detailY += 30;
-        
+
         let rewardsText = '';
         if (quest.rewards.xp) {
             rewardsText += `+${quest.rewards.xp} XP`;
@@ -9875,55 +9602,55 @@ function updateQuestLogItems() {
             if (rewardsText) rewardsText += '\n';
             rewardsText += `+${quest.rewards.gold} Gold`;
         }
-        
+
         const rewards = scene.add.text(detailStartX, detailY, rewardsText, {
             fontSize: '16px',
             fill: '#ffd700'
         }).setScrollFactor(0).setDepth(302).setOrigin(0, 0);
         questPanel.questDetailElements.push(rewards);
-        
+
         // Accept button for available quests
         if (questLogTab === 'available') {
             detailY += 60;
             const acceptBtn = scene.add.rectangle(detailStartX + (detailWidth - 20) / 2, detailY, 200, 40, 0x00aa00, 0.9)
                 .setScrollFactor(0).setDepth(301).setStrokeStyle(2, 0x00ff00).setInteractive({ useHandCursor: true });
-            
+
             const acceptBtnText = scene.add.text(detailStartX + (detailWidth - 20) / 2, detailY, 'Accept Quest', {
                 fontSize: '18px',
                 fill: '#ffffff',
                 fontStyle: 'bold'
             }).setScrollFactor(0).setDepth(302).setOrigin(0.5, 0.5);
-            
+
             const acceptQuest = () => {
                 // Move quest from available to active
                 const questIndex = playerStats.quests.available.findIndex(q => q.id === quest.id);
                 if (questIndex !== -1) {
                     const questToAccept = playerStats.quests.available[questIndex];
                     playerStats.quests.available.splice(questIndex, 1);
-                    
+
                     // Initialize active array if needed
                     if (!playerStats.quests.active) {
                         playerStats.quests.active = [];
                     }
-                    
+
                     // Reset quest progress when accepting
                     questToAccept.progress = 0;
-                    
+
                     // Only add to active if not already there
                     if (!playerStats.quests.active.find(q => q.id === questToAccept.id)) {
                         playerStats.quests.active.push(questToAccept);
                     }
-                    
+
                     // Refresh quest log display
                     updateQuestLogItems();
                     playSound('item_pickup');
                 }
             };
-            
+
             acceptBtn.on('pointerdown', acceptQuest);
             acceptBtnText.setInteractive({ useHandCursor: true });
             acceptBtnText.on('pointerdown', acceptQuest);
-            
+
             questPanel.questDetailElements.push(acceptBtn, acceptBtnText);
         }
     } else if (quests.length === 0) {
@@ -9952,7 +9679,7 @@ function refreshQuestLog() {
  */
 function destroyQuestLogUI() {
     const scene = game.scene.scenes[0];
-    
+
     if (questPanel) {
         if (questPanel.bg) questPanel.bg.destroy();
         if (questPanel.title) questPanel.title.destroy();
@@ -9965,15 +9692,15 @@ function destroyQuestLogUI() {
         if (questPanel.completedTabText) questPanel.completedTabText.destroy();
         if (questPanel.completedTabText) questPanel.completedTabText.destroy();
         if (questPanel.divider) questPanel.divider.destroy();
-        
+
         questPanel.questListElements.forEach(element => {
             if (element) element.destroy();
         });
-        
+
         questPanel.questDetailElements.forEach(element => {
             if (element) element.destroy();
         });
-        
+
         questPanel.questListElements = [];
         questPanel.questDetailElements = [];
         questPanel = null;
@@ -9988,48 +9715,48 @@ function showQuestCompletedModal(quest) {
     if (isInCombat()) {
         return;
     }
-    
+
     const scene = game.scene.scenes[0];
-    
+
     // Hide any existing modal
     if (questCompletedModal) {
         hideQuestCompletedModal();
     }
-    
+
     const centerX = scene.cameras.main.width / 2;
     const centerY = scene.cameras.main.height / 2;
     const modalWidth = 500;
     const modalHeight = 400;
-    
+
     // Background overlay
     const overlay = scene.add.rectangle(centerX, centerY, scene.cameras.main.width, scene.cameras.main.height, 0x000000, 0.7)
         .setScrollFactor(0).setDepth(400).setInteractive();
-    
+
     // Modal background
     const modalBg = scene.add.rectangle(centerX, centerY, modalWidth, modalHeight, 0x1a1a1a, 0.98)
         .setScrollFactor(0).setDepth(401).setStrokeStyle(4, 0x00ff00);
-    
+
     // Title
-    const title = scene.add.text(centerX, centerY - modalHeight/2 + 40, 'QUEST COMPLETED!', {
+    const title = scene.add.text(centerX, centerY - modalHeight / 2 + 40, 'QUEST COMPLETED!', {
         fontSize: '32px',
         fill: '#00ff00',
         fontStyle: 'bold'
     }).setScrollFactor(0).setDepth(402).setOrigin(0.5, 0);
-    
+
     // Quest title
-    const questTitle = scene.add.text(centerX, centerY - modalHeight/2 + 90, quest.title, {
+    const questTitle = scene.add.text(centerX, centerY - modalHeight / 2 + 90, quest.title, {
         fontSize: '24px',
         fill: '#ffffff',
         fontStyle: 'bold'
     }).setScrollFactor(0).setDepth(402).setOrigin(0.5, 0);
-    
+
     // Quest description
-    const questDesc = scene.add.text(centerX, centerY - modalHeight/2 + 130, quest.description, {
+    const questDesc = scene.add.text(centerX, centerY - modalHeight / 2 + 130, quest.description, {
         fontSize: '16px',
         fill: '#cccccc',
         wordWrap: { width: modalWidth - 60 }
     }).setScrollFactor(0).setDepth(402).setOrigin(0.5, 0);
-    
+
     // Rewards section
     let rewardsText = 'Rewards:\n';
     if (quest.rewards.xp) {
@@ -10038,24 +9765,24 @@ function showQuestCompletedModal(quest) {
     if (quest.rewards.gold) {
         rewardsText += `+${quest.rewards.gold} Gold`;
     }
-    
+
     const rewards = scene.add.text(centerX, centerY - 20, rewardsText, {
         fontSize: '20px',
         fill: '#ffd700',
         fontStyle: 'bold',
         align: 'center'
     }).setScrollFactor(0).setDepth(402).setOrigin(0.5, 0.5);
-    
+
     // Close button
-    const closeBtn = scene.add.rectangle(centerX, centerY + modalHeight/2 - 50, 150, 40, 0x333333, 0.9)
+    const closeBtn = scene.add.rectangle(centerX, centerY + modalHeight / 2 - 50, 150, 40, 0x333333, 0.9)
         .setScrollFactor(0).setDepth(402).setStrokeStyle(2, 0xffffff).setInteractive({ useHandCursor: true });
-    
-    const closeBtnText = scene.add.text(centerX, centerY + modalHeight/2 - 50, 'Close', {
+
+    const closeBtnText = scene.add.text(centerX, centerY + modalHeight / 2 - 50, 'Close', {
         fontSize: '18px',
         fill: '#ffffff',
         fontStyle: 'bold'
     }).setScrollFactor(0).setDepth(403).setOrigin(0.5, 0.5);
-    
+
     // Close on click
     const closeModal = () => {
         hideQuestCompletedModal();
@@ -10066,11 +9793,11 @@ function showQuestCompletedModal(quest) {
             showNewQuestModal(questToShow);
         }
     };
-    
+
     closeBtn.on('pointerdown', closeModal);
     closeBtnText.setInteractive({ useHandCursor: true });
     closeBtnText.on('pointerdown', closeModal);
-    
+
     // Close on ESC key
     const escKey = scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ESC);
     const escHandler = () => {
@@ -10086,7 +9813,7 @@ function showQuestCompletedModal(quest) {
         }
     };
     escKey.on('down', escHandler);
-    
+
     questCompletedModal = {
         overlay: overlay,
         modalBg: modalBg,
@@ -10131,7 +9858,7 @@ function showNewQuestModal(quest) {
     if (isInCombat()) {
         return;
     }
-    
+
     // CRITICAL: Don't show if quest completed modal is still open
     // Wait for it to close first
     if (questCompletedModal) {
@@ -10140,54 +9867,54 @@ function showNewQuestModal(quest) {
         pendingNewQuest = quest;
         return;
     }
-    
+
     const scene = game.scene.scenes[0];
-    
+
     // Hide any existing modal
     if (newQuestModal) {
         hideNewQuestModal();
     }
-    
+
     const centerX = scene.cameras.main.width / 2;
     const centerY = scene.cameras.main.height / 2;
     const modalWidth = 500;
     const modalHeight = 450;
-    
+
     // Background overlay
     const overlay = scene.add.rectangle(centerX, centerY, scene.cameras.main.width, scene.cameras.main.height, 0x000000, 0.7)
         .setScrollFactor(0).setDepth(400).setInteractive();
-    
+
     // Modal background
     const modalBg = scene.add.rectangle(centerX, centerY, modalWidth, modalHeight, 0x1a1a1a, 0.98)
         .setScrollFactor(0).setDepth(401).setStrokeStyle(4, 0x00aaff);
-    
+
     // Title
-    const title = scene.add.text(centerX, centerY - modalHeight/2 + 40, 'NEW QUEST!', {
+    const title = scene.add.text(centerX, centerY - modalHeight / 2 + 40, 'NEW QUEST!', {
         fontSize: '32px',
         fill: '#00aaff',
         fontStyle: 'bold'
     }).setScrollFactor(0).setDepth(402).setOrigin(0.5, 0);
-    
+
     // Quest title
-    const questTitle = scene.add.text(centerX, centerY - modalHeight/2 + 90, quest.title, {
+    const questTitle = scene.add.text(centerX, centerY - modalHeight / 2 + 90, quest.title, {
         fontSize: '24px',
         fill: '#ffffff',
         fontStyle: 'bold'
     }).setScrollFactor(0).setDepth(402).setOrigin(0.5, 0);
-    
+
     // Quest description
-    const questDesc = scene.add.text(centerX, centerY - modalHeight/2 + 130, quest.description, {
+    const questDesc = scene.add.text(centerX, centerY - modalHeight / 2 + 130, quest.description, {
         fontSize: '16px',
         fill: '#cccccc',
         wordWrap: { width: modalWidth - 60 }
     }).setScrollFactor(0).setDepth(402).setOrigin(0.5, 0);
-    
+
     // Progress info
     const progressInfo = scene.add.text(centerX, centerY - 30, `Progress: 0/${quest.target}`, {
         fontSize: '16px',
         fill: '#aaaaaa'
     }).setScrollFactor(0).setDepth(402).setOrigin(0.5, 0.5);
-    
+
     // Rewards section
     let rewardsText = 'Rewards:\n';
     if (quest.rewards.xp) {
@@ -10196,43 +9923,43 @@ function showNewQuestModal(quest) {
     if (quest.rewards.gold) {
         rewardsText += `+${quest.rewards.gold} Gold`;
     }
-    
+
     const rewards = scene.add.text(centerX, centerY + 20, rewardsText, {
         fontSize: '18px',
         fill: '#ffd700',
         fontStyle: 'bold',
         align: 'center'
     }).setScrollFactor(0).setDepth(402).setOrigin(0.5, 0.5);
-    
+
     // Accept button
-    const acceptBtn = scene.add.rectangle(centerX - 90, centerY + modalHeight/2 - 50, 150, 40, 0x00aa00, 0.9)
+    const acceptBtn = scene.add.rectangle(centerX - 90, centerY + modalHeight / 2 - 50, 150, 40, 0x00aa00, 0.9)
         .setScrollFactor(0).setDepth(402).setStrokeStyle(2, 0x00ff00).setInteractive({ useHandCursor: true });
-    
-    const acceptBtnText = scene.add.text(centerX - 90, centerY + modalHeight/2 - 50, 'Accept', {
+
+    const acceptBtnText = scene.add.text(centerX - 90, centerY + modalHeight / 2 - 50, 'Accept', {
         fontSize: '18px',
         fill: '#ffffff',
         fontStyle: 'bold'
     }).setScrollFactor(0).setDepth(403).setOrigin(0.5, 0.5);
-    
+
     // Cancel button
-    const cancelBtn = scene.add.rectangle(centerX + 90, centerY + modalHeight/2 - 50, 150, 40, 0xaa0000, 0.9)
+    const cancelBtn = scene.add.rectangle(centerX + 90, centerY + modalHeight / 2 - 50, 150, 40, 0xaa0000, 0.9)
         .setScrollFactor(0).setDepth(402).setStrokeStyle(2, 0xff0000).setInteractive({ useHandCursor: true });
-    
-    const cancelBtnText = scene.add.text(centerX + 90, centerY + modalHeight/2 - 50, 'Cancel', {
+
+    const cancelBtnText = scene.add.text(centerX + 90, centerY + modalHeight / 2 - 50, 'Cancel', {
         fontSize: '18px',
         fill: '#ffffff',
         fontStyle: 'bold'
     }).setScrollFactor(0).setDepth(403).setOrigin(0.5, 0.5);
-    
+
     // Store quest reference for accept handler
     const questRef = quest;
-    
+
     // Accept handler
     const acceptQuest = () => {
         // Quest is already added, just close modal
         hideNewQuestModal();
     };
-    
+
     // Cancel handler
     const cancelQuest = () => {
         // Remove quest from active list and move to available
@@ -10240,12 +9967,12 @@ function showNewQuestModal(quest) {
         if (questIndex !== -1) {
             const quest = playerStats.quests.active[questIndex];
             playerStats.quests.active.splice(questIndex, 1);
-            
+
             // Initialize available array if needed
             if (!playerStats.quests.available) {
                 playerStats.quests.available = [];
             }
-            
+
             // Only add to available if not already there
             if (!playerStats.quests.available.find(q => q.id === quest.id)) {
                 playerStats.quests.available.push(quest);
@@ -10253,15 +9980,15 @@ function showNewQuestModal(quest) {
         }
         hideNewQuestModal();
     };
-    
+
     acceptBtn.on('pointerdown', acceptQuest);
     acceptBtnText.setInteractive({ useHandCursor: true });
     acceptBtnText.on('pointerdown', acceptQuest);
-    
+
     cancelBtn.on('pointerdown', cancelQuest);
     cancelBtnText.setInteractive({ useHandCursor: true });
     cancelBtnText.on('pointerdown', cancelQuest);
-    
+
     // Close on ESC key (same as cancel)
     const escKey = scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ESC);
     const escHandler = () => {
@@ -10271,7 +9998,7 @@ function showNewQuestModal(quest) {
         }
     };
     escKey.on('down', escHandler);
-    
+
     newQuestModal = {
         overlay: overlay,
         modalBg: modalBg,
@@ -10321,19 +10048,19 @@ function hideNewQuestModal() {
  */
 function initializeNPCs() {
     const scene = game.scene.scenes[0];
-    
+
     // Clear existing NPCs first to prevent duplicates
     npcs.forEach(npc => {
         if (npc && npc.active) npc.destroy();
     });
     npcs = [];
-    
+
     const tileSize = scene.tileSize || 32;
     const mapWidth = scene.mapWidth || 40;
     const mapHeight = scene.mapHeight || 40;
     const centerX = Math.floor(mapWidth / 2);
     const centerY = Math.floor(mapHeight / 2);
-    
+
     // Helper function to check if position is inside a building
     function isPositionInBuilding(x, y) {
         const npcSize = 16; // Half of NPC sprite size
@@ -10347,7 +10074,7 @@ function initializeNPCs() {
         }
         return false;
     }
-    
+
     // Helper function to find a valid position near a target
     function findValidPosition(targetX, targetY, attempts = 10) {
         for (let i = 0; i < attempts; i++) {
@@ -10355,13 +10082,13 @@ function initializeNPCs() {
             const offsetY = Phaser.Math.Between(-3, 3) * tileSize;
             const testX = targetX + offsetX;
             const testY = targetY + offsetY;
-            
+
             // Check bounds
             if (testX < tileSize || testX > (mapWidth - 1) * tileSize ||
                 testY < tileSize || testY > (mapHeight - 1) * tileSize) {
                 continue;
             }
-            
+
             // Check if not in building
             if (!isPositionInBuilding(testX, testY)) {
                 return { x: testX, y: testY };
@@ -10370,7 +10097,7 @@ function initializeNPCs() {
         // Fallback: return original position (will be adjusted manually if needed)
         return { x: targetX, y: targetY };
     }
-    
+
     // Position NPCs in town near buildings, ensuring they're not inside buildings
     const npcData = [
         {
@@ -10400,7 +10127,7 @@ function initializeNPCs() {
             dialogId: 'guard_info'
         }
     ];
-    
+
     // Find valid positions for each NPC
     const positionedNPCs = npcData.map(data => {
         const pos = findValidPosition(data.targetX, data.targetY);
@@ -10415,7 +10142,7 @@ function initializeNPCs() {
             merchant: data.merchant
         };
     });
-    
+
     positionedNPCs.forEach(data => {
         // Determine which spritesheet to use based on NPC name
         let spriteKey = 'npc'; // Default fallback
@@ -10426,23 +10153,23 @@ function initializeNPCs() {
         } else if (data.name === 'Guard Thorne') {
             spriteKey = 'npc_captain_thorne';
         }
-        
+
         // Check if spritesheet exists, fallback to default 'npc' if not
         if (!scene.textures.exists(spriteKey)) {
             console.warn(`⚠️ Spritesheet ${spriteKey} not found, using default NPC sprite`);
             spriteKey = 'npc';
         }
-        
+
         const npc = scene.physics.add.sprite(data.x, data.y, spriteKey);
         npc.setDepth(5); // Same depth as monsters
         npc.setCollideWorldBounds(true);
-        
+
         // If using a spritesheet, set to first frame (idle frame)
         if (spriteKey !== 'npc' && scene.textures.exists(spriteKey)) {
             npc.setFrame(0); // Use first frame as idle
             // NPCs at full size (64px)
         }
-        
+
         // Store NPC data
         npc.npcId = data.id;
         npc.name = data.name;
@@ -10454,10 +10181,10 @@ function initializeNPCs() {
         npc.interactionIndicator = null;
         npc.showIndicator = false;
         npc.spriteKey = spriteKey; // Store sprite key for reference
-        
+
         npcs.push(npc);
     });
-    
+
     console.log('✅ NPCs initialized:', npcs.length, 'NPCs');
 }
 
@@ -10466,17 +10193,17 @@ function initializeNPCs() {
  */
 function toggleSettings() {
     const scene = game.scene.scenes[0];
-    
+
     // If already open, close it
     if (settingsVisible) {
         settingsVisible = false;
         destroySettingsUI();
         return;
     }
-    
+
     // Close all other interfaces before opening
     closeAllInterfaces();
-    
+
     // Now open settings
     settingsVisible = true;
     createSettingsUI();
@@ -10487,69 +10214,69 @@ function toggleSettings() {
  */
 function createSettingsUI() {
     const scene = game.scene.scenes[0];
-    
+
     // Create background panel (centered on screen)
     const panelWidth = 500;
     const panelHeight = 400;
     const centerX = scene.cameras.main.width / 2;
     const centerY = scene.cameras.main.height / 2;
-    
+
     // Background
     settingsPanel = {
         bg: scene.add.rectangle(centerX, centerY, panelWidth, panelHeight, 0x1a1a1a, 0.95)
             .setScrollFactor(0).setDepth(300).setStrokeStyle(3, 0xffffff),
-        title: scene.add.text(centerX, centerY - panelHeight/2 + 20, 'SETTINGS', {
+        title: scene.add.text(centerX, centerY - panelHeight / 2 + 20, 'SETTINGS', {
             fontSize: '28px',
             fill: '#ffffff',
             fontStyle: 'bold'
         }).setScrollFactor(0).setDepth(301).setOrigin(0.5, 0),
-        closeText: scene.add.text(centerX + panelWidth/2 - 20, centerY - panelHeight/2 + 20, 'Press ESC to Close', {
+        closeText: scene.add.text(centerX + panelWidth / 2 - 20, centerY - panelHeight / 2 + 20, 'Press ESC to Close', {
             fontSize: '14px',
             fill: '#aaaaaa'
         }).setScrollFactor(0).setDepth(301).setOrigin(1, 0),
         elements: []
     };
-    
+
     // Music toggle setting
-    const settingY = centerY - panelHeight/2 + 80;
+    const settingY = centerY - panelHeight / 2 + 80;
     const settingSpacing = 60;
-    
+
     // Music label
     const musicLabel = scene.add.text(centerX - 100, settingY, 'Music:', {
         fontSize: '20px',
         fill: '#ffffff'
     }).setScrollFactor(0).setDepth(301).setOrigin(0, 0.5);
-    
+
     // Music toggle button
     const toggleWidth = 100;
     const toggleHeight = 40;
     const toggleX = centerX + 50;
-    
+
     const toggleBg = scene.add.rectangle(toggleX, settingY, toggleWidth, toggleHeight, musicEnabled ? 0x00aa00 : 0x666666, 1)
         .setScrollFactor(0).setDepth(301).setStrokeStyle(2, 0xffffff)
         .setInteractive({ useHandCursor: true });
-    
+
     const toggleText = scene.add.text(toggleX, settingY, musicEnabled ? 'ON' : 'OFF', {
         fontSize: '18px',
         fill: '#ffffff',
         fontStyle: 'bold'
     }).setScrollFactor(0).setDepth(302).setOrigin(0.5);
-    
+
     // Toggle button click handler
     toggleBg.on('pointerdown', () => {
         musicEnabled = !musicEnabled;
-        
+
         // Update button appearance
         toggleBg.setFillStyle(musicEnabled ? 0x00aa00 : 0x666666);
         toggleText.setText(musicEnabled ? 'ON' : 'OFF');
-        
+
         // Apply music setting immediately
         if (musicEnabled) {
             // Start appropriate music for current map
             if (scene.sound) {
                 let musicKey = null;
                 let musicName = '';
-                
+
                 if (currentMap === 'town' && scene.cache.audio.exists('village_music')) {
                     musicKey = 'village_music';
                     musicName = 'village';
@@ -10560,7 +10287,7 @@ function createSettingsUI() {
                     musicKey = 'dungeon_music';
                     musicName = 'dungeon';
                 }
-                
+
                 if (musicKey) {
                     try {
                         // Stop any currently playing music
@@ -10579,14 +10306,14 @@ function createSettingsUI() {
                             dungeonMusic.destroy();
                             dungeonMusic = null;
                         }
-                        
+
                         // Start appropriate music
-                        const music = scene.sound.add(musicKey, { 
-                            volume: 0.5, 
+                        const music = scene.sound.add(musicKey, {
+                            volume: 0.5,
                             loop: true,
                             seek: 0
                         });
-                        
+
                         if (currentMap === 'town') {
                             villageMusic = music;
                         } else if (currentMap === 'wilderness') {
@@ -10594,7 +10321,7 @@ function createSettingsUI() {
                         } else if (currentMap === 'dungeon') {
                             dungeonMusic = music;
                         }
-                        
+
                         music.play();
                         console.log(`🎵 Music enabled - started ${musicName} music`);
                     } catch (e) {
@@ -10622,7 +10349,7 @@ function createSettingsUI() {
             console.log('🎵 Music disabled - stopped all music');
         }
     });
-    
+
     // Hover effects
     toggleBg.on('pointerover', () => {
         toggleBg.setStrokeStyle(2, 0xffff00);
@@ -10630,7 +10357,7 @@ function createSettingsUI() {
     toggleBg.on('pointerout', () => {
         toggleBg.setStrokeStyle(2, 0xffffff);
     });
-    
+
     settingsPanel.elements.push(musicLabel, toggleBg, toggleText);
 }
 
@@ -10639,20 +10366,20 @@ function createSettingsUI() {
  */
 function destroySettingsUI() {
     if (!settingsPanel) return;
-    
+
     const scene = game.scene.scenes[0];
-    
+
     // Destroy all elements
     if (settingsPanel.bg) settingsPanel.bg.destroy();
     if (settingsPanel.title) settingsPanel.title.destroy();
     if (settingsPanel.closeText) settingsPanel.closeText.destroy();
-    
+
     settingsPanel.elements.forEach(element => {
         if (element && element.active) {
             element.destroy();
         }
     });
-    
+
     settingsPanel = null;
 }
 
@@ -10661,7 +10388,7 @@ function destroySettingsUI() {
  */
 function updateNPCIndicators() {
     const scene = game.scene.scenes[0];
-    
+
     // Only show NPC indicators in town (NPCs don't exist in wilderness/dungeon)
     if (currentMap !== 'town') {
         // Clean up any lingering indicators
@@ -10674,10 +10401,10 @@ function updateNPCIndicators() {
         });
         return;
     }
-    
+
     npcs.forEach(npc => {
         if (!npc || !npc.active) return;
-        
+
         // Ensure NPC has required properties
         if (npc.interactionRadius === undefined) {
             npc.interactionRadius = 50;
@@ -10685,15 +10412,15 @@ function updateNPCIndicators() {
         if (npc.showIndicator === undefined) {
             npc.showIndicator = false;
         }
-        
+
         // Check distance to player
         const distance = Phaser.Math.Distance.Between(
             player.x, player.y,
             npc.x, npc.y
         );
-        
+
         const inRange = distance <= npc.interactionRadius;
-        
+
         // Show/hide interaction indicator
         if (inRange && !npc.showIndicator) {
             // Convert NPC world position to screen coordinates (since indicator has setScrollFactor(0))
@@ -10701,7 +10428,7 @@ function updateNPCIndicators() {
             const camera = scene.cameras.main;
             const screenX = npc.x - camera.scrollX;
             const screenY = (npc.y - 45) - camera.scrollY;
-            
+
             // Create indicator (exclamation mark or speech bubble)
             npc.interactionIndicator = scene.add.text(screenX, screenY, '!', {
                 fontSize: '24px',
@@ -10710,7 +10437,7 @@ function updateNPCIndicators() {
                 strokeThickness: 3,
                 fontStyle: 'bold'
             }).setOrigin(0.5, 0.5).setDepth(20).setScrollFactor(0); // UI element, don't scroll with world
-            
+
             // Add pulsing animation
             scene.tweens.add({
                 targets: npc.interactionIndicator,
@@ -10721,7 +10448,7 @@ function updateNPCIndicators() {
                 repeat: -1,
                 ease: 'Sine.easeInOut'
             });
-            
+
             npc.showIndicator = true;
         } else if (!inRange && npc.showIndicator) {
             if (npc.interactionIndicator) {
@@ -10730,7 +10457,7 @@ function updateNPCIndicators() {
             }
             npc.showIndicator = false;
         }
-        
+
         // Update indicator position to follow NPC (convert world to screen coordinates)
         if (npc.interactionIndicator && npc.interactionIndicator.active && npc.active) {
             // For objects with setScrollFactor(0), calculate screen position from world position
@@ -10747,7 +10474,7 @@ function updateNPCIndicators() {
  */
 function updateBuildingIndicators() {
     const scene = game.scene.scenes[0];
-    
+
     buildings.forEach((building, index) => {
         if (!building.rect || !building.rect.active) {
             if (building.type && ['inn', 'tavern', 'blacksmith'].includes(building.type)) {
@@ -10755,13 +10482,13 @@ function updateBuildingIndicators() {
             }
             return;
         }
-        
+
         // Ensure building has centerX and centerY (for backwards compatibility)
         if (building.centerX === undefined || building.centerY === undefined) {
             building.centerX = building.x + building.width / 2;
             building.centerY = building.y + building.height / 2;
         }
-        
+
         // Ensure building has interaction properties
         if (building.interactionRadius === undefined) {
             building.interactionRadius = 120; // Increased from 80
@@ -10769,15 +10496,15 @@ function updateBuildingIndicators() {
         if (building.showIndicator === undefined) {
             building.showIndicator = false;
         }
-        
+
         // Check distance to player from building center
         const distance = Phaser.Math.Distance.Between(
             player.x, player.y,
             building.centerX, building.centerY
         );
-        
+
         const inRange = distance <= building.interactionRadius;
-        
+
         // Show/hide interaction indicator
         if (inRange && !building.showIndicator) {
             // Create indicator (door icon or exclamation mark)
@@ -10788,7 +10515,7 @@ function updateBuildingIndicators() {
                 strokeThickness: 3,
                 fontStyle: 'bold'
             }).setOrigin(0.5, 0.5).setDepth(20).setScrollFactor(0);
-            
+
             // Add pulsing animation
             scene.tweens.add({
                 targets: building.interactionIndicator,
@@ -10799,7 +10526,7 @@ function updateBuildingIndicators() {
                 repeat: -1,
                 ease: 'Sine.easeInOut'
             });
-            
+
             building.showIndicator = true;
             if (['inn', 'tavern', 'blacksmith'].includes(building.type)) {
                 console.log(`✅ Showing indicator for ${building.type} (distance: ${distance.toFixed(0)})`);
@@ -10811,7 +10538,7 @@ function updateBuildingIndicators() {
             }
             building.showIndicator = false;
         }
-        
+
         // Update indicator position to follow building
         if (building.interactionIndicator && building.interactionIndicator.active) {
             building.interactionIndicator.x = building.centerX;
@@ -10832,19 +10559,19 @@ function checkBuildingInteraction() {
         console.log('❌ UI already open, skipping building interaction');
         return;
     }
-    
+
     console.log(`🔍 Checking building interaction. Total buildings: ${buildings.length}`);
-    
+
     // Find nearest building in range
     let closestBuilding = null;
     let closestDistance = Infinity;
-    
+
     buildings.forEach((building, index) => {
         if (!building.rect || !building.rect.active) {
             console.log(`⚠️ Building ${index} (${building.type}) has no active rect`);
             return;
         }
-        
+
         // Ensure building has centerX and centerY
         if (building.centerX === undefined || building.centerY === undefined) {
             building.centerX = building.x + building.width / 2;
@@ -10853,21 +10580,21 @@ function checkBuildingInteraction() {
         if (building.interactionRadius === undefined) {
             building.interactionRadius = 120; // Increased from 80
         }
-        
+
         const distance = Phaser.Math.Distance.Between(
             player.x, player.y,
             building.centerX, building.centerY
         );
-        
+
         console.log(`  Building ${index}: ${building.type} at (${building.centerX.toFixed(0)}, ${building.centerY.toFixed(0)}), distance: ${distance.toFixed(0)}, radius: ${building.interactionRadius}`);
-        
+
         if (distance <= building.interactionRadius && distance < closestDistance) {
             closestDistance = distance;
             closestBuilding = building;
             console.log(`  ✅ ${building.type} is in range!`);
         }
     });
-    
+
     if (closestBuilding) {
         console.log(`🏠 Opening UI for ${closestBuilding.type} (distance: ${closestDistance.toFixed(0)})`);
         openBuildingUI(closestBuilding);
@@ -10885,25 +10612,25 @@ function checkNPCInteraction() {
         closeDialog();
         return;
     }
-    
+
     // Find nearest NPC in range
     let closestNPC = null;
     let closestDistance = Infinity;
-    
+
     npcs.forEach(npc => {
         if (!npc.active) return;
-        
+
         const distance = Phaser.Math.Distance.Between(
             player.x, player.y,
             npc.x, npc.y
         );
-        
+
         if (distance <= npc.interactionRadius && distance < closestDistance) {
             closestDistance = distance;
             closestNPC = npc;
         }
     });
-    
+
     if (closestNPC && closestNPC.dialogId) {
         startDialog(closestNPC);
     }
@@ -11013,12 +10740,12 @@ function startDialog(npc) {
         console.warn(`Dialog not found: ${npc.dialogId}`);
         return;
     }
-    
+
     currentDialog = dialogData;
     currentDialogNode = 'start';
     currentShopNPC = npc; // Store reference for shop
     dialogVisible = true;
-    
+
     createDialogUI(npc);
     showDialogNode('start');
 }
@@ -11031,12 +10758,12 @@ function showDialogNode(nodeId) {
         closeDialog();
         return;
     }
-    
+
     currentDialogNode = nodeId;
     const node = currentDialog.nodes[nodeId];
-    
+
     updateDialogUI(node);
-    
+
     // If no choices, auto-close after a moment
     if (node.choices.length === 0) {
         game.scene.scenes[0].time.delayedCall(2000, () => {
@@ -11050,16 +10777,16 @@ function showDialogNode(nodeId) {
  */
 function createDialogUI(npc) {
     const scene = game.scene.scenes[0];
-    
+
     const panelWidth = 700;
     const panelHeight = 300;
     const centerX = scene.cameras.main.width / 2;
     const centerY = scene.cameras.main.height / 2 + 150;
-    
+
     dialogPanel = {
         bg: scene.add.rectangle(centerX, centerY, panelWidth, panelHeight, 0x1a1a1a, 0.95)
             .setScrollFactor(0).setDepth(400).setStrokeStyle(3, 0xffffff),
-        npcNameText: scene.add.text(centerX - panelWidth/2 + 20, centerY - panelHeight/2 + 20, 
+        npcNameText: scene.add.text(centerX - panelWidth / 2 + 20, centerY - panelHeight / 2 + 20,
             `${npc.name}${npc.title ? ' - ' + npc.title : ''}`, {
             fontSize: '24px',
             fill: '#ffffff',
@@ -11076,7 +10803,7 @@ function createDialogUI(npc) {
 function updateDialogUI(node) {
     const scene = game.scene.scenes[0];
     if (!dialogPanel) return;
-    
+
     // Clear previous dialog text and choices
     if (dialogPanel.dialogText) {
         dialogPanel.dialogText.destroy();
@@ -11086,16 +10813,16 @@ function updateDialogUI(node) {
         if (btn.text) btn.text.destroy();
     });
     dialogPanel.choiceButtons = [];
-    
+
     const centerX = dialogPanel.bg.x;
     const centerY = dialogPanel.bg.y;
     const panelWidth = 700;
     const panelHeight = 300;
-    
+
     // Dialog text
     dialogPanel.dialogText = scene.add.text(
-        centerX - panelWidth/2 + 20,
-        centerY - panelHeight/2 + 70,
+        centerX - panelWidth / 2 + 20,
+        centerY - panelHeight / 2 + 70,
         node.text,
         {
             fontSize: '18px',
@@ -11103,16 +10830,16 @@ function updateDialogUI(node) {
             wordWrap: { width: panelWidth - 40 }
         }
     ).setScrollFactor(0).setDepth(401).setOrigin(0, 0);
-    
+
     // Choice buttons
     const startY = centerY + 50;
     const buttonHeight = 40;
     const buttonSpacing = 10;
-    
+
     node.choices.forEach((choice, index) => {
         const buttonY = startY + index * (buttonHeight + buttonSpacing);
         const buttonWidth = panelWidth - 40;
-        
+
         // Button background
         const buttonBg = scene.add.rectangle(
             centerX,
@@ -11122,9 +10849,9 @@ function updateDialogUI(node) {
             0x333333,
             0.9
         ).setScrollFactor(0).setDepth(401)
-         .setStrokeStyle(2, 0x666666)
-         .setInteractive({ useHandCursor: true });
-        
+            .setStrokeStyle(2, 0x666666)
+            .setInteractive({ useHandCursor: true });
+
         // Button text
         const buttonText = scene.add.text(
             centerX,
@@ -11135,7 +10862,7 @@ function updateDialogUI(node) {
                 fill: '#ffffff'
             }
         ).setScrollFactor(0).setDepth(402).setOrigin(0.5, 0.5);
-        
+
         // Button hover effects
         buttonBg.on('pointerover', () => {
             buttonBg.setFillStyle(0x444444);
@@ -11143,7 +10870,7 @@ function updateDialogUI(node) {
         buttonBg.on('pointerout', () => {
             buttonBg.setFillStyle(0x333333);
         });
-        
+
         // Button click handler
         buttonBg.on('pointerdown', () => {
             if (choice.action === 'open_shop') {
@@ -11154,7 +10881,7 @@ function updateDialogUI(node) {
                 closeDialog();
             }
         });
-        
+
         dialogPanel.choiceButtons.push({
             bg: buttonBg,
             text: buttonText,
@@ -11171,15 +10898,15 @@ function closeDialog() {
         if (dialogPanel.bg) dialogPanel.bg.destroy();
         if (dialogPanel.npcNameText) dialogPanel.npcNameText.destroy();
         if (dialogPanel.dialogText) dialogPanel.dialogText.destroy();
-        
+
         dialogPanel.choiceButtons.forEach(btn => {
             if (btn.bg) btn.bg.destroy();
             if (btn.text) btn.text.destroy();
         });
-        
+
         dialogPanel = null;
     }
-    
+
     currentDialog = null;
     currentDialogNode = null;
     currentShopNPC = null;
@@ -11214,11 +10941,11 @@ const shopInventory = [
  */
 function openShop(npc) {
     if (!npc || !npc.merchant) return;
-    
+
     // Close all other interfaces before opening shop
     closeAllInterfaces();
     closeDialog(); // Also close dialog if open
-    
+
     shopVisible = true;
     createShopUI(npc);
 }
@@ -11228,7 +10955,7 @@ function openShop(npc) {
  */
 function createShopUI(npc) {
     const scene = game.scene.scenes[0];
-    
+
     // Calculate panel dimensions - each panel is half the game width
     const gameWidth = 1024;
     const gameHeight = 768;
@@ -11237,22 +10964,22 @@ function createShopUI(npc) {
     const leftPanelX = panelWidth / 2;
     const rightPanelX = panelWidth + panelWidth / 2;
     const centerY = gameHeight / 2;
-    
+
     // Left panel - Shop Items
     const leftBg = scene.add.rectangle(leftPanelX, centerY, panelWidth, panelHeight, 0x1a1a1a, 0.95)
         .setScrollFactor(0).setDepth(400).setStrokeStyle(3, 0xffffff);
-    
+
     // Right panel - Player Inventory
     const rightBg = scene.add.rectangle(rightPanelX, centerY, panelWidth, panelHeight, 0x1a1a1a, 0.95)
         .setScrollFactor(0).setDepth(400).setStrokeStyle(3, 0xffffff);
-    
+
     // Divider line between panels
     const dividerGraphics = scene.add.graphics();
     dividerGraphics.lineStyle(2, 0xffffff, 0.5);
     dividerGraphics.lineBetween(panelWidth, 0, panelWidth, gameHeight);
     dividerGraphics.setScrollFactor(0).setDepth(401);
     const divider = dividerGraphics;
-    
+
     // Create scrollable container for inventory items in right panel
     const inventoryStartY = 100; // Start below title
     const inventoryEndY = gameHeight - 20; // Leave some space at bottom
@@ -11266,28 +10993,28 @@ function createShopUI(npc) {
     const containerOffset = 60;
     const inventoryContainer = scene.add.container(rightPanelX, inventoryStartY - containerOffset);
     inventoryContainer.setScrollFactor(0).setDepth(401);
-    
+
     // Create mask for the scrollable area
     // Start mask higher to prevent clipping of first row (similar to equipment screen)
     const maskTopOffset = 30; // Offset to show first items fully
     const inventoryMask = scene.make.graphics();
     inventoryMask.fillStyle(0xffffff);
-    inventoryMask.fillRect(rightPanelX - panelWidth/2, inventoryStartY - maskTopOffset, panelWidth, inventoryVisibleHeight + maskTopOffset);
+    inventoryMask.fillRect(rightPanelX - panelWidth / 2, inventoryStartY - maskTopOffset, panelWidth, inventoryVisibleHeight + maskTopOffset);
     inventoryMask.setScrollFactor(0).setDepth(401);
     const maskGeometry = inventoryMask.createGeometryMask();
-    
+
     // Create scrollbar for inventory
     const scrollbarWidth = 12;
-    const scrollbarX = rightPanelX + panelWidth/2 - scrollbarWidth - 10;
-    const scrollbarTrack = scene.add.rectangle(scrollbarX, inventoryStartY + inventoryVisibleHeight/2, scrollbarWidth, inventoryVisibleHeight, 0x333333, 0.8)
+    const scrollbarX = rightPanelX + panelWidth / 2 - scrollbarWidth - 10;
+    const scrollbarTrack = scene.add.rectangle(scrollbarX, inventoryStartY + inventoryVisibleHeight / 2, scrollbarWidth, inventoryVisibleHeight, 0x333333, 0.8)
         .setScrollFactor(0).setDepth(403).setStrokeStyle(1, 0x555555)
         .setInteractive({ useHandCursor: true });
-    
+
     const scrollbarThumbHeight = 40; // Will be adjusted based on content
-    const scrollbarThumb = scene.add.rectangle(scrollbarX, inventoryStartY + scrollbarThumbHeight/2, scrollbarWidth - 4, scrollbarThumbHeight, 0x666666, 1)
+    const scrollbarThumb = scene.add.rectangle(scrollbarX, inventoryStartY + scrollbarThumbHeight / 2, scrollbarWidth - 4, scrollbarThumbHeight, 0x666666, 1)
         .setScrollFactor(0).setDepth(404).setStrokeStyle(1, 0x888888)
         .setInteractive({ useHandCursor: true });
-    
+
     // Scroll state for inventory
     // Allow more negative scroll to show first items fully (accounts for top padding)
     const minScroll = -30; // Increased from -20 to show items with top padding
@@ -11296,7 +11023,7 @@ function createShopUI(npc) {
     let isDraggingInventory = false;
     let dragStartY = 0;
     let dragStartScroll = 0;
-    
+
     // Scrollbar drag handlers for inventory
     const handleInventoryPointerDown = (pointer) => {
         if (shopVisible && scrollbarThumb.getBounds().contains(pointer.x, pointer.y)) {
@@ -11313,7 +11040,7 @@ function createShopUI(npc) {
             setInventoryScrollPosition(newScroll);
         }
     };
-    
+
     const handleInventoryPointerMove = (pointer) => {
         if (shopVisible && isDraggingInventory && pointer.isDown) {
             const deltaY = pointer.y - dragStartY;
@@ -11326,11 +11053,11 @@ function createShopUI(npc) {
             }
         }
     };
-    
+
     const handleInventoryPointerUp = () => {
         isDraggingInventory = false;
     };
-    
+
     const handleInventoryWheel = (pointer, gameObjects, deltaX, deltaY, deltaZ) => {
         if (shopVisible && inventoryMaxScroll > 0) {
             // Check if pointer is over the right panel (inventory area)
@@ -11342,15 +11069,15 @@ function createShopUI(npc) {
             }
         }
     };
-    
+
     // Function to update inventory scroll position
     function setInventoryScrollPosition(newPosition) {
         inventoryScrollPosition = Math.max(minScroll, Math.min(inventoryMaxScroll, newPosition));
-        
+
         // Update container position
         const offset = containerOffset;
         inventoryContainer.y = inventoryStartY - offset - inventoryScrollPosition;
-        
+
         // Update scrollbar thumb position
         if (inventoryMaxScroll > 0) {
             const scrollRange = inventoryMaxScroll - minScroll;
@@ -11358,25 +11085,25 @@ function createShopUI(npc) {
             const scrollRatio = Math.min(1, Math.max(0, normalizedScroll));
             const availableTrackHeight = inventoryVisibleHeight - scrollbarThumb.height;
             const thumbY = inventoryStartY + scrollRatio * availableTrackHeight;
-            let thumbCenterY = thumbY + scrollbarThumb.height/2;
-            
+            let thumbCenterY = thumbY + scrollbarThumb.height / 2;
+
             // Ensure thumb reaches absolute top when at or near minScroll
             if (inventoryScrollPosition <= minScroll + 0.5) {
-                thumbCenterY = inventoryStartY + scrollbarThumb.height/2;
+                thumbCenterY = inventoryStartY + scrollbarThumb.height / 2;
             }
-            
+
             scrollbarThumb.y = thumbCenterY;
         } else {
-            scrollbarThumb.y = inventoryStartY + scrollbarThumb.height/2;
+            scrollbarThumb.y = inventoryStartY + scrollbarThumb.height / 2;
         }
     }
-    
+
     // Add scroll handlers
     scene.input.on('pointerdown', handleInventoryPointerDown);
     scene.input.on('pointermove', handleInventoryPointerMove);
     scene.input.on('pointerup', handleInventoryPointerUp);
     scene.input.on('wheel', handleInventoryWheel);
-    
+
     shopPanel = {
         leftBg: leftBg,
         rightBg: rightBg,
@@ -11420,14 +11147,14 @@ function createShopUI(npc) {
             wheel: handleInventoryWheel
         }
     };
-    
+
     // Show current gold - positioned in left panel (moved up to avoid overlap with title)
-    shopPanel.goldText = scene.add.text(leftPanelX - panelWidth/2 + 20, 15, `Gold: ${playerStats.gold}`, {
+    shopPanel.goldText = scene.add.text(leftPanelX - panelWidth / 2 + 20, 15, `Gold: ${playerStats.gold}`, {
         fontSize: '20px',
         fill: '#ffd700',
         fontStyle: 'bold'
     }).setScrollFactor(0).setDepth(401).setOrigin(0, 0);
-    
+
     updateShopItems();
     updateShopInventoryItems();
 }
@@ -11438,9 +11165,9 @@ function createShopUI(npc) {
 function updateShopItems() {
     const scene = game.scene.scenes[0];
     if (!shopPanel) return;
-    
+
     console.log('🛒 Updating shop items. Shop inventory length:', shopInventory.length);
-    
+
     // Clear existing shop items (including stats text)
     shopPanel.items.forEach(item => {
         if (item.bg && item.bg.active) item.bg.destroy();
@@ -11453,10 +11180,10 @@ function updateShopItems() {
         if (item.borderRect && item.borderRect.active) item.borderRect.destroy();
     });
     shopPanel.items = [];
-    
+
     // Don't clear inventory items here - they should only be cleared in updateShopInventoryItems()
     // This prevents inventory from disappearing when shop items are updated
-    
+
     // Update gold display
     if (shopPanel.goldText) {
         shopPanel.goldText.destroy();
@@ -11464,42 +11191,42 @@ function updateShopItems() {
     const leftPanelX = shopPanel.leftBg.x;
     const panelWidth = 512; // Half of 1024
     const panelHeight = 768;
-    
+
     // Gold display - positioned in left panel (moved up to avoid overlap with title)
-    shopPanel.goldText = scene.add.text(leftPanelX - panelWidth/2 + 20, 15, 
+    shopPanel.goldText = scene.add.text(leftPanelX - panelWidth / 2 + 20, 15,
         `Gold: ${playerStats.gold}`, {
         fontSize: '20px',
         fill: '#ffd700',
         fontStyle: 'bold'
     }).setScrollFactor(0).setDepth(401).setOrigin(0, 0);
-    
+
     // Display shop items with scrolling in left panel
     const startY = 100;
     const itemHeight = 80;
     const spacing = 10;
     const visibleAreaHeight = panelHeight - 120; // Area for items (minus header)
-    
+
     // Calculate max scroll
     const totalItemsHeight = shopInventory.length * (itemHeight + spacing);
     shopPanel.maxScrollY = Math.max(0, totalItemsHeight - visibleAreaHeight);
-    
+
     // Clamp scroll position
     shopPanel.scrollY = Math.max(0, Math.min(shopPanel.scrollY, shopPanel.maxScrollY));
-    
+
     shopInventory.forEach((item, index) => {
         const itemY = startY + index * (itemHeight + spacing) - shopPanel.scrollY;
-        
+
         // Only render items that are visible (with some padding)
         const visibleTop = 80;
         const visibleBottom = panelHeight - 40;
         if (itemY < visibleTop || itemY > visibleBottom) {
             return; // Skip rendering off-screen items
         }
-        
+
         console.log(`🛒 Rendering shop item ${index}: ${item.name} (type: ${item.type}) at Y: ${itemY}`);
         // Item width for left panel (leave space for scrollbar)
         const itemWidth = panelWidth - 60;
-        
+
         // Item background
         const itemBg = scene.add.rectangle(
             leftPanelX,
@@ -11509,7 +11236,7 @@ function updateShopItems() {
             0x333333,
             0.8
         ).setScrollFactor(0).setDepth(401).setStrokeStyle(2, 0x666666);
-        
+
         // Item sprite - map item types to sprite keys
         let spriteKey = 'item_weapon'; // Default fallback
         if (item.type === 'weapon') spriteKey = 'item_weapon';
@@ -11521,7 +11248,7 @@ function updateShopItems() {
         else if (item.type === 'gloves') spriteKey = 'item_gloves';
         else if (item.type === 'belt') spriteKey = 'item_belt';
         else if (item.type === 'consumable') spriteKey = 'item_consumable';
-        
+
         // Check if sprite key exists, use fallback if not
         let finalSpriteKey = spriteKey;
         if (!scene.textures.exists(spriteKey)) {
@@ -11543,20 +11270,20 @@ function updateShopItems() {
                 finalSpriteKey = 'item_weapon';
             }
         }
-        
+
         let itemSprite;
         let borderRect = null; // Declare outside try block so it's accessible later
-        
+
         try {
-            itemSprite = scene.add.sprite(leftPanelX - itemWidth/2 + 30, itemY, finalSpriteKey);
+            itemSprite = scene.add.sprite(leftPanelX - itemWidth / 2 + 30, itemY, finalSpriteKey);
             if (itemSprite) {
                 itemSprite.setScrollFactor(0).setDepth(402).setScale(1.2);
-                
+
                 // Check if this is a custom image (not a generated fallback)
                 // Custom images: weapon, armor, helmet, amulet, boots, gloves, belt, ring, consumable
                 const customImageKeys = ['item_weapon', 'item_armor', 'item_helmet', 'item_amulet', 'item_boots', 'item_gloves', 'item_belt', 'item_ring', 'item_consumable'];
                 const isCustomImage = customImageKeys.includes(finalSpriteKey) && finalSpriteKey === spriteKey;
-                
+
                 // Don't tint custom images - they already have their own colors
                 // Only tint generated fallback sprites to show quality
                 if (!isCustomImage) {
@@ -11564,32 +11291,32 @@ function updateShopItems() {
                     itemSprite.setTint(qualityColor);
                 }
                 // Custom images are left untinted to preserve their appearance
-                
+
                 // Add quality border around the sprite
                 const qualityColor = QUALITY_COLORS[item.quality] || QUALITY_COLORS['Common'];
                 const borderWidth = 3;
                 const spriteSize = 32 * 1.2; // Match sprite scale
-                borderRect = scene.add.rectangle(leftPanelX - itemWidth/2 + 30, itemY, spriteSize + borderWidth * 2, spriteSize + borderWidth * 2, qualityColor, 0)
+                borderRect = scene.add.rectangle(leftPanelX - itemWidth / 2 + 30, itemY, spriteSize + borderWidth * 2, spriteSize + borderWidth * 2, qualityColor, 0)
                     .setStrokeStyle(borderWidth, qualityColor)
                     .setScrollFactor(0)
                     .setDepth(401); // Behind sprite but visible
-                
+
                 console.log(`Shop: Successfully created sprite for "${item.name}" using "${finalSpriteKey}"`);
             }
         } catch (error) {
             console.error(`Shop: Failed to create sprite for item "${item.name}":`, error);
             // Create a placeholder rectangle if sprite creation fails
-            itemSprite = scene.add.rectangle(leftPanelX - itemWidth/2 + 30, itemY, 32, 32, 0x888888, 1.0)
+            itemSprite = scene.add.rectangle(leftPanelX - itemWidth / 2 + 30, itemY, 32, 32, 0x888888, 1.0)
                 .setScrollFactor(0).setDepth(402);
         }
-        
+
         // Item name
-        const nameText = scene.add.text(leftPanelX - itemWidth/2 + 80, itemY - 15, item.name, {
+        const nameText = scene.add.text(leftPanelX - itemWidth / 2 + 80, itemY - 15, item.name, {
             fontSize: '18px',
             fill: '#ffffff',
             fontStyle: 'bold'
         }).setScrollFactor(0).setDepth(402).setOrigin(0, 0.5);
-        
+
         // Item stats
         let statsText = '';
         const stats = [];
@@ -11599,37 +11326,37 @@ function updateShopItems() {
         if (item.speed) stats.push(`Speed: +${item.speed}`);
         if (item.healAmount) stats.push(`Heals: ${item.healAmount} HP`);
         statsText = stats.join(' | ');
-        
-        const statsTextObj = scene.add.text(leftPanelX - itemWidth/2 + 80, itemY + 15, statsText, {
+
+        const statsTextObj = scene.add.text(leftPanelX - itemWidth / 2 + 80, itemY + 15, statsText, {
             fontSize: '14px',
             fill: '#cccccc'
         }).setScrollFactor(0).setDepth(402).setOrigin(0, 0.5);
-        
+
         // Price
-        const priceText = scene.add.text(leftPanelX + itemWidth/2 - 140, itemY, `${item.price} Gold`, {
+        const priceText = scene.add.text(leftPanelX + itemWidth / 2 - 140, itemY, `${item.price} Gold`, {
             fontSize: '18px',
             fill: '#ffd700',
             fontStyle: 'bold'
         }).setScrollFactor(0).setDepth(402).setOrigin(0.5, 0.5);
-        
+
         // Buy button
         const buyButton = scene.add.rectangle(
-            leftPanelX + itemWidth/2 - 60,
+            leftPanelX + itemWidth / 2 - 60,
             itemY,
             80,
             40,
             0x00aa00,
             0.9
         ).setScrollFactor(0).setDepth(401)
-         .setStrokeStyle(2, 0x00ff00)
-         .setInteractive({ useHandCursor: true });
-        
-        const buyText = scene.add.text(leftPanelX + itemWidth/2 - 60, itemY, 'Buy', {
+            .setStrokeStyle(2, 0x00ff00)
+            .setInteractive({ useHandCursor: true });
+
+        const buyText = scene.add.text(leftPanelX + itemWidth / 2 - 60, itemY, 'Buy', {
             fontSize: '16px',
             fill: '#ffffff',
             fontStyle: 'bold'
         }).setScrollFactor(0).setDepth(402).setOrigin(0.5, 0.5);
-        
+
         // Button hover
         buyButton.on('pointerover', () => {
             buyButton.setFillStyle(0x00cc00);
@@ -11637,12 +11364,33 @@ function updateShopItems() {
         buyButton.on('pointerout', () => {
             buyButton.setFillStyle(0x00aa00);
         });
-        
+
         // Buy handler
         buyButton.on('pointerdown', () => {
             buyItem(item, item.price);
         });
-        
+
+        // Hover effects
+        const onBuyHoverIn = () => {
+            showTooltip(item, leftPanelX, itemY, 'shop_buy');
+        };
+        const onBuyHoverOut = () => {
+            hideTooltip();
+        };
+
+        itemBg.setInteractive({ useHandCursor: true });
+        itemSprite.setInteractive({ useHandCursor: true });
+        if (borderRect) borderRect.setInteractive({ useHandCursor: true });
+
+        itemBg.on('pointerover', onBuyHoverIn);
+        itemBg.on('pointerout', onBuyHoverOut);
+        itemSprite.on('pointerover', onBuyHoverIn);
+        itemSprite.on('pointerout', onBuyHoverOut);
+        if (borderRect) {
+            borderRect.on('pointerover', onBuyHoverIn);
+            borderRect.on('pointerout', onBuyHoverOut);
+        }
+
         shopPanel.items.push({
             bg: itemBg,
             sprite: itemSprite,
@@ -11656,7 +11404,7 @@ function updateShopItems() {
             baseY: startY + index * (itemHeight + spacing) // Store base position for scrolling
         });
     });
-    
+
     // Add scrollbar if needed
     if (shopPanel.maxScrollY > 0) {
         const scrollbarWidth = 20;
@@ -11664,14 +11412,14 @@ function updateShopItems() {
         const scrollbarTop = startY; // Start where items start
         const scrollbarBottom = startY + visibleAreaHeight; // End where items end
         const scrollbarHeight = visibleAreaHeight;
-        const scrollbarX = leftPanelX + panelWidth/2 - 15; // 15px from right edge of left panel
+        const scrollbarX = leftPanelX + panelWidth / 2 - 15; // 15px from right edge of left panel
         const scrollbarCenterY = scrollbarTop + scrollbarHeight / 2; // Center of scrollbar track
-        
+
         // Scrollbar background (positioned correctly within item area)
         if (shopPanel.scrollbarBg) shopPanel.scrollbarBg.destroy();
         shopPanel.scrollbarBg = scene.add.rectangle(scrollbarX, scrollbarCenterY, scrollbarWidth, scrollbarHeight, 0x333333, 0.8)
             .setScrollFactor(0).setDepth(401).setStrokeStyle(1, 0x666666);
-        
+
         // Scrollbar thumb
         const thumbHeight = Math.max(30, (visibleAreaHeight / totalItemsHeight) * scrollbarHeight);
         // Calculate thumb CENTER position - rectangles are centered on their Y position
@@ -11680,25 +11428,25 @@ function updateShopItems() {
         const thumbTopMin = scrollbarTop + thumbHeight / 2; // Minimum thumb center Y (at top)
         const thumbBottomMax = scrollbarBottom - thumbHeight / 2; // Maximum thumb center Y (at bottom)
         const thumbRange = thumbBottomMax - thumbTopMin; // Available range for thumb center to move
-        
+
         let thumbCenterY = thumbTopMin; // Default to top position
-        
+
         if (shopPanel.maxScrollY > 0 && thumbRange > 0) {
             // Calculate position: 0 scroll = top, maxScrollY = bottom
             const scrollRatio = Math.min(1, Math.max(0, shopPanel.scrollY / shopPanel.maxScrollY)); // Clamp to 0-1
             thumbCenterY = thumbTopMin + (scrollRatio * thumbRange);
         }
-        
+
         // Ensure thumb reaches exact positions at extremes
         if (shopPanel.scrollY <= 0) {
             thumbCenterY = thumbTopMin; // At top when scrollY = 0
         } else if (shopPanel.scrollY >= shopPanel.maxScrollY) {
             thumbCenterY = thumbBottomMax; // At bottom when fully scrolled
         }
-        
+
         // Final clamp to ensure thumb stays within channel bounds
         thumbCenterY = Math.max(thumbTopMin, Math.min(thumbCenterY, thumbBottomMax));
-        
+
         if (shopPanel.scrollbarThumb) shopPanel.scrollbarThumb.destroy();
         shopPanel.scrollbarThumb = scene.add.rectangle(scrollbarX, thumbCenterY, scrollbarWidth - 4, thumbHeight, 0x666666, 0.9)
             .setScrollFactor(0).setDepth(402).setStrokeStyle(1, 0x999999);
@@ -11723,30 +11471,30 @@ function buyItem(item, price) {
         showDamageNumber(player.x, player.y - 40, 'Not enough gold!', 0xff0000);
         return;
     }
-    
+
     // Hide any tooltips before refreshing
-    hideItemTooltip();
-    
+    hideTooltip(true);
+
     // Create item copy for inventory
     const purchasedItem = {
         ...item,
         id: `shop_${Date.now()}_${Math.random()}`
     };
-    
+
     playerStats.gold -= price;
     playerStats.inventory.push(purchasedItem);
-    
+
     // Update gold display
     if (shopPanel.goldText) {
         shopPanel.goldText.setText(`Gold: ${playerStats.gold}`);
     }
-    
+
     showDamageNumber(player.x, player.y - 40, `Bought ${item.name}!`, 0x00ff00);
-    
+
     // Refresh shop UI
     updateShopItems();
     updateShopInventoryItems(); // Update right panel inventory
-    
+
     // Refresh inventory if open (this will also hide tooltips)
     if (inventoryVisible) {
         refreshInventory();
@@ -11759,7 +11507,7 @@ function buyItem(item, price) {
 function updateShopInventoryItems() {
     const scene = game.scene.scenes[0];
     if (!shopPanel) return;
-    
+
     // Clear existing inventory items
     shopPanel.inventoryItems.forEach(item => {
         if (item.bg && item.bg.active) item.bg.destroy();
@@ -11769,15 +11517,15 @@ function updateShopInventoryItems() {
         if (item.borderRect && item.borderRect.active) item.borderRect.destroy();
     });
     shopPanel.inventoryItems = [];
-    
+
     // Clear container
     if (shopPanel.inventoryContainer) {
         shopPanel.inventoryContainer.removeAll(true);
     }
-    
+
     const rightPanelX = shopPanel.rightBg.x;
     const inventoryItems = playerStats.inventory;
-    
+
     if (inventoryItems.length === 0) {
         const emptyText = scene.add.text(rightPanelX, 200, 'Inventory is empty', {
             fontSize: '16px',
@@ -11790,7 +11538,7 @@ function updateShopInventoryItems() {
         if (shopPanel.scrollbarThumb) shopPanel.scrollbarThumb.setVisible(false);
         return;
     }
-    
+
     // Display items in a grid in right panel with dynamic row heights
     const itemSize = 60;
     const spacing = 15;
@@ -11799,14 +11547,14 @@ function updateShopInventoryItems() {
     const startX = -gridWidth / 2 + itemSize / 2; // Relative to container center
     const topPadding = 10; // Add padding at top so first row isn't cut off
     const startY = topPadding; // Items start below top padding
-    
+
     // First, create all items and measure their heights
     const itemData = [];
     inventoryItems.forEach((item, index) => {
         const row = Math.floor(index / itemsPerRow);
         const col = index % itemsPerRow;
         const x = startX + col * (itemSize + spacing);
-        
+
         // Create temporary text to measure height (we'll recreate it properly below)
         const tempNameText = scene.add.text(0, 0, item.name, {
             fontSize: '11px',
@@ -11815,14 +11563,14 @@ function updateShopInventoryItems() {
         });
         const nameTextHeight = tempNameText.height;
         tempNameText.destroy();
-        
+
         // Calculate total item height: sprite + name + price + spacing
         const spriteHeight = itemSize;
         const nameStartOffset = 5;
         const priceHeight = 10;
         const priceSpacing = 4; // Reduced from 8 to 4 for tighter spacing between label and price
         const itemTotalHeight = spriteHeight + nameStartOffset + nameTextHeight + priceSpacing + priceHeight;
-        
+
         itemData.push({
             item: item,
             row: row,
@@ -11832,17 +11580,17 @@ function updateShopInventoryItems() {
             itemTotalHeight: itemTotalHeight
         });
     });
-    
+
     // Group items by row and find the tallest item in each row
     const rowHeights = {};
     const totalRows = Math.ceil(inventoryItems.length / itemsPerRow);
-    
+
     for (let r = 0; r < totalRows; r++) {
         const rowItems = itemData.filter(data => data.row === r);
         const maxHeight = Math.max(...rowItems.map(data => data.itemTotalHeight));
         rowHeights[r] = maxHeight;
     }
-    
+
     // Calculate cumulative Y positions for each row
     const rowYPositions = {};
     let currentY = startY;
@@ -11850,16 +11598,16 @@ function updateShopInventoryItems() {
         rowYPositions[r] = currentY;
         currentY += rowHeights[r] + spacing; // Add spacing between rows
     }
-    
+
     // Calculate total content height based on actual row heights
     // Include top padding in total height calculation
     const totalContentHeight = currentY - spacing; // Remove last spacing, includes topPadding
-    
+
     // Now create items with proper positioning
     itemData.forEach((data, index) => {
         const { item, row, col, x, nameTextHeight } = data;
         const y = rowYPositions[row];
-        
+
         // Get item sprite key based on type
         let spriteKey = 'item_weapon';
         if (item.type === 'weapon') {
@@ -11881,14 +11629,14 @@ function updateShopInventoryItems() {
         else if (item.type === 'belt') spriteKey = 'item_belt';
         else if (item.type === 'consumable') spriteKey = 'item_consumable';
         else if (item.type === 'gold') spriteKey = 'item_gold';
-        
+
         // Create item sprite with background (add to container)
         const itemBg = scene.add.rectangle(x, y, itemSize, itemSize, 0x222222, 0.8)
             .setScrollFactor(0).setDepth(400).setStrokeStyle(1, 0x444444);
-        
+
         const itemSprite = scene.add.sprite(x, y, spriteKey);
         itemSprite.setScrollFactor(0).setDepth(402).setScale(0.8);
-        
+
         // Add quality border
         const qualityColor = QUALITY_COLORS[item.quality] || QUALITY_COLORS['Common'];
         const borderWidth = 2;
@@ -11897,52 +11645,67 @@ function updateShopInventoryItems() {
             .setStrokeStyle(borderWidth, qualityColor)
             .setScrollFactor(0)
             .setDepth(400.5);
-        
+
         // Item name below sprite
-        const itemNameText = scene.add.text(x, y + itemSize/2 + 5, item.name, {
+        const itemNameText = scene.add.text(x, y + itemSize / 2 + 5, item.name, {
             fontSize: '11px',
             fill: '#ffffff',
             wordWrap: { width: itemSize + 10 }
         }).setScrollFactor(0).setDepth(402).setOrigin(0.5, 0);
-        
+
         // Calculate sell price (typically 50% of buy price, or a base value)
         const sellPrice = item.price ? Math.floor(item.price * 0.5) : calculateItemSellPrice(item);
         // Position price below item name using actual measured height
         // Start of name (5px below sprite center) + actual name height + reduced spacing
-        const priceY = y + itemSize/2 + 5 + nameTextHeight + 4; // Reduced from 8 to 4 for tighter spacing
+        const priceY = y + itemSize / 2 + 5 + nameTextHeight + 4; // Reduced from 8 to 4 for tighter spacing
         const priceText = scene.add.text(x, priceY, `${sellPrice}G`, {
             fontSize: '10px',
             fill: '#ffd700'
         }).setScrollFactor(0).setDepth(402).setOrigin(0.5, 0);
-        
+
         // Add all items to container (this fixes the positioning issue)
         shopPanel.inventoryContainer.add([itemBg, itemSprite, borderRect, itemNameText, priceText]);
-        
-        // Make clickable to sell
+
+        // Hover effects for selling
+        const onSellHoverIn = (pointer) => {
+            if (pointer) pointer.event.stopPropagation();
+            showTooltip(item, rightPanelX + x, shopPanel.inventoryContainer.y + y, 'shop_sell');
+        };
+        const onSellHoverOut = () => {
+            hideTooltip();
+        };
+
         itemSprite.setInteractive({ useHandCursor: true });
         itemBg.setInteractive({ useHandCursor: true });
         borderRect.setInteractive({ useHandCursor: true });
-        
+
+        itemSprite.on('pointerover', onSellHoverIn);
+        itemSprite.on('pointerout', onSellHoverOut);
+        itemBg.on('pointerover', onSellHoverIn);
+        itemBg.on('pointerout', onSellHoverOut);
+        borderRect.on('pointerover', onSellHoverIn);
+        borderRect.on('pointerout', onSellHoverOut);
+
         const sellItem = () => {
             // Remove item from inventory
             const itemIndex = playerStats.inventory.indexOf(item);
             if (itemIndex > -1) {
                 playerStats.inventory.splice(itemIndex, 1);
                 playerStats.gold += sellPrice;
-                
+
                 // Update displays
                 updateShopItems();
                 updateShopInventoryItems();
-                
+
                 showDamageNumber(player.x, player.y - 40, `Sold ${item.name} for ${sellPrice} Gold!`, 0x00ff00);
                 addChatMessage(`Sold ${item.name} for ${sellPrice} Gold`, 0xffd700, '💰');
             }
         };
-        
+
         itemSprite.on('pointerdown', sellItem);
         itemBg.on('pointerdown', sellItem);
         borderRect.on('pointerdown', sellItem);
-        
+
         // Hover effects
         const hoverIn = () => {
             itemBg.setStrokeStyle(2, 0xffff00);
@@ -11952,14 +11715,14 @@ function updateShopInventoryItems() {
             itemBg.setStrokeStyle(1, 0x444444);
             itemBg.setFillStyle(0x222222, 0.8);
         };
-        
+
         itemSprite.on('pointerover', hoverIn);
         itemBg.on('pointerover', hoverIn);
         borderRect.on('pointerover', hoverIn);
         itemSprite.on('pointerout', hoverOut);
         itemBg.on('pointerout', hoverOut);
         borderRect.on('pointerout', hoverOut);
-        
+
         shopPanel.inventoryItems.push({
             bg: itemBg,
             sprite: itemSprite,
@@ -11969,18 +11732,18 @@ function updateShopInventoryItems() {
             item: item
         });
     });
-    
+
     // Apply mask to container
     if (shopPanel.inventoryContainer && shopPanel.maskGeometry) {
         shopPanel.inventoryContainer.setMask(shopPanel.maskGeometry);
     }
-    
+
     // Calculate and update scroll limits
     const visibleHeight = shopPanel.inventoryVisibleHeight;
     const containerOffset = shopPanel.containerOffset || 70; // Match the offset used in createShopUI (70)
     const maxScrollValue = Math.max(0, totalContentHeight - visibleHeight - containerOffset);
     shopPanel.setInventoryMaxScroll(maxScrollValue);
-    
+
     // Reset scroll position to top when items are updated
     if (shopPanel.setInventoryScrollPosition) {
         shopPanel.setInventoryScrollPosition(shopPanel.minScroll || -40);
@@ -11999,16 +11762,16 @@ function calculateItemSellPrice(item) {
         'Epic': 100,
         'Legendary': 200
     };
-    
+
     let basePrice = qualityMultiplier[item.quality] || 10;
-    
+
     // Add value based on stats
     if (item.attackPower) basePrice += item.attackPower * 2;
     if (item.defense) basePrice += item.defense * 2;
     if (item.maxHp) basePrice += item.maxHp;
     if (item.speed) basePrice += item.speed * 3;
     if (item.healAmount) basePrice += item.healAmount;
-    
+
     return Math.floor(basePrice * 0.5); // 50% of calculated value
 }
 
@@ -12016,24 +11779,27 @@ function calculateItemSellPrice(item) {
  * Close shop
  */
 function closeShop() {
+    // Hide tooltips first
+    hideTooltip(true);
+
     if (shopPanel) {
         // Destroy panel backgrounds
         if (shopPanel.leftBg && shopPanel.leftBg.active) shopPanel.leftBg.destroy();
         if (shopPanel.rightBg && shopPanel.rightBg.active) shopPanel.rightBg.destroy();
         if (shopPanel.divider && shopPanel.divider.active) shopPanel.divider.destroy();
-        
+
         // Destroy titles and text
         if (shopPanel.leftTitle && shopPanel.leftTitle.active) shopPanel.leftTitle.destroy();
         if (shopPanel.rightTitle && shopPanel.rightTitle.active) shopPanel.rightTitle.destroy();
         if (shopPanel.closeText && shopPanel.closeText.active) shopPanel.closeText.destroy();
         if (shopPanel.goldText && shopPanel.goldText.active) shopPanel.goldText.destroy();
-        
+
         // Destroy scrollbar elements
         if (shopPanel.scrollbarBg && shopPanel.scrollbarBg.active) shopPanel.scrollbarBg.destroy();
         if (shopPanel.scrollbarThumb && shopPanel.scrollbarThumb.active) shopPanel.scrollbarThumb.destroy();
         shopPanel.scrollbarBg = null;
         shopPanel.scrollbarThumb = null;
-        
+
         // Destroy all shop item elements (left panel)
         shopPanel.items.forEach(item => {
             if (item.bg && item.bg.active) item.bg.destroy();
@@ -12045,7 +11811,7 @@ function closeShop() {
             if (item.buyText && item.buyText.active) item.buyText.destroy();
             if (item.borderRect && item.borderRect.active) item.borderRect.destroy();
         });
-        
+
         // Destroy all inventory item elements (right panel)
         shopPanel.inventoryItems.forEach(item => {
             if (item.bg && item.bg.active) item.bg.destroy();
@@ -12055,12 +11821,12 @@ function closeShop() {
             if (item.borderRect && item.borderRect.active) item.borderRect.destroy();
             if (item.label && item.label.active) item.label.destroy();
         });
-        
+
         shopPanel.items = [];
         shopPanel.inventoryItems = [];
         shopPanel = null;
     }
-    
+
     shopVisible = false;
     currentShopNPC = null;
     console.log('🛒 Shop closed');
@@ -12077,9 +11843,9 @@ function openBuildingUI(building) {
     const scene = game.scene.scenes[0];
     currentBuilding = building;
     buildingPanelVisible = true;
-    
+
     console.log(`🏠 Opening building UI for type: ${building.type}`);
-    
+
     switch (building.type) {
         case 'inn':
             createInnUI();
@@ -12119,21 +11885,21 @@ function closeBuildingUI() {
         if (buildingPanel.bg && buildingPanel.bg.active) buildingPanel.bg.destroy();
         if (buildingPanel.title && buildingPanel.title.active) buildingPanel.title.destroy();
         if (buildingPanel.closeText && buildingPanel.closeText.active) buildingPanel.closeText.destroy();
-        
+
         // Destroy buttons
         if (buildingPanel.buttons) {
             buildingPanel.buttons.forEach(btn => {
                 // Common elements
                 if (btn.bg && btn.bg.active) btn.bg.destroy();
                 if (btn.text && btn.text.active) btn.text.destroy();
-                
+
                 // Tavern-specific: destroy item button elements
                 if (btn.sprite && btn.sprite.active) btn.sprite.destroy();
                 if (btn.name && btn.name.active) btn.name.destroy();
                 if (btn.price && btn.price.active) btn.price.destroy();
                 if (btn.buyBg && btn.buyBg.active) btn.buyBg.destroy();
                 if (btn.buyText && btn.buyText.active) btn.buyText.destroy();
-                
+
                 // Blacksmith-specific: destroy slot elements
                 if (btn.label && btn.label.active) btn.label.destroy();
                 if (btn.emptyText && btn.emptyText.active) btn.emptyText.destroy();
@@ -12141,7 +11907,7 @@ function closeBuildingUI() {
                 if (btn.upgradeText && btn.upgradeText.active) btn.upgradeText.destroy();
             });
         }
-        
+
         // Destroy tavern-specific item buttons
         if (buildingPanel.itemButtons) {
             buildingPanel.itemButtons.forEach(itemBtn => {
@@ -12153,24 +11919,24 @@ function closeBuildingUI() {
                 if (itemBtn.buyText && itemBtn.buyText.active) itemBtn.buyText.destroy();
             });
         }
-        
+
         // Destroy text elements
         if (buildingPanel.textElements) {
             buildingPanel.textElements.forEach(elem => {
                 if (elem && elem.active) elem.destroy();
             });
         }
-        
+
         // Destroy other elements (for blacksmith, etc.)
         if (buildingPanel.otherElements) {
             buildingPanel.otherElements.forEach(elem => {
                 if (elem && elem.active) elem.destroy();
             });
         }
-        
+
         buildingPanel = null;
     }
-    
+
     buildingPanelVisible = false;
     currentBuilding = null;
     console.log('🏠 Building UI closed');
@@ -12187,50 +11953,50 @@ function createInnUI() {
     const panelHeight = 400;
     const centerX = gameWidth / 2;
     const centerY = gameHeight / 2;
-    
+
     // Background panel
     const bg = scene.add.rectangle(centerX, centerY, panelWidth, panelHeight, 0x1a1a1a, 0.95)
         .setScrollFactor(0).setDepth(400).setStrokeStyle(3, 0x8B4513);
-    
+
     // Title
     const title = scene.add.text(centerX, centerY - 150, "The Cozy Inn", {
         fontSize: '28px',
         fill: '#ffffff',
         fontStyle: 'bold'
     }).setScrollFactor(0).setDepth(401).setOrigin(0.5, 0.5);
-    
+
     // Close text
-    const closeText = scene.add.text(centerX + panelWidth/2 - 20, centerY - panelHeight/2 + 20, 'Press F to Close', {
+    const closeText = scene.add.text(centerX + panelWidth / 2 - 20, centerY - panelHeight / 2 + 20, 'Press F to Close', {
         fontSize: '14px',
         fill: '#aaaaaa'
     }).setScrollFactor(0).setDepth(401).setOrigin(1, 0);
-    
+
     // Welcome message
     const welcomeText = scene.add.text(centerX, centerY - 80, 'Welcome, traveler! Rest and save your progress.', {
         fontSize: '16px',
         fill: '#cccccc',
         wordWrap: { width: panelWidth - 40 }
     }).setScrollFactor(0).setDepth(401).setOrigin(0.5, 0.5);
-    
+
     // Current stats display
-    const statsText = scene.add.text(centerX, centerY - 20, 
+    const statsText = scene.add.text(centerX, centerY - 20,
         `HP: ${playerStats.hp}/${playerStats.maxHp} | Mana: ${playerStats.mana}/${playerStats.maxMana} | Gold: ${playerStats.gold}`, {
         fontSize: '14px',
         fill: '#ffffff'
     }).setScrollFactor(0).setDepth(401).setOrigin(0.5, 0.5);
-    
+
     // Rest button (restore HP/mana for gold)
     const restCost = 50;
     const restButtonBg = scene.add.rectangle(centerX - 100, centerY + 60, 180, 50, 0x4a4a4a, 1)
         .setScrollFactor(0).setDepth(401).setStrokeStyle(2, 0x8B4513)
         .setInteractive({ useHandCursor: true });
-    
+
     const restButtonText = scene.add.text(centerX - 100, centerY + 60, `Rest (${restCost} Gold)`, {
         fontSize: '16px',
         fill: '#ffffff',
         fontStyle: 'bold'
     }).setScrollFactor(0).setDepth(402).setOrigin(0.5, 0.5);
-    
+
     const restAction = () => {
         if (playerStats.gold >= restCost) {
             if (playerStats.hp < playerStats.maxHp || playerStats.mana < playerStats.maxMana) {
@@ -12248,11 +12014,11 @@ function createInnUI() {
             showDamageNumber(player.x, player.y - 40, 'Not enough gold!', 0xff0000);
         }
     };
-    
+
     restButtonBg.on('pointerdown', restAction);
     restButtonText.setInteractive({ useHandCursor: true });
     restButtonText.on('pointerdown', restAction);
-    
+
     // Hover effects for rest button
     restButtonBg.on('pointerover', () => {
         restButtonBg.setFillStyle(0x5a5a5a, 1);
@@ -12260,28 +12026,28 @@ function createInnUI() {
     restButtonBg.on('pointerout', () => {
         restButtonBg.setFillStyle(0x4a4a4a, 1);
     });
-    
+
     // Save button
     const saveButtonBg = scene.add.rectangle(centerX + 100, centerY + 60, 180, 50, 0x4a4a4a, 1)
         .setScrollFactor(0).setDepth(401).setStrokeStyle(2, 0x8B4513)
         .setInteractive({ useHandCursor: true });
-    
+
     const saveButtonText = scene.add.text(centerX + 100, centerY + 60, 'Save Game', {
         fontSize: '16px',
         fill: '#ffffff',
         fontStyle: 'bold'
     }).setScrollFactor(0).setDepth(402).setOrigin(0.5, 0.5);
-    
+
     const saveAction = () => {
         saveGame();
         showDamageNumber(player.x, player.y - 40, 'Game Saved!', 0x00ff00);
         addChatMessage('Game saved successfully', 0x00ff00, '💾');
     };
-    
+
     saveButtonBg.on('pointerdown', saveAction);
     saveButtonText.setInteractive({ useHandCursor: true });
     saveButtonText.on('pointerdown', saveAction);
-    
+
     // Hover effects for save button
     saveButtonBg.on('pointerover', () => {
         saveButtonBg.setFillStyle(0x5a5a5a, 1);
@@ -12289,7 +12055,7 @@ function createInnUI() {
     saveButtonBg.on('pointerout', () => {
         saveButtonBg.setFillStyle(0x4a4a4a, 1);
     });
-    
+
     buildingPanel = {
         bg: bg,
         title: title,
@@ -12313,79 +12079,79 @@ function createBlacksmithUI() {
     const panelHeight = 500;
     const centerX = gameWidth / 2;
     const centerY = gameHeight / 2;
-    
+
     // Background panel
     const bg = scene.add.rectangle(centerX, centerY, panelWidth, panelHeight, 0x1a1a1a, 0.95)
         .setScrollFactor(0).setDepth(400).setStrokeStyle(3, 0x696969);
-    
+
     // Title
     const title = scene.add.text(centerX, centerY - 200, "Blacksmith's Forge", {
         fontSize: '28px',
         fill: '#ffffff',
         fontStyle: 'bold'
     }).setScrollFactor(0).setDepth(401).setOrigin(0.5, 0.5);
-    
+
     // Close text
-    const closeText = scene.add.text(centerX + panelWidth/2 - 20, centerY - panelHeight/2 + 20, 'Press F to Close', {
+    const closeText = scene.add.text(centerX + panelWidth / 2 - 20, centerY - panelHeight / 2 + 20, 'Press F to Close', {
         fontSize: '14px',
         fill: '#aaaaaa'
     }).setScrollFactor(0).setDepth(401).setOrigin(1, 0);
-    
+
     // Welcome message
     const welcomeText = scene.add.text(centerX, centerY - 140, 'I can upgrade your equipment for a price.', {
         fontSize: '16px',
         fill: '#cccccc',
         wordWrap: { width: panelWidth - 40 }
     }).setScrollFactor(0).setDepth(401).setOrigin(0.5, 0.5);
-    
+
     // Equipment display area
     const equipmentY = centerY - 40;
     const slotSize = 60;
     const slotSpacing = 80;
     const startX = centerX - (slotSpacing * 2);
-    
+
     const equipmentSlots = ['weapon', 'armor', 'helmet'];
     const slotButtons = [];
-    
+
     equipmentSlots.forEach((slotType, index) => {
         const slotX = startX + (index * slotSpacing);
         const equippedItem = playerStats.equipment[slotType];
-        
+
         // Slot background
         const slotBg = scene.add.rectangle(slotX, equipmentY, slotSize, slotSize, 0x333333, 1)
             .setScrollFactor(0).setDepth(401).setStrokeStyle(2, 0x666666);
-        
+
         // Slot label
         const slotLabel = scene.add.text(slotX, equipmentY + 40, slotType.toUpperCase(), {
             fontSize: '12px',
             fill: '#aaaaaa'
         }).setScrollFactor(0).setDepth(401).setOrigin(0.5, 0.5);
-        
+
         if (equippedItem) {
             // Show equipped item
             const itemSprite = scene.add.sprite(slotX, equipmentY, `item_${slotType}`);
             itemSprite.setScrollFactor(0).setDepth(402).setScale(0.6);
-            
+
             // Upgrade button
             const upgradeCost = Math.floor(equippedItem.price * 0.3) || 100;
             const upgradeButtonBg = scene.add.rectangle(slotX, equipmentY + 80, 100, 30, 0x4a4a4a, 1)
                 .setScrollFactor(0).setDepth(401).setStrokeStyle(1, 0x8B4513)
                 .setInteractive({ useHandCursor: true });
-            
+
             const upgradeButtonText = scene.add.text(slotX, equipmentY + 80, `Upgrade\n${upgradeCost}G`, {
                 fontSize: '11px',
                 fill: '#ffffff',
                 align: 'center'
             }).setScrollFactor(0).setDepth(402).setOrigin(0.5, 0.5);
-            
+
             const upgradeAction = () => {
                 if (playerStats.gold >= upgradeCost) {
                     playerStats.gold -= upgradeCost;
-                    
+
                     // Store old values for feedback
                     const oldAttack = equippedItem.attackPower || 0;
                     const oldDefense = equippedItem.defense || 0;
-                    
+
                     // Increase item stats by 10%
                     if (equippedItem.attackPower) {
                         equippedItem.attackPower = Math.floor(equippedItem.attackPower * 1.1);
@@ -12393,7 +12159,7 @@ function createBlacksmithUI() {
                     if (equippedItem.defense) {
                         equippedItem.defense = Math.floor(equippedItem.defense * 1.1);
                     }
-                    
+
                     // Also increase maxHp, speed, and other stats if they exist
                     if (equippedItem.maxHp) {
                         equippedItem.maxHp = Math.floor(equippedItem.maxHp * 1.1);
@@ -12401,10 +12167,10 @@ function createBlacksmithUI() {
                     if (equippedItem.speed) {
                         equippedItem.speed = Math.floor(equippedItem.speed * 1.1);
                     }
-                    
+
                     updatePlayerStats();
                     updateEquipment();
-                    
+
                     // Show detailed upgrade message
                     let upgradeMsg = `${equippedItem.name} Upgraded!`;
                     if (oldAttack > 0 && equippedItem.attackPower) {
@@ -12415,11 +12181,11 @@ function createBlacksmithUI() {
                     }
                     showDamageNumber(player.x, player.y - 40, upgradeMsg, 0x00ff00);
                     addChatMessage(`${equippedItem.name} upgraded (+10% stats)`, 0x00ff00, '⚒️');
-                    
+
                     // Update button cost
                     const newCost = Math.floor(equippedItem.price * 0.3) || 100;
                     upgradeButtonText.setText(`Upgrade\n${newCost}G`);
-                    
+
                     // Refresh the blacksmith UI to show updated stats
                     // Close and reopen to refresh
                     closeBuildingUI();
@@ -12432,11 +12198,11 @@ function createBlacksmithUI() {
                     showDamageNumber(player.x, player.y - 40, 'Not enough gold!', 0xff0000);
                 }
             };
-            
+
             upgradeButtonBg.on('pointerdown', upgradeAction);
             upgradeButtonText.setInteractive({ useHandCursor: true });
             upgradeButtonText.on('pointerdown', upgradeAction);
-            
+
             slotButtons.push({ bg: slotBg, label: slotLabel, sprite: itemSprite, upgradeBg: upgradeButtonBg, upgradeText: upgradeButtonText });
         } else {
             // Empty slot
@@ -12444,11 +12210,11 @@ function createBlacksmithUI() {
                 fontSize: '12px',
                 fill: '#666666'
             }).setScrollFactor(0).setDepth(402).setOrigin(0.5, 0.5);
-            
+
             slotButtons.push({ bg: slotBg, label: slotLabel, emptyText: emptyText });
         }
     });
-    
+
     buildingPanel = {
         bg: bg,
         title: title,
@@ -12469,74 +12235,74 @@ function createTavernUI() {
     const panelHeight = 400;
     const centerX = gameWidth / 2;
     const centerY = gameHeight / 2;
-    
+
     // Background panel
     const bg = scene.add.rectangle(centerX, centerY, panelWidth, panelHeight, 0x1a1a1a, 0.95)
         .setScrollFactor(0).setDepth(400).setStrokeStyle(3, 0x654321);
-    
+
     // Title
     const title = scene.add.text(centerX, centerY - 150, "The Rusty Tankard", {
         fontSize: '28px',
         fill: '#ffffff',
         fontStyle: 'bold'
     }).setScrollFactor(0).setDepth(401).setOrigin(0.5, 0.5);
-    
+
     // Close text
-    const closeText = scene.add.text(centerX + panelWidth/2 - 20, centerY - panelHeight/2 + 20, 'Press F to Close', {
+    const closeText = scene.add.text(centerX + panelWidth / 2 - 20, centerY - panelHeight / 2 + 20, 'Press F to Close', {
         fontSize: '14px',
         fill: '#aaaaaa'
     }).setScrollFactor(0).setDepth(401).setOrigin(1, 0);
-    
+
     // Welcome message
     const welcomeText = scene.add.text(centerX, centerY - 80, 'Welcome! What can I get for you?', {
         fontSize: '16px',
         fill: '#cccccc',
         wordWrap: { width: panelWidth - 40 }
     }).setScrollFactor(0).setDepth(401).setOrigin(0.5, 0.5);
-    
+
     // Consumables for sale
     const consumables = [
         { name: 'Health Potion', price: 25, type: 'consumable', healAmount: 50 },
         { name: 'Mana Potion', price: 20, type: 'consumable', manaAmount: 30 }
     ];
-    
+
     const itemY = centerY - 20;
     const itemSpacing = 80;
     const startX = centerX - 100;
     const itemButtons = [];
-    
+
     consumables.forEach((item, index) => {
         const itemX = startX + (index * itemSpacing);
-        
+
         // Item display
         const itemBg = scene.add.rectangle(itemX, itemY, 70, 70, 0x333333, 1)
             .setScrollFactor(0).setDepth(401).setStrokeStyle(2, 0x654321);
-        
+
         const itemSprite = scene.add.sprite(itemX, itemY, 'item_consumable');
         itemSprite.setScrollFactor(0).setDepth(402).setScale(0.7);
-        
+
         // Item name
         const itemName = scene.add.text(itemX, itemY + 50, item.name, {
             fontSize: '12px',
             fill: '#ffffff'
         }).setScrollFactor(0).setDepth(401).setOrigin(0.5, 0.5);
-        
+
         // Price
         const priceText = scene.add.text(itemX, itemY + 65, `${item.price} Gold`, {
             fontSize: '11px',
             fill: '#ffd700'
         }).setScrollFactor(0).setDepth(401).setOrigin(0.5, 0.5);
-        
+
         // Buy button
         const buyButtonBg = scene.add.rectangle(itemX, itemY + 95, 60, 25, 0x4a4a4a, 1)
             .setScrollFactor(0).setDepth(401).setStrokeStyle(1, 0x654321)
             .setInteractive({ useHandCursor: true });
-        
+
         const buyButtonText = scene.add.text(itemX, itemY + 95, 'Buy', {
             fontSize: '12px',
             fill: '#ffffff'
         }).setScrollFactor(0).setDepth(402).setOrigin(0.5, 0.5);
-        
+
         const buyAction = () => {
             if (playerStats.gold >= item.price) {
                 if (playerStats.inventory.length < 30) { // Max inventory size
@@ -12552,11 +12318,11 @@ function createTavernUI() {
                 showDamageNumber(player.x, player.y - 40, 'Not enough gold!', 0xff0000);
             }
         };
-        
+
         buyButtonBg.on('pointerdown', buyAction);
         buyButtonText.setInteractive({ useHandCursor: true });
         buyButtonText.on('pointerdown', buyAction);
-        
+
         // Hover effects
         buyButtonBg.on('pointerover', () => {
             buyButtonBg.setFillStyle(0x5a5a5a, 1);
@@ -12564,28 +12330,28 @@ function createTavernUI() {
         buyButtonBg.on('pointerout', () => {
             buyButtonBg.setFillStyle(0x4a4a4a, 1);
         });
-        
+
         itemButtons.push({ bg: itemBg, sprite: itemSprite, name: itemName, price: priceText, buyBg: buyButtonBg, buyText: buyButtonText });
     });
-    
+
     // Rumors button
     const rumorButtonBg = scene.add.rectangle(centerX, centerY + 120, 200, 40, 0x4a4a4a, 1)
         .setScrollFactor(0).setDepth(401).setStrokeStyle(2, 0x654321)
         .setInteractive({ useHandCursor: true });
-    
+
     const rumorButtonText = scene.add.text(centerX, centerY + 120, 'Hear Rumors (Free)', {
         fontSize: '14px',
         fill: '#ffffff',
         fontStyle: 'bold'
     }).setScrollFactor(0).setDepth(402).setOrigin(0.5, 0.5);
-    
+
     const rumors = [
         'I heard there\'s a powerful weapon hidden in the deepest dungeon...',
         'The monsters have been more aggressive lately. Be careful out there!',
         'Some say there\'s a secret passage behind the blacksmith\'s shop.',
         'A legendary adventurer once lived in this town. Their treasure is still out there somewhere...'
     ];
-    
+
     // Create rumor display text (initially hidden)
     const rumorDisplayText = scene.add.text(centerX, centerY + 60, '', {
         fontSize: '14px',
@@ -12595,13 +12361,13 @@ function createTavernUI() {
         fontStyle: 'italic'
     }).setScrollFactor(0).setDepth(403).setOrigin(0.5, 0.5);
     rumorDisplayText.setVisible(false);
-    
+
     const rumorAction = () => {
         const randomRumor = rumors[Math.floor(Math.random() * rumors.length)];
         rumorDisplayText.setText(randomRumor);
         rumorDisplayText.setVisible(true);
         addChatMessage(randomRumor, 0xffff00, '💬');
-        
+
         // Hide after 5 seconds
         scene.time.delayedCall(5000, () => {
             if (rumorDisplayText && rumorDisplayText.active) {
@@ -12609,11 +12375,11 @@ function createTavernUI() {
             }
         });
     };
-    
+
     rumorButtonBg.on('pointerdown', rumorAction);
     rumorButtonText.setInteractive({ useHandCursor: true });
     rumorButtonText.on('pointerdown', rumorAction);
-    
+
     // Hover effects
     rumorButtonBg.on('pointerover', () => {
         rumorButtonBg.setFillStyle(0x5a5a5a, 1);
@@ -12621,7 +12387,7 @@ function createTavernUI() {
     rumorButtonBg.on('pointerout', () => {
         rumorButtonBg.setFillStyle(0x4a4a4a, 1);
     });
-    
+
     buildingPanel = {
         bg: bg,
         title: title,
@@ -12648,7 +12414,7 @@ function saveGame() {
             dungeonSeeds[key] = dungeonCache[key].seed;
         }
     });
-    
+
     const saveData = {
         playerStats: {
             hp: playerStats.hp,
@@ -12677,7 +12443,7 @@ function saveGame() {
         dungeonCompletions: dungeonCompletions,
         timestamp: Date.now()
     };
-    
+
     try {
         localStorage.setItem('rpg_savegame', JSON.stringify(saveData));
         showDamageNumber(player.x, player.y - 40, 'Game Saved!', 0x00ffff);
@@ -12700,18 +12466,18 @@ function loadGame() {
             console.log('No save game found');
             return false;
         }
-        
+
         const saveData = JSON.parse(saveDataStr);
-        
+
         // Restore player stats
         Object.assign(playerStats, saveData.playerStats);
-        
+
         // Restore player position
         if (saveData.playerPosition) {
             player.x = saveData.playerPosition.x;
             player.y = saveData.playerPosition.y;
         }
-        
+
         // Restore dungeon state
         if (saveData.dungeonSeeds) {
             console.log('📦 Restoring dungeon seeds from save:', saveData.dungeonSeeds);
@@ -12726,15 +12492,15 @@ function loadGame() {
         } else {
             console.warn('⚠️ No dungeon seeds found in save data');
         }
-        
+
         if (saveData.dungeonCompletions) {
             dungeonCompletions = saveData.dungeonCompletions;
         }
-        
+
         if (saveData.dungeonLevel) {
             dungeonLevel = saveData.dungeonLevel;
         }
-        
+
         // Restore map and recreate if needed
         // IMPORTANT: Use saveData.currentMap (where player saved) not current currentMap (where player is now)
         const savedMap = saveData.currentMap;
@@ -12742,40 +12508,40 @@ function loadGame() {
             // Always use transitionToMap to ensure proper cleanup, even if we're already on that map
             // This ensures buildings/NPCs from previous map are properly destroyed
             const savedLevel = saveData.dungeonLevel || 1;
-            
+
             // IMPORTANT: For dungeons, ensure cache is properly set up before transition
             if (savedMap === 'dungeon' && saveData.dungeonSeeds) {
                 const dungeonKey = `level_${savedLevel}`;
                 // Double-check that the seed is in cache before transitioning
                 if (saveData.dungeonSeeds[dungeonKey] && (!dungeonCache[dungeonKey] || !dungeonCache[dungeonKey].seed)) {
                     console.log(`🔧 Ensuring seed is in cache for ${dungeonKey} before transition...`);
-                    dungeonCache[dungeonKey] = { 
-                        seed: saveData.dungeonSeeds[dungeonKey], 
-                        level: savedLevel 
+                    dungeonCache[dungeonKey] = {
+                        seed: saveData.dungeonSeeds[dungeonKey],
+                        level: savedLevel
                     };
                 }
             }
-            
+
             // Store player position before transition (transitionToMap might move player)
             const savedPlayerPos = saveData.playerPosition ? {
                 x: saveData.playerPosition.x,
                 y: saveData.playerPosition.y
             } : null;
-            
+
             // Transition to the saved map (this will clean up everything)
             transitionToMap(savedMap, savedLevel);
-            
+
             // Restore player position after map transition
             if (savedPlayerPos) {
                 player.x = savedPlayerPos.x;
                 player.y = savedPlayerPos.y;
             }
-            
+
             // For town, also ensure NPCs are initialized
             if (savedMap === 'town') {
                 initializeNPCs();
             }
-            
+
             // For wilderness, spawn monsters
             if (savedMap === 'wilderness') {
                 const scene = game.scene.scenes[0];
@@ -12784,18 +12550,18 @@ function loadGame() {
                 }
             }
         }
-        
+
         // Update player stats (recalculate attack/defense from equipment)
         updatePlayerStats();
-        
+
         // Refresh UIs
         refreshInventory();
         refreshEquipment();
         refreshQuestLog();
-        
+
         // Update weapon sprite to show equipped weapon
         updateWeaponSprite();
-        
+
         showDamageNumber(player.x, player.y - 40, 'Game Loaded!', 0x00ff00);
         console.log('✅ Game loaded from localStorage');
         return true;
@@ -12862,35 +12628,35 @@ function createAbilityBar() {
         console.error('Cannot create ability bar - scene not available');
         return;
     }
-    
+
     const screenWidth = scene.cameras.main.width;
     const screenHeight = scene.cameras.main.height;
-    
+
     console.log('Creating ability bar...');
-    
+
     const abilityBarY = screenHeight - 80;
     const abilitySpacing = 80;
     const startX = screenWidth / 2 - (Object.keys(ABILITY_DEFINITIONS).length - 1) * abilitySpacing / 2;
-    
+
     abilityBar = {
         buttons: [],
         cooldownOverlays: []
     };
-    
+
     let index = 0;
     Object.keys(ABILITY_DEFINITIONS).forEach(abilityId => {
         const ability = ABILITY_DEFINITIONS[abilityId];
         const x = startX + index * abilitySpacing;
-        
+
         // Button background
         const buttonBg = scene.add.rectangle(x, abilityBarY, 60, 60, 0x333333, 0.9)
             .setScrollFactor(0).setDepth(200).setStrokeStyle(2, 0x666666);
-        
+
         // Ability icon
         const icon = scene.add.sprite(x, abilityBarY, ability.icon);
         icon.setScrollFactor(0).setDepth(201).setScale(0.8);
         icon.setTint(ability.color);
-        
+
         // Key binding text (1, 2, 3)
         const keyText = scene.add.text(x - 20, abilityBarY - 20, (index + 1).toString(), {
             fontSize: '14px',
@@ -12899,24 +12665,24 @@ function createAbilityBar() {
             backgroundColor: '#000000',
             padding: { x: 3, y: 2 }
         }).setScrollFactor(0).setDepth(202).setOrigin(0.5, 0.5);
-        
+
         // Cooldown overlay (initially hidden)
         const cooldownOverlay = scene.add.rectangle(x, abilityBarY, 60, 60, 0x000000, 0.7)
             .setScrollFactor(0).setDepth(203).setVisible(false);
-        
+
         // Cooldown text
         const cooldownText = scene.add.text(x, abilityBarY, '', {
             fontSize: '18px',
             fill: '#ffffff',
             fontStyle: 'bold'
         }).setScrollFactor(0).setDepth(204).setOrigin(0.5, 0.5).setVisible(false);
-        
+
         // Mana cost text
         const manaText = scene.add.text(x, abilityBarY + 25, `${ability.manaCost} MP`, {
             fontSize: '10px',
             fill: '#00aaff'
         }).setScrollFactor(0).setDepth(202).setOrigin(0.5, 0.5);
-        
+
         abilityBar.buttons.push({
             id: abilityId,
             bg: buttonBg,
@@ -12926,10 +12692,10 @@ function createAbilityBar() {
             cooldownText: cooldownText,
             manaText: manaText
         });
-        
+
         index++;
     });
-    
+
     console.log(`✅ Ability bar created with ${abilityBar.buttons.length} abilities`);
 }
 
@@ -12938,19 +12704,19 @@ function createAbilityBar() {
  */
 function castAbility(abilityId, time) {
     console.log(`Attempting to cast ability: ${abilityId} at time ${time}`);
-    
+
     const ability = ABILITY_DEFINITIONS[abilityId];
     if (!ability) {
         console.warn(`Ability not found: ${abilityId}`);
         return;
     }
-    
+
     const abilityState = playerStats.abilities[abilityId];
     if (!abilityState) {
         console.warn(`Ability state not found: ${abilityId}`);
         return;
     }
-    
+
     // Check cooldown (allow first use if lastUsed is 0)
     const timeSinceLastUse = abilityState.lastUsed === 0 ? ability.cooldown + 1 : time - abilityState.lastUsed;
     if (timeSinceLastUse < ability.cooldown) {
@@ -12959,31 +12725,31 @@ function castAbility(abilityId, time) {
         console.log(`Ability on cooldown: ${remainingCooldown}s remaining`);
         return;
     }
-    
+
     // Check mana
     if (playerStats.mana < ability.manaCost) {
         showDamageNumber(player.x, player.y - 40, 'Not enough mana!', 0xff0000);
         console.log(`Not enough mana! Need ${ability.manaCost}, have ${playerStats.mana}`);
         return;
     }
-    
+
     console.log(`Casting ${ability.name}...`);
-    
+
     // Cast ability
     playerStats.mana -= ability.manaCost;
     abilityState.lastUsed = time;
-    
+
     // Apply ability effects
     if (abilityId === 'heal') {
         const healAmount = ability.healAmount;
         const oldHp = playerStats.hp;
         playerStats.hp = Math.min(playerStats.hp + healAmount, playerStats.maxHp);
         const actualHeal = playerStats.hp - oldHp;
-        
+
         if (actualHeal > 0) {
             showDamageNumber(player.x, player.y - 40, `+${actualHeal} HP`, 0x00ff00, false, 'healing');
             addChatMessage(`Healed ${actualHeal} HP`, 0x00ff00, '💚');
-            
+
             // Visual effect
             createHealEffect(player.x, player.y);
             playSound('heal_cast');
@@ -12997,16 +12763,16 @@ function castAbility(abilityId, time) {
         if (scene.anims.exists('fireball_cast')) {
             // Stop any current animation
             player.anims.stop();
-            
+
             // Set texture to fireball sprite sheet if needed
             if (scene.textures.exists('player_fireball')) {
                 player.setTexture('player_fireball');
             }
-            
+
             // Play fireball animation
             player.play('fireball_cast');
             console.log('Playing fireball_cast animation');
-            
+
             // Resume walking animation after fireball animation completes
             player.once('animationcomplete', (animation) => {
                 if (animation && animation.key === 'fireball_cast') {
@@ -13015,7 +12781,7 @@ function castAbility(abilityId, time) {
                     if (scene.textures.exists(walkTextureKey)) {
                         player.setTexture(walkTextureKey);
                     }
-                    
+
                     if (player.isMoving && scene.anims.exists(`walk_${player.facingDirection}`)) {
                         player.play(`walk_${player.facingDirection}`);
                     } else {
@@ -13030,49 +12796,49 @@ function castAbility(abilityId, time) {
                 hasFireballAnim: scene.anims.exists('fireball_cast')
             });
         }
-        
+
         // Find nearby monsters
         let hitCount = 0;
         monsters.forEach(monster => {
             if (!monster.active || monster.hp <= 0) return;
-            
+
             const distance = Phaser.Math.Distance.Between(player.x, player.y, monster.x, monster.y);
             if (distance <= ability.range) {
                 const damage = ability.damage;
                 monster.hp -= damage;
                 monster.hp = Math.max(0, monster.hp);
-                
+
                 // Create magic hit effects (blue/purple particles)
                 createHitEffects(monster.x, monster.y, false, 'magic');
-                
+
                 // Show magic damage number
                 showDamageNumber(monster.x, monster.y - 20, `-${damage}`, 0x4400ff, false, 'magic');
                 const monsterName = monster.monsterType || 'Monster';
                 addChatMessage(`Fireball hit ${monsterName} for ${damage} damage`, 0x4400ff, '⚡');
-                
+
                 // Visual effect
                 createFireballEffect(monster.x, monster.y);
                 hitCount++;
-                
+
                 // Check if monster died
                 if (monster.hp <= 0 && !monster.isDead) {
                     monster.isDead = true;
-                    
+
                     // Check if this was a boss in a dungeon
                     if (monster.isBoss && currentMap === 'dungeon') {
                         onBossDefeated(dungeonLevel, monster.x, monster.y);
                     }
                     if (monster.hpBarBg) monster.hpBarBg.destroy();
                     if (monster.hpBar) monster.hpBar.destroy();
-                    
+
                     const xpGain = monster.xpReward || 10;
                     playerStats.xp += xpGain;
                     playerStats.questStats.monstersKilled++;
                     showDamageNumber(monster.x, monster.y, `+${xpGain} XP`, 0xffd700, false, 'xp'); // Gold color for XP
-                    
+
                     checkLevelUp();
                     dropItemsFromMonster(monster.x, monster.y);
-                    
+
                     game.scene.scenes[0].time.delayedCall(100, () => {
                         monster.destroy();
                         monsters.splice(monsters.indexOf(monster), 1);
@@ -13080,7 +12846,7 @@ function castAbility(abilityId, time) {
                 }
             }
         });
-        
+
         if (hitCount > 0) {
             showDamageNumber(player.x, player.y - 40, `Fireball! (${hitCount} hits)`, 0xff4400);
             playSound('fireball_cast');
@@ -13094,12 +12860,12 @@ function castAbility(abilityId, time) {
         playerStats.defense += ability.defenseBonus;
         showDamageNumber(player.x, player.y - 40, `Shield Active! +${ability.defenseBonus} Defense`, 0x0088ff);
         addChatMessage(`Shield active (+${ability.defenseBonus} Defense)`, 0x0088ff, '🛡️');
-        
+
         // Visual effect
         createShieldEffect(player.x, player.y);
         playSound('heal_cast'); // Reuse heal sound for shield
         console.log(`Shield activated! Defense: ${playerStats.defense} (Mana: ${playerStats.mana}/${playerStats.maxMana})`);
-        
+
         // Remove bonus after duration
         game.scene.scenes[0].time.delayedCall(ability.duration, () => {
             playerStats.defense -= ability.defenseBonus;
@@ -13108,7 +12874,7 @@ function castAbility(abilityId, time) {
             console.log(`Shield expired. Defense: ${playerStats.defense}`);
         });
     }
-    
+
     console.log(`Ability cast: ${ability.name} (Mana remaining: ${playerStats.mana}/${playerStats.maxMana})`);
 }
 
@@ -13117,15 +12883,15 @@ function castAbility(abilityId, time) {
  */
 function updateAbilityCooldowns(time) {
     if (!abilityBar) return;
-    
+
     abilityBar.buttons.forEach(button => {
         const abilityState = playerStats.abilities[button.id];
         if (!abilityState) return;
-        
+
         const ability = ABILITY_DEFINITIONS[button.id];
         const timeSinceLastUse = time - abilityState.lastUsed;
         const remainingCooldown = ability.cooldown - timeSinceLastUse;
-        
+
         // Update cooldown display
         if (remainingCooldown > 0) {
             const seconds = Math.ceil(remainingCooldown / 1000);
@@ -13135,7 +12901,7 @@ function updateAbilityCooldowns(time) {
         } else {
             button.cooldownOverlay.setVisible(false);
             button.cooldownText.setVisible(false);
-            
+
             // Check if player has enough mana
             const abilityDef = ABILITY_DEFINITIONS[button.id];
             if (playerStats.mana >= abilityDef.manaCost) {
@@ -13154,7 +12920,7 @@ function createHealEffect(x, y) {
     const scene = game.scene.scenes[0];
     const effect = scene.add.sprite(x, y, 'heal_effect');
     effect.setDepth(20).setScale(1.5);
-    
+
     scene.tweens.add({
         targets: effect,
         scaleX: 2,
@@ -13169,7 +12935,7 @@ function createFireballEffect(x, y) {
     const scene = game.scene.scenes[0];
     const effect = scene.add.sprite(x, y, 'fireball_effect');
     effect.setDepth(20).setScale(1);
-    
+
     scene.tweens.add({
         targets: effect,
         scaleX: 1.5,
@@ -13184,7 +12950,7 @@ function createShieldEffect(x, y) {
     const scene = game.scene.scenes[0];
     const effect = scene.add.sprite(x, y, 'shield_effect');
     effect.setDepth(20).setScale(1.2);
-    
+
     // Pulsing animation
     scene.tweens.add({
         targets: effect,
@@ -13210,12 +12976,12 @@ function playSound(soundName) {
     if (!soundsEnabled) {
         return;
     }
-    
+
     const scene = game.scene.scenes[0];
     if (!scene || !scene.sound) {
         return;
     }
-    
+
     // Use scene.sound.play() which creates a new sound instance each time
     // This ensures sounds can be played multiple times without issues
     try {
@@ -13242,13 +13008,13 @@ function initializeSounds() {
         console.log('💡 Sound system not available');
         return;
     }
-    
+
     // Create sound objects if they loaded successfully
     const soundFiles = [
         'attack_swing', 'hit_monster', 'hit_player', 'monster_die',
         'item_pickup', 'level_up', 'fireball_cast', 'heal_cast'
     ];
-    
+
     console.log('🔊 Initializing sound system...');
     soundFiles.forEach(soundName => {
         try {
@@ -13264,7 +13030,7 @@ function initializeSounds() {
             console.log(`  ❌ Error loading ${soundName}:`, e.message);
         }
     });
-    
+
     const loadedCount = Object.keys(soundEffects).length;
     if (loadedCount > 0) {
         console.log(`✅ Sound system initialized: ${loadedCount}/${soundFiles.length} sounds loaded`);
@@ -13295,28 +13061,28 @@ function toggleAssetsWindow() {
  */
 function createAssetsWindow() {
     if (assetsVisible) return;
-    
+
     const scene = game.scene.scenes[0];
     // Center on camera viewport (screen coordinates, not world coordinates)
     const centerX = scene.cameras.main.centerX;
     const centerY = scene.cameras.main.centerY;
     const panelWidth = 900;
     const panelHeight = 750;
-    
+
     // Store panelHeight for use in updateAssetsWindow
     if (!assetsPanel) {
         assetsPanel = {};
     }
     assetsPanel.panelHeight = panelHeight;
-    
+
     // Create panel background - use high depth to appear above all UI elements
     const bg = scene.add.rectangle(centerX, centerY, panelWidth, panelHeight, 0x1a1a1a, 0.95);
     bg.setStrokeStyle(3, 0x00aaff);
     bg.setScrollFactor(0); // Fixed to camera/screen
     bg.setDepth(250); // Higher than all other UI (bars are 100-101, ability bar is 200-204)
-    
+
     // Title
-    const title = scene.add.text(centerX, centerY - panelHeight/2 + 30, 'Assets Status', {
+    const title = scene.add.text(centerX, centerY - panelHeight / 2 + 30, 'Assets Status', {
         fontSize: '28px',
         fill: '#00aaff',
         fontFamily: 'Arial',
@@ -13325,9 +13091,9 @@ function createAssetsWindow() {
     title.setOrigin(0.5);
     title.setScrollFactor(0); // Fixed to camera/screen
     title.setDepth(251);
-    
+
     // Close instruction
-    const closeText = scene.add.text(centerX, centerY + panelHeight/2 - 20, 'Press CTRL+A to close', {
+    const closeText = scene.add.text(centerX, centerY + panelHeight / 2 - 20, 'Press CTRL+A to close', {
         fontSize: '14px',
         fill: '#888888',
         fontFamily: 'Arial'
@@ -13335,7 +13101,7 @@ function createAssetsWindow() {
     closeText.setOrigin(0.5);
     closeText.setScrollFactor(0); // Fixed to camera/screen
     closeText.setDepth(251);
-    
+
     // Store panel elements
     assetsPanel.bg = bg;
     assetsPanel.title = title;
@@ -13343,7 +13109,7 @@ function createAssetsWindow() {
     assetsPanel.soundItems = [];
     assetsPanel.imageItems = [];
     assetsPanel.summary = null;
-    
+
     assetsVisible = true;
     updateAssetsWindow();
 }
@@ -13362,17 +13128,17 @@ function spawnInitialMonsters(mapWidth, mapHeight) {
         { name: 'Dragon', textureKey: 'monster_dragon', hp: 80, attack: 12, speed: 35, xp: 40 },
         { name: 'Ghost', textureKey: 'monster_ghost', hp: 35, attack: 6, speed: 55, xp: 12 }
     ];
-    
+
     // Spawn monsters spread across entire map, avoiding player spawn area
     const playerSpawnX = 400;
     const playerSpawnY = 300;
     const minDistanceFromPlayer = MONSTER_AGGRO_RADIUS;
-    
+
     for (let i = 0; i < MAX_MONSTERS; i++) {
         let spawnX, spawnY;
         let attempts = 0;
         const maxAttempts = 50;
-        
+
         // Try to find a spawn point away from player
         do {
             spawnX = Phaser.Math.Between(50, mapWidth - 50);
@@ -13382,10 +13148,10 @@ function spawnInitialMonsters(mapWidth, mapHeight) {
             attempts < maxAttempts &&
             Phaser.Math.Distance.Between(spawnX, spawnY, playerSpawnX, playerSpawnY) < minDistanceFromPlayer
         );
-        
+
         const typeIndex = Math.floor(Math.random() * monsterTypes.length);
         const type = monsterTypes[typeIndex];
-        
+
         spawnMonster.call(this, spawnX, spawnY, type);
     }
 }
@@ -13395,16 +13161,16 @@ function spawnInitialMonsters(mapWidth, mapHeight) {
  */
 function spawnMonster(x, y, type) {
     const scene = game.scene.scenes[0];
-    
+
     // Use directional sprite if available, otherwise fall back to old texture
     const monsterType = type.name.toLowerCase();
     const initialTexture = `monster_${monsterType}_south`; // Start facing south
     const fallbackTexture = type.textureKey; // Old procedural texture
-    
+
     const textureToUse = scene.textures.exists(initialTexture) ? initialTexture : fallbackTexture;
     const monster = scene.physics.add.sprite(x, y, textureToUse);
     monster.setDepth(5); // Monsters above tiles but below player
-    
+
     // Add monster stats
     monster.monsterType = type.name;
     monster.hp = type.hp;
@@ -13415,7 +13181,7 @@ function spawnMonster(x, y, type) {
     monster.lastAttackTime = 0;
     monster.attackCooldown = 1000; // 1 second
     monster.attackRange = 50; // pixels
-    
+
     // Add simple animation (gentle pulsing for some types)
     if (type.name === 'Slime' || type.name === 'Ghost') {
         scene.tweens.add({
@@ -13428,7 +13194,7 @@ function spawnMonster(x, y, type) {
             ease: 'Sine.easeInOut'
         });
     }
-    
+
     // Create monster HP bar above sprite
     const monsterHpBarWidth = 30;
     const monsterHpBarHeight = 4;
@@ -13436,7 +13202,7 @@ function spawnMonster(x, y, type) {
         .setDepth(6).setOrigin(0.5, 0.5).setScrollFactor(1);
     monster.hpBar = scene.add.rectangle(0, 0, monsterHpBarWidth - 2, monsterHpBarHeight - 2, 0xff0000)
         .setDepth(7).setOrigin(0, 0.5).setScrollFactor(1);
-    
+
     monsters.push(monster);
     return monster;
 }
@@ -13446,16 +13212,16 @@ function spawnMonster(x, y, type) {
  */
 function spawnMonsterScaled(x, y, type, scaledHp, scaledAttack, scaledXp) {
     const scene = game.scene.scenes[0];
-    
+
     // Use directional sprite if available, otherwise fall back to old texture
     const monsterType = type.name.toLowerCase();
     const initialTexture = `monster_${monsterType}_south`; // Start facing south
     const fallbackTexture = type.textureKey; // Old procedural texture
-    
+
     const textureToUse = scene.textures.exists(initialTexture) ? initialTexture : fallbackTexture;
     const monster = scene.physics.add.sprite(x, y, textureToUse);
     monster.setDepth(5);
-    
+
     monster.monsterType = type.name;
     monster.hp = scaledHp;
     monster.maxHp = scaledHp;
@@ -13467,15 +13233,15 @@ function spawnMonsterScaled(x, y, type, scaledHp, scaledAttack, scaledXp) {
     monster.attackRange = 50;
     monster.isBoss = false;
     monster.isDead = false;
-    
+
     // Initialize animation properties
     monster.facingDirection = 'south';
     monster.isMoving = false;
     monster.animationState = 'idle';
-    
+
     // Set initial animation state
     updateMonsterAnimation(monster, 0);
-    
+
     // Create HP bar
     const monsterHpBarWidth = 30;
     const monsterHpBarHeight = 4;
@@ -13483,7 +13249,7 @@ function spawnMonsterScaled(x, y, type, scaledHp, scaledAttack, scaledXp) {
         .setDepth(6).setOrigin(0.5, 0.5).setScrollFactor(1);
     monster.hpBar = scene.add.rectangle(0, 0, monsterHpBarWidth - 2, monsterHpBarHeight - 2, 0xff0000)
         .setDepth(7).setOrigin(0, 0.5).setScrollFactor(1);
-    
+
     monsters.push(monster);
     return monster;
 }
@@ -13493,9 +13259,9 @@ function spawnMonsterScaled(x, y, type, scaledHp, scaledAttack, scaledXp) {
  */
 function updateAssetsWindow() {
     if (!assetsVisible || !assetsPanel) return;
-    
+
     const scene = game.scene.scenes[0];
-    
+
     // Clear existing items
     assetsPanel.soundItems.forEach(item => {
         if (item.status) item.status.destroy();
@@ -13509,17 +13275,17 @@ function updateAssetsWindow() {
     });
     assetsPanel.soundItems = [];
     assetsPanel.imageItems = [];
-    
+
     // Center on camera viewport (screen coordinates, not world coordinates)
     const centerX = scene.cameras.main.centerX;
     const centerY = scene.cameras.main.centerY;
     const panelWidth = 900;
     const panelHeight = assetsPanel.panelHeight || 750;
-    const startY = centerY - panelHeight/2 + 80;
+    const startY = centerY - panelHeight / 2 + 80;
     const lineHeight = 22; // Slightly more compact
-    const leftMargin = centerX - panelWidth/2 + 20;
-    const rightMargin = centerX + panelWidth/2 - 20;
-    
+    const leftMargin = centerX - panelWidth / 2 + 20;
+    const rightMargin = centerX + panelWidth / 2 - 20;
+
     // Define expected assets
     const expectedSounds = [
         { key: 'attack_swing', path: 'assets/audio/attack_swing.wav' },
@@ -13531,7 +13297,7 @@ function updateAssetsWindow() {
         { key: 'fireball_cast', path: 'assets/audio/fireball_cast.wav' },
         { key: 'heal_cast', path: 'assets/audio/heal_cast.wav' }
     ];
-    
+
     const expectedImages = [
         { key: 'player', path: 'assets/player.png', isGenerated: true },
         { key: 'monster', path: 'assets/monster.png', isGenerated: true },
@@ -13548,7 +13314,7 @@ function updateAssetsWindow() {
         { key: 'heal_effect', path: 'N/A (generated)', isGenerated: true },
         { key: 'shield_effect', path: 'N/A (generated)', isGenerated: true }
     ];
-    
+
     // Section headers
     const soundsHeader = scene.add.text(leftMargin, startY, 'SOUNDS:', {
         fontSize: '18px',
@@ -13559,14 +13325,14 @@ function updateAssetsWindow() {
     soundsHeader.setScrollFactor(0); // Fixed to camera/screen
     soundsHeader.setDepth(251);
     assetsPanel.soundsHeader = soundsHeader;
-    
+
     // Check sounds
     let yPos = startY + 30;
     expectedSounds.forEach((sound, index) => {
         const exists = scene.cache.audio.exists(sound.key);
         const statusText = exists ? '✅' : '❌';
         const statusColor = exists ? '#00ff00' : '#ff0000';
-        
+
         const status = scene.add.text(leftMargin, yPos, statusText, {
             fontSize: '14px',
             fill: statusColor,
@@ -13574,7 +13340,7 @@ function updateAssetsWindow() {
         });
         status.setScrollFactor(0); // Fixed to camera/screen
         status.setDepth(251);
-        
+
         const name = scene.add.text(leftMargin + 25, yPos, sound.key, {
             fontSize: '13px',
             fill: '#ffffff',
@@ -13582,7 +13348,7 @@ function updateAssetsWindow() {
         });
         name.setScrollFactor(0); // Fixed to camera/screen
         name.setDepth(251);
-        
+
         const path = scene.add.text(leftMargin + 180, yPos, sound.path, {
             fontSize: '11px',
             fill: '#888888',
@@ -13590,11 +13356,11 @@ function updateAssetsWindow() {
         });
         path.setScrollFactor(0); // Fixed to camera/screen
         path.setDepth(251);
-        
+
         assetsPanel.soundItems.push({ status, name, path });
         yPos += lineHeight;
     });
-    
+
     // Images header
     yPos += 15;
     const imagesHeader = scene.add.text(leftMargin, yPos, 'IMAGES:', {
@@ -13606,7 +13372,7 @@ function updateAssetsWindow() {
     imagesHeader.setScrollFactor(0); // Fixed to camera/screen
     imagesHeader.setDepth(251);
     assetsPanel.imagesHeader = imagesHeader;
-    
+
     // Check images
     yPos += 35;
     expectedImages.forEach((image, index) => {
@@ -13615,7 +13381,7 @@ function updateAssetsWindow() {
         const statusText = exists ? (isRealImage ? '✅' : '🔄') : '❌';
         const statusColor = isRealImage ? '#00ff00' : (exists ? '#ffaa00' : '#ff0000');
         const statusLabel = isRealImage ? '✅ Loaded' : (exists ? '🔄 Generated' : '❌ Missing');
-        
+
         const status = scene.add.text(leftMargin, yPos, statusText, {
             fontSize: '14px',
             fill: statusColor,
@@ -13623,7 +13389,7 @@ function updateAssetsWindow() {
         });
         status.setScrollFactor(0); // Fixed to camera/screen
         status.setDepth(251);
-        
+
         const name = scene.add.text(leftMargin + 25, yPos, image.key, {
             fontSize: '13px',
             fill: '#ffffff',
@@ -13631,7 +13397,7 @@ function updateAssetsWindow() {
         });
         name.setScrollFactor(0); // Fixed to camera/screen
         name.setDepth(251);
-        
+
         const path = scene.add.text(leftMargin + 180, yPos, image.path, {
             fontSize: '11px',
             fill: '#888888',
@@ -13639,19 +13405,19 @@ function updateAssetsWindow() {
         });
         path.setScrollFactor(0); // Fixed to camera/screen
         path.setDepth(251);
-        
+
         assetsPanel.imageItems.push({ status, name, path });
         yPos += lineHeight;
     });
-    
+
     // Summary
     yPos += 15;
     const soundsLoaded = expectedSounds.filter(s => scene.cache.audio.exists(s.key)).length;
     const soundsTotal = expectedSounds.length;
     const imagesLoaded = expectedImages.filter(i => scene.textures.exists(i.key)).length;
     const imagesTotal = expectedImages.length;
-    
-    const summary = scene.add.text(centerX, yPos, 
+
+    const summary = scene.add.text(centerX, yPos,
         `Summary: ${soundsLoaded}/${soundsTotal} sounds loaded, ${imagesLoaded}/${imagesTotal} images available`, {
         fontSize: '14px',
         fill: '#00aaff',
@@ -13669,14 +13435,14 @@ function updateAssetsWindow() {
  */
 function destroyAssetsWindow() {
     if (!assetsVisible || !assetsPanel) return;
-    
+
     const scene = game.scene.scenes[0];
-    
+
     if (assetsPanel.bg && assetsPanel.bg.active) assetsPanel.bg.destroy();
     if (assetsPanel.title && assetsPanel.title.active) assetsPanel.title.destroy();
     if (assetsPanel.closeText && assetsPanel.closeText.active) assetsPanel.closeText.destroy();
     if (assetsPanel.summary && assetsPanel.summary.active) assetsPanel.summary.destroy();
-    
+
     if (assetsPanel.soundItems) {
         assetsPanel.soundItems.forEach(item => {
             if (item.status && item.status.active) item.status.destroy();
@@ -13684,7 +13450,7 @@ function destroyAssetsWindow() {
             if (item.path && item.path.active) item.path.destroy();
         });
     }
-    
+
     if (assetsPanel.imageItems) {
         assetsPanel.imageItems.forEach(item => {
             if (item.status && item.status.active) item.status.destroy();
@@ -13692,11 +13458,11 @@ function destroyAssetsWindow() {
             if (item.path && item.path.active) item.path.destroy();
         });
     }
-    
+
     // Also destroy section headers if they exist
     if (assetsPanel.soundsHeader && assetsPanel.soundsHeader.active) assetsPanel.soundsHeader.destroy();
     if (assetsPanel.imagesHeader && assetsPanel.imagesHeader.active) assetsPanel.imagesHeader.destroy();
-    
+
     assetsPanel = null;
     assetsVisible = false;
 }
@@ -13725,7 +13491,7 @@ function createGrassDebugWindow() {
         console.log('⚠️ Grass debug window already visible');
         return;
     }
-    
+
     console.log('🔍 Creating grass debug window...');
     const scene = game.scene.scenes[0];
     // Center on camera viewport (screen coordinates, not world coordinates)
@@ -13733,16 +13499,16 @@ function createGrassDebugWindow() {
     const centerY = scene.cameras.main.centerY;
     const panelWidth = 1000;
     const panelHeight = 800;
-    
+
     // Create panel background - use high depth to appear above all UI elements
     const bg = scene.add.rectangle(centerX, centerY, panelWidth, panelHeight, 0x1a1a1a, 0.95);
     bg.setStrokeStyle(3, 0x00ff00);
     bg.setScrollFactor(0); // Fixed to camera/screen
     bg.setDepth(250); // Higher than all other UI
     console.log('✅ Created debug window background at depth 250');
-    
+
     // Title
-    const title = scene.add.text(centerX, centerY - panelHeight/2 + 30, 'Grass Spritesheet Debug', {
+    const title = scene.add.text(centerX, centerY - panelHeight / 2 + 30, 'Grass Spritesheet Debug', {
         fontSize: '28px',
         fill: '#00ff00',
         fontFamily: 'Arial',
@@ -13751,9 +13517,9 @@ function createGrassDebugWindow() {
     title.setOrigin(0.5);
     title.setScrollFactor(0);
     title.setDepth(251);
-    
+
     // Close instruction
-    const closeText = scene.add.text(centerX, centerY + panelHeight/2 - 20, 'Press CTRL+M to close', {
+    const closeText = scene.add.text(centerX, centerY + panelHeight / 2 - 20, 'Press CTRL+M to close', {
         fontSize: '14px',
         fill: '#888888',
         fontFamily: 'Arial'
@@ -13761,9 +13527,9 @@ function createGrassDebugWindow() {
     closeText.setOrigin(0.5);
     closeText.setScrollFactor(0);
     closeText.setDepth(251);
-    
+
     // Add frame size input
-    const inputY = centerY - panelHeight/2 + 60;
+    const inputY = centerY - panelHeight / 2 + 60;
     const inputLabel = scene.add.text(centerX - 200, inputY, 'Frame Size:', {
         fontSize: '16px',
         fill: '#ffffff',
@@ -13773,14 +13539,14 @@ function createGrassDebugWindow() {
     inputLabel.setOrigin(0, 0.5);
     inputLabel.setScrollFactor(0);
     inputLabel.setDepth(251);
-    
+
     // Create input field background
     const inputBg = scene.add.rectangle(centerX - 50, inputY, 100, 30, 0x333333, 0.9);
     inputBg.setStrokeStyle(2, 0x00ff00);
     inputBg.setScrollFactor(0);
     inputBg.setDepth(251);
     inputBg.setInteractive({ useHandCursor: true });
-    
+
     // Create input text (we'll use a DOM input element)
     // Calculate absolute position based on canvas position
     const canvas = scene.game.canvas;
@@ -13804,14 +13570,14 @@ function createGrassDebugWindow() {
     inputElement.style.zIndex = '10000';
     document.body.appendChild(inputElement);
     console.log('✅ Created input element at position:', inputElement.style.left, inputElement.style.top);
-    
+
     // Update button
     const updateButton = scene.add.rectangle(centerX + 100, inputY, 120, 30, 0x00aa00, 0.9);
     updateButton.setStrokeStyle(2, 0x00ff00);
     updateButton.setScrollFactor(0);
     updateButton.setDepth(251);
     updateButton.setInteractive({ useHandCursor: true });
-    
+
     const updateButtonText = scene.add.text(centerX + 100, inputY, 'Update', {
         fontSize: '14px',
         fill: '#ffffff',
@@ -13821,7 +13587,7 @@ function createGrassDebugWindow() {
     updateButtonText.setOrigin(0.5);
     updateButtonText.setScrollFactor(0);
     updateButtonText.setDepth(252);
-    
+
     updateButton.on('pointerdown', () => {
         const newFrameSize = parseInt(inputElement.value);
         if (newFrameSize >= 32 && newFrameSize <= 96) {
@@ -13831,14 +13597,14 @@ function createGrassDebugWindow() {
             alert('Please enter a value between 32 and 96');
         }
     });
-    
+
     updateButton.on('pointerover', () => {
         updateButton.setFillStyle(0x00cc00);
     });
     updateButton.on('pointerout', () => {
         updateButton.setFillStyle(0x00aa00);
     });
-    
+
     // Store panel elements
     grassDebugPanel = {
         bg: bg,
@@ -13854,9 +13620,9 @@ function createGrassDebugWindow() {
         updateButtonText: updateButtonText,
         currentFrameSize: 32
     };
-    
+
     grassDebugVisible = true;
-    
+
     console.log('✅ Grass debug window created, calling updateGrassDebugWindow...');
     try {
         updateGrassDebugWindow();
@@ -13887,15 +13653,15 @@ function updateGrassDebugWindow() {
         console.warn('⚠️ Cannot update grass debug window - not visible or panel missing');
         return;
     }
-    
+
     const scene = game.scene.scenes[0];
     if (!scene) {
         console.error('❌ No scene available');
         return;
     }
-    
+
     console.log('🔄 Updating grass debug window...');
-    
+
     // Clear existing content
     if (grassDebugPanel.spritesheetImage && grassDebugPanel.spritesheetImage.active) {
         grassDebugPanel.spritesheetImage.destroy();
@@ -13915,18 +13681,18 @@ function updateGrassDebugWindow() {
     if (grassDebugPanel.infoText && grassDebugPanel.infoText.active) {
         grassDebugPanel.infoText.destroy();
     }
-    
+
     const centerX = scene.cameras.main.centerX;
     const centerY = scene.cameras.main.centerY;
     const panelWidth = 1000;
     const panelHeight = 800;
-    
+
     // Check if grass texture exists - use debug texture if available, otherwise main grass texture
     const currentFrameSize = grassDebugPanel ? grassDebugPanel.currentFrameSize : 96;
     const debugTextureKey = 'grass_debug_' + currentFrameSize;
     let grassTexture;
     let usingDebugTexture = false;
-    
+
     if (scene.textures.exists(debugTextureKey)) {
         console.log('Using debug texture for display:', debugTextureKey);
         grassTexture = scene.textures.get(debugTextureKey);
@@ -13936,13 +13702,13 @@ function updateGrassDebugWindow() {
     } else {
         grassTexture = null;
     }
-    
+
     // Store for use in display code
     if (grassDebugPanel) {
         grassDebugPanel.usingDebugTexture = usingDebugTexture;
         grassDebugPanel.debugTextureKey = debugTextureKey;
     }
-    
+
     if (!grassTexture) {
         const errorText = scene.add.text(centerX, centerY, '❌ Grass texture not found!\n\nCheck console for available textures.', {
             fontSize: '24px',
@@ -13958,15 +13724,15 @@ function updateGrassDebugWindow() {
         grassDebugPanel.infoText = errorText;
         return;
     }
-    
+
     console.log('✅ Grass texture found, continuing with update...');
-    
+
     // Get texture info
     const frameTotal = grassTexture.frameTotal || 1;
     const sourceImage = grassTexture.source[0];
     const sourceWidth = sourceImage ? sourceImage.width : 32;
     const sourceHeight = sourceImage ? sourceImage.height : 32;
-    
+
     // Get the actual image source URL
     let imageUrl = 'Unknown';
     if (sourceImage && sourceImage.image) {
@@ -13978,20 +13744,20 @@ function updateGrassDebugWindow() {
             imageUrl = sourceImage.image.baseURI;
         }
     }
-    
+
     // Also check the texture's key and cache
     const textureKey = grassTexture.key;
     const cacheEntry = scene.cache.image ? scene.cache.image.get(textureKey) : null;
     if (cacheEntry && cacheEntry.src) {
         imageUrl = cacheEntry.src;
     }
-    
+
     // Calculate expected frames based on source size and current frame size
     // (currentFrameSize was already declared earlier in this function at line 5918)
     const expectedFramesX = Math.floor(sourceWidth / currentFrameSize);
     const expectedFramesY = Math.floor(sourceHeight / currentFrameSize);
     const expectedTotalFrames = expectedFramesX * expectedFramesY;
-    
+
     console.log('📊 Grass texture analysis:');
     console.log('  Texture key:', textureKey);
     console.log('  Image URL:', imageUrl);
@@ -14002,15 +13768,15 @@ function updateGrassDebugWindow() {
     console.log('  Texture keys:', Object.keys(grassTexture.frames || {}));
     console.log('  Source image:', sourceImage);
     console.log('  Cache entry:', cacheEntry);
-    
+
     // Display info
-    const infoY = centerY - panelHeight/2 + 120;
+    const infoY = centerY - panelHeight / 2 + 120;
     let infoMessage = `Frames: ${frameTotal} | Source Size: ${sourceWidth}x${sourceHeight} | Frame Size: ${currentFrameSize}x${currentFrameSize}`;
     if (usingDebugTexture) {
         infoMessage += `\n(Using debug texture for display - game still uses original)`;
     }
     infoMessage += `\n\n📎 Image URL:\n${imageUrl}`;
-    
+
     // Check if this is a generated texture (canvas) vs loaded image
     if (sourceImage && sourceImage.image && sourceImage.image.isCanvas) {
         infoMessage += `\n\n⚠️ This is a GENERATED texture (canvas), not a loaded image!`;
@@ -14035,38 +13801,38 @@ function updateGrassDebugWindow() {
     infoText.setScrollFactor(0);
     infoText.setDepth(251);
     grassDebugPanel.infoText = infoText;
-    
+
     // Display full spritesheet (scaled down if too large)
     const spritesheetY = infoY + 60;
     const maxSpritesheetWidth = panelWidth - 100;
     const maxSpritesheetHeight = 300;
     let spritesheetScale = 1;
-    
+
     if (sourceWidth > maxSpritesheetWidth) {
         spritesheetScale = maxSpritesheetWidth / sourceWidth;
     }
     if (sourceHeight * spritesheetScale > maxSpritesheetHeight) {
         spritesheetScale = maxSpritesheetHeight / sourceHeight;
     }
-    
+
     console.log('Creating spritesheet image with scale:', spritesheetScale);
-    
-        // Try to display the full spritesheet - use frame 0 or the source image
-        let spritesheetImage;
-        try {
-            // Use debug texture if available, otherwise use main grass texture
-            const displayKey = grassDebugPanel.usingDebugTexture ? grassDebugPanel.debugTextureKey : 'grass';
-            
-            // For spritesheets, we can display the source image directly
-            if (frameTotal > 1) {
-                // It's a spritesheet - try to show the source
-                spritesheetImage = scene.add.image(centerX, spritesheetY, displayKey, 0);
-                spritesheetImage.setScale(spritesheetScale);
-            } else {
-                // Single texture
-                spritesheetImage = scene.add.image(centerX, spritesheetY, displayKey);
-                spritesheetImage.setScale(spritesheetScale);
-            }
+
+    // Try to display the full spritesheet - use frame 0 or the source image
+    let spritesheetImage;
+    try {
+        // Use debug texture if available, otherwise use main grass texture
+        const displayKey = grassDebugPanel.usingDebugTexture ? grassDebugPanel.debugTextureKey : 'grass';
+
+        // For spritesheets, we can display the source image directly
+        if (frameTotal > 1) {
+            // It's a spritesheet - try to show the source
+            spritesheetImage = scene.add.image(centerX, spritesheetY, displayKey, 0);
+            spritesheetImage.setScale(spritesheetScale);
+        } else {
+            // Single texture
+            spritesheetImage = scene.add.image(centerX, spritesheetY, displayKey);
+            spritesheetImage.setScale(spritesheetScale);
+        }
         spritesheetImage.setScrollFactor(0);
         spritesheetImage.setDepth(251);
         spritesheetImage.setOrigin(0.5);
@@ -14083,9 +13849,9 @@ function updateGrassDebugWindow() {
         errorMsg.setDepth(251);
         grassDebugPanel.spritesheetImage = errorMsg;
     }
-    
+
     // Add label for spritesheet
-    const spritesheetLabel = scene.add.text(centerX, spritesheetY - (sourceHeight * spritesheetScale / 2) - 20, 
+    const spritesheetLabel = scene.add.text(centerX, spritesheetY - (sourceHeight * spritesheetScale / 2) - 20,
         'Full Spritesheet:', {
         fontSize: '16px',
         fill: '#ffffff',
@@ -14095,12 +13861,12 @@ function updateGrassDebugWindow() {
     spritesheetLabel.setOrigin(0.5);
     spritesheetLabel.setScrollFactor(0);
     spritesheetLabel.setDepth(251);
-    
+
     if (spritesheetImage) {
         grassDebugPanel.spritesheetImage = spritesheetImage;
     }
     grassDebugPanel.spritesheetLabel = spritesheetLabel;
-    
+
     // Display individual frames in a grid
     const framesStartY = spritesheetY + (sourceHeight * spritesheetScale / 2) + 60;
     const framesLabel = scene.add.text(centerX, framesStartY - 30, 'Individual Frames:', {
@@ -14113,26 +13879,26 @@ function updateGrassDebugWindow() {
     framesLabel.setScrollFactor(0);
     framesLabel.setDepth(251);
     grassDebugPanel.framesLabel = framesLabel;
-    
+
     // Calculate grid layout
     const frameSize = 64; // Display size for each frame
     const framesPerRow = Math.floor((panelWidth - 100) / (frameSize + 20));
     const frameSpacing = (panelWidth - 100) / framesPerRow;
     const startX = centerX - (framesPerRow - 1) * frameSpacing / 2;
-    
+
     let currentY = framesStartY;
     let currentX = startX;
     let framesInCurrentRow = 0;
-    
+
     console.log('Creating', frameTotal, 'frame images...');
-    
+
     for (let i = 0; i < frameTotal; i++) {
         try {
             // Create frame image
             let frameImage;
             // currentFrameSize is already declared in function scope
             const displayKey = grassDebugPanel.usingDebugTexture ? grassDebugPanel.debugTextureKey : 'grass';
-            
+
             if (frameTotal > 1) {
                 // It's a spritesheet - use frame index
                 frameImage = scene.add.image(currentX, currentY, displayKey, i);
@@ -14144,9 +13910,9 @@ function updateGrassDebugWindow() {
             frameImage.setScrollFactor(0);
             frameImage.setDepth(251);
             frameImage.setOrigin(0.5);
-            
+
             // Add frame number label
-            const frameLabel = scene.add.text(currentX, currentY + frameSize/2 + 10, `Frame ${i}`, {
+            const frameLabel = scene.add.text(currentX, currentY + frameSize / 2 + 10, `Frame ${i}`, {
                 fontSize: '12px',
                 fill: '#cccccc',
                 fontFamily: 'Arial'
@@ -14154,13 +13920,13 @@ function updateGrassDebugWindow() {
             frameLabel.setOrigin(0.5);
             frameLabel.setScrollFactor(0);
             frameLabel.setDepth(251);
-            
+
             // Add border around frame
             const frameBorder = scene.add.rectangle(currentX, currentY, frameSize + 4, frameSize + 4, 0x000000, 0);
             frameBorder.setStrokeStyle(2, 0x00ff00);
             frameBorder.setScrollFactor(0);
             frameBorder.setDepth(250);
-            
+
             grassDebugPanel.frameImages.push({ image: frameImage, label: frameLabel, border: frameBorder });
         } catch (e) {
             console.error(`Error creating frame ${i}:`, e);
@@ -14176,18 +13942,18 @@ function updateGrassDebugWindow() {
             errorText.setDepth(251);
             grassDebugPanel.frameImages.push({ image: null, label: errorText, border: null });
         }
-        
+
         // Move to next position
         framesInCurrentRow++;
         currentX += frameSpacing;
-        
+
         if (framesInCurrentRow >= framesPerRow) {
             framesInCurrentRow = 0;
             currentX = startX;
             currentY += frameSize + 50; // Move to next row
         }
     }
-    
+
     console.log('✅ Created', grassDebugPanel.frameImages.length, 'frame displays');
 }
 
@@ -14196,12 +13962,12 @@ function updateGrassDebugWindow() {
  */
 function reloadGrassSpritesheet(frameSize) {
     const scene = game.scene.scenes[0];
-    
+
     console.log('🔄 Reloading grass spritesheet with frame size:', frameSize);
-    
+
     // Use a temporary key first to avoid breaking existing references
     const tempKey = 'grass_debug_' + frameSize;
-    
+
     // Check if temp texture already exists
     if (scene.textures.exists(tempKey)) {
         console.log('✅ Using cached texture for frame size:', frameSize);
@@ -14213,34 +13979,34 @@ function reloadGrassSpritesheet(frameSize) {
         updateGrassDebugWindow();
         return;
     }
-    
+
     // Load with new frame size to temporary key
     scene.load.spritesheet(tempKey, 'assets/tiles/grass.png', {
         frameWidth: frameSize,
         frameHeight: frameSize
     });
-    
+
     // Wait for load to complete
     const onComplete = () => {
         console.log('✅ Grass spritesheet loaded with frame size:', frameSize);
-        
+
         if (grassDebugPanel) {
             grassDebugPanel.currentFrameSize = frameSize;
         }
-        
+
         // Update the input value
         if (grassDebugPanel && grassDebugPanel.inputElement) {
             grassDebugPanel.inputElement.value = frameSize;
         }
-        
+
         // Update display (will use tempKey for display)
         updateGrassDebugWindow();
-        
+
         // Clean up listeners
         scene.load.off('filecomplete-spritesheet-' + tempKey, onComplete);
         scene.load.off('loaderror', onError);
     };
-    
+
     const onError = (file) => {
         if (file.key === tempKey) {
             console.error('❌ Failed to reload grass spritesheet with frame size:', frameSize);
@@ -14249,10 +14015,10 @@ function reloadGrassSpritesheet(frameSize) {
             scene.load.off('loaderror', onError);
         }
     };
-    
+
     scene.load.once('filecomplete-spritesheet-' + tempKey, onComplete);
     scene.load.once('loaderror', onError);
-    
+
     scene.load.start();
 }
 
@@ -14261,9 +14027,9 @@ function reloadGrassSpritesheet(frameSize) {
  */
 function destroyGrassDebugWindow() {
     if (!grassDebugVisible || !grassDebugPanel) return;
-    
+
     const scene = game.scene.scenes[0];
-    
+
     if (grassDebugPanel.bg && grassDebugPanel.bg.active) grassDebugPanel.bg.destroy();
     if (grassDebugPanel.title && grassDebugPanel.title.active) grassDebugPanel.title.destroy();
     if (grassDebugPanel.closeText && grassDebugPanel.closeText.active) grassDebugPanel.closeText.destroy();
@@ -14275,18 +14041,18 @@ function destroyGrassDebugWindow() {
     if (grassDebugPanel.inputBg && grassDebugPanel.inputBg.active) grassDebugPanel.inputBg.destroy();
     if (grassDebugPanel.updateButton && grassDebugPanel.updateButton.active) grassDebugPanel.updateButton.destroy();
     if (grassDebugPanel.updateButtonText && grassDebugPanel.updateButtonText.active) grassDebugPanel.updateButtonText.destroy();
-    
+
     // Remove DOM input element
     if (grassDebugPanel.inputElement && grassDebugPanel.inputElement.parentNode) {
         grassDebugPanel.inputElement.parentNode.removeChild(grassDebugPanel.inputElement);
     }
-    
+
     grassDebugPanel.frameImages.forEach(item => {
         if (item.image && item.image.active) item.image.destroy();
         if (item.label && item.label.active) item.label.destroy();
         if (item.border && item.border.active) item.border.destroy();
     });
-    
+
     grassDebugPanel = null;
     grassDebugVisible = false;
 }
@@ -14305,10 +14071,10 @@ function destroyGrassDebugWindow() {
 function createMonsterAnimations() {
     const scene = this;
     const frameRate = 8; // Animation speed
-    
+
     // Monster types that will have animations
     const monsterTypes = ['goblin', 'orc', 'skeleton', 'slime', 'wolf', 'dragon', 'ghost', 'spider'];
-    
+
     monsterTypes.forEach(type => {
         // For now, we're using static directional images
         // When animated sprite sheets are ready, we'll load those instead
@@ -14317,7 +14083,7 @@ function createMonsterAnimations() {
             const spriteSheetKey = `monster_${type}_walk_${direction}`;
             const staticImageKey = `monster_${type}_${direction}`;
             const animKey = `${type}_walk_${direction}`;
-            
+
             // Check for animated sprite sheet first
             if (scene.textures.exists(spriteSheetKey)) {
                 scene.anims.create({
@@ -14330,7 +14096,7 @@ function createMonsterAnimations() {
             }
             // Static images are already loaded, no animation needed - just use setTexture()
         });
-        
+
         // Idle animation (breathing/idle cycle)
         const idleTextureKey = `monster_${type}_idle`;
         const idleAnimKey = `${type}_idle`;
@@ -14343,12 +14109,12 @@ function createMonsterAnimations() {
                 yoyo: false
             });
         }
-        
+
         // Attack animations (4 directions) - check for sprite sheets first
         ['south', 'north', 'east', 'west'].forEach(direction => {
             const attackSpriteSheetKey = `monster_${type}_attack_${direction}`;
             const attackAnimKey = `${type}_attack_${direction}`;
-            
+
             // Check for animated sprite sheet first
             if (scene.textures.exists(attackSpriteSheetKey)) {
                 scene.anims.create({
@@ -14362,7 +14128,7 @@ function createMonsterAnimations() {
                 console.log(`⚠️ Attack spritesheet not found: ${attackSpriteSheetKey}`);
             }
         });
-        
+
         // Death animation
         const deathTextureKey = `monster_${type}_death`;
         const deathAnimKey = `${type}_death`;
@@ -14375,7 +14141,7 @@ function createMonsterAnimations() {
             });
         }
     });
-    
+
     console.log('✅ Monster animation system initialized');
 }
 
@@ -14385,7 +14151,7 @@ function createMonsterAnimations() {
 function updateMonsterAnimation(monster, delta) {
     const scene = game.scene.scenes[0];
     if (!monster || !monster.active || monster.isDead) return;
-    
+
     // Initialize direction tracking if not present
     if (!monster.facingDirection) {
         monster.facingDirection = 'south';
@@ -14396,17 +14162,17 @@ function updateMonsterAnimation(monster, delta) {
     if (monster.animationState === undefined) {
         monster.animationState = 'idle'; // 'idle', 'walking', 'attacking', 'dying'
     }
-    
+
     // Don't change animation if attacking or dying
     if (monster.animationState === 'attacking' || monster.animationState === 'dying') {
         return;
     }
-    
+
     // Determine direction from velocity
     const velX = monster.body.velocity.x;
     const velY = monster.body.velocity.y;
     const isMoving = Math.abs(velX) > 5 || Math.abs(velY) > 5;
-    
+
     let newDirection = monster.facingDirection;
     if (isMoving) {
         // Determine facing direction based on velocity
@@ -14416,19 +14182,19 @@ function updateMonsterAnimation(monster, delta) {
             newDirection = velX > 0 ? 'east' : 'west';
         }
     }
-    
+
     // Update animation state
     const newState = isMoving ? 'walking' : 'idle';
-    
+
     // Only update if direction or state changed
     if (newDirection !== monster.facingDirection || newState !== monster.animationState || isMoving !== monster.isMoving) {
         monster.facingDirection = newDirection;
         monster.animationState = newState;
         monster.isMoving = isMoving;
-        
+
         // Get monster type name (lowercase)
         const monsterType = (monster.monsterType || 'goblin').toLowerCase();
-        
+
         if (isMoving) {
             // Play walking animation (sprite sheet) or use static directional image
             const walkAnimKey = `${monsterType}_walk_${newDirection}`;
@@ -14476,22 +14242,22 @@ function updateMonsterAnimation(monster, delta) {
 function playMonsterAttackAnimation(monster) {
     const scene = game.scene.scenes[0];
     if (!monster || !monster.active) return;
-    
+
     const monsterType = (monster.monsterType || 'goblin').toLowerCase();
-    
+
     // Get the direction the monster is facing (default to south if not set)
     const direction = monster.facingDirection || 'south';
     const attackAnimKey = `${monsterType}_attack_${direction}`;
-    
+
     monster.animationState = 'attacking';
-    
+
     console.log(`🎬 Attempting to play attack animation: ${attackAnimKey} for ${monsterType} facing ${direction}`);
-    
+
     // Try directional attack animation first
     if (scene.anims.exists(attackAnimKey)) {
         console.log(`✅ Found directional attack animation: ${attackAnimKey}`);
         monster.play(attackAnimKey);
-        
+
         // Return to walking/idle after attack completes
         monster.once('animationcomplete', (animation) => {
             if (animation && animation.key === attackAnimKey) {
@@ -14530,12 +14296,12 @@ function playMonsterAttackAnimation(monster) {
 function playMonsterDeathAnimation(monster) {
     const scene = game.scene.scenes[0];
     if (!monster || !monster.active) return;
-    
+
     const monsterType = (monster.monsterType || 'goblin').toLowerCase();
     const deathAnimKey = `${monsterType}_death`;
-    
+
     monster.animationState = 'dying';
-    
+
     if (scene.anims.exists(deathAnimKey)) {
         monster.play(deathAnimKey);
     }

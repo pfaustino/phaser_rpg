@@ -7273,24 +7273,68 @@ function createInventoryUI() {
     const centerX = scene.cameras.main.width / 2;
     const centerY = scene.cameras.main.height / 2;
 
-    // Background
+    // Create background and title first
+    const bg = scene.add.rectangle(centerX, centerY, panelWidth, panelHeight, 0x1a1a1a, 0.95)
+        .setScrollFactor(0).setDepth(300).setStrokeStyle(3, 0xffffff);
+
+    const title = scene.add.text(centerX, centerY - panelHeight / 2 + 20, 'INVENTORY', {
+        fontSize: '28px',
+        fill: '#ffffff',
+        fontStyle: 'bold'
+    }).setScrollFactor(0).setDepth(301).setOrigin(0.5, 0);
+
+    const closeText = scene.add.text(centerX + panelWidth / 2 - 20, centerY - panelHeight / 2 + 20, 'Press I to Close', {
+        fontSize: '14px',
+        fill: '#aaaaaa'
+    }).setScrollFactor(0).setDepth(301).setOrigin(1, 0);
+
     inventoryPanel = {
-        bg: scene.add.rectangle(centerX, centerY, panelWidth, panelHeight, 0x1a1a1a, 0.95)
-            .setScrollFactor(0).setDepth(300).setStrokeStyle(3, 0xffffff),
-        title: scene.add.text(centerX, centerY - panelHeight / 2 + 20, 'INVENTORY', {
-            fontSize: '28px',
-            fill: '#ffffff',
-            fontStyle: 'bold'
-        }).setScrollFactor(0).setDepth(301).setOrigin(0.5, 0),
-        closeText: scene.add.text(centerX + panelWidth / 2 - 20, centerY - panelHeight / 2 + 20, 'Press I to Close', {
-            fontSize: '14px',
-            fill: '#aaaaaa'
-        }).setScrollFactor(0).setDepth(301).setOrigin(1, 0),
+        bg,
+        title,
+        closeText,
         items: []
     };
 
+    // Container for items
+    const inventoryStartY = centerY - panelHeight / 2 + 80;
+    const inventoryVisibleHeight = panelHeight - 120;
+    const inventoryContainer = scene.add.container(centerX, inventoryStartY);
+    inventoryContainer.setScrollFactor(0).setDepth(301);
+
+    // Mask for items
+    const inventoryMask = scene.make.graphics();
+    inventoryMask.fillStyle(0xffffff);
+    inventoryMask.fillRect(centerX - panelWidth / 2, inventoryStartY, panelWidth, inventoryVisibleHeight);
+    inventoryMask.setScrollFactor(0);
+    const maskGeometry = inventoryMask.createGeometryMask();
+    inventoryContainer.setMask(maskGeometry);
+
+    // Scrollbar
+    const scrollbar = setupScrollbar({
+        scene,
+        x: centerX + panelWidth / 2 - 25,
+        y: inventoryStartY,
+        height: inventoryVisibleHeight,
+        depth: 303,
+        minScroll: 0,
+        initialScroll: 0,
+        container: inventoryContainer,
+        containerStartY: inventoryStartY,
+        containerOffset: 0,
+        wheelHitArea: inventoryPanel.bg,
+        visibleHeight: inventoryVisibleHeight
+    });
+
+    inventoryPanel.container = inventoryContainer;
+    inventoryPanel.mask = inventoryMask;
+    inventoryPanel.maskGeometry = maskGeometry;
+    inventoryPanel.scrollbar = scrollbar;
+    inventoryPanel.startY = inventoryStartY;
+    inventoryPanel.visibleHeight = inventoryVisibleHeight;
+
     // Show items
     updateInventoryItems();
+
 }
 
 /**
@@ -7308,37 +7352,24 @@ function updateInventoryItems() {
     // Always hide tooltip when refreshing inventory items
     hideTooltip(true);
 
-    // Clear existing item displays and remove event listeners
-    inventoryPanel.items.forEach(item => {
-        if (item.sprite && item.sprite.active) {
-            // Remove event listeners before destroying
-            if (item.sprite._tooltipHandlers) {
-                item.sprite.off('pointerover', item.sprite._tooltipHandlers.onPointerOver);
-                item.sprite.off('pointerout', item.sprite._tooltipHandlers.onPointerOut);
-                item.sprite._tooltipHandlers = null;
-            }
-            item.sprite.destroy();
-        }
-        if (item.text && item.text.active) item.text.destroy();
-        if (item.borderRect && item.borderRect.active) item.borderRect.destroy();
-    });
+    // Clear container
+    if (inventoryPanel.container) {
+        inventoryPanel.container.removeAll(true);
+    }
     inventoryPanel.items = [];
-
-    // Ensure tooltip is cleared after destroying items
-    hideTooltip(true);
 
     const slotSize = 60;
     const slotsPerRow = 6;
-    const spacing = 10;
+    const spacing = 30; // Increased spacing for labels
     const panelWidth = inventoryPanel.bg.width;
     const panelHeight = inventoryPanel.bg.height;
-    const panelCenterX = inventoryPanel.bg.x;
-    const panelCenterY = inventoryPanel.bg.y;
 
-    // Calculate grid start position (centered in panel)
+    // Calculate grid start position (relative to container)
     const gridWidth = slotsPerRow * slotSize + (slotsPerRow - 1) * spacing;
-    const startX = panelCenterX - gridWidth / 2 + slotSize / 2;
-    const startY = panelCenterY - panelHeight / 2 + 80;
+    const startX = -gridWidth / 2 + slotSize / 2;
+    const startY = 40; // Increased top padding inside container to prevent cut-off
+
+
 
     // Display items
     console.log(`📦 Rendering ${playerStats.inventory.length} items in inventory UI`);
@@ -7414,6 +7445,9 @@ function updateInventoryItems() {
         itemSprite.on('pointerover', onPointerOver);
         itemSprite.on('pointerout', onPointerOut);
 
+        // Add all to container
+        inventoryPanel.container.add([borderRect, itemSprite, itemText]);
+
         // Store cleanup handlers
         itemSprite._tooltipHandlers = { onPointerOver, onPointerOut };
 
@@ -7441,21 +7475,26 @@ function updateInventoryItems() {
         });
     });
 
+    // Update scrollbar
+    const totalRows = Math.ceil(playerStats.inventory.length / slotsPerRow);
+    const totalContentHeight = totalRows * (slotSize + spacing) + 20; // 20 for padding
+    if (inventoryPanel.scrollbar) {
+        inventoryPanel.scrollbar.updateMaxScroll(Math.max(0, totalContentHeight - inventoryPanel.visibleHeight), totalContentHeight);
+    }
+
     // Show empty message if no items
     if (playerStats.inventory.length === 0) {
-        const emptyText = scene.add.text(
-            panelCenterX,
-            panelCenterY,
-            'Inventory is empty\nKill monsters to collect items!',
-            {
-                fontSize: '18px',
-                fill: '#888888',
-                align: 'center'
-            }
-        ).setScrollFactor(0).setDepth(302).setOrigin(0.5, 0.5);
+        const emptyText = scene.add.text(0, 50, 'Inventory is empty\nKill monsters to collect items!', {
+            fontSize: '18px',
+            fill: '#888888',
+            align: 'center',
+            fontStyle: 'italic'
+        }).setScrollFactor(0).setDepth(302).setOrigin(0.5, 0);
+        inventoryPanel.container.add(emptyText);
         inventoryPanel.items.push({ text: emptyText });
     }
 }
+
 
 /**
  * showTooltip - Unified tooltip system for Inventory, Equipment, and Shop
@@ -7467,8 +7506,6 @@ function updateInventoryItems() {
 function showTooltip(item, x, y, context = 'inventory') {
     const scene = game.scene.scenes[0];
     if (!item) return;
-
-
 
     // Clear any existing tooltip or hide timer immediately
     if (tooltipHideTimer) {
@@ -7601,6 +7638,184 @@ const scene = game.scene.scenes[0];
 
 
 /**
+ * Unified scrollbar setup utility
+ * @param {Object} params Configuration parameters
+ * @returns {Object} Scrollbar instance with update methods
+ */
+function setupScrollbar({
+    scene,
+    x,
+    y,
+    width = 12,
+    height,
+    depth = 1000,
+    minScroll = 0,
+    initialScroll = 0,
+    onScroll, // Callback(newPosition)
+    container, // Optional Phaser Container to auto-update .y
+    containerStartY, // Required if using container
+    containerOffset = 0, // Extra offset for container positioning
+    wheelHitArea, // Optional rectangle/object with getBounds() for wheel support
+    visibleHeight // Height of the visible area (usually same as scrollbar height)
+}) {
+    // Create track with origin at top center
+    const track = scene.add.rectangle(x, y, width, height, 0x333333, 0.8)
+        .setScrollFactor(0).setDepth(depth).setStrokeStyle(1, 0x555555)
+        .setInteractive({ useHandCursor: true }).setOrigin(0.5, 0);
+
+    // Thumb height ratio
+    let thumbHeight = 40;
+    const thumb = scene.add.rectangle(x, y, width - 4, thumbHeight, 0x666666, 1)
+        .setScrollFactor(0).setDepth(depth + 1).setStrokeStyle(1, 0x888888)
+        .setInteractive({ useHandCursor: true }).setOrigin(0.5, 0);
+
+    let currentScroll = initialScroll;
+    let maxScroll = 0;
+    let isDragging = false;
+    let dragStartY = 0;
+    let dragStartScroll = 0;
+
+    const setScroll = (newPosition) => {
+        // Clamp scroll position between min and max
+        currentScroll = Math.max(minScroll, Math.min(maxScroll, newPosition));
+
+        // Update thumb position with precision
+        if (maxScroll > minScroll) {
+            const scrollRange = maxScroll - minScroll;
+            const scrollRatio = (currentScroll - minScroll) / scrollRange;
+
+            // Available movement range for the thumb (leave 2px padding at top and bottom)
+            const padding = 2;
+            const availableTrackHeight = height - (padding * 2);
+            const thumbMoveRange = availableTrackHeight - thumb.height;
+
+            // Map scroll ratio to thumb Y position (relative to track Y + padding)
+            if (thumbMoveRange > 0) {
+                thumb.y = y + padding + (scrollRatio * thumbMoveRange);
+            } else {
+                thumb.y = y + padding;
+            }
+        } else {
+            thumb.y = y + 2;
+        }
+
+        // Apply scroll logic to container
+        if (container && containerStartY !== undefined) {
+            container.y = containerStartY - containerOffset - currentScroll;
+        }
+
+        if (onScroll) {
+            onScroll(currentScroll);
+        }
+    };
+
+
+    // Interactions
+    const onPointerDown = (pointer) => {
+        if (!track.visible) return;
+
+        if (thumb.getBounds().contains(pointer.x, pointer.y)) {
+            isDragging = true;
+            dragStartY = pointer.y;
+            dragStartScroll = currentScroll;
+        } else if (track.getBounds().contains(pointer.x, pointer.y)) {
+            // Jump to position
+            const padding = 2;
+            const availableTrackHeight = height - (padding * 2);
+            const thumbMoveRange = availableTrackHeight - thumb.height;
+
+            if (thumbMoveRange > 0) {
+                // Click position relative to track start (offset by padding and half thumb)
+                const clickY = pointer.y - y - padding - (thumb.height / 2);
+                const clickRatio = Math.max(0, Math.min(1, clickY / thumbMoveRange));
+                const scrollRange = maxScroll - minScroll;
+                setScroll(minScroll + clickRatio * scrollRange);
+            }
+        }
+    };
+
+    const onPointerMove = (pointer) => {
+        if (isDragging && pointer.isDown) {
+            const padding = 2;
+            const availableTrackHeight = height - (padding * 2);
+            const thumbMoveRange = availableTrackHeight - thumb.height;
+
+            if (thumbMoveRange > 0 && maxScroll > minScroll) {
+                const deltaY = pointer.y - dragStartY;
+                const scrollChangeRatio = deltaY / thumbMoveRange;
+                const scrollRange = maxScroll - minScroll;
+                setScroll(dragStartScroll + scrollChangeRatio * scrollRange);
+            }
+        }
+    };
+
+
+    const onPointerUp = () => { isDragging = false; };
+
+    const onWheel = (pointer, gameObjects, deltaX, deltaY) => {
+        if (!track.visible || maxScroll <= minScroll) return;
+
+        const hitArea = wheelHitArea || track;
+        const bounds = (hitArea.getBounds ? hitArea.getBounds() : hitArea);
+
+        if (bounds.contains(pointer.x, pointer.y)) {
+            setScroll(currentScroll + deltaY * 0.5);
+        }
+    };
+
+    scene.input.on('pointerdown', onPointerDown);
+    scene.input.on('pointermove', onPointerMove);
+    scene.input.on('pointerup', onPointerUp);
+    scene.input.on('wheel', onWheel);
+
+    const instance = {
+        track,
+        thumb,
+        updateMaxScroll: (newMax, totalContentHeight) => {
+            maxScroll = newMax;
+            if (totalContentHeight > visibleHeight) {
+                const ratio = Math.min(1, visibleHeight / totalContentHeight);
+                const padding = 2;
+                const usableHeight = height - (padding * 2);
+
+                // Calculate thumb height proportionate to usable track height
+                // Ensure min height of 30, but never more than usableHeight
+                thumb.height = Math.min(usableHeight, Math.max(30, usableHeight * ratio));
+
+                track.setVisible(true);
+                thumb.setVisible(true);
+            } else {
+                track.setVisible(false);
+                thumb.setVisible(false);
+            }
+            setScroll(currentScroll); // Refresh position
+        },
+
+        setScroll,
+        getScroll: () => currentScroll,
+        destroy: () => {
+            scene.input.off('pointerdown', onPointerDown);
+            scene.input.off('pointermove', onPointerMove);
+            scene.input.off('pointerup', onPointerUp);
+            scene.input.off('wheel', onWheel);
+            track.destroy();
+            thumb.destroy();
+        },
+        setVisible: (visible) => {
+            if (visible && maxScroll > minScroll) {
+                track.setVisible(true);
+                thumb.setVisible(true);
+            } else {
+                track.setVisible(false);
+                thumb.setVisible(false);
+            }
+        }
+    };
+
+    return instance;
+}
+
+/**
  * Destroy inventory UI
  */
 function destroyInventoryUI() {
@@ -7614,24 +7829,18 @@ function destroyInventoryUI() {
         if (inventoryPanel.title && inventoryPanel.title.active) inventoryPanel.title.destroy();
         if (inventoryPanel.closeText && inventoryPanel.closeText.active) inventoryPanel.closeText.destroy();
 
-        inventoryPanel.items.forEach(item => {
-            if (item.sprite && item.sprite.active) {
-                // Remove event listeners before destroying
-                if (item.sprite._tooltipHandlers) {
-                    item.sprite.off('pointerover', item.sprite._tooltipHandlers.onPointerOver);
-                    item.sprite.off('pointerout', item.sprite._tooltipHandlers.onPointerOut);
-                    item.sprite._tooltipHandlers = null;
-                }
-                item.sprite.destroy();
-            }
-            if (item.text && item.text.active) item.text.destroy();
-            if (item.borderRect && item.borderRect.active) item.borderRect.destroy();
-        });
+        if (inventoryPanel.scrollbar) {
+            inventoryPanel.scrollbar.destroy();
+        }
+
+        if (inventoryPanel.container) {
+            inventoryPanel.container.destroy();
+        }
 
         inventoryPanel.items = [];
-
         inventoryPanel = null;
     }
+
 
     // Final cleanup - ensure tooltip is gone
     hideTooltip(true);
@@ -7989,122 +8198,24 @@ function createEquipmentUI() {
     inventoryMask.setScrollFactor(0).setDepth(301);
     const maskGeometry = inventoryMask.createGeometryMask();
 
-    // Create scrollbar
-    const scrollbarWidth = 12;
-    const scrollbarX = rightPanelX + panelWidth / 2 - scrollbarWidth - 10;
-    const scrollbarTrack = scene.add.rectangle(scrollbarX, inventoryStartY + inventoryVisibleHeight / 2, scrollbarWidth, inventoryVisibleHeight, 0x333333, 0.8)
-        .setScrollFactor(0).setDepth(303).setStrokeStyle(1, 0x555555)
-        .setInteractive({ useHandCursor: true });
-
-    const scrollbarThumbHeight = 40; // Will be adjusted based on content
-    // Thumb starts at the top of the track (will be repositioned when content is loaded)
-    const scrollbarThumb = scene.add.rectangle(scrollbarX, inventoryStartY + scrollbarThumbHeight / 2, scrollbarWidth - 4, scrollbarThumbHeight, 0x666666, 1)
-        .setScrollFactor(0).setDepth(304).setStrokeStyle(1, 0x888888)
-        .setInteractive({ useHandCursor: true });
-
     // Scroll state
-    // Allow negative scroll to bring first items fully into view
-    // Container starts at inventoryStartY - containerOffset
-    // At scrollPosition = minScroll (negative), container moves up more to show first items
-    // At scrollPosition = 0, container is at inventoryStartY - containerOffset
-    // At scrollPosition = maxScroll, container moves up: y = inventoryStartY - containerOffset - maxScroll
     const minScroll = -40; // Increased to show items with top padding at correct position
-    let scrollPosition = minScroll; // Start at minScroll to show first items
-    let maxScroll = 0;
-    let isDragging = false;
-    let dragStartY = 0;
-    let dragStartScroll = 0;
 
-    // Scrollbar drag handlers (only when equipment panel is visible)
-    const handlePointerDown = (pointer) => {
-        if (equipmentVisible) {
-            if (scrollbarThumb.getBounds().contains(pointer.x, pointer.y)) {
-                // Start dragging thumb
-                isDragging = true;
-                dragStartY = pointer.y;
-                dragStartScroll = scrollPosition;
-            } else if (scrollbarTrack.getBounds().contains(pointer.x, pointer.y)) {
-                // Click on track - jump to that position
-                const availableTrackHeight = inventoryVisibleHeight - scrollbarThumb.height;
-                const clickY = pointer.y - inventoryStartY;
-                const clickRatio = Math.max(0, Math.min(1, clickY / availableTrackHeight));
-                const scrollRange = maxScroll - minScroll;
-                const newScroll = minScroll + clickRatio * scrollRange;
-                setScrollPosition(newScroll);
-            }
-        }
-    };
-
-    const handlePointerMove = (pointer) => {
-        if (equipmentVisible && isDragging && pointer.isDown) {
-            const deltaY = pointer.y - dragStartY;
-            // Calculate scroll based on available track space (accounting for thumb height)
-            const availableTrackHeight = inventoryVisibleHeight - scrollbarThumb.height;
-            if (availableTrackHeight > 0 && maxScroll > 0) {
-                const scrollRatio = deltaY / availableTrackHeight;
-                const scrollRange = maxScroll - minScroll;
-                const newScroll = Math.max(minScroll, Math.min(maxScroll, dragStartScroll + scrollRatio * scrollRange));
-                setScrollPosition(newScroll);
-            }
-        }
-    };
-
-    const handlePointerUp = () => {
-        isDragging = false;
-    };
-
-    const handleWheel = (pointer, gameObjects, deltaX, deltaY, deltaZ) => {
-        if (equipmentVisible && maxScroll > 0) {
-            // Check if pointer is over the right panel (inventory area)
-            const rightPanelBounds = rightBg.getBounds();
-            if (rightPanelBounds.contains(pointer.x, pointer.y)) {
-                const scrollDelta = deltaY * 0.5; // Scroll speed
-                const newScroll = Math.max(minScroll, Math.min(maxScroll, scrollPosition + scrollDelta));
-                setScrollPosition(newScroll);
-            }
-        }
-    };
-
-    scene.input.on('pointerdown', handlePointerDown);
-    scene.input.on('pointermove', handlePointerMove);
-    scene.input.on('pointerup', handlePointerUp);
-    scene.input.on('wheel', handleWheel);
-
-    // Function to update scroll position
-    function setScrollPosition(newPosition) {
-        // Allow slight negative scroll to bring first item fully into view
-        const oldScrollPosition = scrollPosition;
-        scrollPosition = Math.max(minScroll, Math.min(maxScroll, newPosition));
-
-        // Update container position
-        const offset = equipmentPanel ? equipmentPanel.containerOffset : containerOffset;
-        inventoryContainer.y = inventoryStartY - offset - scrollPosition;
-
-        // Update scrollbar thumb position
-        if (maxScroll > 0) {
-            // Map scrollPosition from [minScroll, maxScroll] to [0, 1] for thumb positioning
-            const scrollRange = maxScroll - minScroll;
-            const normalizedScroll = scrollRange > 0 ? (scrollPosition - minScroll) / scrollRange : 0;
-            const scrollRatio = Math.min(1, Math.max(0, normalizedScroll));
-            const availableTrackHeight = inventoryVisibleHeight - scrollbarThumb.height;
-
-            // Position thumb: when scrollRatio = 0 (at minScroll), thumb at top
-            // when scrollRatio = 1 (at maxScroll), thumb at bottom
-            const thumbY = inventoryStartY + scrollRatio * availableTrackHeight;
-            let thumbCenterY = thumbY + scrollbarThumb.height / 2;
-
-            // Ensure thumb reaches absolute top when at or near minScroll
-            if (scrollPosition <= minScroll + 0.5) {
-                // Force thumb to absolute top of track
-                thumbCenterY = inventoryStartY + scrollbarThumb.height / 2;
-            }
-
-            scrollbarThumb.y = thumbCenterY;
-        } else {
-            // Reset thumb to top when no scrolling needed
-            scrollbarThumb.y = inventoryStartY + scrollbarThumb.height / 2;
-        }
-    }
+    const scrollbarX = rightPanelX + panelWidth / 2 - 22;
+    const scrollbar = setupScrollbar({
+        scene,
+        x: scrollbarX,
+        y: inventoryStartY,
+        height: inventoryVisibleHeight,
+        depth: 303,
+        minScroll: minScroll,
+        initialScroll: minScroll,
+        container: inventoryContainer,
+        containerStartY: inventoryStartY,
+        containerOffset: containerOffset,
+        wheelHitArea: rightBg,
+        visibleHeight: inventoryVisibleHeight
+    });
 
     equipmentPanel = {
         leftBg: leftBg,
@@ -8129,23 +8240,13 @@ function createEquipmentUI() {
         inventoryContainer: inventoryContainer,
         inventoryMask: inventoryMask,
         maskGeometry: maskGeometry,
-        scrollbarTrack: scrollbarTrack,
-        scrollbarThumb: scrollbarThumb,
+        scrollbar: scrollbar,
         inventoryStartY: inventoryStartY,
         inventoryVisibleHeight: inventoryVisibleHeight,
         containerOffset: containerOffset, // Store offset so it's accessible in updateEquipmentInventoryItems
-        minScroll: minScroll,
-        scrollPosition: () => scrollPosition, // Expose current scroll position
-        setScrollPosition: setScrollPosition,
-        maxScroll: () => maxScroll,
-        setMaxScroll: (value) => { maxScroll = value; },
-        scrollHandlers: {
-            pointerDown: handlePointerDown,
-            pointerMove: handlePointerMove,
-            pointerUp: handlePointerUp,
-            wheel: handleWheel
-        }
+        minScroll: minScroll
     };
+
 
     // Show equipment slots in left panel
     updateEquipmentSlots();
@@ -8339,8 +8440,9 @@ function updateEquipmentInventoryItems() {
     // We want items at startY to appear at or near inventoryStartY (90)
     // So: containerY + startY ≈ inventoryStartY, startY ≈ inventoryStartY - containerY = 90 - 70 = 20
     // But we use topPadding approach like shop for consistency
-    const topPadding = 10; // Top padding to ensure first row isn't cut off
-    const startY = topPadding; // Items start below top padding
+    const topPadding = 45; // Increased to ensure first row isn't clipped by mask
+    const startY = topPadding;
+
 
     // Define equippable types once for the function
     const equippableTypes = ['weapon', 'armor', 'helmet', 'ring', 'amulet', 'boots', 'gloves', 'belt'];
@@ -8358,7 +8460,8 @@ function updateEquipmentInventoryItems() {
         const row = Math.floor(index / itemsPerRow);
         const col = index % itemsPerRow;
         const x = startX + col * (itemSize + spacing);
-        const y = startY + row * (itemSize + spacing + 20); // Extra spacing for text
+        const y = startY + row * (itemSize + 40); // Increased spacing for labels (total row height 100)
+
 
         // Get item sprite key based on type
         let spriteKey = 'item_weapon';
@@ -8498,36 +8601,6 @@ function updateEquipmentInventoryItems() {
         }
     }
 
-    // Calculate scroll limits
-    // Ensure we can scroll enough to show the last item at the bottom of visible area
-    const visibleHeight = equipmentPanel.inventoryVisibleHeight;
-    // Container starts at: inventoryStartY - containerOffset
-    // Items in container start at y=0, last item bottom is at y=totalContentHeight
-    // When scrollPosition = maxScroll, container is at: inventoryStartY - containerOffset - maxScroll
-    // Last item bottom in world space: inventoryStartY - containerOffset - maxScroll + totalContentHeight
-    // Visible area bottom: inventoryStartY + visibleHeight
-    // For last item bottom to align with visible bottom: inventoryStartY - containerOffset - maxScroll + totalContentHeight = inventoryStartY + visibleHeight
-    // Solving: -containerOffset - maxScroll + totalContentHeight = visibleHeight
-    // Therefore: maxScroll = totalContentHeight - visibleHeight - containerOffset
-    // Calculate maxScroll: when scrolled to bottom, last item should be at visible bottom
-    // Container at maxScroll: inventoryStartY - containerOffset - maxScroll
-    // Last item bottom: inventoryStartY - containerOffset - maxScroll + totalContentHeight
-    // Visible bottom: inventoryStartY + visibleHeight
-    // For alignment: inventoryStartY - containerOffset - maxScroll + totalContentHeight = inventoryStartY + visibleHeight
-    // Solving: maxScroll = totalContentHeight - visibleHeight - containerOffset
-    const maxScrollValue = Math.max(0, totalContentHeight - visibleHeight - containerOffset);
-    equipmentPanel.setMaxScroll(maxScrollValue);
-
-    // Reset scroll position to minScroll (top) when items are updated
-    // This ensures the first items are fully visible and scrollbar thumb is at top
-    if (equipmentPanel.setScrollPosition && equipmentPanel.minScroll !== undefined) {
-        // Force scrollPosition to minScroll to ensure thumb goes to top and first items are visible
-        equipmentPanel.setScrollPosition(equipmentPanel.minScroll);
-        console.log(`📦 Reset scroll position to minScroll: ${equipmentPanel.minScroll}`);
-    } else {
-        console.warn(`⚠️ Cannot reset scroll - setScrollPosition: ${!!equipmentPanel.setScrollPosition}, minScroll: ${equipmentPanel.minScroll}`);
-    }
-
     // Force container to be visible and active
     if (equipmentPanel.inventoryContainer) {
         equipmentPanel.inventoryContainer.setVisible(true);
@@ -8536,33 +8609,12 @@ function updateEquipmentInventoryItems() {
     }
 
     // Update scrollbar visibility and size
-    if (maxScrollValue > 0) {
-        // Show scrollbar
-        equipmentPanel.scrollbarTrack.setVisible(true);
-        equipmentPanel.scrollbarThumb.setVisible(true);
-
-        // Calculate thumb size based on visible/content ratio
-        // Thumb height should be proportional to how much content is visible
-        // Standard formula: thumbHeight = (visibleArea / totalContent) * scrollbarHeight
-        // But we need to ensure thumb is reasonable size and can move within track
-        const trackHeight = visibleHeight; // This is the inventoryVisibleHeight from equipmentPanel
-        // Calculate what portion of content is visible
-        const visibleRatio = Math.min(1, trackHeight / totalContentHeight);
-        // Thumb height should represent visible ratio
-        // Cap at 50% of track to ensure there's always room to scroll
-        // Also ensure minimum of 20px and maximum that leaves room for movement
-        const maxThumbHeight = Math.min(trackHeight * 0.5, trackHeight - 60); // Max 50% or track-60px
-        const calculatedThumbHeight = visibleRatio * trackHeight;
-        const thumbHeight = Math.max(20, Math.min(maxThumbHeight, calculatedThumbHeight));
-        equipmentPanel.scrollbarThumb.height = thumbHeight;
-
-        // Reset scroll position to top (0)
-        // Container is already offset, so scrollPosition = 0 shows first items
-        equipmentPanel.setScrollPosition(0);
-    } else {
-        // Hide scrollbar when not needed
-        equipmentPanel.scrollbarTrack.setVisible(false);
-        equipmentPanel.scrollbarThumb.setVisible(false);
+    const visibleHeight = equipmentPanel.inventoryVisibleHeight; // Needed for maxScrollValue calculation
+    const maxScrollValue = Math.max(0, totalContentHeight - visibleHeight - containerOffset);
+    if (equipmentPanel.scrollbar) {
+        equipmentPanel.scrollbar.updateMaxScroll(maxScrollValue, totalContentHeight);
+        // Reset scroll position to minScroll (top)
+        equipmentPanel.scrollbar.setScroll(equipmentPanel.minScroll || 0);
     }
 }
 
@@ -8723,6 +8775,11 @@ function destroyEquipmentUI() {
         }
         if (equipmentPanel.divider && equipmentPanel.divider.active) {
             equipmentPanel.divider.destroy();
+        }
+
+        // Destroy scrollbar
+        if (equipmentPanel.scrollbar) {
+            equipmentPanel.scrollbar.destroy();
         }
 
         // Destroy titles and text
@@ -10945,8 +11002,10 @@ function openShop(npc) {
     closeDialog(); // Also close dialog if open
 
     shopVisible = true;
+    currentShopNPC = npc; // Set current merchant
     createShopUI(npc);
 }
+
 
 /**
  * Create shop UI panel - split into left (shop items) and right (player inventory) panels
@@ -10978,129 +11037,64 @@ function createShopUI(npc) {
     dividerGraphics.setScrollFactor(0).setDepth(401);
     const divider = dividerGraphics;
 
-    // Create scrollable container for inventory items in right panel
-    const inventoryStartY = 100; // Start below title
-    const inventoryEndY = gameHeight - 20; // Leave some space at bottom
+    // --- Right Panel: Player Inventory ---
+    const inventoryStartY = 100;
+    const inventoryEndY = gameHeight - 20;
     const inventoryVisibleHeight = inventoryEndY - inventoryStartY;
-    // Container offset: at minScroll, we want items at startY (10px) to appear at inventoryStartY (100)
-    // containerY = inventoryStartY - offset - minScroll
-    // We want: containerY + startY = inventoryStartY
-    // So: inventoryStartY - offset - minScroll + startY = inventoryStartY
-    // Simplifying: offset = startY - minScroll = 10 - (-40) = 50
-    // But we add extra margin to ensure visibility
-    const containerOffset = 60;
-    const inventoryContainer = scene.add.container(rightPanelX, inventoryStartY - containerOffset);
+    const inventoryContainerOffset = 60;
+    const inventoryContainer = scene.add.container(rightPanelX, inventoryStartY - inventoryContainerOffset);
     inventoryContainer.setScrollFactor(0).setDepth(401);
 
-    // Create mask for the scrollable area
-    // Start mask higher to prevent clipping of first row (similar to equipment screen)
-    const maskTopOffset = 30; // Offset to show first items fully
+    const inventoryMaskTopOffset = 30;
     const inventoryMask = scene.make.graphics();
     inventoryMask.fillStyle(0xffffff);
-    inventoryMask.fillRect(rightPanelX - panelWidth / 2, inventoryStartY - maskTopOffset, panelWidth, inventoryVisibleHeight + maskTopOffset);
-    inventoryMask.setScrollFactor(0).setDepth(401);
-    const maskGeometry = inventoryMask.createGeometryMask();
+    inventoryMask.fillRect(rightPanelX - panelWidth / 2, inventoryStartY - inventoryMaskTopOffset, panelWidth, inventoryVisibleHeight + inventoryMaskTopOffset);
+    inventoryMask.setScrollFactor(0);
+    const inventoryMaskGeometry = inventoryMask.createGeometryMask();
+    inventoryContainer.setMask(inventoryMaskGeometry);
 
-    // Create scrollbar for inventory
-    const scrollbarWidth = 12;
-    const scrollbarX = rightPanelX + panelWidth / 2 - scrollbarWidth - 10;
-    const scrollbarTrack = scene.add.rectangle(scrollbarX, inventoryStartY + inventoryVisibleHeight / 2, scrollbarWidth, inventoryVisibleHeight, 0x333333, 0.8)
-        .setScrollFactor(0).setDepth(403).setStrokeStyle(1, 0x555555)
-        .setInteractive({ useHandCursor: true });
+    const inventoryScrollbar = setupScrollbar({
+        scene,
+        x: rightPanelX + panelWidth / 2 - 22,
+        y: inventoryStartY,
+        height: inventoryVisibleHeight,
+        depth: 403,
+        minScroll: -30,
+        initialScroll: -30,
+        container: inventoryContainer,
+        containerStartY: inventoryStartY,
+        containerOffset: inventoryContainerOffset,
+        wheelHitArea: rightBg,
+        visibleHeight: inventoryVisibleHeight
+    });
 
-    const scrollbarThumbHeight = 40; // Will be adjusted based on content
-    const scrollbarThumb = scene.add.rectangle(scrollbarX, inventoryStartY + scrollbarThumbHeight / 2, scrollbarWidth - 4, scrollbarThumbHeight, 0x666666, 1)
-        .setScrollFactor(0).setDepth(404).setStrokeStyle(1, 0x888888)
-        .setInteractive({ useHandCursor: true });
+    // --- Left Panel: Shop Items ---
+    const shopStartY = 100;
+    const shopVisibleHeight = gameHeight - 120;
+    const shopItemsContainer = scene.add.container(leftPanelX, shopStartY);
+    shopItemsContainer.setScrollFactor(0).setDepth(401);
 
-    // Scroll state for inventory
-    // Allow more negative scroll to show first items fully (accounts for top padding)
-    const minScroll = -30; // Increased from -20 to show items with top padding
-    let inventoryScrollPosition = minScroll;
-    let inventoryMaxScroll = 0;
-    let isDraggingInventory = false;
-    let dragStartY = 0;
-    let dragStartScroll = 0;
+    const shopMask = scene.make.graphics();
+    shopMask.fillStyle(0xffffff);
+    shopMask.fillRect(leftPanelX - panelWidth / 2, shopStartY, panelWidth, shopVisibleHeight);
+    shopMask.setScrollFactor(0);
+    const shopMaskGeometry = shopMask.createGeometryMask();
+    shopItemsContainer.setMask(shopMaskGeometry);
 
-    // Scrollbar drag handlers for inventory
-    const handleInventoryPointerDown = (pointer) => {
-        if (shopVisible && scrollbarThumb.getBounds().contains(pointer.x, pointer.y)) {
-            isDraggingInventory = true;
-            dragStartY = pointer.y;
-            dragStartScroll = inventoryScrollPosition;
-        } else if (shopVisible && scrollbarTrack.getBounds().contains(pointer.x, pointer.y)) {
-            // Click on track - jump to that position
-            const availableTrackHeight = inventoryVisibleHeight - scrollbarThumb.height;
-            const clickY = pointer.y - inventoryStartY;
-            const clickRatio = Math.max(0, Math.min(1, clickY / availableTrackHeight));
-            const scrollRange = inventoryMaxScroll - minScroll;
-            const newScroll = minScroll + clickRatio * scrollRange;
-            setInventoryScrollPosition(newScroll);
-        }
-    };
-
-    const handleInventoryPointerMove = (pointer) => {
-        if (shopVisible && isDraggingInventory && pointer.isDown) {
-            const deltaY = pointer.y - dragStartY;
-            const availableTrackHeight = inventoryVisibleHeight - scrollbarThumb.height;
-            if (availableTrackHeight > 0 && inventoryMaxScroll > 0) {
-                const scrollRatio = deltaY / availableTrackHeight;
-                const scrollRange = inventoryMaxScroll - minScroll;
-                const newScroll = Math.max(minScroll, Math.min(inventoryMaxScroll, dragStartScroll + scrollRatio * scrollRange));
-                setInventoryScrollPosition(newScroll);
-            }
-        }
-    };
-
-    const handleInventoryPointerUp = () => {
-        isDraggingInventory = false;
-    };
-
-    const handleInventoryWheel = (pointer, gameObjects, deltaX, deltaY, deltaZ) => {
-        if (shopVisible && inventoryMaxScroll > 0) {
-            // Check if pointer is over the right panel (inventory area)
-            const rightPanelBounds = rightBg.getBounds();
-            if (rightPanelBounds.contains(pointer.x, pointer.y)) {
-                const scrollDelta = deltaY * 0.5;
-                const newScroll = Math.max(minScroll, Math.min(inventoryMaxScroll, inventoryScrollPosition + scrollDelta));
-                setInventoryScrollPosition(newScroll);
-            }
-        }
-    };
-
-    // Function to update inventory scroll position
-    function setInventoryScrollPosition(newPosition) {
-        inventoryScrollPosition = Math.max(minScroll, Math.min(inventoryMaxScroll, newPosition));
-
-        // Update container position
-        const offset = containerOffset;
-        inventoryContainer.y = inventoryStartY - offset - inventoryScrollPosition;
-
-        // Update scrollbar thumb position
-        if (inventoryMaxScroll > 0) {
-            const scrollRange = inventoryMaxScroll - minScroll;
-            const normalizedScroll = scrollRange > 0 ? (inventoryScrollPosition - minScroll) / scrollRange : 0;
-            const scrollRatio = Math.min(1, Math.max(0, normalizedScroll));
-            const availableTrackHeight = inventoryVisibleHeight - scrollbarThumb.height;
-            const thumbY = inventoryStartY + scrollRatio * availableTrackHeight;
-            let thumbCenterY = thumbY + scrollbarThumb.height / 2;
-
-            // Ensure thumb reaches absolute top when at or near minScroll
-            if (inventoryScrollPosition <= minScroll + 0.5) {
-                thumbCenterY = inventoryStartY + scrollbarThumb.height / 2;
-            }
-
-            scrollbarThumb.y = thumbCenterY;
-        } else {
-            scrollbarThumb.y = inventoryStartY + scrollbarThumb.height / 2;
-        }
-    }
-
-    // Add scroll handlers
-    scene.input.on('pointerdown', handleInventoryPointerDown);
-    scene.input.on('pointermove', handleInventoryPointerMove);
-    scene.input.on('pointerup', handleInventoryPointerUp);
-    scene.input.on('wheel', handleInventoryWheel);
+    const shopItemsScrollbar = setupScrollbar({
+        scene,
+        x: leftPanelX + panelWidth / 2 - 22,
+        y: shopStartY,
+        height: shopVisibleHeight,
+        depth: 403,
+        minScroll: 0,
+        initialScroll: 0,
+        container: shopItemsContainer,
+        containerStartY: shopStartY,
+        containerOffset: 0,
+        wheelHitArea: leftBg,
+        visibleHeight: shopVisibleHeight
+    });
 
     shopPanel = {
         leftBg: leftBg,
@@ -11123,28 +11117,19 @@ function createShopUI(npc) {
         goldText: null,
         items: [],
         inventoryItems: [],
-        scrollY: 0, // Scroll position for shop items
-        maxScrollY: 0, // Maximum scroll (calculated in updateShopItems)
-        // Inventory scrolling
+        shopItemsContainer: shopItemsContainer,
+        shopItemsScrollbar: shopItemsScrollbar,
         inventoryContainer: inventoryContainer,
-        inventoryMask: inventoryMask,
-        maskGeometry: maskGeometry,
-        scrollbarTrack: scrollbarTrack,
-        scrollbarThumb: scrollbarThumb,
-        inventoryStartY: inventoryStartY,
+        inventoryScrollbar: inventoryScrollbar,
         inventoryVisibleHeight: inventoryVisibleHeight,
-        containerOffset: containerOffset,
-        minScroll: minScroll,
-        setInventoryScrollPosition: setInventoryScrollPosition,
-        inventoryMaxScroll: () => inventoryMaxScroll,
-        setInventoryMaxScroll: (value) => { inventoryMaxScroll = value; },
-        inventoryScrollHandlers: {
-            pointerDown: handleInventoryPointerDown,
-            pointerMove: handleInventoryPointerMove,
-            pointerUp: handleInventoryPointerUp,
-            wheel: handleInventoryWheel
-        }
+        shopVisibleHeight: shopVisibleHeight,
+        inventoryContainerOffset: inventoryContainerOffset,
+        minScroll: -30,
+        shopMask: shopMask,
+        inventoryMask: inventoryMask
     };
+
+
 
     // Show current gold - positioned in left panel (moved up to avoid overlap with title)
     shopPanel.goldText = scene.add.text(leftPanelX - panelWidth / 2 + 20, 15, `Gold: ${playerStats.gold}`, {
@@ -11162,11 +11147,9 @@ function createShopUI(npc) {
  */
 function updateShopItems() {
     const scene = game.scene.scenes[0];
-    if (!shopPanel) return;
+    if (!shopPanel || !currentShopNPC) return;
 
-    console.log('🛒 Updating shop items. Shop inventory length:', shopInventory.length);
-
-    // Clear existing shop items (including stats text)
+    // Clear existing shop items
     shopPanel.items.forEach(item => {
         if (item.bg && item.bg.active) item.bg.destroy();
         if (item.sprite && item.sprite.active) item.sprite.destroy();
@@ -11178,62 +11161,34 @@ function updateShopItems() {
         if (item.borderRect && item.borderRect.active) item.borderRect.destroy();
     });
     shopPanel.items = [];
+    if (shopPanel.shopItemsContainer) {
+        shopPanel.shopItemsContainer.removeAll(true);
+    }
 
-    // Don't clear inventory items here - they should only be cleared in updateShopInventoryItems()
-    // This prevents inventory from disappearing when shop items are updated
+    const itemsToDisplay = (currentShopNPC && currentShopNPC.inventory) ? currentShopNPC.inventory : shopInventory;
+
+    const panelWidth = shopPanel.leftBg.width;
+    const panelHeight = shopPanel.leftBg.height; // This is the full panel height, not just visible area
+    const leftPanelX = shopPanel.leftBg.x;
+    const startY = 50; // Relative to container
+    const itemHeight = 100; // Increased to accommodate stats/price
+    const spacing = 20; // Increased spacing between rows
+
+    const visibleAreaHeight = shopPanel.shopVisibleHeight;
 
     // Update gold display
     if (shopPanel.goldText) {
-        shopPanel.goldText.destroy();
+        shopPanel.goldText.setText(`Gold: ${playerStats.gold}`);
     }
-    const leftPanelX = shopPanel.leftBg.x;
-    const panelWidth = 512; // Half of 1024
-    const panelHeight = 768;
 
-    // Gold display - positioned in left panel (moved up to avoid overlap with title)
-    shopPanel.goldText = scene.add.text(leftPanelX - panelWidth / 2 + 20, 15,
-        `Gold: ${playerStats.gold}`, {
-        fontSize: '20px',
-        fill: '#ffd700',
-        fontStyle: 'bold'
-    }).setScrollFactor(0).setDepth(401).setOrigin(0, 0);
+    itemsToDisplay.forEach((item, index) => {
 
-    // Display shop items with scrolling in left panel
-    const startY = 100;
-    const itemHeight = 80;
-    const spacing = 10;
-    const visibleAreaHeight = panelHeight - 120; // Area for items (minus header)
-
-    // Calculate max scroll
-    const totalItemsHeight = shopInventory.length * (itemHeight + spacing);
-    shopPanel.maxScrollY = Math.max(0, totalItemsHeight - visibleAreaHeight);
-
-    // Clamp scroll position
-    shopPanel.scrollY = Math.max(0, Math.min(shopPanel.scrollY, shopPanel.maxScrollY));
-
-    shopInventory.forEach((item, index) => {
-        const itemY = startY + index * (itemHeight + spacing) - shopPanel.scrollY;
-
-        // Only render items that are visible (with some padding)
-        const visibleTop = 80;
-        const visibleBottom = panelHeight - 40;
-        if (itemY < visibleTop || itemY > visibleBottom) {
-            return; // Skip rendering off-screen items
-        }
-
-        console.log(`🛒 Rendering shop item ${index}: ${item.name} (type: ${item.type}) at Y: ${itemY}`);
-        // Item width for left panel (leave space for scrollbar)
+        const itemY = startY + index * (itemHeight + spacing);
         const itemWidth = panelWidth - 60;
+        const x = 0; // Center of container (which is at leftPanelX)
 
-        // Item background
-        const itemBg = scene.add.rectangle(
-            leftPanelX,
-            itemY,
-            itemWidth,
-            itemHeight,
-            0x333333,
-            0.8
-        ).setScrollFactor(0).setDepth(401).setStrokeStyle(2, 0x666666);
+        const itemBg = scene.add.rectangle(x, itemY, itemWidth, itemHeight, 0x333333, 0.8)
+            .setScrollFactor(0).setDepth(401).setStrokeStyle(2, 0x666666);
 
         // Item sprite - map item types to sprite keys
         let spriteKey = 'item_weapon'; // Default fallback
@@ -11273,7 +11228,7 @@ function updateShopItems() {
         let borderRect = null; // Declare outside try block so it's accessible later
 
         try {
-            itemSprite = scene.add.sprite(leftPanelX - itemWidth / 2 + 30, itemY, finalSpriteKey);
+            itemSprite = scene.add.sprite(x - itemWidth / 2 + 30, itemY, finalSpriteKey);
             if (itemSprite) {
                 itemSprite.setScrollFactor(0).setDepth(402).setScale(1.2);
 
@@ -11294,7 +11249,7 @@ function updateShopItems() {
                 const qualityColor = QUALITY_COLORS[item.quality] || QUALITY_COLORS['Common'];
                 const borderWidth = 3;
                 const spriteSize = 32 * 1.2; // Match sprite scale
-                borderRect = scene.add.rectangle(leftPanelX - itemWidth / 2 + 30, itemY, spriteSize + borderWidth * 2, spriteSize + borderWidth * 2, qualityColor, 0)
+                borderRect = scene.add.rectangle(x - itemWidth / 2 + 30, itemY, spriteSize + borderWidth * 2, spriteSize + borderWidth * 2, qualityColor, 0)
                     .setStrokeStyle(borderWidth, qualityColor)
                     .setScrollFactor(0)
                     .setDepth(401); // Behind sprite but visible
@@ -11304,12 +11259,12 @@ function updateShopItems() {
         } catch (error) {
             console.error(`Shop: Failed to create sprite for item "${item.name}":`, error);
             // Create a placeholder rectangle if sprite creation fails
-            itemSprite = scene.add.rectangle(leftPanelX - itemWidth / 2 + 30, itemY, 32, 32, 0x888888, 1.0)
+            itemSprite = scene.add.rectangle(x - itemWidth / 2 + 30, itemY, 32, 32, 0x888888, 1.0)
                 .setScrollFactor(0).setDepth(402);
         }
 
         // Item name
-        const nameText = scene.add.text(leftPanelX - itemWidth / 2 + 80, itemY - 15, item.name, {
+        const nameText = scene.add.text(x - itemWidth / 2 + 80, itemY - 15, item.name, {
             fontSize: '18px',
             fill: '#ffffff',
             fontStyle: 'bold'
@@ -11325,13 +11280,13 @@ function updateShopItems() {
         if (item.healAmount) stats.push(`Heals: ${item.healAmount} HP`);
         statsText = stats.join(' | ');
 
-        const statsTextObj = scene.add.text(leftPanelX - itemWidth / 2 + 80, itemY + 15, statsText, {
+        const statsTextObj = scene.add.text(x - itemWidth / 2 + 80, itemY + 15, statsText, {
             fontSize: '14px',
             fill: '#cccccc'
         }).setScrollFactor(0).setDepth(402).setOrigin(0, 0.5);
 
         // Price
-        const priceText = scene.add.text(leftPanelX + itemWidth / 2 - 140, itemY, `${item.price} Gold`, {
+        const priceText = scene.add.text(x + itemWidth / 2 - 140, itemY, `${item.price} Gold`, {
             fontSize: '18px',
             fill: '#ffd700',
             fontStyle: 'bold'
@@ -11339,7 +11294,7 @@ function updateShopItems() {
 
         // Buy button
         const buyButton = scene.add.rectangle(
-            leftPanelX + itemWidth / 2 - 60,
+            x + itemWidth / 2 - 60,
             itemY,
             80,
             40,
@@ -11349,7 +11304,7 @@ function updateShopItems() {
             .setStrokeStyle(2, 0x00ff00)
             .setInteractive({ useHandCursor: true });
 
-        const buyText = scene.add.text(leftPanelX + itemWidth / 2 - 60, itemY, 'Buy', {
+        const buyText = scene.add.text(x + itemWidth / 2 - 60, itemY, 'Buy', {
             fontSize: '16px',
             fill: '#ffffff',
             fontStyle: 'bold'
@@ -11370,7 +11325,8 @@ function updateShopItems() {
 
         // Hover effects
         const onBuyHoverIn = () => {
-            showTooltip(item, leftPanelX, itemY, 'shop_buy');
+            // Tooltip position needs to be absolute, so add container's world Y
+            showTooltip(item, leftPanelX, shopPanel.shopItemsContainer.y + itemY, 'shop_buy');
         };
         const onBuyHoverOut = () => {
             hideTooltip();
@@ -11389,6 +11345,8 @@ function updateShopItems() {
             borderRect.on('pointerout', onBuyHoverOut);
         }
 
+        shopPanel.shopItemsContainer.add([itemBg, itemSprite, borderRect, nameText, statsTextObj, priceText, buyButton, buyText]);
+
         shopPanel.items.push({
             bg: itemBg,
             sprite: itemSprite,
@@ -11399,65 +11357,14 @@ function updateShopItems() {
             buyText: buyText,
             borderRect: borderRect, // Store border for cleanup
             item: item,
-            baseY: startY + index * (itemHeight + spacing) // Store base position for scrolling
+            baseY: itemY // Store base position for scrolling (relative to container)
         });
     });
 
-    // Add scrollbar if needed
-    if (shopPanel.maxScrollY > 0) {
-        const scrollbarWidth = 20;
-        // Position scrollbar within the item area (not the full panel)
-        const scrollbarTop = startY; // Start where items start
-        const scrollbarBottom = startY + visibleAreaHeight; // End where items end
-        const scrollbarHeight = visibleAreaHeight;
-        const scrollbarX = leftPanelX + panelWidth / 2 - 15; // 15px from right edge of left panel
-        const scrollbarCenterY = scrollbarTop + scrollbarHeight / 2; // Center of scrollbar track
+    const totalContentHeight = itemsToDisplay.length * (itemHeight + spacing) + startY;
 
-        // Scrollbar background (positioned correctly within item area)
-        if (shopPanel.scrollbarBg) shopPanel.scrollbarBg.destroy();
-        shopPanel.scrollbarBg = scene.add.rectangle(scrollbarX, scrollbarCenterY, scrollbarWidth, scrollbarHeight, 0x333333, 0.8)
-            .setScrollFactor(0).setDepth(401).setStrokeStyle(1, 0x666666);
-
-        // Scrollbar thumb
-        const thumbHeight = Math.max(30, (visibleAreaHeight / totalItemsHeight) * scrollbarHeight);
-        // Calculate thumb CENTER position - rectangles are centered on their Y position
-        // When at top: thumb center should be at scrollbarTop + thumbHeight/2
-        // When at bottom: thumb center should be at scrollbarBottom - thumbHeight/2
-        const thumbTopMin = scrollbarTop + thumbHeight / 2; // Minimum thumb center Y (at top)
-        const thumbBottomMax = scrollbarBottom - thumbHeight / 2; // Maximum thumb center Y (at bottom)
-        const thumbRange = thumbBottomMax - thumbTopMin; // Available range for thumb center to move
-
-        let thumbCenterY = thumbTopMin; // Default to top position
-
-        if (shopPanel.maxScrollY > 0 && thumbRange > 0) {
-            // Calculate position: 0 scroll = top, maxScrollY = bottom
-            const scrollRatio = Math.min(1, Math.max(0, shopPanel.scrollY / shopPanel.maxScrollY)); // Clamp to 0-1
-            thumbCenterY = thumbTopMin + (scrollRatio * thumbRange);
-        }
-
-        // Ensure thumb reaches exact positions at extremes
-        if (shopPanel.scrollY <= 0) {
-            thumbCenterY = thumbTopMin; // At top when scrollY = 0
-        } else if (shopPanel.scrollY >= shopPanel.maxScrollY) {
-            thumbCenterY = thumbBottomMax; // At bottom when fully scrolled
-        }
-
-        // Final clamp to ensure thumb stays within channel bounds
-        thumbCenterY = Math.max(thumbTopMin, Math.min(thumbCenterY, thumbBottomMax));
-
-        if (shopPanel.scrollbarThumb) shopPanel.scrollbarThumb.destroy();
-        shopPanel.scrollbarThumb = scene.add.rectangle(scrollbarX, thumbCenterY, scrollbarWidth - 4, thumbHeight, 0x666666, 0.9)
-            .setScrollFactor(0).setDepth(402).setStrokeStyle(1, 0x999999);
-    } else {
-        // Remove scrollbar if not needed
-        if (shopPanel.scrollbarBg) {
-            shopPanel.scrollbarBg.destroy();
-            shopPanel.scrollbarBg = null;
-        }
-        if (shopPanel.scrollbarThumb) {
-            shopPanel.scrollbarThumb.destroy();
-            shopPanel.scrollbarThumb = null;
-        }
+    if (shopPanel.shopItemsScrollbar) {
+        shopPanel.shopItemsScrollbar.updateMaxScroll(Math.max(0, totalContentHeight - visibleAreaHeight), totalContentHeight);
     }
 }
 
@@ -11543,8 +11450,9 @@ function updateShopInventoryItems() {
     const itemsPerRow = 6;
     const gridWidth = itemsPerRow * itemSize + (itemsPerRow - 1) * spacing;
     const startX = -gridWidth / 2 + itemSize / 2; // Relative to container center
-    const topPadding = 10; // Add padding at top so first row isn't cut off
-    const startY = topPadding; // Items start below top padding
+    const topPadding = 45; // Increased to ensure first row isn't cut off
+    const startY = topPadding;
+
 
     // First, create all items and measure their heights
     const itemData = [];
@@ -11599,7 +11507,6 @@ function updateShopInventoryItems() {
 
     // Calculate total content height based on actual row heights
     // Include top padding in total height calculation
-    const totalContentHeight = currentY - spacing; // Remove last spacing, includes topPadding
 
     // Now create items with proper positioning
     itemData.forEach((data, index) => {
@@ -11731,22 +11638,15 @@ function updateShopInventoryItems() {
         });
     });
 
-    // Apply mask to container
-    if (shopPanel.inventoryContainer && shopPanel.maskGeometry) {
-        shopPanel.inventoryContainer.setMask(shopPanel.maskGeometry);
-    }
-
     // Calculate and update scroll limits
-    const visibleHeight = shopPanel.inventoryVisibleHeight;
-    const containerOffset = shopPanel.containerOffset || 70; // Match the offset used in createShopUI (70)
-    const maxScrollValue = Math.max(0, totalContentHeight - visibleHeight - containerOffset);
-    shopPanel.setInventoryMaxScroll(maxScrollValue);
-
-    // Reset scroll position to top when items are updated
-    if (shopPanel.setInventoryScrollPosition) {
-        shopPanel.setInventoryScrollPosition(shopPanel.minScroll || -40);
+    const inventoryTotalHeight = currentY - spacing;
+    if (shopPanel.inventoryScrollbar) {
+        shopPanel.inventoryScrollbar.updateMaxScroll(Math.max(0, inventoryTotalHeight - shopPanel.inventoryVisibleHeight - shopPanel.inventoryContainerOffset), inventoryTotalHeight);
+        // Reset scroll position to top
+        shopPanel.inventoryScrollbar.setScroll(shopPanel.minScroll || 0);
     }
 }
+
 
 /**
  * Calculate sell price for an item (if it doesn't have a price property)
@@ -11785,18 +11685,19 @@ function closeShop() {
         if (shopPanel.leftBg && shopPanel.leftBg.active) shopPanel.leftBg.destroy();
         if (shopPanel.rightBg && shopPanel.rightBg.active) shopPanel.rightBg.destroy();
         if (shopPanel.divider && shopPanel.divider.active) shopPanel.divider.destroy();
-
-        // Destroy titles and text
         if (shopPanel.leftTitle && shopPanel.leftTitle.active) shopPanel.leftTitle.destroy();
         if (shopPanel.rightTitle && shopPanel.rightTitle.active) shopPanel.rightTitle.destroy();
         if (shopPanel.closeText && shopPanel.closeText.active) shopPanel.closeText.destroy();
         if (shopPanel.goldText && shopPanel.goldText.active) shopPanel.goldText.destroy();
+        if (shopPanel.shopMask && shopPanel.shopMask.active) shopPanel.shopMask.destroy();
+        if (shopPanel.inventoryMask && shopPanel.inventoryMask.active) shopPanel.inventoryMask.destroy();
+        if (shopPanel.shopItemsContainer && shopPanel.shopItemsContainer.active) shopPanel.shopItemsContainer.destroy();
+        if (shopPanel.inventoryContainer && shopPanel.inventoryContainer.active) shopPanel.inventoryContainer.destroy();
 
-        // Destroy scrollbar elements
-        if (shopPanel.scrollbarBg && shopPanel.scrollbarBg.active) shopPanel.scrollbarBg.destroy();
-        if (shopPanel.scrollbarThumb && shopPanel.scrollbarThumb.active) shopPanel.scrollbarThumb.destroy();
-        shopPanel.scrollbarBg = null;
-        shopPanel.scrollbarThumb = null;
+
+        // Destroy scrollbars
+        if (shopPanel.shopItemsScrollbar) shopPanel.shopItemsScrollbar.destroy();
+        if (shopPanel.inventoryScrollbar) shopPanel.inventoryScrollbar.destroy();
 
         // Destroy all shop item elements (left panel)
         shopPanel.items.forEach(item => {

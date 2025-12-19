@@ -51,6 +51,49 @@ Quest chains allow for sequential storytelling and progression. Completing one q
 
 ---
 
+## Technical Implementation: JSON Structure
+
+The quest system is data-driven, defined in `quests.json`. This allows for easy modification and AI integration.
+
+### JSON Schema
+
+```json
+{
+  "questTypes": {
+    "kill": { "label": "Kill Monsters", "desc": "..." }
+  },
+  "starterQuests": [
+    {
+      "id": "quest_001",
+      "title": "First Steps",
+      "description": "Kill 5 monsters...",
+      "type": "kill",
+      "target": 5,
+      "rewards": { "xp": 50, "gold": 25 },
+      "chainId": "beginner_chain",
+      "chainStep": 1
+    }
+  ],
+  "availableQuests": [...],
+  "questChains": {
+    "beginner_chain": [
+      { "step": 2, "id": "quest_003", ... }
+    ]
+  }
+}
+```
+
+### How Chain Triggers Work
+
+The system uses the `chainId` and `chainStep` properties to track progression:
+
+1.  **Completion**: When `completeQuest(quest)` is called, the game checks if the quest has a `chainId`.
+2.  **Lookup**: It updates the `playerStats.questChains[chainId]` step to the current `chainStep`.
+3.  **Automatic Unlock**: The `QuestManager` is then queried for the next quest in that chain (where `step == currentStep + 1`).
+4.  **Activation**: If found, the next quest is automatically moved from the JSON data pool into the player's `active` quest list.
+
+---
+
 ## Future Expansion Ideas
 
 ### New Quest Types

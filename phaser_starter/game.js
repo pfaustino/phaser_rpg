@@ -109,7 +109,8 @@ let playerStats = {
         itemsCollected: 0,
         goldEarned: 0,
         tilesTraveled: 0,
-        survivalTime: 0
+        survivalTime: 0,
+        availableTabClicked: 0
     },
     questChains: {}, // Track quest chain progress
     // Abilities system
@@ -175,6 +176,7 @@ let selectedQuestIndex = 0;
 let questLogTab = 'current'; // 'current' or 'completed'
 let pendingNewQuest = null; // Store new quest to show after completed modal closes
 let pendingCompletedQuest = null; // Store completed quest to show after combat ends
+let questManager = null; // Manager for data-driven quests
 
 // Dialog UI
 let dialogVisible = false;
@@ -230,6 +232,10 @@ function preload() {
 
     console.log('🚀🚀🚀 PRELOAD FUNCTION CALLED 🚀🚀🚀');
     console.trace('PRELOAD CALL STACK');
+
+    // Load quest data
+    this.load.json('questData', 'quests.json');
+
 
     // Add load event listeners for debugging - MUST be before load calls
     this.load.on('filecomplete', (key, type, data) => {
@@ -1478,7 +1484,7 @@ function createTownMap() {
 
     // Define player spawn and exit positions (before placing buildings)
     const entranceX = centerX * tileSize;
-    const entranceY = (mapHeight - 3) * tileSize; // Exit marker position
+    const entranceY = (mapHeight - 7) * tileSize; // Exit marker position (moved north to clear UI)
     const playerSpawnX = entranceX;
     const playerSpawnY = entranceY - 50; // Player spawns above exit
 
@@ -3554,6 +3560,11 @@ function dropBossLoot(x, y, level) {
  */
 function create() {
     console.log('🚀 CREATE FUNCTION CALLED - Starting tileset processing');
+
+    // Initialize Quest Manager
+    questManager = new QuestManager(this);
+    questManager.init();
+
     // Parse dungeon tileset metadata and create texture frames
     try {
         if (this.cache.text.exists('dungeon_floor_metadata')) {
@@ -8904,193 +8915,9 @@ function destroyEquipmentUI() {
  * Initialize starting quests
  */
 function initializeQuests() {
-    // Create starter quests with variety
-    const starterQuests = [
-        {
-            id: 'quest_001',
-            title: 'First Steps',
-            description: 'Kill 5 monsters to prove your worth.',
-            type: 'kill',
-            target: 5,
-            progress: 0,
-            rewards: { xp: 50, gold: 25 },
-            chainId: 'beginner_chain',
-            chainStep: 1
-        },
-        {
-            id: 'quest_002',
-            title: 'Treasure Hunter',
-            description: 'Collect 3 items from defeated monsters.',
-            type: 'collect',
-            target: 3,
-            progress: 0,
-            rewards: { xp: 30, gold: 15 }
-        },
-        {
-            id: 'quest_003',
-            title: 'Rising Power',
-            description: 'Reach level 2 to unlock new abilities.',
-            type: 'level',
-            target: 2,
-            progress: playerStats.level,
-            rewards: { xp: 100, gold: 50 },
-            chainId: 'beginner_chain',
-            chainStep: 2
-        },
-        {
-            id: 'quest_004',
-            title: 'Gold Rush',
-            description: 'Earn 100 gold from monster drops.',
-            type: 'gold',
-            target: 100,
-            progress: 0,
-            rewards: { xp: 40, gold: 20 }
-        },
-        {
-            id: 'quest_005',
-            title: 'Explorer',
-            description: 'Travel 500 tiles across the map.',
-            type: 'explore',
-            target: 500,
-            progress: 0,
-            rewards: { xp: 60, gold: 30 }
-        },
-        {
-            id: 'quest_006',
-            title: 'Survivor',
-            description: 'Survive for 2 minutes without dying.',
-            type: 'survive',
-            target: 120, // seconds
-            progress: 0,
-            rewards: { xp: 80, gold: 40 }
-        },
-        {
-            id: 'quest_007',
-            title: 'Monster Slayer',
-            description: 'Defeat 15 monsters to show your combat prowess.',
-            type: 'kill',
-            target: 15,
-            progress: 0,
-            rewards: { xp: 120, gold: 60 }
-        },
-        {
-            id: 'quest_008',
-            title: 'Item Collector',
-            description: 'Gather 10 items from your adventures.',
-            type: 'collect',
-            target: 10,
-            progress: 0,
-            rewards: { xp: 80, gold: 40 }
-        },
-        {
-            id: 'quest_009',
-            title: 'Level Up',
-            description: 'Reach level 3 and grow stronger.',
-            type: 'level',
-            target: 3,
-            progress: playerStats.level,
-            rewards: { xp: 150, gold: 75 }
-        },
-        {
-            id: 'quest_010',
-            title: 'Wealth Accumulator',
-            description: 'Amass 250 gold through your efforts.',
-            type: 'gold',
-            target: 250,
-            progress: 0,
-            rewards: { xp: 100, gold: 50 }
-        },
-        {
-            id: 'quest_011',
-            title: 'Wanderer',
-            description: 'Explore 1000 tiles of the world.',
-            type: 'explore',
-            target: 1000,
-            progress: 0,
-            rewards: { xp: 150, gold: 75 }
-        },
-        {
-            id: 'quest_012',
-            title: 'Endurance Test',
-            description: 'Survive for 5 minutes in the dangerous world.',
-            type: 'survive',
-            target: 300, // seconds
-            progress: 0,
-            rewards: { xp: 200, gold: 100 }
-        },
-        {
-            id: 'quest_013',
-            title: 'Exterminator',
-            description: 'Eliminate 25 monsters from the land.',
-            type: 'kill',
-            target: 25,
-            progress: 0,
-            rewards: { xp: 180, gold: 90 }
-        },
-        {
-            id: 'quest_014',
-            title: 'Hoarder',
-            description: 'Collect 20 items for your inventory.',
-            type: 'collect',
-            target: 20,
-            progress: 0,
-            rewards: { xp: 140, gold: 70 }
-        },
-        {
-            id: 'quest_015',
-            title: 'Power Seeker',
-            description: 'Achieve level 5 through experience.',
-            type: 'level',
-            target: 5,
-            progress: playerStats.level,
-            rewards: { xp: 250, gold: 125 }
-        },
-        {
-            id: 'quest_016',
-            title: 'Rich Beyond Measure',
-            description: 'Accumulate 500 gold pieces.',
-            type: 'gold',
-            target: 500,
-            progress: 0,
-            rewards: { xp: 200, gold: 100 }
-        },
-        {
-            id: 'quest_017',
-            title: 'World Traveler',
-            description: 'Journey across 2000 tiles of terrain.',
-            type: 'explore',
-            target: 2000,
-            progress: 0,
-            rewards: { xp: 250, gold: 125 }
-        },
-        {
-            id: 'quest_018',
-            title: 'Unstoppable',
-            description: 'Survive for 10 minutes without falling.',
-            type: 'survive',
-            target: 600, // seconds
-            progress: 0,
-            rewards: { xp: 300, gold: 150 }
-        },
-        {
-            id: 'quest_019',
-            title: 'Massacre',
-            description: 'Slay 50 monsters in your path.',
-            type: 'kill',
-            target: 50,
-            progress: 0,
-            rewards: { xp: 300, gold: 150 }
-        },
-        {
-            id: 'quest_020',
-            title: 'Master Collector',
-            description: 'Gather 30 items for your collection.',
-            type: 'collect',
-            target: 30,
-            progress: 0,
-            rewards: { xp: 220, gold: 110 }
-        }
-    ];
+    // Get starter quests from QuestManager
+    const starterQuests = questManager ? questManager.getStarterQuests() : [];
+    const initialAvailable = questManager ? questManager.getAvailableQuests() : [];
 
     // Initialize quest chain tracking
     if (!playerStats.questChains) {
@@ -9102,13 +8929,11 @@ function initializeQuests() {
         playerStats.quests.completedQuests = [];
     }
 
-    // Initialize available quests array if it doesn't exist
-    if (!playerStats.quests.available) {
-        playerStats.quests.available = [];
-    }
+    // Initialize available quests array
+    playerStats.quests.available = initialAvailable;
 
     playerStats.quests.active = starterQuests;
-    console.log('✅ Quests initialized:', starterQuests.length, 'active quests');
+    console.log('✅ Quests initialized:', starterQuests.length, 'active,', initialAvailable.length, 'available');
 }
 
 /**
@@ -9116,28 +8941,11 @@ function initializeQuests() {
  */
 function checkQuestProgress() {
     playerStats.quests.active.forEach((quest, index) => {
-        let updated = false;
-
-        // Update progress based on quest type
-        if (quest.type === 'kill') {
-            quest.progress = playerStats.questStats.monstersKilled;
-            updated = true;
-        } else if (quest.type === 'collect') {
-            quest.progress = playerStats.questStats.itemsCollected;
-            updated = true;
-        } else if (quest.type === 'level') {
-            quest.progress = playerStats.level;
-            updated = true;
-        } else if (quest.type === 'gold') {
-            quest.progress = playerStats.questStats.goldEarned;
-            updated = true;
-        } else if (quest.type === 'explore') {
-            quest.progress = playerStats.questStats.tilesTraveled;
-            updated = true;
-        } else if (quest.type === 'survive') {
-            quest.progress = Math.floor(playerStats.questStats.survivalTime / 1000); // Convert to seconds
-            updated = true;
+        // Update progress using QuestManager
+        if (questManager) {
+            quest.progress = questManager.calculateProgress(quest, playerStats);
         }
+
 
         // Cap progress at target
         if (quest.progress > quest.target) {
@@ -9214,41 +9022,12 @@ function completeQuest(quest, index) {
  * Get next quest in a chain
  */
 function getNextChainQuest(chainId, currentStep) {
-    const chainQuests = {
-        'beginner_chain': {
-            1: null, // Step 1 is "First Steps" - already in starter quests
-            2: null, // Step 2 is "Rising Power" - already in starter quests
-            3: {
-                id: 'quest_chain_001',
-                title: 'Advanced Training',
-                description: 'Kill 15 monsters to advance your skills.',
-                type: 'kill',
-                target: 15,
-                progress: playerStats.questStats.monstersKilled,
-                rewards: { xp: 150, gold: 75 },
-                chainId: 'beginner_chain',
-                chainStep: 3
-            },
-            4: {
-                id: 'quest_chain_002',
-                title: 'Master Warrior',
-                description: 'Reach level 5 and become a true warrior.',
-                type: 'level',
-                target: 5,
-                progress: playerStats.level,
-                rewards: { xp: 300, gold: 150 },
-                chainId: 'beginner_chain',
-                chainStep: 4
-            }
-        }
-    };
-
-    const chain = chainQuests[chainId];
-    if (chain && chain[currentStep + 1]) {
-        return chain[currentStep + 1]; // Return next step
+    if (questManager) {
+        return questManager.getNextInChain(chainId, currentStep);
     }
     return null;
 }
+
 
 /**
  * Check if player is in combat (has nearby monsters)
@@ -9374,6 +9153,11 @@ function createQuestLogUI() {
     const switchToAvailable = () => {
         questLogTab = 'available';
         selectedQuestIndex = 0; // Reset selection
+
+        // Trigger for UI tutorial quest
+        playerStats.questStats.availableTabClicked = (playerStats.questStats.availableTabClicked || 0) + 1;
+        checkQuestProgress(); // Check if "Exploring Options" is complete
+
         updateTabButtons();
         updateQuestLogItems();
     };
@@ -9419,6 +9203,39 @@ function createQuestLogUI() {
     completedTabText.setInteractive({ useHandCursor: true });
     completedTabText.on('pointerdown', switchToCompleted);
 
+    // Container for quest list (to allow scrolling)
+    const listStartX = centerX - panelWidth / 2 + 20;
+    const listStartY = centerY - panelHeight / 2 + 100;
+    const listWidth = 310;
+    const listHeight = panelHeight - 200;
+
+    const listContainer = scene.add.container(listStartX, listStartY);
+    listContainer.setScrollFactor(0).setDepth(301);
+
+    // Mask for quest list
+    const listMask = scene.add.graphics();
+    listMask.fillStyle(0xffffff);
+    listMask.fillRect(listStartX, listStartY, listWidth, listHeight);
+    listMask.setScrollFactor(0).setDepth(299).setVisible(false); // Add to display list but keep invisible
+    const maskGeometry = listMask.createGeometryMask();
+    listContainer.setMask(maskGeometry);
+
+    // Scrollbar using unified utility
+    const scrollbar = setupScrollbar({
+        scene,
+        x: listStartX + listWidth + 10,
+        y: listStartY,
+        height: listHeight,
+        depth: 303,
+        minScroll: 0,
+        initialScroll: 0,
+        container: listContainer,
+        containerStartY: listStartY,
+        containerOffset: 0,
+        wheelHitArea: bg, // Scroll when over the panel
+        visibleHeight: listHeight
+    });
+
     // Divider between list and details
     const dividerX = centerX - panelWidth / 2 + 350;
     const divider = scene.add.line(dividerX, centerY - panelHeight / 2 + 90, 0, 0, 0, panelHeight - 180, 0x666666, 1)
@@ -9435,6 +9252,15 @@ function createQuestLogUI() {
         completedTabBtn: completedTabBtn,
         completedTabText: completedTabText,
         divider: divider,
+        container: listContainer,
+        mask: listMask,
+        maskGeometry: maskGeometry,
+        scrollbar: scrollbar,
+        scrollY: 0,
+        listStartX: listStartX,
+        listStartY: listStartY,
+        listWidth: listWidth,
+        listHeight: listHeight,
         updateTabButtons: updateTabButtons,
         questListElements: [],
         questDetailElements: []
@@ -9450,14 +9276,17 @@ function createQuestLogUI() {
 /**
  * Update quest log items display
  */
+/**
+ * Update quest log items display
+ */
 function updateQuestLogItems() {
     const scene = game.scene.scenes[0];
     if (!questPanel) return;
 
     // Clear existing quest displays
-    questPanel.questListElements.forEach(element => {
-        if (element) element.destroy();
-    });
+    if (questPanel.container) {
+        questPanel.container.removeAll(true);
+    }
     questPanel.questListElements = [];
 
     questPanel.questDetailElements.forEach(element => {
@@ -9467,14 +9296,14 @@ function updateQuestLogItems() {
 
     const centerX = questPanel.bg.x;
     const centerY = questPanel.bg.y;
-    const panelWidth = 900;
-    const panelHeight = 600;
+    const panelWidth = questPanel.bg.width;
+    const panelHeight = questPanel.bg.height;
 
-    // Left panel: Quest list
-    const listStartX = centerX - panelWidth / 2 + 20;
-    const listStartY = centerY - panelHeight / 2 + 100;
-    const listWidth = 310;
-    const listHeight = panelHeight - 200;
+    // List dimensions (from questPanel)
+    const listWidth = questPanel.listWidth;
+    const listHeight = questPanel.listHeight;
+    const listStartX = questPanel.listStartX;
+    const listStartY = questPanel.listStartY;
     const dividerX = centerX - panelWidth / 2 + 350;
 
     // Right panel: Quest details
@@ -9502,7 +9331,7 @@ function updateQuestLogItems() {
         selectedQuestIndex = -1;
     }
 
-    // Quest list on left
+    // Quest list on left (RENDERED INTO CONTAINER FOR SCROLLING)
     if (quests.length === 0) {
         let noQuestsMessage = 'No active quests';
         if (questLogTab === 'available') {
@@ -9510,51 +9339,73 @@ function updateQuestLogItems() {
         } else if (questLogTab === 'completed') {
             noQuestsMessage = 'No completed quests';
         }
-        const noQuestsText = scene.add.text(listStartX + listWidth / 2, listStartY + listHeight / 2,
+        const noQuestsText = scene.add.text(listWidth / 2, listHeight / 2,
             noQuestsMessage, {
             fontSize: '16px',
             fill: '#888888',
             fontStyle: 'italic'
-        }).setScrollFactor(0).setDepth(302).setOrigin(0.5, 0.5);
-        questPanel.questListElements.push(noQuestsText);
+        }).setOrigin(0.5, 0.5);
+        questPanel.container.add(noQuestsText);
+
+        // Disable scrollbar when no quests
+        if (questPanel.scrollbar) {
+            questPanel.scrollbar.updateMaxScroll(0, listHeight);
+            questPanel.scrollbar.setVisible(false);
+        }
     } else {
         const questItemHeight = 50;
-        const maxVisibleQuests = Math.floor(listHeight / questItemHeight);
-        const startIndex = Math.max(0, selectedQuestIndex - maxVisibleQuests + 1);
-        const endIndex = Math.min(quests.length, startIndex + maxVisibleQuests);
+        const totalContentHeight = quests.length * questItemHeight;
 
+        // Update scrollbar
+        if (questPanel.scrollbar) {
+            const maxScroll = Math.max(0, totalContentHeight - listHeight);
+            questPanel.scrollbar.updateMaxScroll(maxScroll, totalContentHeight);
+        }
+
+        // Optimization: only render quests that are currently visible (plus a buffer)
+        const scrollY = questPanel.scrollbar ? questPanel.scrollbar.getScroll() : 0;
+        const startIndex = Math.floor(scrollY / questItemHeight);
+        const endIndex = Math.min(quests.length, Math.ceil((scrollY + listHeight) / questItemHeight));
+
+        // Render visible quests into the container
         for (let i = startIndex; i < endIndex; i++) {
             const quest = quests[i];
-            const itemY = listStartY + (i - startIndex) * questItemHeight;
-            const isSelected = i === selectedQuestIndex;
+            const isSelected = (i === selectedQuestIndex);
 
-            // Quest item background
-            const itemBg = scene.add.rectangle(listStartX + listWidth / 2, itemY, listWidth - 10, questItemHeight - 5,
+            // USE ABSOLUTE POSITION WITHIN CONTAINER (scrollbar moves the container)
+            const itemY = i * questItemHeight + questItemHeight / 2;
+
+            // Quest item background (relative to container)
+            const itemBg = scene.add.rectangle(listWidth / 2, itemY, listWidth - 10, questItemHeight - 5,
                 isSelected ? 0x444444 : 0x2a2a2a, 0.9)
-                .setScrollFactor(0).setDepth(301).setStrokeStyle(2, isSelected ? 0x00aaff : 0x555555)
+                .setStrokeStyle(2, isSelected ? 0x00aaff : 0x555555)
+                .setScrollFactor(0).setDepth(302)
                 .setInteractive({ useHandCursor: true });
 
             // Quest title
-            const titleText = scene.add.text(listStartX + 10, itemY, quest.title, {
+            const titleText = scene.add.text(10, itemY, quest.title, {
                 fontSize: '16px',
                 fill: isSelected ? '#ffffff' : '#cccccc',
                 fontStyle: 'bold'
             }).setScrollFactor(0).setDepth(302).setOrigin(0, 0.5);
 
+            // Add to container
+            questPanel.container.add([itemBg, titleText]);
+
             // Progress indicator for current quests
             if (questLogTab === 'current' && quest.progress !== undefined && quest.target !== undefined) {
                 const progressPercent = Math.min(quest.progress / quest.target, 1);
-                const progressText = scene.add.text(listStartX + listWidth - 15, itemY, `${Math.round(progressPercent * 100)}%`, {
+                const progressText = scene.add.text(listWidth - 15, itemY, `${Math.round(progressPercent * 100)}%`, {
                     fontSize: '12px',
                     fill: '#00ff00'
                 }).setScrollFactor(0).setDepth(302).setOrigin(1, 0.5);
-                questPanel.questListElements.push(progressText);
+                questPanel.container.add(progressText);
             } else if (questLogTab === 'completed') {
-                const completedIcon = scene.add.text(listStartX + listWidth - 15, itemY, '✓', {
+                const completedIcon = scene.add.text(listWidth - 15, itemY, '✓', {
                     fontSize: '20px',
                     fill: '#00ff00'
                 }).setScrollFactor(0).setDepth(302).setOrigin(1, 0.5);
-                questPanel.questListElements.push(completedIcon);
+                questPanel.container.add(completedIcon);
             }
 
             // Click handler
@@ -9564,14 +9415,10 @@ function updateQuestLogItems() {
             };
 
             itemBg.on('pointerdown', selectQuest);
-            titleText.setInteractive({ useHandCursor: true });
-            titleText.on('pointerdown', selectQuest);
-
-            questPanel.questListElements.push(itemBg, titleText);
         }
     }
 
-    // Quest details on right
+    // Quest details on right (REMAINS ABSOLUTE, NOT IN SCROLLING CONTAINER)
     if (quests.length > 0 && selectedQuestIndex >= 0 && selectedQuestIndex < quests.length && selectedQuestIndex !== -1) {
         const quest = quests[selectedQuestIndex];
         let detailY = detailStartY;
@@ -9747,6 +9594,11 @@ function destroyQuestLogUI() {
         if (questPanel.completedTabText) questPanel.completedTabText.destroy();
         if (questPanel.completedTabText) questPanel.completedTabText.destroy();
         if (questPanel.divider) questPanel.divider.destroy();
+
+        // New UI components
+        if (questPanel.container) questPanel.container.destroy();
+        if (questPanel.mask) questPanel.mask.destroy();
+        if (questPanel.scrollbar) questPanel.scrollbar.destroy();
 
         questPanel.questListElements.forEach(element => {
             if (element) element.destroy();

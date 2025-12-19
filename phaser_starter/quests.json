@@ -1,11 +1,33 @@
 {
   "questTypes": {
-    "kill": { "label": "Kill Monsters", "desc": "Defeat enemy units." },
-    "collect": { "label": "Collect Items", "desc": "Gather items from the world." },
-    "level": { "label": "Level Up", "desc": "Reach a target level." },
-    "gold": { "label": "Earn Gold", "desc": "Accumulate gold." },
-    "explore": { "label": "Explore", "desc": "Travel across tiles." },
-    "survive": { "label": "Survive", "desc": "Stay alive for duration." }
+    "kill": {
+      "label": "Kill Monsters",
+      "desc": "Defeat enemy units."
+    },
+    "collect": {
+      "label": "Collect Items",
+      "desc": "Gather items from the world."
+    },
+    "level": {
+      "label": "Level Up",
+      "desc": "Reach a target level."
+    },
+    "gold": {
+      "label": "Earn Gold",
+      "desc": "Accumulate gold."
+    },
+    "explore": {
+      "label": "Explore",
+      "desc": "Travel across tiles."
+    },
+    "survive": {
+      "label": "Survive",
+      "desc": "Stay alive for duration."
+    },
+    "ui_tab": {
+      "label": "Interface",
+      "desc": "Interact with UI tabs."
+    }
   },
   "starterQuests": [
     {
@@ -14,7 +36,10 @@
       "description": "Kill 5 monsters to prove your worth.",
       "type": "kill",
       "target": 5,
-      "rewards": { "xp": 50, "gold": 25 },
+      "rewards": {
+        "xp": 50,
+        "gold": 25
+      },
       "chainId": "beginner_chain",
       "chainStep": 1
     },
@@ -24,25 +49,34 @@
       "description": "Collect 3 items from defeated monsters.",
       "type": "collect",
       "target": 3,
-      "rewards": { "xp": 30, "gold": 15 }
+      "rewards": {
+        "xp": 30,
+        "gold": 15
+      }
     },
     {
-      "id": "quest_003",
-      "title": "Rising Power",
-      "description": "Reach level 2 to unlock new abilities.",
-      "type": "level",
-      "target": 2,
-      "rewards": { "xp": 100, "gold": 50 },
-      "chainId": "beginner_chain",
-      "chainStep": 2
-    },
+      "id": "quest_ui_001",
+      "title": "Exploring Options",
+      "description": "Click the 'Available' tab in your Quest Log to see more quests.",
+      "type": "ui_tab",
+      "target": 1,
+      "rewards": {
+        "xp": 20,
+        "gold": 10
+      }
+    }
+  ],
+  "availableQuests": [
     {
       "id": "quest_004",
       "title": "Gold Rush",
       "description": "Earn 100 gold from monster drops.",
       "type": "gold",
       "target": 100,
-      "rewards": { "xp": 40, "gold": 20 }
+      "rewards": {
+        "xp": 40,
+        "gold": 20
+      }
     },
     {
       "id": "quest_005",
@@ -50,7 +84,10 @@
       "description": "Travel 500 tiles across the map.",
       "type": "explore",
       "target": 500,
-      "rewards": { "xp": 60, "gold": 30 }
+      "rewards": {
+        "xp": 60,
+        "gold": 30
+      }
     },
     {
       "id": "quest_006",
@@ -58,7 +95,10 @@
       "description": "Survive for 2 minutes without dying.",
       "type": "survive",
       "target": 120,
-      "rewards": { "xp": 80, "gold": 40 }
+      "rewards": {
+        "xp": 80,
+        "gold": 40
+      }
     },
     {
       "id": "quest_007",
@@ -66,7 +106,10 @@
       "description": "Defeat 15 monsters to show your combat prowess.",
       "type": "kill",
       "target": 15,
-      "rewards": { "xp": 120, "gold": 60 }
+      "rewards": {
+        "xp": 120,
+        "gold": 60
+      }
     },
     {
       "id": "quest_008",
@@ -74,7 +117,10 @@
       "description": "Gather 10 items from your adventures.",
       "type": "collect",
       "target": 10,
-      "rewards": { "xp": 80, "gold": 40 }
+      "rewards": {
+        "xp": 80,
+        "gold": 40
+      }
     },
     {
       "id": "quest_009",
@@ -82,7 +128,10 @@
       "description": "Reach level 3 and grow stronger.",
       "type": "level",
       "target": 3,
-      "rewards": { "xp": 150, "gold": 75 }
+      "rewards": {
+        "xp": 150,
+        "gold": 75
+      }
     },
     {
       "id": "quest_010",
@@ -90,7 +139,10 @@
       "description": "Amass 250 gold through your efforts.",
       "type": "gold",
       "target": 250,
-      "rewards": { "xp": 100, "gold": 50 }
+      "rewards": {
+        "xp": 100,
+        "gold": 50
+      }
     },
     {
       "id": "quest_011",
@@ -98,7 +150,10 @@
       "description": "Explore 1000 tiles of the world.",
       "type": "explore",
       "target": 1000,
-      "rewards": { "xp": 150, "gold": 75 }
+      "rewards": {
+        "xp": 150,
+        "gold": 75
+      }
     },
     {
       "id": "quest_012",
@@ -106,7 +161,10 @@
       "description": "Survive for 5 minutes in the dangerous world.",
       "type": "survive",
       "target": 300,
-      "rewards": { "xp": 200, "gold": 100 }
+      "rewards": {
+        "xp": 200,
+        "gold": 100
+      }
     },
     {
       "id": "quest_013",
@@ -114,7 +172,10 @@
       "description": "Eliminate 25 monsters from the land.",
       "type": "kill",
       "target": 25,
-      "rewards": { "xp": 180, "gold": 90 }
+      "rewards": {
+        "xp": 180,
+        "gold": 90
+      }
     },
     {
       "id": "quest_014",
@@ -122,7 +183,10 @@
       "description": "Collect 20 items for your inventory.",
       "type": "collect",
       "target": 20,
-      "rewards": { "xp": 140, "gold": 70 }
+      "rewards": {
+        "xp": 140,
+        "gold": 70
+      }
     },
     {
       "id": "quest_015",
@@ -130,7 +194,10 @@
       "description": "Achieve level 5 through experience.",
       "type": "level",
       "target": 5,
-      "rewards": { "xp": 250, "gold": 125 }
+      "rewards": {
+        "xp": 250,
+        "gold": 125
+      }
     },
     {
       "id": "quest_016",
@@ -138,7 +205,10 @@
       "description": "Accumulate 500 gold pieces.",
       "type": "gold",
       "target": 500,
-      "rewards": { "xp": 200, "gold": 100 }
+      "rewards": {
+        "xp": 200,
+        "gold": 100
+      }
     },
     {
       "id": "quest_017",
@@ -146,7 +216,10 @@
       "description": "Journey across 2000 tiles of terrain.",
       "type": "explore",
       "target": 2000,
-      "rewards": { "xp": 250, "gold": 125 }
+      "rewards": {
+        "xp": 250,
+        "gold": 125
+      }
     },
     {
       "id": "quest_018",
@@ -154,7 +227,10 @@
       "description": "Survive for 10 minutes without falling.",
       "type": "survive",
       "target": 600,
-      "rewards": { "xp": 300, "gold": 150 }
+      "rewards": {
+        "xp": 300,
+        "gold": 150
+      }
     },
     {
       "id": "quest_019",
@@ -162,7 +238,10 @@
       "description": "Slay 50 monsters in your path.",
       "type": "kill",
       "target": 50,
-      "rewards": { "xp": 300, "gold": 150 }
+      "rewards": {
+        "xp": 300,
+        "gold": 150
+      }
     },
     {
       "id": "quest_020",
@@ -170,11 +249,28 @@
       "description": "Gather 30 items for your collection.",
       "type": "collect",
       "target": 30,
-      "rewards": { "xp": 220, "gold": 110 }
+      "rewards": {
+        "xp": 220,
+        "gold": 110
+      }
     }
   ],
   "questChains": {
     "beginner_chain": [
+      {
+        "step": 2,
+        "id": "quest_003",
+        "title": "Rising Power",
+        "description": "Reach level 2 to unlock new abilities.",
+        "type": "level",
+        "target": 2,
+        "rewards": {
+          "xp": 100,
+          "gold": 50
+        },
+        "chainId": "beginner_chain",
+        "chainStep": 2
+      },
       {
         "step": 3,
         "id": "quest_chain_001",
@@ -182,7 +278,10 @@
         "description": "Kill 15 monsters to advance your skills.",
         "type": "kill",
         "target": 15,
-        "rewards": { "xp": 150, "gold": 75 },
+        "rewards": {
+          "xp": 150,
+          "gold": 75
+        },
         "chainId": "beginner_chain",
         "chainStep": 3
       },
@@ -193,7 +292,10 @@
         "description": "Reach level 5 and become a true warrior.",
         "type": "level",
         "target": 5,
-        "rewards": { "xp": 300, "gold": 150 },
+        "rewards": {
+          "xp": 300,
+          "gold": 150
+        },
         "chainId": "beginner_chain",
         "chainStep": 4
       }

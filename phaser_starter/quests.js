@@ -19,10 +19,17 @@ class QuestManager {
     }
 
     /**
-     * Get the pool of starter quests
+     * Get the pool of quests to be active at start
      */
     getStarterQuests() {
-        return this.data ? JSON.parse(JSON.stringify(this.data.starterQuests)) : [];
+        return this.data ? JSON.parse(JSON.stringify(this.data.starterQuests || [])) : [];
+    }
+
+    /**
+     * Get the pool of quests to be available at start
+     */
+    getAvailableQuests() {
+        return this.data ? JSON.parse(JSON.stringify(this.data.availableQuests || [])) : [];
     }
 
     /**
@@ -32,7 +39,11 @@ class QuestManager {
         if (!this.data) return null;
 
         // Search in starters
-        let quest = this.data.starterQuests.find(q => q.id === id);
+        let quest = (this.data.starterQuests || []).find(q => q.id === id);
+        if (quest) return JSON.parse(JSON.stringify(quest));
+
+        // Search in available
+        quest = (this.data.availableQuests || []).find(q => q.id === id);
         if (quest) return JSON.parse(JSON.stringify(quest));
 
         // Search in chains
@@ -75,6 +86,8 @@ class QuestManager {
                 return playerStats.questStats.tilesTraveled || 0;
             case 'survive':
                 return Math.floor((playerStats.questStats.survivalTime || 0) / 1000);
+            case 'ui_tab':
+                return playerStats.questStats.availableTabClicked || 0;
             default:
                 return 0;
         }

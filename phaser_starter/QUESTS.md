@@ -2,6 +2,46 @@
 
 This document catalogs the current quest system and outlines future expansion plans for quest types and chains.
 
+---
+
+## Main Story Campaign: The Shattered Aegis
+
+The world's protective barrier, the Shattered Aegis, is failing. This 15-chapter epic follows the player's journey from local investigator to the world's savior.
+
+### Campaign Roadmap
+- **Phase 1: The Local Breach (Chapters 1-3)**: Investigate quakes and the Watchtower mines.
+- **Phase 2: The Spreading Echo (Chapters 4-6)**: Track corruption through forests and marshes.
+- **Phase 3: The Crystalline Plains (Chapters 7-9)**: Traverse desolate peaks to find ancient temples.
+- **Phase 4: The Core Descent (Chapters 10-12)**: Enter the heart of the subterranean empire.
+- **Phase 5: The Reforging (Chapters 13-15)**: Confront the Echo Primordial and fix the Aegis.
+
+### Chapter 1: Resonance of the Depths
+Tremors have begun rocking the town. Crystalline corruption, known as the Echo, is seeping from the Watchtower's basement.
+
+#### Chapter 1 Quests
+1.  **Tremors in the Earth**: Talk to the Town Elder.
+2.  **Echoes from Below**: Kill 3 Echo Mites in the basement.
+3.  **Crystalline Seepage**: Collect 5 Echo Shards.
+4.  **The Elder's Request**: Deliver shards to the Blacksmith.
+5.  **Resonant Frequencies**: Survive 60s of blacksmith testing.
+6.  **A Warrior's Path / Shadow Stitching**: Class-specific investigation.
+7.  **Mana Leak**: Stabilize 3 mana fluxes.
+8.  **The Subterranean Breach**: Reach Floor -1.
+9.  **Infested Veins**: Kill 15 Echo Rats.
+10. **Forgotten Miners**: Clear debris and explore mines.
+11. **Solidified Corruption**: Collect 10 Echo Crystals.
+12. **The First Fragment**: Defeat the Echo Beholder.
+13. **Claiming the Shard**: Recover the Shard of Resonance.
+14. **Elder's Wisdom**: Report back to the Elder.
+15. **Strengthening the Aegis**: Use shard at the Obelisk.
+16. **Unexpected Feedback**: Survive the Obelisk backlash (120s).
+17. **The Echo's Warning**: Kill 20 Backlash constructs.
+18. **Deep Scan**: Explore 2000 tiles.
+19. **Resonance Established**: Reach Level 5 to finalize attunement.
+20. **Chapter Final**: Prepare for the journey beyond the town.
+
+---
+
 ## Current Quest System
 
 The game currently features a robust quest system with automatic progress tracking, a tabbed quest log interface, and support for quest chains.

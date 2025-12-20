@@ -33,6 +33,13 @@ class QuestManager {
     }
 
     /**
+     * Get the pool of main story quests
+     */
+    getMainQuests() {
+        return this.data ? JSON.parse(JSON.stringify(this.data.mainQuests || [])) : [];
+    }
+
+    /**
      * Get a specific quest by ID
      */
     getQuest(id) {
@@ -51,6 +58,10 @@ class QuestManager {
             quest = this.data.questChains[chainId].find(q => q.id === id);
             if (quest) return JSON.parse(JSON.stringify(quest));
         }
+
+        // Search in main quests
+        quest = (this.data.mainQuests || []).find(q => q.id === id);
+        if (quest) return JSON.parse(JSON.stringify(quest));
 
         return null;
     }
@@ -73,19 +84,49 @@ class QuestManager {
     calculateProgress(quest, playerStats) {
         if (!quest || !playerStats) return 0;
 
+        const startValue = quest.startValue || 0;
+
         switch (quest.type) {
+            case 'kill':
+                return (playerStats.questStats.monstersKilled || 0) - startValue;
+            case 'collect':
+                return (playerStats.questStats.itemsCollected || 0) - startValue;
+            case 'level':
+                // Level is usually absolute, but we can make it relative if startValue is set.
+                // However, most games treat "Reach Level X" as absolute.
+                // If startValue is explicitly 0, we treat it as absolute.
+                return playerStats.level || 1;
+            case 'gold':
+                return (playerStats.questStats.goldEarned || 0) - startValue;
+            case 'explore':
+                return (playerStats.questStats.tilesTraveled || 0) - startValue;
+            case 'survive':
+                return Math.floor(((playerStats.questStats.survivalTime || 0) - startValue) / 1000);
+            case 'ui_tab':
+                return (playerStats.questStats.availableTabClicked || 0) - startValue;
+            case 'story':
+                return (playerStats.questStats.storyProgress && playerStats.questStats.storyProgress[quest.id]) ? 1 : 0;
+            default:
+                return 0;
+        }
+    }
+
+    /**
+     * Get the current value for a specific quest type stat
+     */
+    getStatValue(type, playerStats) {
+        if (!playerStats) return 0;
+        switch (type) {
             case 'kill':
                 return playerStats.questStats.monstersKilled || 0;
             case 'collect':
                 return playerStats.questStats.itemsCollected || 0;
-            case 'level':
-                return playerStats.level || 1;
             case 'gold':
                 return playerStats.questStats.goldEarned || 0;
             case 'explore':
                 return playerStats.questStats.tilesTraveled || 0;
             case 'survive':
-                return Math.floor((playerStats.questStats.survivalTime || 0) / 1000);
+                return playerStats.questStats.survivalTime || 0;
             case 'ui_tab':
                 return playerStats.questStats.availableTabClicked || 0;
             default:

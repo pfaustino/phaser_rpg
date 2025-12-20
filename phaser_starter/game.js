@@ -100,7 +100,8 @@ let playerStats = {
     },
     // Quest system
     quests: {
-        active: [],      // Active quests
+        active: [],      // Active side quests
+        main: [],        // Active main quests
         available: [],   // Available quests (rejected/cancelled)
         completed: []    // Completed quest IDs
     },
@@ -110,7 +111,8 @@ let playerStats = {
         goldEarned: 0,
         tilesTraveled: 0,
         survivalTime: 0,
-        availableTabClicked: 0
+        availableTabClicked: 0,
+        storyProgress: {}
     },
     questChains: {}, // Track quest chain progress
     // Abilities system
@@ -177,6 +179,7 @@ let questLogTab = 'current'; // 'current' or 'completed'
 let pendingNewQuest = null; // Store new quest to show after completed modal closes
 let pendingCompletedQuest = null; // Store completed quest to show after combat ends
 let questManager = null; // Manager for data-driven quests
+let monsterRenderer = null; // Renderer for data-driven monsters
 
 // Dialog UI
 let dialogVisible = false;
@@ -236,6 +239,9 @@ function preload() {
     // Load quest data
     this.load.json('questData', 'quests.json');
 
+    // Load Method 2 monster data
+    this.load.json('monsterData', 'monsters.json');
+
 
     // Add load event listeners for debugging - MUST be before load calls
     this.load.on('filecomplete', (key, type, data) => {
@@ -289,6 +295,18 @@ function preload() {
         frameHeight: 64
     });
     this.load.spritesheet('npc_captain_thorne', 'assets/animations/CaptainThorne.png', {
+        frameWidth: 64,
+        frameHeight: 64
+    });
+    this.load.spritesheet('npc_blacksmith_brond', 'assets/animations/BlacksmithBrond.png', {
+        frameWidth: 64,
+        frameHeight: 64
+    });
+    this.load.spritesheet('npc_mage_elara', 'assets/animations/MageElara.png', {
+        frameWidth: 64,
+        frameHeight: 64
+    });
+    this.load.spritesheet('npc_captain_kael', 'assets/animations/CaptainKael.png', {
         frameWidth: 64,
         frameHeight: 64
     });
@@ -490,6 +508,31 @@ function preload() {
     this.load.image('monster_spider_north', 'assets/animations/monster_spider_north.png');
     this.load.image('monster_spider_east', 'assets/animations/monster_spider_east.png');
     this.load.image('monster_spider_west', 'assets/animations/monster_spider_west.png');
+
+    // Echo Mite (from PixelLab)
+    this.load.image('monster_echo_mite', 'assets/animations/monster_echo_mite_south.png');
+    this.load.image('monster_echo_mite_south', 'assets/animations/monster_echo_mite_south.png');
+    this.load.image('monster_echo_mite_north', 'assets/animations/monster_echo_mite_north.png');
+    this.load.image('monster_echo_mite_east', 'assets/animations/monster_echo_mite_east.png');
+    this.load.image('monster_echo_mite_west', 'assets/animations/monster_echo_mite_west.png');
+
+    // Echo Mite attack animations (64x64 frames)
+    this.load.spritesheet('monster_echo_mite_attack_south', 'assets/animations/monster-echo-mite-attack-south.png', {
+        frameWidth: 64,
+        frameHeight: 64
+    });
+    this.load.spritesheet('monster_echo_mite_attack_north', 'assets/animations/monster-echo-mite-attack-north.png', {
+        frameWidth: 64,
+        frameHeight: 64
+    });
+    this.load.spritesheet('monster_echo_mite_attack_east', 'assets/animations/monster-echo-mite-attack-east.png', {
+        frameWidth: 64,
+        frameHeight: 64
+    });
+    this.load.spritesheet('monster_echo_mite_attack_west', 'assets/animations/monster-echo-mite-attack-west.png', {
+        frameWidth: 64,
+        frameHeight: 64
+    });
 
     // Load animated sprite sheets for walking (Goblin, Orc, Skeleton, Wolf, Dragon, Slime, Ghost, and Spider)
     // Goblin walking animations (48x48 frames, 6 frames per direction)
@@ -1252,6 +1295,15 @@ function generateProceduralMonsters() {
             features: ['glow', 'eyes'],
             size: 1.0,
             alpha: 0.7
+        },
+        {
+            key: 'monster_echo_mite',
+            name: 'Echo_Mite',
+            bodyColor: 0x8b4513, // Brownish
+            accentColor: 0xff0000,
+            shape: 'blob',
+            features: ['eyes', 'legs'],
+            size: 0.8
         }
     ];
 
@@ -1549,7 +1601,8 @@ function createTownMap() {
         blacksmith: 0x696969,  // Gray
         shop: 0xFFD700,       // Gold
         house: 0xCD853F,       // Peru
-        market: 0xFFA500       // Orange
+        market: 0xFFA500,      // Orange
+        watchtower: 0x483D8B   // Dark Slate Blue
     };
 
     // Place important buildings with quadrant restrictions
@@ -1586,7 +1639,9 @@ function createTownMap() {
         // Shop: Lower right, moved up to avoid spawn area
         { type: 'shop', x: centerX + 4, y: 15, width: 5, height: 4, color: buildingColors.shop, quadrant: 'other' },
         // Market: Near center, upper area
-        { type: 'market', x: centerX + 2, y: centerY - 4, width: 3, height: 3, color: buildingColors.market, quadrant: 'other' }
+        { type: 'market', x: centerX + 2, y: centerY - 4, width: 3, height: 3, color: buildingColors.market, quadrant: 'other' },
+        // Watchtower: Upper right, further from center
+        { type: 'watchtower', x: mapWidth - 10, y: 5, width: 4, height: 8, color: buildingColors.watchtower, quadrant: 'other' }
     ];
 
     // Filter out buildings that would block spawn/exit or violate quadrant rules
@@ -1706,7 +1761,19 @@ function createTownMap() {
 
             // Check if not on street or overlapping buildings
             valid = true;
-            if (Math.abs(houseY - centerY) <= 2 || Math.abs(houseX - centerX) <= 2) {
+            const streetBuffer = 3;
+            const buildingMinX = houseX;
+            const buildingMaxX = houseX + houseW;
+            const buildingMinY = houseY;
+            const buildingMaxY = houseY + houseH;
+
+            // Check if building overlaps the horizontal street (Y corridor)
+            if (buildingMaxY >= centerY - streetBuffer && buildingMinY <= centerY + streetBuffer) {
+                valid = false;
+            }
+
+            // Check if building overlaps the vertical street (X corridor)
+            if (valid && buildingMaxX >= centerX - streetBuffer && buildingMinX <= centerX + streetBuffer) {
                 valid = false;
             }
 
@@ -3333,15 +3400,35 @@ function spawnDungeonMonsters() {
 
             // Spawn random monster type (scaled by level)
             const dungeonMonsterTypes = [
-                { name: 'Goblin', textureKey: 'monster_goblin', hp: 30, attack: 5, speed: 50, xp: 10 },
-                { name: 'Orc', textureKey: 'monster_orc', hp: 50, attack: 8, speed: 40, xp: 20 },
-                { name: 'Skeleton', textureKey: 'monster_skeleton', hp: 25, attack: 6, speed: 60, xp: 15 }
+                { name: 'Goblin', textureKey: 'monster_goblin', hp: 30, attack: 5, speed: 50, xp: 10, isProcedural: false },
+                { name: 'Orc', textureKey: 'monster_orc', hp: 50, attack: 8, speed: 40, xp: 20, isProcedural: false },
+                { name: 'Skeleton', textureKey: 'monster_skeleton', hp: 25, attack: 6, speed: 60, xp: 15, isProcedural: false }
             ];
+
+            // Add procedural versions to the pool if available
+            if (monsterRenderer && Object.keys(monsterRenderer.monsterBlueprints).length > 0) {
+                const blueprints = Object.values(monsterRenderer.monsterBlueprints);
+                blueprints.forEach(bp => {
+                    // Only add if it's one of the dungeon types or a unique one like Prism Slime
+                    if (['Goblin', 'Orc', 'Skeleton', 'Prism Slime'].includes(bp.name)) {
+                        dungeonMonsterTypes.push({
+                            name: bp.name,
+                            id: bp.id,
+                            hp: bp.stats.hp,
+                            attack: bp.stats.attack,
+                            speed: bp.stats.speed,
+                            xp: bp.stats.xp,
+                            textureKey: bp.id,
+                            isProcedural: true
+                        });
+                    }
+                });
+            }
 
             const selectedType = Phaser.Utils.Array.GetRandom(dungeonMonsterTypes);
             const scaledHp = selectedType.hp + (dungeonLevel * 10);
             const scaledAttack = selectedType.attack + (dungeonLevel * 2);
-            const scaledXp = selectedType.xp + (dungeonLevel * 5);
+            const scaledXp = (selectedType.xp || 10) + (dungeonLevel * 5);
 
             spawnMonsterScaled(x, y, selectedType, scaledHp, scaledAttack, scaledXp);
         }
@@ -3363,50 +3450,32 @@ function spawnDungeonMonsters() {
 function spawnBossMonster(x, y, level) {
     const scene = game.scene.scenes[0];
 
-    // Use a specific monster type for boss (dragon is the most powerful, or use orc as fallback)
-    // Try to use dragon texture if available, otherwise use orc
-    let bossTexture = 'monster_dragon_south';
+    // Use a specific monster type for boss
     let bossType = 'dragon';
-    if (!scene.textures.exists(bossTexture)) {
-        bossTexture = 'monster_orc_south';
-        bossType = 'orc';
-        if (!scene.textures.exists(bossTexture)) {
-            // Ultimate fallback to generic monster texture
-            bossTexture = 'monster';
-            bossType = 'goblin';
-        }
+    let bossName = 'Dragon Boss';
+
+    // Check if we have a special boss blueprint or if the user wants procedural boss
+    // For now, let's randomly decide or try to find a "Boss" type blueprint
+    const hasBossBlueprint = monsterRenderer && (monsterRenderer.monsterBlueprints['Boss'] || monsterRenderer.monsterBlueprints['dragon']);
+
+    // 50/50 chance to be procedural if a blueprint exists
+    const useProcedural = hasBossBlueprint && Math.random() < 0.5;
+
+    const bossTypeData = {
+        name: bossName,
+        textureKey: 'monster_dragon_south',
+        hp: 100 + (level * 50),
+        attack: 15 + (level * 5),
+        speed: 80,
+        xp: 50 + (level * 25),
+        isProcedural: useProcedural
+    };
+
+    const boss = spawnMonster(x, y, bossTypeData, bossTypeData.hp, bossTypeData.attack, bossTypeData.xp, true);
+
+    if (boss) {
+        console.log(`👹 Boss spawned at level ${level} (${useProcedural ? 'Procedural' : 'Sprite'})`);
     }
-
-    // Create boss with enhanced stats
-    const boss = scene.physics.add.sprite(x, y, bossTexture);
-    boss.setScale(1.5); // Bigger than normal monsters
-    boss.isBoss = true;
-    boss.monsterType = bossType; // Set monster type so animation system works correctly
-    boss.hp = 100 + (level * 50);
-    boss.maxHp = boss.hp;
-    boss.attack = 15 + (level * 5);
-    boss.defense = 10 + (level * 3);
-    boss.speed = 80;
-    boss.xpReward = 50 + (level * 25);
-    boss.lastAttackTime = 0;
-    boss.attackCooldown = 1500;
-    boss.isDead = false;
-    boss.facingDirection = 'south'; // Initialize direction
-    boss.isMoving = false;
-    boss.animationState = 'idle';
-
-    // Boss visual indicator
-    boss.setTint(0xff0000); // Red tint for boss
-
-    monsters.push(boss);
-
-    // Create HP bar for boss
-    const hpBarBg = scene.add.rectangle(x, y - 25, 40, 4, 0x000000, 0.8).setDepth(15);
-    const hpBar = scene.add.rectangle(x - 20, y - 25, 40, 2, 0xff0000).setDepth(16).setOrigin(0, 0.5);
-    boss.hpBarBg = hpBarBg;
-    boss.hpBar = hpBar;
-
-    console.log(`👹 Boss spawned at level ${level}`);
 }
 
 /**
@@ -3560,6 +3629,15 @@ function dropBossLoot(x, y, level) {
  */
 function create() {
     console.log('🚀 CREATE FUNCTION CALLED - Starting tileset processing');
+
+    // Initialize procedural monster renderer (Method 2)
+    monsterRenderer = new MonsterRenderer(this);
+    if (this.cache.json.exists('monsterData')) {
+        monsterRenderer.init(this.cache.json.get('monsterData'));
+    }
+
+    // Load persistent settings (independent of save game)
+    loadSettings();
 
     // Initialize Quest Manager
     questManager = new QuestManager(this);
@@ -4863,16 +4941,35 @@ function update(time, delta) {
         const mapHeight = scene.mapHeight * scene.tileSize;
         const monstersNeeded = MAX_MONSTERS - monsters.length;
 
-        const monsterTypes = [
-            { name: 'Goblin', textureKey: 'monster_goblin', hp: 30, attack: 5, speed: 50, xp: 10 },
-            { name: 'Orc', textureKey: 'monster_orc', hp: 50, attack: 8, speed: 40, xp: 20 },
-            { name: 'Skeleton', textureKey: 'monster_skeleton', hp: 25, attack: 6, speed: 60, xp: 15 },
-            { name: 'Spider', textureKey: 'monster_spider', hp: 20, attack: 4, speed: 70, xp: 8 },
-            { name: 'Slime', textureKey: 'monster_slime', hp: 15, attack: 3, speed: 30, xp: 5 },
-            { name: 'Wolf', textureKey: 'monster_wolf', hp: 40, attack: 7, speed: 65, xp: 18 },
-            { name: 'Dragon', textureKey: 'monster_dragon', hp: 80, attack: 12, speed: 35, xp: 40 },
-            { name: 'Ghost', textureKey: 'monster_ghost', hp: 35, attack: 6, speed: 55, xp: 12 }
+        // Use data-driven monster types if available
+        let monsterTypes = [
+            { name: 'Goblin', textureKey: 'monster_goblin', hp: 30, attack: 5, speed: 50, xp: 10, isProcedural: false },
+            { name: 'Orc', textureKey: 'monster_orc', hp: 50, attack: 8, speed: 40, xp: 20, isProcedural: false },
+            { name: 'Skeleton', textureKey: 'monster_skeleton', hp: 25, attack: 6, speed: 60, xp: 15, isProcedural: false },
+            { name: 'Spider', textureKey: 'monster_spider', hp: 20, attack: 4, speed: 70, xp: 8, isProcedural: false },
+            { name: 'Slime', textureKey: 'monster_slime', hp: 15, attack: 3, speed: 30, xp: 5, isProcedural: false },
+            { name: 'Wolf', textureKey: 'monster_wolf', hp: 40, attack: 7, speed: 65, xp: 18, isProcedural: false },
+            { name: 'Dragon', textureKey: 'monster_dragon', hp: 80, attack: 12, speed: 35, xp: 40, isProcedural: false },
+            { name: 'Echo_Mite', textureKey: 'monster_echo_mite', hp: 15, attack: 3, speed: 60, xp: 5, isProcedural: false },
+            { name: 'Ghost', textureKey: 'monster_ghost', hp: 35, attack: 6, speed: 55, xp: 12, isProcedural: false }
         ];
+
+        if (monsterRenderer && Object.keys(monsterRenderer.monsterBlueprints).length > 0) {
+            const uniqueBlueprints = Array.from(new Set(Object.values(monsterRenderer.monsterBlueprints)));
+
+            uniqueBlueprints.forEach(bp => {
+                monsterTypes.push({
+                    name: bp.name,
+                    id: bp.id,
+                    hp: bp.stats.hp,
+                    attack: bp.stats.attack,
+                    speed: bp.stats.speed,
+                    xp: bp.stats.xp,
+                    textureKey: bp.id,
+                    isProcedural: true
+                });
+            });
+        }
 
         // Spawn monsters away from player
         for (let i = 0; i < monstersNeeded; i++) {
@@ -4983,7 +5080,12 @@ function update(time, delta) {
         );
 
         // Update monster animation based on movement
-        updateMonsterAnimation(monster, delta);
+        const isMoving = monster.body.velocity.x !== 0 || monster.body.velocity.y !== 0;
+        if (monster.getData('isMethod2')) {
+            monsterRenderer.update(monster, isMoving);
+        } else {
+            updateMonsterAnimation(monster, delta);
+        }
 
         // Move towards player if close (use monster's speed stat)
         if (distance < 200 && distance > 32) {
@@ -5030,14 +5132,14 @@ function update(time, delta) {
 
                 // Stop movement on axis that would collide
                 if (wouldCollideX) {
-                    monster.setVelocityX(0);
+                    monster.body.setVelocityX(0);
                 }
                 if (wouldCollideY) {
-                    monster.setVelocityY(0);
+                    monster.body.setVelocityY(0);
                 }
             }
         } else {
-            monster.setVelocity(0);
+            monster.body.setVelocity(0);
         }
 
         // Monster attack player if in range
@@ -5281,13 +5383,24 @@ function playerAttack(time) {
         playSound('hit_monster');
 
         // Enhanced visual feedback - flash monster with color
-        const flashColor = isCritical ? 0xff6666 : 0xffffff; // Red tint for critical
-        closestMonster.setTint(flashColor);
-        scene.time.delayedCall(100, () => {
-            if (closestMonster && closestMonster.active) {
-                closestMonster.clearTint();
-            }
-        });
+        if (closestMonster.setTint) {
+            const flashColor = isCritical ? 0xff6666 : 0xffffff; // Red tint for critical
+            closestMonster.setTint(flashColor);
+            scene.time.delayedCall(100, () => {
+                if (closestMonster && closestMonster.active && closestMonster.clearTint) {
+                    closestMonster.clearTint();
+                }
+            });
+        } else {
+            // Fallback for Containers (Method 2)
+            const originalAlpha = closestMonster.alpha || 1;
+            closestMonster.setAlpha(0.5);
+            scene.time.delayedCall(100, () => {
+                if (closestMonster && closestMonster.active) {
+                    closestMonster.setAlpha(originalAlpha);
+                }
+            });
+        }
     }
 }
 
@@ -8915,37 +9028,49 @@ function destroyEquipmentUI() {
  * Initialize starting quests
  */
 function initializeQuests() {
-    // Get starter quests from QuestManager
-    const starterQuests = questManager ? questManager.getStarterQuests() : [];
-    const initialAvailable = questManager ? questManager.getAvailableQuests() : [];
+    if (!questManager) return;
 
-    // Initialize quest chain tracking
-    if (!playerStats.questChains) {
-        playerStats.questChains = {};
+    // Get starter and available quests from QuestManager
+    const starterQuests = questManager.getStarterQuests();
+    const availablePool = questManager.getAvailableQuests();
+
+    // No longer automatically assigning side/starter quests to playerStats.quests.active.
+    // They remain in the pool until picked up from an NPC.
+
+    // Ensure available list contains starter quests that haven't been completed/started
+    playerStats.quests.available = [...starterQuests, ...availablePool].filter(q =>
+        !playerStats.quests.completed.includes(q.id) &&
+        !playerStats.quests.active.some(active => active.id === q.id)
+    );
+
+    // Initial main quest setup (if none active/completed)
+    const allMainQuests = questManager.getMainQuests();
+    if (allMainQuests.length > 0) {
+        const hasMainStarted = (playerStats.quests.main.length > 0) ||
+            (playerStats.quests.completed && playerStats.quests.completed.some(id => id.startsWith('main_')));
+
+        if (!hasMainStarted) {
+            // Keep the very first main quest active by default for player guidance
+            const firstMain = allMainQuests[0];
+            firstMain.startValue = questManager.getStatValue(firstMain.type, playerStats);
+            playerStats.quests.main.push(firstMain);
+            console.log(`✅ Started primary main quest: ${firstMain.title}`);
+        }
     }
 
-    // Initialize completed quests array if it doesn't exist
-    if (!playerStats.quests.completedQuests) {
-        playerStats.quests.completedQuests = [];
-    }
-
-    // Initialize available quests array
-    playerStats.quests.available = initialAvailable;
-
-    playerStats.quests.active = starterQuests;
-    console.log('✅ Quests initialized:', starterQuests.length, 'active,', initialAvailable.length, 'available');
+    console.log(`✅ Quests initialized: 0 initial side, ${playerStats.quests.available.length} available, ${playerStats.quests.main.length} main`);
 }
 
 /**
  * Check quest progress and complete quests
  */
 function checkQuestProgress() {
-    playerStats.quests.active.forEach((quest, index) => {
+    // Check main quests
+    playerStats.quests.main.forEach((quest, index) => {
         // Update progress using QuestManager
         if (questManager) {
             quest.progress = questManager.calculateProgress(quest, playerStats);
         }
-
 
         // Cap progress at target
         if (quest.progress > quest.target) {
@@ -8957,6 +9082,117 @@ function checkQuestProgress() {
             completeQuest(quest, index);
         }
     });
+
+    // Check side quests
+    playerStats.quests.active.forEach((quest, index) => {
+        // Update progress using QuestManager
+        if (questManager) {
+            quest.progress = questManager.calculateProgress(quest, playerStats);
+        }
+
+        // Cap progress at target
+        if (quest.progress > quest.target) {
+            quest.progress = quest.target;
+        }
+
+        // Check if quest is complete
+        if (quest.progress >= quest.target && !quest.completed) {
+            completeQuest(quest, index);
+        }
+    });
+}
+
+/**
+ * Advance a quest manually (used for story quests via dialog)
+ */
+function advanceQuest(questId) {
+    if (!playerStats.questStats.storyProgress) {
+        playerStats.questStats.storyProgress = {};
+    }
+
+    playerStats.questStats.storyProgress[questId] = true;
+    checkQuestProgress();
+}
+
+/**
+ * Move all available side quests to active list
+ */
+function acceptAllAvailableQuests() {
+    if (!playerStats.quests.available || playerStats.quests.available.length === 0) return;
+
+    playerStats.quests.available.forEach(quest => {
+        quest.startValue = questManager.getStatValue(quest.type, playerStats);
+        playerStats.quests.active.push(quest);
+        console.log(`Quest accepted: ${quest.title}`);
+    });
+
+    playerStats.quests.available = [];
+
+    // Show notification
+    showDamageNumber(player.x, player.y - 60, `Accepted ${playerStats.quests.active.length} Quests`, 0x00ff00);
+
+    // Refresh log if visible
+    if (questVisible) {
+        refreshQuestLog();
+    }
+}
+
+/**
+ * Explicitly accept a main quest from dialogue
+ */
+function acceptMainQuest(questId) {
+    if (questManager) {
+        const quest = questManager.getQuest(questId);
+        if (quest) {
+            // Check if already active or completed
+            const isActive = playerStats.quests.main.some(q => q.id === questId);
+            const isCompleted = playerStats.quests.completed.includes(questId);
+
+            if (!isActive && !isCompleted) {
+                quest.startValue = questManager.getStatValue(quest.type, playerStats);
+                playerStats.quests.main.push(quest);
+                console.log(`Main quest accepted: ${quest.title}`);
+                showNewQuestModal(quest);
+
+                // Refresh log if visible
+                if (questVisible) {
+                    refreshQuestLog();
+                }
+
+                // UI will refresh indicators in the next update loop
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+/**
+ * Explicitly accept a side quest (non-main) from dialogue
+ */
+function acceptSideQuest(questId) {
+    if (questManager) {
+        // Find quest in AVAILABLE list
+        const questIdx = playerStats.quests.available.findIndex(q => q.id === questId);
+        if (questIdx !== -1) {
+            const quest = playerStats.quests.available[questIdx];
+
+            // Move from available to active
+            playerStats.quests.available.splice(questIdx, 1);
+            quest.startValue = questManager.getStatValue(quest.type, playerStats);
+            playerStats.quests.active.push(quest);
+
+            console.log(`Side quest accepted: ${quest.title}`);
+            showNewQuestModal(quest);
+
+            // Refresh log if visible
+            if (questVisible) {
+                refreshQuestLog();
+            }
+            return true;
+        }
+    }
+    return false;
 }
 
 /**
@@ -8984,6 +9220,7 @@ function completeQuest(quest, index) {
         // Check if next chain quest should be added
         const nextQuest = getNextChainQuest(quest.chainId, quest.chainStep);
         if (nextQuest) {
+            nextQuest.startValue = questManager.getStatValue(nextQuest.type, playerStats);
             playerStats.quests.active.push(nextQuest);
             console.log(`New chain quest unlocked: ${nextQuest.title}`);
             // Store to show after completed modal closes
@@ -8997,7 +9234,24 @@ function completeQuest(quest, index) {
     }
     playerStats.quests.completedQuests.push(quest);
     playerStats.quests.completed.push(quest.id);
-    playerStats.quests.active.splice(index, 1);
+
+    // Remove from appropriate list
+    const isMain = quest.id.startsWith('main_');
+    if (isMain) {
+        playerStats.quests.main.splice(index, 1);
+
+        // We no longer automatically push the next main quest.
+        // The player must pick it up from an NPC.
+        // However, we can still log that it's "unlocked" for debugging.
+        const allMainQuests = questManager ? questManager.getMainQuests() : [];
+        const nextStep = (quest.step || 0) + 1;
+        const nextMain = allMainQuests.find(q => q.chapter === quest.chapter && q.step === nextStep);
+        if (nextMain) {
+            console.log(`Next main quest available to pick up: ${nextMain.title}`);
+        }
+    } else {
+        playerStats.quests.active.splice(index, 1);
+    }
 
     // Check level up after XP reward
     checkLevelUp();
@@ -9110,39 +9364,57 @@ function createQuestLogUI() {
         fill: '#aaaaaa'
     }).setScrollFactor(0).setDepth(301).setOrigin(1, 0);
 
-    // Tab buttons (three tabs: Current, Available, Completed)
+    // Tab buttons (four tabs: Main, Current, Available, Completed)
     const tabY = centerY - panelHeight / 2 + 60;
-    const tabWidth = 140;
-    const tabSpacing = 10;
-    const totalTabWidth = (tabWidth * 3) + (tabSpacing * 2);
+    const tabWidth = 110;
+    const tabSpacing = 5;
+    const totalTabWidth = (tabWidth * 4) + (tabSpacing * 3);
     const tabStartX = centerX - totalTabWidth / 2 + tabWidth / 2;
 
-    const currentTabBtn = scene.add.rectangle(tabStartX, tabY, tabWidth, 35, 0x333333, 0.9)
+    // Reset default tab to 'main'
+    questLogTab = 'main';
+
+    const mainTabBtn = scene.add.rectangle(tabStartX, tabY, tabWidth, 35, 0x333333, 0.9)
         .setScrollFactor(0).setDepth(301).setStrokeStyle(2, 0xffffff).setInteractive({ useHandCursor: true });
 
-    const currentTabText = scene.add.text(tabStartX, tabY, 'Current', {
+    const mainTabText = scene.add.text(tabStartX, tabY, 'Main', {
         fontSize: '16px',
         fill: '#ffffff',
         fontStyle: 'bold'
     }).setScrollFactor(0).setDepth(302).setOrigin(0.5, 0.5);
 
-    const availableTabBtn = scene.add.rectangle(tabStartX + tabWidth + tabSpacing, tabY, tabWidth, 35, 0x333333, 0.9)
+    const currentTabBtn = scene.add.rectangle(tabStartX + tabWidth + tabSpacing, tabY, tabWidth, 35, 0x333333, 0.9)
         .setScrollFactor(0).setDepth(301).setStrokeStyle(2, 0x666666).setInteractive({ useHandCursor: true });
 
-    const availableTabText = scene.add.text(tabStartX + tabWidth + tabSpacing, tabY, 'Available', {
+    const currentTabText = scene.add.text(tabStartX + tabWidth + tabSpacing, tabY, 'Current', {
         fontSize: '16px',
         fill: '#aaaaaa'
     }).setScrollFactor(0).setDepth(302).setOrigin(0.5, 0.5);
 
-    const completedTabBtn = scene.add.rectangle(tabStartX + (tabWidth + tabSpacing) * 2, tabY, tabWidth, 35, 0x333333, 0.9)
+    const availableTabBtn = scene.add.rectangle(tabStartX + (tabWidth + tabSpacing) * 2, tabY, tabWidth, 35, 0x333333, 0.9)
         .setScrollFactor(0).setDepth(301).setStrokeStyle(2, 0x666666).setInteractive({ useHandCursor: true });
 
-    const completedTabText = scene.add.text(tabStartX + (tabWidth + tabSpacing) * 2, tabY, 'Completed', {
+    const availableTabText = scene.add.text(tabStartX + (tabWidth + tabSpacing) * 2, tabY, 'Available', {
+        fontSize: '16px',
+        fill: '#aaaaaa'
+    }).setScrollFactor(0).setDepth(302).setOrigin(0.5, 0.5);
+
+    const completedTabBtn = scene.add.rectangle(tabStartX + (tabWidth + tabSpacing) * 3, tabY, tabWidth, 35, 0x333333, 0.9)
+        .setScrollFactor(0).setDepth(301).setStrokeStyle(2, 0x666666).setInteractive({ useHandCursor: true });
+
+    const completedTabText = scene.add.text(tabStartX + (tabWidth + tabSpacing) * 3, tabY, 'Completed', {
         fontSize: '16px',
         fill: '#aaaaaa'
     }).setScrollFactor(0).setDepth(302).setOrigin(0.5, 0.5);
 
     // Tab click handlers
+    const switchToMain = () => {
+        questLogTab = 'main';
+        selectedQuestIndex = 0;
+        updateTabButtons();
+        updateQuestLogItems();
+    };
+
     const switchToCurrent = () => {
         questLogTab = 'current';
         selectedQuestIndex = 0; // Reset selection
@@ -9171,6 +9443,8 @@ function createQuestLogUI() {
 
     const updateTabButtons = () => {
         // Reset all tabs to inactive style
+        mainTabBtn.setStrokeStyle(2, 0x666666);
+        mainTabText.setStyle({ fill: '#aaaaaa', fontStyle: 'normal' });
         currentTabBtn.setStrokeStyle(2, 0x666666);
         currentTabText.setStyle({ fill: '#aaaaaa', fontStyle: 'normal' });
         availableTabBtn.setStrokeStyle(2, 0x666666);
@@ -9179,7 +9453,10 @@ function createQuestLogUI() {
         completedTabText.setStyle({ fill: '#aaaaaa', fontStyle: 'normal' });
 
         // Set active tab style
-        if (questLogTab === 'current') {
+        if (questLogTab === 'main') {
+            mainTabBtn.setStrokeStyle(2, 0xffffff);
+            mainTabText.setStyle({ fill: '#ffffff', fontStyle: 'bold' });
+        } else if (questLogTab === 'current') {
             currentTabBtn.setStrokeStyle(2, 0xffffff);
             currentTabText.setStyle({ fill: '#ffffff', fontStyle: 'bold' });
         } else if (questLogTab === 'available') {
@@ -9190,6 +9467,10 @@ function createQuestLogUI() {
             completedTabText.setStyle({ fill: '#ffffff', fontStyle: 'bold' });
         }
     };
+
+    mainTabBtn.on('pointerdown', switchToMain);
+    mainTabText.setInteractive({ useHandCursor: true });
+    mainTabText.on('pointerdown', switchToMain);
 
     currentTabBtn.on('pointerdown', switchToCurrent);
     currentTabText.setInteractive({ useHandCursor: true });
@@ -9245,6 +9526,8 @@ function createQuestLogUI() {
         bg: bg,
         title: title,
         closeText: closeText,
+        mainTabBtn: mainTabBtn,
+        mainTabText: mainTabText,
         currentTabBtn: currentTabBtn,
         currentTabText: currentTabText,
         availableTabBtn: availableTabBtn,
@@ -9313,7 +9596,9 @@ function updateQuestLogItems() {
 
     // Get quests based on current tab
     let quests = [];
-    if (questLogTab === 'current') {
+    if (questLogTab === 'main') {
+        quests = playerStats.quests.main || [];
+    } else if (questLogTab === 'current') {
         quests = playerStats.quests.active;
     } else if (questLogTab === 'available') {
         // Get available quests (rejected/cancelled)
@@ -9333,8 +9618,10 @@ function updateQuestLogItems() {
 
     // Quest list on left (RENDERED INTO CONTAINER FOR SCROLLING)
     if (quests.length === 0) {
-        let noQuestsMessage = 'No active quests';
-        if (questLogTab === 'available') {
+        let noQuestsMessage = 'No active side quests';
+        if (questLogTab === 'main') {
+            noQuestsMessage = 'No active story quests';
+        } else if (questLogTab === 'available') {
             noQuestsMessage = 'No available quests';
         } else if (questLogTab === 'completed') {
             noQuestsMessage = 'No completed quests';
@@ -9586,6 +9873,8 @@ function destroyQuestLogUI() {
         if (questPanel.bg) questPanel.bg.destroy();
         if (questPanel.title) questPanel.title.destroy();
         if (questPanel.closeText) questPanel.closeText.destroy();
+        if (questPanel.mainTabBtn) questPanel.mainTabBtn.destroy();
+        if (questPanel.mainTabText) questPanel.mainTabText.destroy();
         if (questPanel.currentTabBtn) questPanel.currentTabBtn.destroy();
         if (questPanel.currentTabText) questPanel.currentTabText.destroy();
         if (questPanel.availableTabBtn) questPanel.availableTabBtn.destroy();
@@ -9636,33 +9925,33 @@ function showQuestCompletedModal(quest) {
     const modalHeight = 400;
 
     // Background overlay
-    const overlay = scene.add.rectangle(centerX, centerY, scene.cameras.main.width, scene.cameras.main.height, 0x000000, 0.7)
-        .setScrollFactor(0).setDepth(400).setInteractive();
+    const overlay = scene.add.rectangle(centerX, centerY, scene.cameras.main.width, scene.cameras.main.height, 0x000000, 0.8)
+        .setScrollFactor(0).setDepth(600).setInteractive();
 
     // Modal background
     const modalBg = scene.add.rectangle(centerX, centerY, modalWidth, modalHeight, 0x1a1a1a, 0.98)
-        .setScrollFactor(0).setDepth(401).setStrokeStyle(4, 0x00ff00);
+        .setScrollFactor(0).setDepth(601).setStrokeStyle(4, 0x00ff00);
 
     // Title
     const title = scene.add.text(centerX, centerY - modalHeight / 2 + 40, 'QUEST COMPLETED!', {
         fontSize: '32px',
         fill: '#00ff00',
         fontStyle: 'bold'
-    }).setScrollFactor(0).setDepth(402).setOrigin(0.5, 0);
+    }).setScrollFactor(0).setDepth(602).setOrigin(0.5, 0);
 
     // Quest title
     const questTitle = scene.add.text(centerX, centerY - modalHeight / 2 + 90, quest.title, {
         fontSize: '24px',
         fill: '#ffffff',
         fontStyle: 'bold'
-    }).setScrollFactor(0).setDepth(402).setOrigin(0.5, 0);
+    }).setScrollFactor(0).setDepth(602).setOrigin(0.5, 0);
 
     // Quest description
     const questDesc = scene.add.text(centerX, centerY - modalHeight / 2 + 130, quest.description, {
         fontSize: '16px',
         fill: '#cccccc',
         wordWrap: { width: modalWidth - 60 }
-    }).setScrollFactor(0).setDepth(402).setOrigin(0.5, 0);
+    }).setScrollFactor(0).setDepth(602).setOrigin(0.5, 0);
 
     // Rewards section
     let rewardsText = 'Rewards:\n';
@@ -9673,22 +9962,22 @@ function showQuestCompletedModal(quest) {
         rewardsText += `+${quest.rewards.gold} Gold`;
     }
 
-    const rewards = scene.add.text(centerX, centerY - 20, rewardsText, {
+    const rewards = scene.add.text(centerX, centerY + 50, rewardsText, {
         fontSize: '20px',
         fill: '#ffd700',
         fontStyle: 'bold',
         align: 'center'
-    }).setScrollFactor(0).setDepth(402).setOrigin(0.5, 0.5);
+    }).setScrollFactor(0).setDepth(602).setOrigin(0.5, 0.5);
 
     // Close button
     const closeBtn = scene.add.rectangle(centerX, centerY + modalHeight / 2 - 50, 150, 40, 0x333333, 0.9)
-        .setScrollFactor(0).setDepth(402).setStrokeStyle(2, 0xffffff).setInteractive({ useHandCursor: true });
+        .setScrollFactor(0).setDepth(602).setStrokeStyle(2, 0xffffff).setInteractive({ useHandCursor: true });
 
     const closeBtnText = scene.add.text(centerX, centerY + modalHeight / 2 - 50, 'Close', {
         fontSize: '18px',
         fill: '#ffffff',
         fontStyle: 'bold'
-    }).setScrollFactor(0).setDepth(403).setOrigin(0.5, 0.5);
+    }).setScrollFactor(0).setDepth(603).setOrigin(0.5, 0.5);
 
     // Close on click
     const closeModal = () => {
@@ -9788,39 +10077,39 @@ function showNewQuestModal(quest) {
     const modalHeight = 450;
 
     // Background overlay
-    const overlay = scene.add.rectangle(centerX, centerY, scene.cameras.main.width, scene.cameras.main.height, 0x000000, 0.7)
-        .setScrollFactor(0).setDepth(400).setInteractive();
+    const overlay = scene.add.rectangle(centerX, centerY, scene.cameras.main.width, scene.cameras.main.height, 0x000000, 0.8)
+        .setScrollFactor(0).setDepth(600).setInteractive();
 
     // Modal background
     const modalBg = scene.add.rectangle(centerX, centerY, modalWidth, modalHeight, 0x1a1a1a, 0.98)
-        .setScrollFactor(0).setDepth(401).setStrokeStyle(4, 0x00aaff);
+        .setScrollFactor(0).setDepth(601).setStrokeStyle(4, 0x00aaff);
 
     // Title
     const title = scene.add.text(centerX, centerY - modalHeight / 2 + 40, 'NEW QUEST!', {
         fontSize: '32px',
         fill: '#00aaff',
         fontStyle: 'bold'
-    }).setScrollFactor(0).setDepth(402).setOrigin(0.5, 0);
+    }).setScrollFactor(0).setDepth(602).setOrigin(0.5, 0);
 
     // Quest title
     const questTitle = scene.add.text(centerX, centerY - modalHeight / 2 + 90, quest.title, {
         fontSize: '24px',
         fill: '#ffffff',
         fontStyle: 'bold'
-    }).setScrollFactor(0).setDepth(402).setOrigin(0.5, 0);
+    }).setScrollFactor(0).setDepth(602).setOrigin(0.5, 0);
 
     // Quest description
     const questDesc = scene.add.text(centerX, centerY - modalHeight / 2 + 130, quest.description, {
         fontSize: '16px',
         fill: '#cccccc',
         wordWrap: { width: modalWidth - 60 }
-    }).setScrollFactor(0).setDepth(402).setOrigin(0.5, 0);
+    }).setScrollFactor(0).setDepth(602).setOrigin(0.5, 0);
 
     // Progress info
     const progressInfo = scene.add.text(centerX, centerY - 30, `Progress: 0/${quest.target}`, {
         fontSize: '16px',
         fill: '#aaaaaa'
-    }).setScrollFactor(0).setDepth(402).setOrigin(0.5, 0.5);
+    }).setScrollFactor(0).setDepth(602).setOrigin(0.5, 0.5);
 
     // Rewards section
     let rewardsText = 'Rewards:\n';
@@ -9836,27 +10125,27 @@ function showNewQuestModal(quest) {
         fill: '#ffd700',
         fontStyle: 'bold',
         align: 'center'
-    }).setScrollFactor(0).setDepth(402).setOrigin(0.5, 0.5);
+    }).setScrollFactor(0).setDepth(602).setOrigin(0.5, 0.5);
 
     // Accept button
     const acceptBtn = scene.add.rectangle(centerX - 90, centerY + modalHeight / 2 - 50, 150, 40, 0x00aa00, 0.9)
-        .setScrollFactor(0).setDepth(402).setStrokeStyle(2, 0x00ff00).setInteractive({ useHandCursor: true });
+        .setScrollFactor(0).setDepth(602).setStrokeStyle(2, 0x00ff00).setInteractive({ useHandCursor: true });
 
     const acceptBtnText = scene.add.text(centerX - 90, centerY + modalHeight / 2 - 50, 'Accept', {
         fontSize: '18px',
         fill: '#ffffff',
         fontStyle: 'bold'
-    }).setScrollFactor(0).setDepth(403).setOrigin(0.5, 0.5);
+    }).setScrollFactor(0).setDepth(603).setOrigin(0.5, 0.5);
 
     // Cancel button
     const cancelBtn = scene.add.rectangle(centerX + 90, centerY + modalHeight / 2 - 50, 150, 40, 0xaa0000, 0.9)
-        .setScrollFactor(0).setDepth(402).setStrokeStyle(2, 0xff0000).setInteractive({ useHandCursor: true });
+        .setScrollFactor(0).setDepth(602).setStrokeStyle(2, 0xff0000).setInteractive({ useHandCursor: true });
 
     const cancelBtnText = scene.add.text(centerX + 90, centerY + modalHeight / 2 - 50, 'Cancel', {
         fontSize: '18px',
         fill: '#ffffff',
         fontStyle: 'bold'
-    }).setScrollFactor(0).setDepth(403).setOrigin(0.5, 0.5);
+    }).setScrollFactor(0).setDepth(603).setOrigin(0.5, 0.5);
 
     // Store quest reference for accept handler
     const questRef = quest;
@@ -9983,10 +10272,10 @@ function initializeNPCs() {
     }
 
     // Helper function to find a valid position near a target
-    function findValidPosition(targetX, targetY, attempts = 10) {
+    function findValidPosition(targetX, targetY, attempts = 50) {
         for (let i = 0; i < attempts; i++) {
-            const offsetX = Phaser.Math.Between(-3, 3) * tileSize;
-            const offsetY = Phaser.Math.Between(-3, 3) * tileSize;
+            const offsetX = Phaser.Math.Between(-5, 5) * tileSize;
+            const offsetY = Phaser.Math.Between(-5, 5) * tileSize;
             const testX = targetX + offsetX;
             const testY = targetY + offsetY;
 
@@ -10011,8 +10300,8 @@ function initializeNPCs() {
             id: 'npc_001',
             name: 'Elder Malik',
             title: 'Village Elder',
-            targetX: (centerX - 1) * tileSize,  // Near center square
-            targetY: (centerY - 5) * tileSize, // Above center, near inn
+            targetX: centerX * tileSize,  // Center square
+            targetY: (centerY - 3) * tileSize, // Above center, clear of Inn
             dialogId: 'elder_intro',
             questGiver: true
         },
@@ -10023,15 +10312,44 @@ function initializeNPCs() {
             targetX: (centerX + 6) * tileSize,  // Near shop (to the right)
             targetY: (centerY + 6) * tileSize, // Below shop
             dialogId: 'merchant_shop',
-            merchant: true
+            merchant: true,
+            questGiver: true
         },
         {
             id: 'npc_003',
             name: 'Guard Thorne',
-            title: 'Guard Captain',
-            targetX: centerX * tileSize,  // Near town entrance
-            targetY: (mapHeight - 6) * tileSize, // Above entrance marker
-            dialogId: 'guard_info'
+            title: 'Guard Officer',
+            targetX: centerX * tileSize,
+            targetY: (mapHeight - 6) * tileSize,
+            dialogId: 'guard_info',
+            questGiver: true
+        },
+        {
+            id: 'npc_004',
+            name: 'Captain Kael',
+            title: 'Captain of the Guard',
+            targetX: (centerX - 5) * tileSize,
+            targetY: (mapHeight - 9) * tileSize,
+            dialogId: 'generic_npc',
+            questGiver: true
+        },
+        {
+            id: 'npc_005',
+            name: 'Mage Elara',
+            title: 'Village Mage',
+            targetX: (centerX + 5) * tileSize,
+            targetY: (centerY - 5) * tileSize,
+            dialogId: 'generic_npc',
+            questGiver: true
+        },
+        {
+            id: 'npc_006',
+            name: 'Blacksmith Brond',
+            title: 'Master Smith',
+            targetX: 6 * tileSize,
+            targetY: 20 * tileSize,
+            dialogId: 'generic_npc',
+            questGiver: true
         }
     ];
 
@@ -10059,6 +10377,14 @@ function initializeNPCs() {
             spriteKey = 'npc_lysa';
         } else if (data.name === 'Guard Thorne') {
             spriteKey = 'npc_captain_thorne';
+        } else if (data.name === 'Guard Kael') {
+            spriteKey = 'npc_captain_kael';
+        } else if (data.name === 'Captain Kael') {
+            spriteKey = 'npc_captain_kael';
+        } else if (data.name === 'Mage Elara') {
+            spriteKey = 'npc_mage_elara';
+        } else if (data.name === 'Blacksmith Brond') {
+            spriteKey = 'npc_blacksmith_brond';
         }
 
         // Check if spritesheet exists, fallback to default 'npc' if not
@@ -10068,7 +10394,7 @@ function initializeNPCs() {
         }
 
         const npc = scene.physics.add.sprite(data.x, data.y, spriteKey);
-        npc.setDepth(5); // Same depth as monsters
+        npc.setDepth(30); // Same depth as monsters
         npc.setCollideWorldBounds(true);
 
         // If using a spritesheet, set to first frame (idle frame)
@@ -10172,6 +10498,9 @@ function createSettingsUI() {
     // Toggle button click handler
     toggleBg.on('pointerdown', () => {
         musicEnabled = !musicEnabled;
+
+        // Save to persistent storage
+        saveSettings();
 
         // Update button appearance
         toggleBg.setFillStyle(musicEnabled ? 0x00aa00 : 0x666666);
@@ -10291,6 +10620,39 @@ function destroySettingsUI() {
 }
 
 /**
+ * Save settings to localStorage
+ */
+function saveSettings() {
+    try {
+        const settings = {
+            musicEnabled: musicEnabled
+        };
+        localStorage.setItem('pfaustino_rpg_settings', JSON.stringify(settings));
+        console.log('💾 Settings saved to localStorage');
+    } catch (e) {
+        console.error('❌ Error saving settings:', e);
+    }
+}
+
+/**
+ * Load settings from localStorage
+ */
+function loadSettings() {
+    try {
+        const savedSettings = localStorage.getItem('pfaustino_rpg_settings');
+        if (savedSettings) {
+            const settings = JSON.parse(savedSettings);
+            if (settings.musicEnabled !== undefined) {
+                musicEnabled = settings.musicEnabled;
+                console.log('💾 Settings loaded from localStorage:', settings);
+            }
+        }
+    } catch (e) {
+        console.error('❌ Error loading settings:', e);
+    }
+}
+
+/**
  * Update NPC interaction indicators
  */
 function updateNPCIndicators() {
@@ -10329,35 +10691,83 @@ function updateNPCIndicators() {
         const inRange = distance <= npc.interactionRadius;
 
         // Show/hide interaction indicator
-        if (inRange && !npc.showIndicator) {
-            // Convert NPC world position to screen coordinates (since indicator has setScrollFactor(0))
-            // When camera follows player, screen position = world position - camera scroll
-            const camera = scene.cameras.main;
-            const screenX = npc.x - camera.scrollX;
-            const screenY = (npc.y - 45) - camera.scrollY;
+        let iconText = '!';
+        let iconColor = '#ffff00'; // Yellow for quests
 
-            // Create indicator (exclamation mark or speech bubble)
-            npc.interactionIndicator = scene.add.text(screenX, screenY, '!', {
-                fontSize: '24px',
-                fill: '#ffff00',
-                stroke: '#000000',
-                strokeThickness: 3,
-                fontStyle: 'bold'
-            }).setOrigin(0.5, 0.5).setDepth(20).setScrollFactor(0); // UI element, don't scroll with world
+        if (npc.questGiver) {
+            const npcName = npc.name || npc.title;
+            const hasStoryActive = playerStats.quests.main.some(q => q.type === 'story' && q.giver === npcName && !playerStats.quests.completed.includes(q.id));
+            const hasSideAvailable = playerStats.quests.available && playerStats.quests.available.some(q => q.giver === npcName);
 
-            // Add pulsing animation
-            scene.tweens.add({
-                targets: npc.interactionIndicator,
-                scaleX: 1.3,
-                scaleY: 1.3,
-                duration: 500,
-                yoyo: true,
-                repeat: -1,
-                ease: 'Sine.easeInOut'
-            });
+            // NEW: Check for available but not yet accepted main quests
+            let hasStoryAvailable = false;
+            if (questManager) {
+                const allMain = questManager.getMainQuests();
+                const completedIds = playerStats.quests.completed || [];
+                const activeIds = playerStats.quests.main.map(q => q.id);
 
-            npc.showIndicator = true;
-        } else if (!inRange && npc.showIndicator) {
+                // Find highest completed step in any chapter
+                const nextQuests = allMain.filter(q => {
+                    // It's not completed and not active
+                    if (completedIds.includes(q.id) || activeIds.includes(q.id)) return false;
+
+                    // It's step 1 or its predecessor is completed
+                    if (q.step === 1) return true;
+                    const prevQuest = allMain.find(prev => prev.chapter === q.chapter && prev.step === q.step - 1);
+                    return prevQuest && completedIds.includes(prevQuest.id);
+                });
+
+                hasStoryAvailable = nextQuests.some(q => q.giver === npcName);
+            }
+
+            if (!hasStoryActive && !hasSideAvailable && !hasStoryAvailable) {
+                iconText = '💬'; // No urgent quests, just chat
+                iconColor = '#ffffff';
+            }
+        } else {
+            iconText = '💬'; // Regular NPC info
+            iconColor = '#ffffff';
+        }
+
+        const shouldShow = inRange || iconText === '!';
+
+        if (shouldShow) {
+            if (!npc.showIndicator) {
+                // Convert NPC world position to screen coordinates
+                const camera = scene.cameras.main;
+                const screenX = npc.x - camera.scrollX;
+                const screenY = (npc.y - 45) - camera.scrollY;
+
+                // Create indicator
+                npc.interactionIndicator = scene.add.text(screenX, screenY, iconText, {
+                    fontSize: '24px',
+                    fill: iconColor,
+                    stroke: '#000000',
+                    strokeThickness: 3,
+                    fontStyle: 'bold'
+                }).setOrigin(0.5, 0.5).setDepth(20).setScrollFactor(0);
+
+                // Add pulsing animation
+                scene.tweens.add({
+                    targets: npc.interactionIndicator,
+                    scaleX: 1.3,
+                    scaleY: 1.3,
+                    duration: 500,
+                    yoyo: true,
+                    repeat: -1,
+                    ease: 'Sine.easeInOut'
+                });
+
+                npc.showIndicator = true;
+            } else if (npc.interactionIndicator) {
+                // REAL-TIME UPDATE: Check if icon should change
+                // (e.g. from ! to 💬 if quest accepted, which might then hide it if out of range)
+                if (npc.interactionIndicator.text !== iconText) {
+                    npc.interactionIndicator.setText(iconText);
+                    npc.interactionIndicator.setFill(iconColor);
+                }
+            }
+        } else if (npc.showIndicator) {
             if (npc.interactionIndicator) {
                 npc.interactionIndicator.destroy();
                 npc.interactionIndicator = null;
@@ -10421,7 +10831,7 @@ function updateBuildingIndicators() {
                 stroke: '#000000',
                 strokeThickness: 3,
                 fontStyle: 'bold'
-            }).setOrigin(0.5, 0.5).setDepth(20).setScrollFactor(0);
+            }).setOrigin(0.5, 0.5).setDepth(30).setScrollFactor(0);
 
             // Add pulsing animation
             scene.tweens.add({
@@ -10558,29 +10968,45 @@ const dialogDatabase = {
             'start': {
                 text: 'Welcome, traveler! I am Elder Malik, the leader of this village. How may I assist you?',
                 choices: [
+                    {
+                        text: 'About the tremors in the earth...',
+                        next: 'quakes',
+                        isQuest: true,
+                        condition: (stats) => stats.quests.main.some(q => q.id === 'main_01_001') && !stats.quests.completed.includes('main_01_001')
+                    },
+                    {
+                        text: 'How can I stop the tremors?',
+                        next: 'echoes_intro',
+                        isQuest: true,
+                        condition: (stats) => stats.quests.completed.includes('main_01_001') && !stats.quests.completed.includes('main_01_002') && !stats.quests.main.some(q => q.id === 'main_01_002')
+                    },
                     { text: 'Tell me about this place', next: 'about_place' },
-                    { text: 'Do you have any quests?', next: 'quests' },
                     { text: 'Goodbye', next: 'end' }
+                ]
+            },
+            'quakes': {
+                text: 'Ah, so you\'ve felt them too. The ground has been restless of late. It began shortly after the corruption started spreading from the old Watchtower. I fear something ancient has been disturbed.',
+                choices: [
+                    { text: 'I\'ll investigate the Watchtower', action: 'quest_advance', questId: 'main_01_001', next: 'quakes_conclusion' }
+                ]
+            },
+            'echoes_intro': {
+                text: 'To stop the tremors, you must delve into the Watchtower basement. The corruption is strongest there, manifesting as Echo Mites. Clear them out, and we may find a way to stabilize the earth.',
+                choices: [
+                    { text: 'I\'ll clear out the Mites', action: 'quest_accept', questId: 'main_01_002', next: 'end' },
+                    { text: 'I need to prepare first', next: 'end' }
+                ]
+            },
+            'quakes_conclusion': {
+                text: 'Thank you, brave soul. Be careful—the Watchtower basement is filled with Echo Mites. They are drawn to the tremors.',
+                choices: [
+                    { text: 'I will be careful', next: 'end' }
                 ]
             },
             'about_place': {
                 text: 'This is a peaceful village, though we have been troubled by monsters lately. The brave adventurers who help us are always welcome.',
                 choices: [
-                    { text: 'I can help with monsters', next: 'quests' },
                     { text: 'Thank you', next: 'end' }
-                ]
-            },
-            'quests': {
-                text: 'Yes! We need help clearing the monsters that have been appearing. Would you be willing to help?',
-                choices: [
-                    { text: 'I\'ll help!', next: 'quest_accepted' },
-                    { text: 'Maybe later', next: 'end' }
-                ]
-            },
-            'quest_accepted': {
-                text: 'Thank you! Please eliminate 5 monsters and return to me. I will reward you handsomely.',
-                choices: [
-                    { text: 'I\'ll get started', next: 'end' }
                 ]
             },
             'end': {
@@ -10591,20 +11017,46 @@ const dialogDatabase = {
     },
     'merchant_shop': {
         npcName: 'Merchant Lysa',
-        npcTitle: 'Trader',
+        npcTitle: 'Village Trader',
         nodes: {
             'start': {
-                text: 'Welcome to my shop! I have the finest wares in all the land. What would you like?',
+                text: 'Welcome to my shop! I have the finest wares in the village. Are you looking to buy something, or perhaps you could help me with a business favor?',
                 choices: [
-                    { text: 'Show me your items', next: 'shop' },
-                    { text: 'Just browsing', next: 'end' }
+                    { text: 'I\'d like to browse your wares', next: 'shop' },
+                    {
+                        text: 'About that favor...',
+                        next: 'favors',
+                        isQuest: true,
+                        condition: (stats) => stats.quests.available.some(q => q.giver === 'Merchant Lysa')
+                    },
+                    { text: 'Goodbye', next: 'end' }
+                ]
+            },
+            'favors': {
+                text: 'Business has been tough with the tremors. I need more inventory to stay afloat. Could you help me gather some items or perhaps earn some extra gold for me?',
+                choices: [
+                    {
+                        text: 'I can gather items for you',
+                        action: 'quest_accept_side',
+                        questId: 'quest_002',
+                        next: 'end',
+                        condition: (stats) => stats.quests.available.some(q => q.id === 'quest_002')
+                    },
+                    {
+                        text: 'I can help you with gold',
+                        action: 'quest_accept_side',
+                        questId: 'quest_004',
+                        next: 'end',
+                        condition: (stats) => stats.quests.available.some(q => q.id === 'quest_004')
+                    },
+                    { text: 'Maybe another time', next: 'end' }
                 ]
             },
             'shop': {
                 text: 'Here are my wares. What would you like to buy?',
                 choices: [
                     { text: 'Open Shop', action: 'open_shop' },
-                    { text: 'Maybe later', next: 'end' }
+                    { text: 'Nevermind', next: 'start' }
                 ]
             },
             'end': {
@@ -10620,18 +11072,47 @@ const dialogDatabase = {
             'start': {
                 text: 'Halt! I am Captain Thorne, head of the village guard. State your business.',
                 choices: [
-                    { text: 'I\'m here to help', next: 'help' },
+                    {
+                        text: 'I want to help with the monsters',
+                        next: 'hunting',
+                        isQuest: true,
+                        condition: (stats) => stats.quests.available.some(q => q.id === 'quest_001')
+                    },
+                    { text: 'Tell me about the monsters', next: 'help' },
                     { text: 'Just passing through', next: 'end' }
                 ]
             },
+            'hunting': {
+                text: 'A volunteer? Excellent. My guards are spread thin. If you can eliminate some of the local pests, I\'ll make sure the village compensates you.',
+                choices: [
+                    { text: 'I\'ll take the contract', action: 'quest_accept_side', questId: 'quest_001', next: 'end' },
+                    { text: 'Not right now', next: 'end' }
+                ]
+            },
             'help': {
-                text: 'Good! We need all the help we can get. The monsters have been getting bolder. Stay safe out there.',
+                text: 'The monsters have been getting bolder since the quakes started. They seem drawn to the tremors. Stay safe out there.',
                 choices: [
                     { text: 'I will', next: 'end' }
                 ]
             },
             'end': {
                 text: 'Stay vigilant!',
+                choices: []
+            }
+        }
+    },
+    'generic_npc': {
+        npcName: 'NPC',
+        npcTitle: 'Villager',
+        nodes: {
+            'start': {
+                text: 'Greetings. How can I help you?',
+                choices: [
+                    { text: 'Goodbye', next: 'end' }
+                ]
+            },
+            'end': {
+                text: 'Farewell.',
                 choices: []
             }
         }
@@ -10642,13 +11123,69 @@ const dialogDatabase = {
  * Start dialog with an NPC
  */
 function startDialog(npc) {
-    const dialogData = dialogDatabase[npc.dialogId];
+    let dialogData = dialogDatabase[npc.dialogId];
     if (!dialogData) {
-        console.warn(`Dialog not found: ${npc.dialogId}`);
-        return;
+        dialogData = dialogDatabase['generic_npc'];
     }
 
-    currentDialog = dialogData;
+    // Clone to avoid modifying the original database
+    const activeDialog = JSON.parse(JSON.stringify(dialogData));
+    activeDialog.npcName = npc.name || activeDialog.npcName;
+    activeDialog.npcTitle = npc.title || activeDialog.npcTitle;
+
+    // Check for available main quests from this NPC
+    if (questManager) {
+        const allMainQuests = questManager.getMainQuests();
+        const completedIds = playerStats.quests.completed;
+        const activeIds = playerStats.quests.main.map(q => q.id);
+
+        // Find if this NPC can either advance an active quest or give a new one
+
+        // 1. Check for TURN IN / ADVANCE of active story quest
+        const currentActiveMain = playerStats.quests.main.find(q => q.giver === npc.name);
+        if (currentActiveMain && currentActiveMain.type === 'story') {
+            activeDialog.nodes.start.choices.unshift({
+                text: `About ${currentActiveMain.title}...`,
+                isQuest: true,
+                action: 'quest_advance',
+                questId: currentActiveMain.id,
+                next: 'quest_advanced'
+            });
+
+            activeDialog.nodes.quest_advanced = {
+                text: `Ah, I see. You've made progress. Well done.`,
+                choices: [{ text: 'Thank you', next: 'end' }]
+            };
+        }
+
+        // 2. Check for NEW main quest available from this NPC
+        // It must be the next step in the sequence
+        const lastStep = completedIds.length > 0 ?
+            Math.max(...allMainQuests.filter(q => completedIds.includes(q.id)).map(q => q.step || 0), 0) : 0;
+
+        const nextMain = allMainQuests.find(q =>
+            q.step === lastStep + 1 &&
+            !activeIds.includes(q.id) &&
+            q.giver === npc.name
+        );
+
+        if (nextMain) {
+            activeDialog.nodes.start.choices.unshift({
+                text: `${nextMain.title}`,
+                isQuest: true,
+                action: 'quest_accept',
+                questId: nextMain.id,
+                next: 'quest_accepted'
+            });
+
+            activeDialog.nodes.quest_accepted = {
+                text: `Excellent. Here's what I need you to do: ${nextMain.description}`,
+                choices: [{ text: 'I\'ll get right on it', next: 'end' }]
+            };
+        }
+    }
+
+    currentDialog = activeDialog;
     currentDialogNode = 'start';
     currentShopNPC = npc; // Store reference for shop
     dialogVisible = true;
@@ -10686,9 +11223,9 @@ function createDialogUI(npc) {
     const scene = game.scene.scenes[0];
 
     const panelWidth = 700;
-    const panelHeight = 300;
+    const panelHeight = 450;
     const centerX = scene.cameras.main.width / 2;
-    const centerY = scene.cameras.main.height / 2 + 150;
+    const centerY = scene.cameras.main.height / 2 + 50;
 
     dialogPanel = {
         bg: scene.add.rectangle(centerX, centerY, panelWidth, panelHeight, 0x1a1a1a, 0.95)
@@ -10724,7 +11261,7 @@ function updateDialogUI(node) {
     const centerX = dialogPanel.bg.x;
     const centerY = dialogPanel.bg.y;
     const panelWidth = 700;
-    const panelHeight = 300;
+    const panelHeight = 450;
 
     // Dialog text
     dialogPanel.dialogText = scene.add.text(
@@ -10739,12 +11276,17 @@ function updateDialogUI(node) {
     ).setScrollFactor(0).setDepth(401).setOrigin(0, 0);
 
     // Choice buttons
-    const startY = centerY + 50;
+    const startY = centerY + 20;
     const buttonHeight = 40;
     const buttonSpacing = 10;
 
-    node.choices.forEach((choice, index) => {
-        const buttonY = startY + index * (buttonHeight + buttonSpacing);
+    let visibleChoiceCount = 0;
+    node.choices.forEach((choice) => {
+        // Skip choices that don't meet their condition
+        if (choice.condition && !choice.condition(playerStats)) return;
+
+        const buttonY = startY + visibleChoiceCount * (buttonHeight + buttonSpacing);
+        visibleChoiceCount++;
         const buttonWidth = panelWidth - 40;
 
         // Button background
@@ -10760,15 +11302,27 @@ function updateDialogUI(node) {
             .setInteractive({ useHandCursor: true });
 
         // Button text
+        const isQuest = choice.isQuest;
+        const displayText = isQuest ? `(!) ${choice.text}` : choice.text;
+
         const buttonText = scene.add.text(
             centerX,
             buttonY,
-            choice.text,
+            displayText,
             {
                 fontSize: '16px',
                 fill: '#ffffff'
             }
         ).setScrollFactor(0).setDepth(402).setOrigin(0.5, 0.5);
+
+        // Apply yellow color to the marker if it's a quest
+        if (isQuest) {
+            // Note: Basic Phaser Text doesn't support BBCode like style tags easily without a plugin
+            // For now, let's just make the whole text a bit more yellow, or just leave as is if we want just the ! yellow
+            // Actually, if we want just the ! yellow, we'd need multiple text objects or a more complex solution.
+            // Let's at least make the whole line yellow-ish to signal quest value
+            buttonText.setFill('#ffff00');
+        }
 
         // Button hover effects
         buttonBg.on('pointerover', () => {
@@ -10782,6 +11336,34 @@ function updateDialogUI(node) {
         buttonBg.on('pointerdown', () => {
             if (choice.action === 'open_shop') {
                 openShop(currentShopNPC);
+            } else if (choice.action === 'quest_advance') {
+                advanceQuest(choice.questId);
+                if (choice.next) {
+                    showDialogNode(choice.next);
+                } else {
+                    closeDialog();
+                }
+            } else if (choice.action === 'accept_all') {
+                acceptAllAvailableQuests();
+                if (choice.next) {
+                    showDialogNode(choice.next);
+                } else {
+                    closeDialog();
+                }
+            } else if (choice.action === 'quest_accept') {
+                acceptMainQuest(choice.questId);
+                if (choice.next) {
+                    showDialogNode(choice.next);
+                } else {
+                    closeDialog();
+                }
+            } else if (choice.action === 'quest_accept_side') {
+                acceptSideQuest(choice.questId);
+                if (choice.next) {
+                    showDialogNode(choice.next);
+                } else {
+                    closeDialog();
+                }
             } else if (choice.next) {
                 showDialogNode(choice.next);
             } else {
@@ -12869,16 +13451,35 @@ function createAssetsWindow() {
  * Spawn initial monsters across the entire map
  */
 function spawnInitialMonsters(mapWidth, mapHeight) {
-    const monsterTypes = [
-        { name: 'Goblin', textureKey: 'monster_goblin', hp: 30, attack: 5, speed: 50, xp: 10 },
-        { name: 'Orc', textureKey: 'monster_orc', hp: 50, attack: 8, speed: 40, xp: 20 },
-        { name: 'Skeleton', textureKey: 'monster_skeleton', hp: 25, attack: 6, speed: 60, xp: 15 },
-        { name: 'Spider', textureKey: 'monster_spider', hp: 20, attack: 4, speed: 70, xp: 8 },
-        { name: 'Slime', textureKey: 'monster_slime', hp: 15, attack: 3, speed: 30, xp: 5 },
-        { name: 'Wolf', textureKey: 'monster_wolf', hp: 40, attack: 7, speed: 65, xp: 18 },
-        { name: 'Dragon', textureKey: 'monster_dragon', hp: 80, attack: 12, speed: 35, xp: 40 },
-        { name: 'Ghost', textureKey: 'monster_ghost', hp: 35, attack: 6, speed: 55, xp: 12 }
+    // Use data-driven monster types if available from Method 2
+    let monsterTypes = [
+        { name: 'Goblin', textureKey: 'monster_goblin', hp: 30, attack: 5, speed: 50, xp: 10, isProcedural: false },
+        { name: 'Orc', textureKey: 'monster_orc', hp: 50, attack: 8, speed: 40, xp: 20, isProcedural: false },
+        { name: 'Skeleton', textureKey: 'monster_skeleton', hp: 25, attack: 6, speed: 60, xp: 15, isProcedural: false },
+        { name: 'Spider', textureKey: 'monster_spider', hp: 20, attack: 4, speed: 70, xp: 8, isProcedural: false },
+        { name: 'Slime', textureKey: 'monster_slime', hp: 15, attack: 3, speed: 30, xp: 5, isProcedural: false },
+        { name: 'Wolf', textureKey: 'monster_wolf', hp: 40, attack: 7, speed: 65, xp: 18, isProcedural: false },
+        { name: 'Dragon', textureKey: 'monster_dragon', hp: 80, attack: 12, speed: 35, xp: 40, isProcedural: false },
+        { name: 'Ghost', textureKey: 'monster_ghost', hp: 35, attack: 6, speed: 55, xp: 12, isProcedural: false },
+        { name: 'Echo_Mite', textureKey: 'monster_echo_mite', hp: 15, attack: 3, speed: 60, xp: 5, isProcedural: false }
     ];
+
+    if (monsterRenderer && Object.keys(monsterRenderer.monsterBlueprints).length > 0) {
+        const uniqueBlueprints = Array.from(new Set(Object.values(monsterRenderer.monsterBlueprints)));
+
+        uniqueBlueprints.forEach(bp => {
+            monsterTypes.push({
+                name: bp.name,
+                id: bp.id,
+                hp: bp.stats.hp,
+                attack: bp.stats.attack,
+                speed: bp.stats.speed,
+                xp: bp.stats.xp,
+                textureKey: bp.id,
+                isProcedural: true
+            });
+        });
+    }
 
     // Spawn monsters spread across entire map, avoiding player spawn area
     const playerSpawnX = 400;
@@ -12909,100 +13510,107 @@ function spawnInitialMonsters(mapWidth, mapHeight) {
 
 /**
  * Spawn a single monster at the given position
+ * Supports optional overrides for scaled stats (dungeons)
  */
-function spawnMonster(x, y, type) {
+function spawnMonster(x, y, type, hpOverride, attackOverride, xpOverride, isBoss = false) {
     const scene = game.scene.scenes[0];
+    let monster;
 
-    // Use directional sprite if available, otherwise fall back to old texture
-    const monsterType = type.name.toLowerCase();
-    const initialTexture = `monster_${monsterType}_south`; // Start facing south
-    const fallbackTexture = type.textureKey; // Old procedural texture
+    // Check if we should use Method 2 (procedural blueprints)
+    const canUseMethod2 = monsterRenderer && (monsterRenderer.monsterBlueprints[type.name] || monsterRenderer.monsterBlueprints[type.name.toLowerCase()] || (type.id && monsterRenderer.monsterBlueprints[type.id]));
 
-    const textureToUse = scene.textures.exists(initialTexture) ? initialTexture : fallbackTexture;
-    const monster = scene.physics.add.sprite(x, y, textureToUse);
-    monster.setDepth(5); // Monsters above tiles but below player
+    if (type.isProcedural && canUseMethod2) {
+        const blueprintId = type.id && monsterRenderer.monsterBlueprints[type.id] ? type.id :
+            (monsterRenderer.monsterBlueprints[type.name] ? type.name : type.name.toLowerCase());
 
-    // Add monster stats
-    monster.monsterType = type.name;
-    monster.hp = type.hp;
-    monster.maxHp = type.hp;
-    monster.attack = type.attack;
-    monster.speed = type.speed;
-    monster.xpReward = type.xp;
-    monster.lastAttackTime = 0;
-    monster.attackCooldown = 1000; // 1 second
-    monster.attackRange = 50; // pixels
+        console.log(`👾 Spawning Method 2 monster: ${type.name} (${blueprintId})`);
+        monster = monsterRenderer.createMonster(x, y, blueprintId);
+        monster.setData('isMethod2', true);
+        monster.setData('blueprintId', blueprintId);
 
-    // Add simple animation (gentle pulsing for some types)
-    if (type.name === 'Slime' || type.name === 'Ghost') {
-        scene.tweens.add({
-            targets: monster,
-            scaleX: 1.1,
-            scaleY: 1.1,
-            duration: 1000,
-            yoyo: true,
-            repeat: -1,
-            ease: 'Sine.easeInOut'
-        });
+        if (monster) {
+            // Add name and stats for common game logic
+            monster.name = type.name;
+            monster.monsterType = type.name.toLowerCase();
+            monster.blueprintId = blueprintId; // Crucial for animation skip check
+            monster.setDepth(5); // Ensure they appear above tiles
+            monster.stats = { ...type };
+
+            // Common properties initialized below the if/else
+        }
+    } else {
+        // FALLBACK TO METHOD 1 (Spritesheets)
+        // Use directional sprite if available, otherwise fall back to old texture
+        const monsterType = type.name.toLowerCase();
+        const initialTexture = `monster_${monsterType}_south`; // Start facing south
+        const fallbackTexture = type.textureKey; // Old procedural texture
+
+        const textureToUse = scene.textures.exists(initialTexture) ? initialTexture : fallbackTexture;
+        monster = scene.physics.add.sprite(x, y, textureToUse);
+        monster.setDepth(5); // Monsters above tiles but below player
     }
 
-    // Create monster HP bar above sprite
-    const monsterHpBarWidth = 30;
-    const monsterHpBarHeight = 4;
-    monster.hpBarBg = scene.add.rectangle(0, 0, monsterHpBarWidth, monsterHpBarHeight, 0x000000, 0.8)
-        .setDepth(6).setOrigin(0.5, 0.5).setScrollFactor(1);
-    monster.hpBar = scene.add.rectangle(0, 0, monsterHpBarWidth - 2, monsterHpBarHeight - 2, 0xff0000)
-        .setDepth(7).setOrigin(0, 0.5).setScrollFactor(1);
+    if (monster) {
+        // Shared properties for ALL monsters (Method 1 & 2)
+        monster.name = type.name;
+        monster.monsterType = type.name.toLowerCase();
+        monster.hp = hpOverride !== undefined ? hpOverride : type.hp;
+        monster.maxHp = monster.hp;
+        monster.attack = attackOverride !== undefined ? attackOverride : type.attack;
+        monster.speed = type.speed;
+        monster.xpReward = xpOverride !== undefined ? xpOverride : (type.xp || 10);
+        monster.lastAttackTime = 0;
+        monster.attackCooldown = isBoss ? 1500 : 1000;
+        monster.attackRange = isBoss ? 70 : 50;
+        monster.isBoss = isBoss;
+        monster.isDead = false;
 
-    monsters.push(monster);
-    return monster;
+        if (isBoss) {
+            monster.setScale(1.5);
+            if (monster.setTint) {
+                monster.setTint(0xff0000); // Red tint for boss (if it's a sprite)
+            }
+        }
+
+        // Add physics properties (ensure body exists)
+        if (monster.body) {
+            monster.body.setCollideWorldBounds(true);
+        }
+
+        // Add simple animation (gentle pulsing for some types)
+        if (type.name === 'Slime' || type.name === 'Ghost' || isBoss) {
+            scene.tweens.add({
+                targets: monster,
+                scaleX: isBoss ? 1.6 : 1.1,
+                scaleY: isBoss ? 1.6 : 1.1,
+                duration: 1000,
+                yoyo: true,
+                repeat: -1,
+                ease: 'Sine.easeInOut'
+            });
+        }
+
+        // Create monster HP bar above sprite
+        const monsterHpBarWidth = 30;
+        const monsterHpBarHeight = 4;
+        monster.hpBarBg = scene.add.rectangle(0, 0, monsterHpBarWidth, monsterHpBarHeight, 0x000000, 0.8)
+            .setDepth(6).setOrigin(0.5, 0.5).setScrollFactor(1);
+        monster.hpBar = scene.add.rectangle(0, 0, monsterHpBarWidth - 2, monsterHpBarHeight - 2, 0xff0000)
+            .setDepth(7).setOrigin(0, 0.5).setScrollFactor(1);
+
+        monster.isBoss = false;
+        monster.isDead = false;
+
+        monsters.push(monster);
+        return monster;
+    }
 }
 
 /**
  * Spawn a scaled monster (for dungeons with level scaling)
  */
 function spawnMonsterScaled(x, y, type, scaledHp, scaledAttack, scaledXp) {
-    const scene = game.scene.scenes[0];
-
-    // Use directional sprite if available, otherwise fall back to old texture
-    const monsterType = type.name.toLowerCase();
-    const initialTexture = `monster_${monsterType}_south`; // Start facing south
-    const fallbackTexture = type.textureKey; // Old procedural texture
-
-    const textureToUse = scene.textures.exists(initialTexture) ? initialTexture : fallbackTexture;
-    const monster = scene.physics.add.sprite(x, y, textureToUse);
-    monster.setDepth(5);
-
-    monster.monsterType = type.name;
-    monster.hp = scaledHp;
-    monster.maxHp = scaledHp;
-    monster.attack = scaledAttack;
-    monster.speed = type.speed;
-    monster.xpReward = scaledXp;
-    monster.lastAttackTime = 0;
-    monster.attackCooldown = 1000;
-    monster.attackRange = 50;
-    monster.isBoss = false;
-    monster.isDead = false;
-
-    // Initialize animation properties
-    monster.facingDirection = 'south';
-    monster.isMoving = false;
-    monster.animationState = 'idle';
-
-    // Set initial animation state
-    updateMonsterAnimation(monster, 0);
-
-    // Create HP bar
-    const monsterHpBarWidth = 30;
-    const monsterHpBarHeight = 4;
-    monster.hpBarBg = scene.add.rectangle(0, 0, monsterHpBarWidth, monsterHpBarHeight, 0x000000, 0.8)
-        .setDepth(6).setOrigin(0.5, 0.5).setScrollFactor(1);
-    monster.hpBar = scene.add.rectangle(0, 0, monsterHpBarWidth - 2, monsterHpBarHeight - 2, 0xff0000)
-        .setDepth(7).setOrigin(0, 0.5).setScrollFactor(1);
-
-    monsters.push(monster);
-    return monster;
+    return spawnMonster(x, y, type, scaledHp, scaledAttack, scaledXp);
 }
 
 /**
@@ -13824,7 +14432,7 @@ function createMonsterAnimations() {
     const frameRate = 8; // Animation speed
 
     // Monster types that will have animations
-    const monsterTypes = ['goblin', 'orc', 'skeleton', 'slime', 'wolf', 'dragon', 'ghost', 'spider'];
+    const monsterTypes = ['goblin', 'orc', 'skeleton', 'slime', 'wolf', 'dragon', 'ghost', 'spider', 'echo_mite'];
 
     monsterTypes.forEach(type => {
         // For now, we're using static directional images
@@ -13902,6 +14510,9 @@ function createMonsterAnimations() {
 function updateMonsterAnimation(monster, delta) {
     const scene = game.scene.scenes[0];
     if (!monster || !monster.active || monster.isDead) return;
+
+    // Method 2 monsters (procedural) handle their own animations in their update method
+    if (monster.blueprintId || monster.getData('isMethod2')) return;
 
     // Initialize direction tracking if not present
     if (!monster.facingDirection) {
@@ -13994,6 +14605,10 @@ function playMonsterAttackAnimation(monster) {
     const scene = game.scene.scenes[0];
     if (!monster || !monster.active) return;
 
+    // Method 2 monsters (procedural) handle their own animations if needed, 
+    // or use simpler visual cues for now.
+    if (monster.blueprintId || monster.getData('isMethod2')) return;
+
     const monsterType = (monster.monsterType || 'goblin').toLowerCase();
 
     // Get the direction the monster is facing (default to south if not set)
@@ -14047,6 +14662,9 @@ function playMonsterAttackAnimation(monster) {
 function playMonsterDeathAnimation(monster) {
     const scene = game.scene.scenes[0];
     if (!monster || !monster.active) return;
+
+    // Method 2 monsters (procedural) handle death via existing tween/fade logic
+    if (monster.blueprintId || monster.getData('isMethod2')) return;
 
     const monsterType = (monster.monsterType || 'goblin').toLowerCase();
     const deathAnimKey = `${monsterType}_death`;

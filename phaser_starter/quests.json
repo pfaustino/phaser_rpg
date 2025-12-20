@@ -27,6 +27,10 @@
     "ui_tab": {
       "label": "Interface",
       "desc": "Interact with UI tabs."
+    },
+    "story": {
+      "label": "Main Quest",
+      "desc": "Advance the world's story."
     }
   },
   "starterQuests": [
@@ -41,7 +45,8 @@
         "gold": 25
       },
       "chainId": "beginner_chain",
-      "chainStep": 1
+      "chainStep": 1,
+      "giver": "Guard Thorne"
     },
     {
       "id": "quest_002",
@@ -52,18 +57,8 @@
       "rewards": {
         "xp": 30,
         "gold": 15
-      }
-    },
-    {
-      "id": "quest_ui_001",
-      "title": "Exploring Options",
-      "description": "Click the 'Available' tab in your Quest Log to see more quests.",
-      "type": "ui_tab",
-      "target": 1,
-      "rewards": {
-        "xp": 20,
-        "gold": 10
-      }
+      },
+      "giver": "Merchant Lysa"
     }
   ],
   "availableQuests": [
@@ -76,7 +71,8 @@
       "rewards": {
         "xp": 40,
         "gold": 20
-      }
+      },
+      "giver": "Merchant Lysa"
     },
     {
       "id": "quest_005",
@@ -102,13 +98,13 @@
     },
     {
       "id": "quest_007",
-      "title": "Monster Slayer",
-      "description": "Defeat 15 monsters to show your combat prowess.",
+      "title": "Monster Hunter III",
+      "description": "Defeat 20 monsters to earn the title of Hunter.",
       "type": "kill",
-      "target": 15,
+      "target": 20,
       "rewards": {
-        "xp": 120,
-        "gold": 60
+        "xp": 150,
+        "gold": 80
       }
     },
     {
@@ -300,5 +296,287 @@
         "chainStep": 4
       }
     ]
-  }
+  },
+  "mainQuests": [
+    {
+      "id": "main_01_001",
+      "title": "Tremors in the Earth",
+      "description": "The ground shakes beneath our feet. Speak with the Town Elder to understand these strange quakes.",
+      "type": "story",
+      "target": 1,
+      "rewards": {
+        "xp": 50,
+        "gold": 20
+      },
+      "chapter": 1,
+      "step": 1,
+      "giver": "Elder Malik"
+    },
+    {
+      "id": "main_01_002",
+      "title": "Echoes from Below",
+      "description": "Corruption is seeping from the Watchtower basement. Clear out the Echo Mites gathered there.",
+      "type": "kill",
+      "target": 3,
+      "rewards": {
+        "xp": 100,
+        "gold": 50
+      },
+      "chapter": 1,
+      "step": 2,
+      "giver": "Elder Malik"
+    },
+    {
+      "id": "main_01_003",
+      "title": "Crystalline Seepage",
+      "description": "Gather shards of the crystalline corruption for the town's blacksmith to study.",
+      "type": "collect",
+      "target": 5,
+      "rewards": {
+        "xp": 80,
+        "gold": 40
+      },
+      "chapter": 1,
+      "step": 3,
+      "giver": "Elder Malik"
+    },
+    {
+      "id": "main_01_004",
+      "title": "The Elder's Request",
+      "description": "Deliver the gathered shards to the Blacksmith so he can determine their frequency.",
+      "type": "story",
+      "target": 1,
+      "rewards": {
+        "xp": 50,
+        "gold": 25
+      },
+      "chapter": 1,
+      "step": 4,
+      "giver": "Elder Malik"
+    },
+    {
+      "id": "main_01_005",
+      "title": "Resonant Frequencies",
+      "description": "The blacksmith is sounding the shards. Stay nearby and defend the shop from drawn Echo creatures.",
+      "type": "survive",
+      "target": 60,
+      "rewards": {
+        "xp": 120,
+        "gold": 60
+      },
+      "chapter": 1,
+      "step": 5,
+      "giver": "Elder Malik"
+    },
+    {
+      "id": "main_01_006",
+      "title": "A Warrior's Path",
+      "description": "Your actions have drawn attention. Prove your combat readiness to the Captain of the Guard.",
+      "type": "story",
+      "target": 1,
+      "rewards": {
+        "xp": 100,
+        "gold": 40
+      },
+      "chapter": 1,
+      "step": 6,
+      "giver": "Captain Kael"
+    },
+    {
+      "id": "main_01_007",
+      "title": "Mana Leak",
+      "description": "The instability is disrupting the town's wards. Help the local Mage stabilize 3 mana fluxes.",
+      "type": "kill",
+      "target": 3,
+      "rewards": {
+        "xp": 150,
+        "gold": 60
+      },
+      "chapter": 1,
+      "step": 7,
+      "giver": "Mage Elara"
+    },
+    {
+      "id": "main_01_008",
+      "title": "The Subterranean Breach",
+      "description": "The tremors are originating from deep within the old Watchtower. Find the entrance to the first subterranean floor.",
+      "type": "story",
+      "target": 1,
+      "rewards": {
+        "xp": 100,
+        "gold": 50
+      },
+      "chapter": 1,
+      "step": 8,
+      "giver": "Elder Malik"
+    },
+    {
+      "id": "main_01_009",
+      "title": "Infested Veins",
+      "description": "The mines are crawling with rats corrupted by the Echo. Clear out 15 of them to secure the area.",
+      "type": "kill",
+      "target": 15,
+      "rewards": {
+        "xp": 200,
+        "gold": 80
+      },
+      "chapter": 1,
+      "step": 9,
+      "giver": "Elder Malik"
+    },
+    {
+      "id": "main_01_010",
+      "title": "Forgotten Miners",
+      "description": "Search the deep tunnels for any miners who might have been trapped during the first tremor.",
+      "type": "explore",
+      "target": 1000,
+      "rewards": {
+        "xp": 250,
+        "gold": 100
+      },
+      "chapter": 1,
+      "step": 10,
+      "giver": "Elder Malik"
+    },
+    {
+      "id": "main_01_011",
+      "title": "Solidified Corruption",
+      "description": "The corruption is forming hard crystalline structures. Mine 10 Echo Crystals from the lower depths.",
+      "type": "collect",
+      "target": 10,
+      "rewards": {
+        "xp": 300,
+        "gold": 150
+      },
+      "chapter": 1,
+      "step": 11,
+      "giver": "Blacksmith Brond"
+    },
+    {
+      "id": "main_01_012",
+      "title": "The First Fragment",
+      "description": "A massive creature has nested near the breach. Defeat the Echo Beholder to reach the first fragment of the Aegis.",
+      "type": "kill",
+      "target": 1,
+      "rewards": {
+        "xp": 500,
+        "gold": 250
+      },
+      "chapter": 1,
+      "step": 12,
+      "giver": "Elder Malik"
+    },
+    {
+      "id": "main_01_013",
+      "title": "Claiming the Shard",
+      "description": "The Beholder is slain. Recover the Shard of Resonance from its nest.",
+      "type": "story",
+      "target": 1,
+      "rewards": {
+        "xp": 100,
+        "gold": 50
+      },
+      "chapter": 1,
+      "step": 13,
+      "giver": "Elder Malik"
+    },
+    {
+      "id": "main_01_014",
+      "title": "Elder's Wisdom",
+      "description": "Return to the surface and present the Shard of Resonance to Elder Malik.",
+      "type": "story",
+      "target": 1,
+      "rewards": {
+        "xp": 150,
+        "gold": 75
+      },
+      "chapter": 1,
+      "step": 14,
+      "giver": "Elder Malik"
+    },
+    {
+      "id": "main_01_015",
+      "title": "Strengthening the Aegis",
+      "description": "Take the shard to the Ancient Obelisk at the town center and restore its power.",
+      "type": "story",
+      "target": 1,
+      "rewards": {
+        "xp": 200,
+        "gold": 100
+      },
+      "chapter": 1,
+      "step": 15,
+      "giver": "Elder Malik"
+    },
+    {
+      "id": "main_01_016",
+      "title": "Unexpected Feedback",
+      "description": "The restoration triggered a massive release of energy! Survive the intense Obelisk backlash.",
+      "type": "survive",
+      "target": 120,
+      "rewards": {
+        "xp": 300,
+        "gold": 150
+      },
+      "chapter": 1,
+      "step": 16,
+      "giver": "Elder Malik"
+    },
+    {
+      "id": "main_01_017",
+      "title": "The Echo's Warning",
+      "description": "Constructs have emerged from the light. Defeat 20 Backlash constructs to stabilize the ritual.",
+      "type": "kill",
+      "target": 20,
+      "rewards": {
+        "xp": 400,
+        "gold": 200
+      },
+      "chapter": 1,
+      "step": 17,
+      "giver": "Elder Malik"
+    },
+    {
+      "id": "main_01_018",
+      "title": "Deep Scan",
+      "description": "The Aegis needs data on the world's status. Travel across the wilderness to calibrate the sensors.",
+      "type": "explore",
+      "target": 2000,
+      "rewards": {
+        "xp": 500,
+        "gold": 250
+      },
+      "chapter": 1,
+      "step": 18,
+      "giver": "Elder Malik"
+    },
+    {
+      "id": "main_01_019",
+      "title": "Resonance Established",
+      "description": "Your connection with the Aegis is growing. Reach Level 5 to finalize your attunement.",
+      "type": "level",
+      "target": 5,
+      "rewards": {
+        "xp": 600,
+        "gold": 300
+      },
+      "chapter": 1,
+      "step": 19,
+      "giver": "Elder Malik"
+    },
+    {
+      "id": "main_01_020",
+      "title": "Chapter Final",
+      "description": "Chapter 1 is complete. Prepare yourself for the journey to the next corrupted region.",
+      "type": "story",
+      "target": 1,
+      "rewards": {
+        "xp": 1000,
+        "gold": 500
+      },
+      "chapter": 1,
+      "step": 20,
+      "giver": "Elder Malik"
+    }
+  ]
 }

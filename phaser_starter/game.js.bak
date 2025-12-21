@@ -180,6 +180,7 @@ let pendingNewQuest = null; // Store new quest to show after completed modal clo
 let pendingCompletedQuest = null; // Store completed quest to show after combat ends
 let questManager = null; // Manager for data-driven quests
 let monsterRenderer = null; // Renderer for data-driven monsters
+let npcManager = null; // Manager for data-driven NPCs
 
 // Dialog UI
 let dialogVisible = false;
@@ -241,6 +242,9 @@ function preload() {
 
     // Load Method 2 monster data
     this.load.json('monsterData', 'monsters.json');
+
+    // Load NPC data
+    this.load.json('npcData', 'npc.json');
 
 
     // Add load event listeners for debugging - MUST be before load calls
@@ -3642,6 +3646,10 @@ function create() {
     // Initialize Quest Manager
     questManager = new QuestManager(this);
     questManager.init();
+
+    // Initialize NPC Manager
+    npcManager = new NPCManager(this);
+    npcManager.init();
 
     // Parse dungeon tileset metadata and create texture frames
     try {
@@ -9044,31 +9052,31 @@ function initializeQuests() {
     );
 
     // Initial main quest setup (if none active/completed)
-    const allMainQuests = questManager.getMainQuests();
-    if (allMainQuests.length > 0) {
-        const hasMainStarted = (playerStats.quests.main.length > 0) ||
-            (playerStats.quests.completed && playerStats.quests.completed.some(id => id.startsWith('main_')));
+    // ONLY initialize if main quest list is empty AND no main quests are completed
+    const hasMainStarted = (playerStats.quests.main && playerStats.quests.main.length > 0) ||
+        (playerStats.quests.completed && playerStats.quests.completed.some(id => id.startsWith('main_')));
 
-        if (!hasMainStarted) {
+    if (!hasMainStarted && questManager) {
+        const allMainQuests = questManager.getMainQuests();
+        if (allMainQuests.length > 0) {
             // Keep the very first main quest active by default for player guidance
             const firstMain = allMainQuests[0];
             firstMain.startValue = questManager.getStatValue(firstMain.type, playerStats);
-            playerStats.quests.main.push(firstMain);
+            playerStats.quests.main = [firstMain];
             console.log(`✅ Started primary main quest: ${firstMain.title}`);
         }
     }
 
-    console.log(`✅ Quests initialized: 0 initial side, ${playerStats.quests.available.length} available, ${playerStats.quests.main.length} main`);
+    console.log(`✅ Quests initialized: ${playerStats.quests.available.length} available, ${playerStats.quests.main.length} active main`);
 }
-
 /**
  * Check quest progress and complete quests
  */
 function checkQuestProgress() {
     // Check main quests
+    // Use for loop for safe removal during iteration
     for (let i = playerStats.quests.main.length - 1; i >= 0; i--) {
         const quest = playerStats.quests.main[i];
-        const index = i;
         // Update progress using QuestManager
         if (questManager) {
             quest.progress = questManager.calculateProgress(quest, playerStats);
@@ -9081,14 +9089,13 @@ function checkQuestProgress() {
 
         // Check if quest is complete
         if (quest.progress >= quest.target && !quest.completed) {
-            completeQuest(quest, index);
+            completeQuest(quest, i);
         }
     }
 
     // Check side quests
     for (let i = playerStats.quests.active.length - 1; i >= 0; i--) {
         const quest = playerStats.quests.active[i];
-        const index = i;
         // Update progress using QuestManager
         if (questManager) {
             quest.progress = questManager.calculateProgress(quest, playerStats);
@@ -9101,7 +9108,7 @@ function checkQuestProgress() {
 
         // Check if quest is complete
         if (quest.progress >= quest.target && !quest.completed) {
-            completeQuest(quest, index);
+            completeQuest(quest, i);
         }
     }
 }
@@ -9153,12 +9160,12 @@ function acceptMainQuest(questId) {
             const isCompleted = playerStats.quests.completed.includes(questId);
 
             if (!isActive && !isCompleted) {
-                console.log(`✅ acceptMainQuest: Adding ${questId} to main list`);
-                console.log(`   Current main quests before:`, playerStats.quests.main.map(q => q.id));
+                console.log(`📝 acceptMainQuest: Attempting to accept ${questId}`);
+                console.log(`   State BEFORE:`, playerStats.quests.main.map(q => q.id));
                 quest.startValue = questManager.getStatValue(quest.type, playerStats);
                 playerStats.quests.main.push(quest);
-                console.log(`   Current main quests after:`, playerStats.quests.main.map(q => q.id));
-                console.log(`Main quest accepted: ${quest.title}`);
+                console.log(`✅ Main quest accepted: ${quest.title} (${questId})`);
+                console.log(`   State AFTER:`, playerStats.quests.main.map(q => q.id));
                 showNewQuestModal(quest);
 
                 // Refresh log if visible
@@ -9205,7 +9212,8 @@ function acceptSideQuest(questId) {
 /**
  * Complete a quest and give rewards
  */
-function completeQuest(quest, index) {
+function completeQuest(quest, index, isMain = false) {
+    console.log(`🏁 completeQuest: ${quest.id} (${isMain ? 'Main' : 'Side'})`);
     quest.completed = true;
 
     // Give rewards
@@ -9243,8 +9251,7 @@ function completeQuest(quest, index) {
     playerStats.quests.completed.push(quest.id);
 
     // Remove from appropriate list
-    const isMain = quest.id.startsWith('main_');
-    if (isMain) {
+    if (isMain || quest.id.startsWith('main_')) {
         playerStats.quests.main.splice(index, 1);
 
         // We no longer automatically push the next main quest.
@@ -9378,7 +9385,7 @@ function createQuestLogUI() {
     const totalTabWidth = (tabWidth * 4) + (tabSpacing * 3);
     const tabStartX = centerX - totalTabWidth / 2 + tabWidth / 2;
 
-    // Reset default tab to 'main'
+    // Reset default tab to 'main' (Story label)
     questLogTab = 'main';
 
     const mainTabBtn = scene.add.rectangle(tabStartX, tabY, tabWidth, 35, 0x333333, 0.9)
@@ -9418,32 +9425,33 @@ function createQuestLogUI() {
     const switchToMain = () => {
         questLogTab = 'main';
         selectedQuestIndex = 0;
+        if (scrollbar) scrollbar.setScroll(0);
         updateTabButtons();
         updateQuestLogItems();
     };
 
     const switchToCurrent = () => {
         questLogTab = 'current';
-        selectedQuestIndex = 0; // Reset selection
+        selectedQuestIndex = 0;
+        if (scrollbar) scrollbar.setScroll(0);
         updateTabButtons();
         updateQuestLogItems();
     };
 
     const switchToAvailable = () => {
         questLogTab = 'available';
-        selectedQuestIndex = 0; // Reset selection
-
-        // Trigger for UI tutorial quest
+        selectedQuestIndex = 0;
+        if (scrollbar) scrollbar.setScroll(0);
         playerStats.questStats.availableTabClicked = (playerStats.questStats.availableTabClicked || 0) + 1;
-        checkQuestProgress(); // Check if "Exploring Options" is complete
-
+        checkQuestProgress();
         updateTabButtons();
         updateQuestLogItems();
     };
 
     const switchToCompleted = () => {
         questLogTab = 'completed';
-        selectedQuestIndex = 0; // Reset selection
+        selectedQuestIndex = 0;
+        if (scrollbar) scrollbar.setScroll(0);
         updateTabButtons();
         updateQuestLogItems();
     };
@@ -9566,9 +9574,6 @@ function createQuestLogUI() {
 /**
  * Update quest log items display
  */
-/**
- * Update quest log items display
- */
 function updateQuestLogItems() {
     const scene = game.scene.scenes[0];
     if (!questPanel) return;
@@ -9606,9 +9611,8 @@ function updateQuestLogItems() {
     if (questLogTab === 'main') {
         quests = playerStats.quests.main || [];
     } else if (questLogTab === 'current') {
-        // Show BOTH main and side quests in the Active (Current) tab
+        // Active tab shows BOTH main and side quests
         quests = [...(playerStats.quests.main || []), ...(playerStats.quests.active || [])];
-        console.log(`📋 Rendering Active tab: found ${quests.length} quests (${(playerStats.quests.main || []).length} story, ${(playerStats.quests.active || []).length} side)`);
     } else if (questLogTab === 'available') {
         // Get available quests (rejected/cancelled)
         quests = playerStats.quests.available || [];
@@ -9617,19 +9621,21 @@ function updateQuestLogItems() {
         quests = playerStats.quests.completedQuests || [];
     }
 
+    console.log(`📋 updateQuestLogItems: Rendering ${quests.length} quests for tab ${questLogTab}`);
+    quests.forEach((q, i) => console.log(`   [${i}] ${q.id}: ${q.title}`));
+
     // Ensure selectedQuestIndex is valid
     if (selectedQuestIndex >= quests.length) {
         selectedQuestIndex = Math.max(0, quests.length - 1);
     }
-    if (quests.length === 0) {
-        selectedQuestIndex = -1;
-    }
-
     // Quest list on left (RENDERED INTO CONTAINER FOR SCROLLING)
     if (quests.length === 0) {
+        selectedQuestIndex = -1;
         let noQuestsMessage = 'No active side quests';
         if (questLogTab === 'main') {
             noQuestsMessage = 'No active story quests';
+        } else if (questLogTab === 'current') {
+            noQuestsMessage = 'No active quests';
         } else if (questLogTab === 'available') {
             noQuestsMessage = 'No available quests';
         } else if (questLogTab === 'completed') {
@@ -9689,8 +9695,8 @@ function updateQuestLogItems() {
             questPanel.container.add([itemBg, titleText]);
 
             // Progress indicator for current and main quests
-            const isTrackedTab = (questLogTab === 'current' || questLogTab === 'main');
-            if (isTrackedTab && quest.progress !== undefined && quest.target !== undefined) {
+            const showProgress = (questLogTab === 'current' || questLogTab === 'main') && quest.progress !== undefined && quest.target !== undefined;
+            if (showProgress) {
                 const progressPercent = Math.min(quest.progress / quest.target, 1);
                 const progressText = scene.add.text(listWidth - 15, itemY, `${Math.round(progressPercent * 100)}%`, {
                     fontSize: '12px',
@@ -9740,8 +9746,8 @@ function updateQuestLogItems() {
         detailY += 50;
 
         // Progress section (for current and main quests)
-        const isProgressTab = (questLogTab === 'current' || questLogTab === 'main');
-        if (isProgressTab && quest.progress !== undefined && quest.target !== undefined) {
+        const hasProgress = (questLogTab === 'current' || questLogTab === 'main') && quest.progress !== undefined && quest.target !== undefined;
+        if (hasProgress) {
             const progressLabel = scene.add.text(detailStartX, detailY, 'Progress:', {
                 fontSize: '18px',
                 fill: '#ffffff',
@@ -10169,20 +10175,28 @@ function showNewQuestModal(quest) {
 
     // Cancel handler
     const cancelQuest = () => {
-        // Remove quest from active list and move to available
-        const questIndex = playerStats.quests.active.findIndex(q => q.id === questRef.id);
+        // Remove quest from whichever list it's in (active side or main)
+        let questIndex = playerStats.quests.active.findIndex(q => q.id === questRef.id);
+        let list = playerStats.quests.active;
+
+        if (questIndex === -1 && playerStats.quests.main) {
+            questIndex = playerStats.quests.main.findIndex(q => q.id === questRef.id);
+            list = playerStats.quests.main;
+        }
+
         if (questIndex !== -1) {
-            const quest = playerStats.quests.active[questIndex];
-            playerStats.quests.active.splice(questIndex, 1);
+            const questToRemove = list[questIndex];
+            list.splice(questIndex, 1);
 
             // Initialize available array if needed
             if (!playerStats.quests.available) {
                 playerStats.quests.available = [];
             }
 
-            // Only add to available if not already there
-            if (!playerStats.quests.available.find(q => q.id === quest.id)) {
-                playerStats.quests.available.push(quest);
+            // Only add to available if not already there and if it's NOT a story quest 
+            // (Store story quests in main sequence, usually not manually rejectable)
+            if (!playerStats.quests.available.find(q => q.id === questToRemove.id)) {
+                playerStats.quests.available.push(questToRemove);
             }
         }
         hideNewQuestModal();
@@ -10262,6 +10276,11 @@ function initializeNPCs() {
     });
     npcs = [];
 
+    if (!npcManager) {
+        console.warn('⚠️ NPCManager not initialized, skipping NPC creation');
+        return;
+    }
+
     const tileSize = scene.tileSize || 32;
     const mapWidth = scene.mapWidth || 40;
     const mapHeight = scene.mapHeight || 40;
@@ -10301,135 +10320,64 @@ function initializeNPCs() {
                 return { x: testX, y: testY };
             }
         }
-        // Fallback: return original position (will be adjusted manually if needed)
+        // Fallback: return original position
         return { x: targetX, y: targetY };
     }
 
-    // Position NPCs in town near buildings, ensuring they're not inside buildings
-    const npcData = [
-        {
-            id: 'npc_001',
-            name: 'Elder Malik',
-            title: 'Village Elder',
-            targetX: centerX * tileSize,  // Center square
-            targetY: (centerY - 3) * tileSize, // Above center, clear of Inn
-            dialogId: 'elder_intro',
-            questGiver: true
-        },
-        {
-            id: 'npc_002',
-            name: 'Merchant Lysa',
-            title: 'Trader',
-            targetX: (centerX + 6) * tileSize,  // Near shop (to the right)
-            targetY: (centerY + 6) * tileSize, // Below shop
-            dialogId: 'merchant_shop',
-            merchant: true,
-            questGiver: true
-        },
-        {
-            id: 'npc_003',
-            name: 'Guard Thorne',
-            title: 'Guard Officer',
-            targetX: centerX * tileSize,
-            targetY: (mapHeight - 6) * tileSize,
-            dialogId: 'guard_info',
-            questGiver: true
-        },
-        {
-            id: 'npc_004',
-            name: 'Captain Kael',
-            title: 'Captain of the Guard',
-            targetX: (centerX - 5) * tileSize,
-            targetY: (mapHeight - 9) * tileSize,
-            dialogId: 'generic_npc',
-            questGiver: true
-        },
-        {
-            id: 'npc_005',
-            name: 'Mage Elara',
-            title: 'Village Mage',
-            targetX: (centerX + 5) * tileSize,
-            targetY: (centerY - 5) * tileSize,
-            dialogId: 'generic_npc',
-            questGiver: true
-        },
-        {
-            id: 'npc_006',
-            name: 'Blacksmith Brond',
-            title: 'Master Smith',
-            targetX: 6 * tileSize,
-            targetY: 20 * tileSize,
-            dialogId: 'generic_npc',
-            questGiver: true
-        }
-    ];
+    // Spawn NPCs from data
+    npcManager.getAllNPCs().forEach(data => {
+        let targetX, targetY;
 
-    // Find valid positions for each NPC
-    const positionedNPCs = npcData.map(data => {
-        const pos = findValidPosition(data.targetX, data.targetY);
-        return {
-            id: data.id,
-            name: data.name,
-            title: data.title,
-            x: pos.x,
-            y: pos.y,
-            dialogId: data.dialogId,
-            questGiver: data.questGiver,
-            merchant: data.merchant
-        };
-    });
-
-    positionedNPCs.forEach(data => {
-        // Determine which spritesheet to use based on NPC name
-        let spriteKey = 'npc'; // Default fallback
-        if (data.name === 'Elder Malik') {
-            spriteKey = 'npc_elder_malik';
-        } else if (data.name === 'Merchant Lysa') {
-            spriteKey = 'npc_lysa';
-        } else if (data.name === 'Guard Thorne') {
-            spriteKey = 'npc_captain_thorne';
-        } else if (data.name === 'Guard Kael') {
-            spriteKey = 'npc_captain_kael';
-        } else if (data.name === 'Captain Kael') {
-            spriteKey = 'npc_captain_kael';
-        } else if (data.name === 'Mage Elara') {
-            spriteKey = 'npc_mage_elara';
-        } else if (data.name === 'Blacksmith Brond') {
-            spriteKey = 'npc_blacksmith_brond';
+        // Calculate base position based on spawnType
+        if (data.spawnType === 'center') {
+            targetX = (centerX + (data.offsetX || 0)) * tileSize;
+            targetY = (centerY + (data.offsetY || 0)) * tileSize;
+        } else if (data.spawnType === 'bottom') {
+            targetX = (centerX + (data.offsetX || 0)) * tileSize;
+            targetY = (mapHeight + (data.offsetY || 0)) * tileSize;
+        } else {
+            // Absolute positioning
+            targetX = (data.targetX || 0) * tileSize;
+            targetY = (data.targetY || 0) * tileSize;
         }
+
+        // Find a valid spot (not in building)
+        const pos = findValidPosition(targetX, targetY);
+
+        // Determine which spritesheet to use
+        let spriteKey = data.spriteKey || 'npc';
 
         // Check if spritesheet exists, fallback to default 'npc' if not
         if (!scene.textures.exists(spriteKey)) {
-            console.warn(`⚠️ Spritesheet ${spriteKey} not found, using default NPC sprite`);
+            console.warn(`⚠️ Spritesheet ${spriteKey} not found for NPC ${data.name}, using default NPC sprite`);
             spriteKey = 'npc';
         }
 
-        const npc = scene.physics.add.sprite(data.x, data.y, spriteKey);
-        npc.setDepth(30); // Same depth as monsters
+        const npc = scene.physics.add.sprite(pos.x, pos.y, spriteKey);
+        npc.setDepth(30);
         npc.setCollideWorldBounds(true);
 
         // If using a spritesheet, set to first frame (idle frame)
         if (spriteKey !== 'npc' && scene.textures.exists(spriteKey)) {
-            npc.setFrame(0); // Use first frame as idle
-            // NPCs at full size (64px)
+            npc.setFrame(0);
         }
 
-        // Store NPC data
+        // Store NPC properties
         npc.npcId = data.id;
         npc.name = data.name;
         npc.title = data.title;
         npc.dialogId = data.dialogId;
         npc.questGiver = data.questGiver || false;
         npc.merchant = data.merchant || false;
-        npc.interactionRadius = 50; // pixels
+        npc.interactionRadius = 50;
         npc.interactionIndicator = null;
         npc.showIndicator = false;
-        npc.spriteKey = spriteKey; // Store sprite key for reference
+        npc.spriteKey = spriteKey;
 
         npcs.push(npc);
     });
 
-    console.log('✅ NPCs initialized:', npcs.length, 'NPCs');
+    console.log(`✅ NPCs initialized: ${npcs.length} NPCs from data`);
 }
 
 /**
@@ -10707,8 +10655,12 @@ function updateNPCIndicators() {
 
         if (npc.questGiver) {
             const npcName = npc.name || npc.title;
-            const hasStoryActive = playerStats.quests.main.some(q => q.type === 'story' && q.giver === npcName && !playerStats.quests.completed.includes(q.id));
+            // Check for ANY active main quest from this NPC
+            const hasMainActive = playerStats.quests.main && playerStats.quests.main.some(q => q.giver === npcName);
+            // Check for available side quests
             const hasSideAvailable = playerStats.quests.available && playerStats.quests.available.some(q => q.giver === npcName);
+            // Check for active side quests
+            const hasSideActive = playerStats.quests.active && playerStats.quests.active.some(q => q.giver === npcName);
 
             // NEW: Check for available but not yet accepted main quests
             let hasStoryAvailable = false;
@@ -10731,7 +10683,7 @@ function updateNPCIndicators() {
                 hasStoryAvailable = nextQuests.some(q => q.giver === npcName);
             }
 
-            if (!hasStoryActive && !hasSideAvailable && !hasStoryAvailable) {
+            if (!hasMainActive && !hasSideAvailable && !hasStoryAvailable && !hasSideActive) {
                 iconText = '💬'; // No urgent quests, just chat
                 iconColor = '#ffffff';
             }
@@ -10788,8 +10740,7 @@ function updateNPCIndicators() {
 
         // Update indicator position to follow NPC (convert world to screen coordinates)
         if (npc.interactionIndicator && npc.interactionIndicator.active && npc.active) {
-            // For objects with setScrollFactor(0), calculate screen position from world position
-            // When camera follows player, screen position = world position - camera scroll
+            // For objects with setScrollFactor(0), calculate screen position = world position - camera scroll
             const camera = scene.cameras.main;
             npc.interactionIndicator.x = npc.x - camera.scrollX;
             npc.interactionIndicator.y = (npc.y - 45) - camera.scrollY;
@@ -10979,18 +10930,6 @@ const dialogDatabase = {
             'start': {
                 text: 'Welcome, traveler! I am Elder Malik, the leader of this village. How may I assist you?',
                 choices: [
-                    {
-                        text: 'About the tremors in the earth...',
-                        next: 'quakes',
-                        isQuest: true,
-                        condition: (stats) => stats.quests.main.some(q => q.id === 'main_01_001') && !stats.quests.completed.includes('main_01_001')
-                    },
-                    {
-                        text: 'How can I stop the tremors?',
-                        next: 'echoes_intro',
-                        isQuest: true,
-                        condition: (stats) => stats.quests.completed.includes('main_01_001') && !stats.quests.completed.includes('main_01_002') && !stats.quests.main.some(q => q.id === 'main_01_002')
-                    },
                     { text: 'Tell me about this place', next: 'about_place' },
                     { text: 'Goodbye', next: 'end' }
                 ]
@@ -11174,11 +11113,22 @@ function startDialog(npc) {
         const lastStep = completedIds.length > 0 ?
             Math.max(...allMainQuests.filter(q => completedIds.includes(q.id)).map(q => q.step || 0), 0) : 0;
 
+        console.log(`💬 Dialogue with ${npc.name}:`);
+        console.log(`   - Active Main IDs: ${activeIds.join(', ')}`);
+        console.log(`   - Completed IDs: ${playerStats.quests.completed.join(', ')}`);
+        console.log(`   - Last Main Step: ${lastStep}`);
+
         const nextMain = allMainQuests.find(q =>
             q.step === lastStep + 1 &&
             !activeIds.includes(q.id) &&
             q.giver === npc.name
         );
+
+        if (nextMain) {
+            console.log(`   - Offered Main Quest: ${nextMain.id} (${nextMain.title})`);
+        } else {
+            console.log(`   - No new main quests for this NPC.`);
+        }
 
         if (nextMain) {
             activeDialog.nodes.start.choices.unshift({
@@ -11348,6 +11298,7 @@ function updateDialogUI(node) {
             if (choice.action === 'open_shop') {
                 openShop(currentShopNPC);
             } else if (choice.action === 'quest_advance') {
+                console.log(`🔘 Dialog Choice: quest_advance for ${choice.questId}`);
                 advanceQuest(choice.questId);
                 if (choice.next) {
                     showDialogNode(choice.next);
@@ -11355,6 +11306,7 @@ function updateDialogUI(node) {
                     closeDialog();
                 }
             } else if (choice.action === 'accept_all') {
+                console.log(`🔘 Dialog Choice: accept_all`);
                 acceptAllAvailableQuests();
                 if (choice.next) {
                     showDialogNode(choice.next);
@@ -11362,6 +11314,7 @@ function updateDialogUI(node) {
                     closeDialog();
                 }
             } else if (choice.action === 'quest_accept') {
+                console.log(`🔘 Dialog Choice: quest_accept for ${choice.questId}`);
                 acceptMainQuest(choice.questId);
                 if (choice.next) {
                     showDialogNode(choice.next);
@@ -11369,6 +11322,7 @@ function updateDialogUI(node) {
                     closeDialog();
                 }
             } else if (choice.action === 'quest_accept_side') {
+                console.log(`🔘 Dialog Choice: quest_accept_side for ${choice.questId}`);
                 acceptSideQuest(choice.questId);
                 if (choice.next) {
                     showDialogNode(choice.next);

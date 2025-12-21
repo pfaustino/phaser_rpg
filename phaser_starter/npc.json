@@ -1,0 +1,69 @@
+[
+    {
+        "id": "npc_001",
+        "name": "Elder Malik",
+        "title": "Village Elder",
+        "spawnType": "center",
+        "offsetX": 0,
+        "offsetY": -3,
+        "dialogId": "elder_intro",
+        "questGiver": true,
+        "spriteKey": "npc_elder_malik"
+    },
+    {
+        "id": "npc_002",
+        "name": "Merchant Lysa",
+        "title": "Trader",
+        "spawnType": "center",
+        "offsetX": 6,
+        "offsetY": 6,
+        "dialogId": "merchant_shop",
+        "merchant": true,
+        "questGiver": true,
+        "spriteKey": "npc_lysa"
+    },
+    {
+        "id": "npc_003",
+        "name": "Guard Thorne",
+        "title": "Guard Officer",
+        "spawnType": "bottom",
+        "offsetX": 0,
+        "offsetY": -6,
+        "dialogId": "guard_info",
+        "questGiver": true,
+        "spriteKey": "npc_captain_thorne"
+    },
+    {
+        "id": "npc_004",
+        "name": "Captain Kael",
+        "title": "Captain of the Guard",
+        "spawnType": "bottom",
+        "offsetX": -5,
+        "offsetY": -9,
+        "dialogId": "generic_npc",
+        "questGiver": true,
+        "spriteKey": "npc_captain_kael"
+    },
+    {
+        "id": "npc_005",
+        "name": "Mage Elara",
+        "title": "Village Mage",
+        "spawnType": "center",
+        "offsetX": 5,
+        "offsetY": -5,
+        "dialogId": "generic_npc",
+        "questGiver": true,
+        "spriteKey": "npc_mage_elara"
+    },
+    {
+        "id": "npc_006",
+        "name": "Blacksmith Brond",
+        "title": "Master Smith",
+        "spawnType": "absolute",
+        "targetX": 6,
+        "targetY": 20,
+        "dialogId": "generic_npc",
+        "questGiver": true,
+        "spriteKey": "npc_blacksmith_brond"
+    }
+]

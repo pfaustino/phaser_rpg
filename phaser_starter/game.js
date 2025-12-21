@@ -238,6 +238,7 @@ function preload() {
 
     // Load quest data
     this.load.json('questData', 'quests.json');
+    this.load.json('questDataV2', 'quests_v2.json');
 
     // Load Method 2 monster data
     this.load.json('monsterData', 'monsters.json');
@@ -3643,6 +3644,37 @@ function create() {
     questManager = new QuestManager(this);
     questManager.init();
 
+    // Initialize Unified Quest Engine (V2)
+    if (this.cache.json.exists('questDataV2')) {
+        const v2Data = this.cache.json.get('questDataV2');
+        uqe.init(v2Data.quests || {});
+
+        // Handle V2 Quest Completion
+        uqe.eventBus.on(UQE_EVENTS.QUEST_COMPLETED, (quest) => {
+            console.log(`🎁 [UQE Bridge] Handling completion for: ${quest.title}`);
+
+            // Give Rewards
+            if (quest.rewards.xp) {
+                playerStats.xp += quest.rewards.xp;
+                addChatMessage(`Gained ${quest.rewards.xp} XP from quest`, 0xffd700, '✨');
+            }
+            if (quest.rewards.gold) {
+                playerStats.gold += quest.rewards.gold;
+                addChatMessage(`Gained ${quest.rewards.gold} Gold from quest`, 0xffd700, '💰');
+            }
+            updatePlayerStats();
+
+            // Show UI Notification
+            showQuestCompletedModal({
+                title: quest.title,
+                rewards: quest.rewards
+            });
+
+            // Refresh UI
+            if (questVisible) updateQuestLogItems();
+        });
+    }
+
     // Parse dungeon tileset metadata and create texture frames
     try {
         if (this.cache.text.exists('dungeon_floor_metadata')) {
@@ -4077,6 +4109,11 @@ function create() {
  * Update loop (like pygame game loop)
  */
 function update(time, delta) {
+    // Update uqe quest engine (V2)
+    if (typeof uqe !== 'undefined') {
+        uqe.update();
+    }
+
     const speed = 200; // pixels per second
 
     // Update damage numbers
@@ -5206,6 +5243,11 @@ function update(time, delta) {
 
             // Track quest progress - monster killed
             playerStats.questStats.monstersKilled++;
+
+            // UQE Bridge Event
+            if (typeof uqe !== 'undefined') {
+                uqe.eventBus.emit(UQE_EVENTS.MONSTER_KILLED, { id: monster.monsterType.toLowerCase() });
+            }
 
             // Add chat message for monster death
             const monsterName = monster.monsterType || 'Monster';
@@ -7326,6 +7368,11 @@ function pickupItem(item, index) {
 
         // Refresh inventory UI if open - this will update the display with the new item
         refreshInventory();
+
+        // UQE Bridge Event
+        if (typeof uqe !== 'undefined') {
+            uqe.eventBus.emit(UQE_EVENTS.ITEM_PICKUP, { id: item.type, amount: 1 });
+        }
     }
 
     // Remove item from ground
@@ -8065,6 +8112,11 @@ function useConsumable(item, inventoryIndex) {
 
     // Remove item from inventory
     playerStats.inventory.splice(inventoryIndex, 1);
+
+    // UQE Bridge Event
+    if (typeof uqe !== 'undefined') {
+        uqe.eventBus.emit(UQE_EVENTS.ITEM_PICKUP, { id: item.type, amount: 1 });
+    }
 
     // Refresh inventory UI
     refreshInventory();
@@ -9607,14 +9659,36 @@ function updateQuestLogItems() {
         quests = playerStats.quests.main || [];
     } else if (questLogTab === 'current') {
         // Show BOTH main and side quests in the Active (Current) tab
-        quests = [...(playerStats.quests.main || []), ...(playerStats.quests.active || [])];
-        console.log(`📋 Rendering Active tab: found ${quests.length} quests (${(playerStats.quests.main || []).length} story, ${(playerStats.quests.active || []).length} side)`);
+        const v2Quests = (uqe && uqe.activeQuests) ? uqe.activeQuests.map(q => {
+            const totalProgress = q.objectives.reduce((sum, obj) => sum + obj.progress, 0);
+            const totalTarget = q.objectives.reduce((sum, obj) => sum + obj.target, 0);
+            return {
+                title: q.title,
+                description: q.description,
+                progress: totalProgress,
+                target: totalTarget,
+                completed: q.completed,
+                rewards: q.rewards || {}, // FIX: Include rewards
+                objectives: q.objectives // Pass for detail rendering
+            };
+        }) : [];
+
+        quests = [...(playerStats.quests.main || []), ...(playerStats.quests.active || []), ...v2Quests];
+        console.log(`📋 Rendering Active tab: found ${quests.length} quests (${(playerStats.quests.main || []).length} story, ${(playerStats.quests.active || []).length} side, ${v2Quests.length} v2)`);
     } else if (questLogTab === 'available') {
         // Get available quests (rejected/cancelled)
         quests = playerStats.quests.available || [];
     } else {
         // Get completed quests
-        quests = playerStats.quests.completedQuests || [];
+        const v2Completed = (uqe && uqe.completedQuests) ? uqe.completedQuests.map(q => {
+            return {
+                title: q.title,
+                description: q.description,
+                completed: true,
+                rewards: q.rewards || {}
+            };
+        }) : [];
+        quests = [...(playerStats.quests.completedQuests || []), ...v2Completed];
     }
 
     // Ensure selectedQuestIndex is valid
@@ -9738,6 +9812,28 @@ function updateQuestLogItems() {
         }).setScrollFactor(0).setDepth(302).setOrigin(0, 0);
         questPanel.questDetailElements.push(detailDesc);
         detailY += 50;
+
+        // Objectives section (Unified Quest Engine / V2)
+        if (quest.objectives) {
+            const objLabel = scene.add.text(detailStartX, detailY, 'Objectives:', {
+                fontSize: '18px',
+                fill: '#ffffff',
+                fontStyle: 'bold'
+            }).setScrollFactor(0).setDepth(302).setOrigin(0, 0);
+            questPanel.questDetailElements.push(objLabel);
+            detailY += 30;
+
+            quest.objectives.forEach(obj => {
+                const statusStr = obj.completed ? '✅' : '⏳';
+                const objText = scene.add.text(detailStartX + 20, detailY, `${statusStr} ${obj.label}: ${obj.progress}/${obj.target}`, {
+                    fontSize: '14px',
+                    fill: obj.completed ? '#00ff00' : '#cccccc'
+                }).setScrollFactor(0).setDepth(302).setOrigin(0, 0);
+                questPanel.questDetailElements.push(objText);
+                detailY += 25;
+            });
+            detailY += 15;
+        }
 
         // Progress section (for current and main quests)
         const isProgressTab = (questLogTab === 'current' || questLogTab === 'main');
@@ -10980,6 +11076,12 @@ const dialogDatabase = {
                 text: 'Welcome, traveler! I am Elder Malik, the leader of this village. How may I assist you?',
                 choices: [
                     {
+                        text: 'Test Unified Engine (V2)',
+                        action: 'quest_accept_v2',
+                        questId: 'v2_demo_quest',
+                        next: 'end'
+                    },
+                    {
                         text: 'About the tremors in the earth...',
                         next: 'quakes',
                         isQuest: true,
@@ -11141,6 +11243,11 @@ function startDialog(npc) {
 
     // Clone to avoid modifying the original database
     const activeDialog = JSON.parse(JSON.stringify(dialogData));
+
+    // UQE Bridge Event
+    if (typeof uqe !== 'undefined') {
+        uqe.eventBus.emit(UQE_EVENTS.NPC_TALK, { id: npc.name });
+    }
     activeDialog.npcName = npc.name || activeDialog.npcName;
     activeDialog.npcTitle = npc.title || activeDialog.npcTitle;
 
@@ -11370,6 +11477,16 @@ function updateDialogUI(node) {
                 }
             } else if (choice.action === 'quest_accept_side') {
                 acceptSideQuest(choice.questId);
+                if (choice.next) {
+                    showDialogNode(choice.next);
+                } else {
+                    closeDialog();
+                }
+            } else if (choice.action === 'quest_accept_v2') {
+                if (typeof uqe !== 'undefined') {
+                    uqe.acceptQuest(choice.questId);
+                    showDamageNumber(player.x, player.y - 40, "New Era Quest Accepted!", 0xffff00);
+                }
                 if (choice.next) {
                     showDialogNode(choice.next);
                 } else {
@@ -12785,6 +12902,7 @@ function saveGame() {
         dungeonLevel: dungeonLevel,
         dungeonSeeds: dungeonSeeds,
         dungeonCompletions: dungeonCompletions,
+        uqeQuests: uqe.getSaveData(),
         timestamp: Date.now()
     };
 
@@ -12815,6 +12933,11 @@ function loadGame() {
 
         // Restore player stats
         Object.assign(playerStats, saveData.playerStats);
+
+        // Restore UQE Quests
+        if (saveData.uqeQuests) {
+            uqe.loadSaveData(saveData.uqeQuests);
+        }
 
         // Restore player position
         if (saveData.playerPosition) {

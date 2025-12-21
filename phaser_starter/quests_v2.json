@@ -1,0 +1,29 @@
+{
+    "quests": {
+        "v2_demo_quest": {
+            "id": "v2_demo_quest",
+            "title": "The Unified Engine Test",
+            "description": "Prove that the new quest system bridge is operational.",
+            "objectives": [
+                {
+                    "id": "talk_malik",
+                    "type": "talk",
+                    "npcId": "Elder Malik",
+                    "label": "Speak with Elder Malik",
+                    "target": 1
+                },
+                {
+                    "id": "kill_slimes",
+                    "type": "kill",
+                    "monsterId": "slime",
+                    "label": "Defeat Slimes",
+                    "target": 5
+                }
+            ],
+            "rewards": {
+                "xp": 500,
+                "gold": 250
+            }
+        }
+    }
+}

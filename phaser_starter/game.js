@@ -2437,10 +2437,10 @@ function transitionToMap(targetMap, level = 1) {
 
     currentMap = targetMap;
 
-    // Update camera bounds for new map
-    const worldWidth = scene.mapWidth * scene.tileSize;
-    const worldHeight = scene.mapHeight * scene.tileSize;
-    scene.cameras.main.setBounds(0, 0, worldWidth, worldHeight);
+    // Update camera for new map - NO bounds so player stays centered
+    // const worldWidth = scene.mapWidth * scene.tileSize;
+    // const worldHeight = scene.mapHeight * scene.tileSize;
+    // scene.cameras.main.setBounds(0, 0, worldWidth, worldHeight);
     scene.cameras.main.startFollow(player);
 
     console.log('✅ Transitioned to', targetMap);
@@ -4120,11 +4120,11 @@ function create() {
     // Check for auto-load
     checkAutoLoad();
 
-    // Camera follows player - set bounds to allow camera to show full map
-    // Camera can scroll to show the entire map, including edges
-    const worldWidth = this.mapWidth * this.tileSize;
-    const worldHeight = this.mapHeight * this.tileSize;
-    this.cameras.main.setBounds(0, 0, worldWidth, worldHeight);
+    // Camera follows player - NO bounds set so player always stays centered
+    // This allows black space to show beyond map edges
+    // const worldWidth = this.mapWidth * this.tileSize;
+    // const worldHeight = this.mapHeight * this.tileSize;
+    // this.cameras.main.setBounds(0, 0, worldWidth, worldHeight);
     this.cameras.main.startFollow(player);
 
     // Store map dimensions for debug display (already set above)
@@ -11482,8 +11482,25 @@ const dialogDatabase = {
                 text: 'Welcome, traveler! I am Elder Malik, the leader of this village. How may I assist you?',
                 choices: [
                     // All UQE quests are dynamically injected at dialog open time
+                    { text: 'How do I survive out there?', next: 'controls_tutorial' },
                     { text: 'Tell me about this place', next: 'about_place' },
                     { text: 'Goodbye', next: 'end' }
+                ]
+            },
+            'controls_tutorial': {
+                text: 'Ah, a wise question! Let me share the essential knowledge:\n\n' +
+                    '⚔️ MOVEMENT: WASD or Arrow Keys\n' +
+                    '🗡️ ATTACK: Spacebar (attack nearby enemies)\n' +
+                    '✨ SPECIAL ATTACKS: 1-9 (use learned abilities)\n' +
+                    '📜 QUEST LOG: Q (view your active quests)\n' +
+                    '🎒 INVENTORY: I (manage your items)\n' +
+                    '💾 SAVE GAME: F5\n' +
+                    '📂 LOAD GAME: F9\n' +
+                    '❓ HELP: H (quick controls reminder)\n\n' +
+                    'Remember: Talk to villagers for quests, and defeat monsters to grow stronger!',
+                choices: [
+                    { text: 'Tell me more about this place', next: 'about_place' },
+                    { text: 'Thank you, Elder', next: 'end' }
                 ]
             },
             'about_place': {
@@ -11651,7 +11668,10 @@ function startDialog(npc) {
         const uqeActiveIds = uqe.activeQuests.map(q => q.id);
 
         // Get all quests for this NPC from UQE definitions
-        const npcQuests = Object.values(uqe.allDefinitions).filter(q => q.giver === npc.name);
+        // Skip Merchant Lysa - she has a custom 'About that favor...' sub-menu
+        const npcQuests = Object.values(uqe.allDefinitions).filter(q =>
+            q.giver === npc.name && npc.name !== 'Merchant Lysa'
+        );
 
         // Inject available quests (not active, not completed, prerequisites met)
         npcQuests.forEach(questDef => {
@@ -11724,7 +11744,7 @@ function createDialogUI(npc) {
     const scene = game.scene.scenes[0];
 
     const panelWidth = 700;
-    const panelHeight = 550;
+    const panelHeight = 620;
     const centerX = scene.cameras.main.width / 2;
     const centerY = scene.cameras.main.height / 2 + 50;
 
@@ -11762,7 +11782,7 @@ function updateDialogUI(node) {
     const centerX = dialogPanel.bg.x;
     const centerY = dialogPanel.bg.y;
     const panelWidth = 700;
-    const panelHeight = 550; // Corrected from 450 to match creation
+    const panelHeight = 620; // Increased to fit longer text like tutorials
 
     // Dialog text
     dialogPanel.dialogText = scene.add.text(
@@ -11777,7 +11797,7 @@ function updateDialogUI(node) {
     ).setScrollFactor(0).setDepth(401).setOrigin(0, 0);
 
     // Choice buttons
-    const startY = centerY + 20;
+    const startY = centerY + 80; // Pushed down to fit longer text
     const buttonHeight = 40;
     const buttonSpacing = 10;
 
@@ -15250,8 +15270,10 @@ function updateQuestTrackerHUD() {
     Object.keys(questTrackerEntries).forEach(questId => {
         if (!activeQuests.find(q => q.id === questId)) {
             const entry = questTrackerEntries[questId];
+            if (entry.titleBg) entry.titleBg.destroy();
             if (entry.title) entry.title.destroy();
             entry.objectives.forEach(obj => {
+                if (obj.bg) obj.bg.destroy();
                 if (obj.text) obj.text.destroy();
             });
             delete questTrackerEntries[questId];
@@ -15262,7 +15284,10 @@ function updateQuestTrackerHUD() {
     let yOffset = 0;
     activeQuests.forEach(quest => {
         if (!questTrackerEntries[quest.id]) {
-            // Create new entry
+            // Create new entry with background
+            const titleBg = scene.add.rectangle(startX + 130, startY + yOffset + 8, 280, 18, 0x000000, 0.65)
+                .setScrollFactor(0).setDepth(199).setOrigin(0.5, 0.5);
+
             const titleText = scene.add.text(startX, startY + yOffset, quest.title, {
                 fontSize: '14px',
                 fill: '#ffd700',
@@ -15271,14 +15296,18 @@ function updateQuestTrackerHUD() {
             }).setScrollFactor(0).setDepth(200).setOrigin(0, 0);
 
             questTrackerEntries[quest.id] = {
+                titleBg: titleBg,
                 title: titleText,
                 objectives: [],
                 yStart: startY + yOffset
             };
             yOffset += 20;
 
-            // Create objective entries
+            // Create objective entries with backgrounds
             quest.objectives.forEach((obj, idx) => {
+                const objBg = scene.add.rectangle(startX + 130, startY + yOffset + 7, 280, 16, 0x000000, 0.55)
+                    .setScrollFactor(0).setDepth(199).setOrigin(0.5, 0.5);
+
                 const objStr = `  ${obj.completed ? '✅' : '⏳'} ${obj.label}: ${obj.progress}/${obj.target}`;
                 const objText = scene.add.text(startX, startY + yOffset, objStr, {
                     fontSize: '12px',
@@ -15287,6 +15316,7 @@ function updateQuestTrackerHUD() {
                 }).setScrollFactor(0).setDepth(200).setOrigin(0, 0);
 
                 questTrackerEntries[quest.id].objectives.push({
+                    bg: objBg,
                     text: objText,
                     objId: obj.id,
                     lastProgress: obj.progress
@@ -15298,10 +15328,12 @@ function updateQuestTrackerHUD() {
             // Update existing entry
             const entry = questTrackerEntries[quest.id];
             entry.yStart = startY + yOffset;
+            // Update title background and text positions
+            if (entry.titleBg) entry.titleBg.y = startY + yOffset + 8;
             entry.title.y = startY + yOffset;
             yOffset += 20;
 
-            // Update objective texts
+            // Update objective texts and backgrounds
             quest.objectives.forEach((obj, idx) => {
                 if (entry.objectives[idx]) {
                     const objEntry = entry.objectives[idx];
@@ -15309,6 +15341,7 @@ function updateQuestTrackerHUD() {
                     objEntry.text.setText(objStr);
                     objEntry.text.setFill(obj.completed ? '#00ff00' : '#cccccc');
                     objEntry.text.y = startY + yOffset;
+                    if (objEntry.bg) objEntry.bg.y = startY + yOffset + 7;
                     yOffset += 18;
                 }
             });
@@ -15364,8 +15397,10 @@ function handleObjectiveUpdate(data) {
 function clearQuestTrackerHUD() {
     Object.keys(questTrackerEntries).forEach(questId => {
         const entry = questTrackerEntries[questId];
+        if (entry.titleBg) entry.titleBg.destroy();
         if (entry.title) entry.title.destroy();
         entry.objectives.forEach(obj => {
+            if (obj.bg) obj.bg.destroy();
             if (obj.text) obj.text.destroy();
         });
     });

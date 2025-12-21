@@ -95,6 +95,12 @@ class KillObjective extends UqeObjective {
         super(data, eventBus);
         this.monsterId = data.monsterId;
         eventBus.on(UQE_EVENTS.MONSTER_KILLED, (data) => {
+            // Support 'any' wildcard (match all monsters)
+            if (this.monsterId === 'any') {
+                this.updateProgress(1);
+                return;
+            }
+
             const target = this.monsterId.toLowerCase();
             const killedId = data.id.toLowerCase();
             const killedType = data.type.toLowerCase();

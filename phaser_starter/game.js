@@ -9762,41 +9762,107 @@ function updateQuestLogItems() {
     // Get quests based on current tab
     let quests = [];
     if (questLogTab === 'main') {
-        quests = playerStats.quests.main || [];
+        // Story quests: UQE quests that have a 'step' field (main story progression)
+        const storyQuests = [];
+        if (typeof uqe !== 'undefined' && uqe.activeQuests) {
+            uqe.activeQuests.forEach(q => {
+                const def = uqe.allDefinitions[q.id];
+                if (def && def.step) { // Has step = story quest
+                    const totalProgress = q.objectives.reduce((sum, obj) => sum + obj.progress, 0);
+                    const totalTarget = q.objectives.reduce((sum, obj) => sum + obj.target, 0);
+                    storyQuests.push({
+                        id: q.id,
+                        title: q.title,
+                        description: q.description,
+                        progress: totalProgress,
+                        target: totalTarget,
+                        completed: q.completed,
+                        rewards: q.rewards || {},
+                        objectives: q.objectives
+                    });
+                }
+            });
+        }
+        quests = storyQuests;
+        console.log(`📋 Rendering Story tab: found ${quests.length} story quests from UQE`);
     } else if (questLogTab === 'current') {
-        // Show BOTH main and side quests in the Active (Current) tab
-        const v2Quests = (uqe && uqe.activeQuests) ? uqe.activeQuests.map(q => {
-            const totalProgress = q.objectives.reduce((sum, obj) => sum + obj.progress, 0);
-            const totalTarget = q.objectives.reduce((sum, obj) => sum + obj.target, 0);
-            return {
-                id: q.id,
-                title: q.title,
-                description: q.description,
-                progress: totalProgress,
-                target: totalTarget,
-                completed: q.completed,
-                rewards: q.rewards || {},
-                objectives: q.objectives
-            };
-        }) : [];
-
-        quests = [...(playerStats.quests.main || []), ...(playerStats.quests.active || []), ...v2Quests];
-        console.log(`📋 Rendering Active tab: found ${quests.length} quests (${(playerStats.quests.main || []).length} story, ${(playerStats.quests.active || []).length} side, ${v2Quests.length} v2)`);
+        // Active tab: ALL active UQE quests
+        const activeQuests = [];
+        if (typeof uqe !== 'undefined' && uqe.activeQuests) {
+            uqe.activeQuests.forEach(q => {
+                const totalProgress = q.objectives.reduce((sum, obj) => sum + obj.progress, 0);
+                const totalTarget = q.objectives.reduce((sum, obj) => sum + obj.target, 0);
+                activeQuests.push({
+                    id: q.id,
+                    title: q.title,
+                    description: q.description,
+                    progress: totalProgress,
+                    target: totalTarget,
+                    completed: q.completed,
+                    rewards: q.rewards || {},
+                    objectives: q.objectives
+                });
+            });
+        }
+        quests = activeQuests;
+        console.log(`📋 Rendering Active tab: found ${quests.length} quests from UQE`);
     } else if (questLogTab === 'available') {
-        // Get available quests (rejected/cancelled)
-        quests = playerStats.quests.available || [];
+        // Get available quests from UQE (not active, not completed, prereqs met)
+        const availableQuests = [];
+        if (typeof uqe !== 'undefined' && uqe.allDefinitions) {
+            const uqeCompletedIds = uqe.completedQuests.map(q => q.id);
+            const uqeActiveIds = uqe.activeQuests.map(q => q.id);
+
+            console.log(`🔍 [Available Debug] Total definitions: ${Object.keys(uqe.allDefinitions).length}`);
+            console.log(`🔍 [Available Debug] Active IDs: [${uqeActiveIds.join(', ')}]`);
+            console.log(`🔍 [Available Debug] Completed IDs: [${uqeCompletedIds.join(', ')}]`);
+
+            Object.values(uqe.allDefinitions).forEach(questDef => {
+                const isActive = uqeActiveIds.includes(questDef.id);
+                const isCompleted = uqeCompletedIds.includes(questDef.id);
+
+                // Check prerequisites
+                let prereqMet = true;
+                if (questDef.requires) {
+                    prereqMet = uqeCompletedIds.includes(questDef.requires);
+                }
+
+                console.log(`🔍 [Available Debug] Quest ${questDef.id}: active=${isActive}, completed=${isCompleted}, prereqMet=${prereqMet}, requires=${questDef.requires || 'none'}`);
+
+                // Show if not active, not completed, and prereqs met
+                if (!isActive && !isCompleted && prereqMet) {
+                    availableQuests.push({
+                        id: questDef.id,
+                        title: questDef.title,
+                        description: questDef.description,
+                        giver: questDef.giver,
+                        objectives: questDef.objectives,
+                        rewards: questDef.rewards || {},
+                        isUQE: true
+                    });
+                }
+            });
+        } else {
+            console.log(`⚠️ [Available Debug] UQE not available or no allDefinitions`);
+        }
+        quests = availableQuests;
+        console.log(`📋 Rendering Available tab: found ${quests.length} quests from UQE`);
     } else {
-        // Get completed quests
-        const v2Completed = (uqe && uqe.completedQuests) ? uqe.completedQuests.map(q => {
-            return {
-                id: q.id,
-                title: q.title,
-                description: q.description,
-                completed: true,
-                rewards: q.rewards || {}
-            };
-        }) : [];
-        quests = [...(playerStats.quests.completedQuests || []), ...v2Completed];
+        // Get completed quests from UQE
+        const completedQuests = [];
+        if (typeof uqe !== 'undefined' && uqe.completedQuests) {
+            uqe.completedQuests.forEach(q => {
+                completedQuests.push({
+                    id: q.id,
+                    title: q.title,
+                    description: q.description,
+                    completed: true,
+                    rewards: q.rewards || {}
+                });
+            });
+        }
+        quests = completedQuests;
+        console.log(`📋 Rendering Completed tab: found ${quests.length} quests from UQE`);
     }
 
     // Ensure selectedQuestIndex is valid
@@ -10026,29 +10092,27 @@ function updateQuestLogItems() {
             }).setScrollFactor(0).setDepth(302).setOrigin(0.5, 0.5);
 
             const acceptQuest = () => {
-                // Move quest from available to active
-                const questIndex = playerStats.quests.available.findIndex(q => q.id === quest.id);
-                if (questIndex !== -1) {
-                    const questToAccept = playerStats.quests.available[questIndex];
-                    playerStats.quests.available.splice(questIndex, 1);
-
-                    // Initialize active array if needed
-                    if (!playerStats.quests.active) {
-                        playerStats.quests.active = [];
+                // Accept quest via UQE
+                if (typeof uqe !== 'undefined' && quest.isUQE) {
+                    uqe.acceptQuest(quest.id);
+                    console.log(`✅ [UQE] Quest accepted from Available tab: ${quest.id}`);
+                } else {
+                    // Fallback for legacy quests (if any)
+                    const questIndex = playerStats.quests.available.findIndex(q => q.id === quest.id);
+                    if (questIndex !== -1) {
+                        const questToAccept = playerStats.quests.available[questIndex];
+                        playerStats.quests.available.splice(questIndex, 1);
+                        if (!playerStats.quests.active) playerStats.quests.active = [];
+                        questToAccept.progress = 0;
+                        if (!playerStats.quests.active.find(q => q.id === questToAccept.id)) {
+                            playerStats.quests.active.push(questToAccept);
+                        }
                     }
-
-                    // Reset quest progress when accepting
-                    questToAccept.progress = 0;
-
-                    // Only add to active if not already there
-                    if (!playerStats.quests.active.find(q => q.id === questToAccept.id)) {
-                        playerStats.quests.active.push(questToAccept);
-                    }
-
-                    // Refresh quest log display
-                    updateQuestLogItems();
-                    playSound('item_pickup');
                 }
+
+                // Refresh quest log display
+                updateQuestLogItems();
+                playSound('item_pickup');
             };
 
             acceptBtn.on('pointerdown', acceptQuest);

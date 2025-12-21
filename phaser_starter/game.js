@@ -123,6 +123,58 @@ let playerStats = {
     }
 };
 
+// ============================================
+// QUEST HELPERS (Global Bridge)
+// ============================================
+function isQuestActive(id) {
+    if (!id) return false;
+
+    // Legacy check
+    const legacyQuests = playerStats.quests.main.concat(playerStats.quests.active);
+    const legacyActive = legacyQuests.some(q => q.id === id);
+
+    // UQE check
+    let uqeActive = false;
+    if (window.uqe) {
+        uqeActive = window.uqe.activeQuests.some(q => q.id === id);
+    }
+
+    // EXTREME LOUD LOGGING for specific quests
+    if (id.startsWith('main_01_') || id === 'v2_demo_quest') {
+        const uqeActiveIds = window.uqe ? window.uqe.activeQuests.map(q => q.id) : [];
+        console.log(`[UQE] isQuestActive('${id}') CHECK: legacy=${legacyActive}, uqe=${uqeActive}`);
+        console.log(`[UQE] Current UQE Active IDs: [${uqeActiveIds.join(', ')}]`);
+    }
+
+    return legacyActive || uqeActive;
+}
+
+function isQuestCompleted(id) {
+    if (!id) return false;
+
+    // Legacy check
+    const legacyCompleted = playerStats.quests.completed.includes(id);
+
+    // UQE check
+    let uqeCompleted = false;
+    if (window.uqe) {
+        uqeCompleted = window.uqe.completedQuests.some(q => q.id === id);
+    }
+
+    // EXTREME LOUD LOGGING for specific quests
+    if (id.startsWith('main_01_') || id === 'v2_demo_quest') {
+        const uqeCompletedIds = window.uqe ? window.uqe.completedQuests.map(q => q.id) : [];
+        console.log(`[UQE] isQuestCompleted('${id}') CHECK: legacy=${legacyCompleted}, uqe=${uqeCompleted}`);
+        console.log(`[UQE] Current UQE Completed IDs: [${uqeCompletedIds.join(', ')}]`);
+    }
+
+    return legacyCompleted || uqeCompleted;
+}
+
+// Ensure global scope
+window.isQuestActive = isQuestActive;
+window.isQuestCompleted = isQuestCompleted;
+
 // UI elements
 let hpBarBg, hpBar;
 let manaBarBg, manaBar;
@@ -3673,6 +3725,14 @@ function create() {
             // Refresh UI
             if (questVisible) updateQuestLogItems();
         });
+
+        // Handle Objective Progress HUD
+        uqe.eventBus.on(UQE_EVENTS.OBJECTIVE_UPDATED, (data) => {
+            const obj = data.objective;
+            const questTitle = obj.parentQuest ? obj.parentQuest.title : 'Quest';
+            const message = `${questTitle}: ${obj.label} (${obj.progress}/${obj.target})`;
+            showQuestUpdateHUD(message, obj.completed);
+        });
     }
 
     // Parse dungeon tileset metadata and create texture frames
@@ -5208,90 +5268,98 @@ function update(time, delta) {
 
         // Remove dead monsters
         if (monster.hp <= 0 && !monster.isDead) {
-            monster.isDead = true;
-
-            // Check if this was a boss in a dungeon
-            if (monster.isBoss && currentMap === 'dungeon') {
-                onBossDefeated(dungeonLevel, monster.x, monster.y);
-            }
-
-            // Destroy HP bars
-            if (monster.hpBarBg) monster.hpBarBg.destroy();
-            if (monster.hpBar) monster.hpBar.destroy();
-
-            // Play death animation
-            playMonsterDeathAnimation(monster);
-
-            // Create death particle effects
-            createDeathEffects(monster.x, monster.y);
-
-            // Death animation - fade out and rotate (enhanced)
-            this.tweens.add({
-                targets: monster,
-                alpha: 0,
-                angle: 360,
-                scale: 0,
-                duration: 500, // Slightly longer for better effect
-                ease: 'Power2'
-            });
-
-            // Give XP (based on monster type)
-            const xpGain = monster.xpReward || 10;
-            playerStats.xp += xpGain;
-            showDamageNumber(monster.x, monster.y, `+${xpGain} XP`, 0xffd700, false, 'xp'); // Gold color for XP
-            addChatMessage(`Gained ${xpGain} XP`, 0xffd700, '✨');
-
-            // Track quest progress - monster killed
-            playerStats.questStats.monstersKilled++;
-
-            // UQE Bridge Event
-            if (typeof uqe !== 'undefined') {
-                uqe.eventBus.emit(UQE_EVENTS.MONSTER_KILLED, { id: monster.monsterType.toLowerCase() });
-            }
-
-            // Add chat message for monster death
-            const monsterName = monster.monsterType || 'Monster';
-            addChatMessage(`${monsterName} defeated`, 0xff6b6b, '💀');
-
-            // Check level up
-            checkLevelUp();
-
-            // Drop items when monster dies
-            dropItemsFromMonster(monster.x, monster.y);
-
-            // Play death sound
-            playSound('monster_die');
-
-            // Remove monster after animation completes
-            this.time.delayedCall(300, () => {
-                if (monster && monster.active) {
-                    monster.destroy();
-                    const index = monsters.indexOf(monster);
-                    if (index !== -1) {
-                        monsters.splice(index, 1);
-                    }
-                }
-            });
+            handleMonsterDeath(monster);
         }
     });
+}
 
-    // Items are now manually picked up with Spacebar (handled above)
-    // No automatic pickup - player must press Spacebar when near items
+/**
+ * Handle monster death (XP, quests, loot, animations)
+ */
+function handleMonsterDeath(monster) {
+    if (!monster || monster.isDead) return;
+    monster.isDead = true;
 
-    // Check if combat just ended and show pending quest modals
-    const currentlyInCombat = isInCombat();
-    if (!currentlyInCombat && (pendingCompletedQuest || pendingNewQuest)) {
-        // Combat ended, show pending quest modals
-        if (pendingCompletedQuest) {
-            const questToShow = pendingCompletedQuest;
-            pendingCompletedQuest = null;
-            showQuestCompletedModal(questToShow);
-        } else if (pendingNewQuest) {
-            // Only show new quest if no completed quest was pending
-            const questToShow = pendingNewQuest;
-            pendingNewQuest = null;
-            showNewQuestModal(questToShow);
+    const scene = game.scene.scenes[0];
+
+    // Check if this was a boss in a dungeon
+    if (monster.isBoss && currentMap === 'dungeon') {
+        onBossDefeated(dungeonLevel, monster.x, monster.y);
+    }
+
+    // Destroy HP bars
+    if (monster.hpBarBg) monster.hpBarBg.destroy();
+    if (monster.hpBar) monster.hpBar.destroy();
+
+    // Play death animation & particles
+    playMonsterDeathAnimation(monster);
+    createDeathEffects(monster.x, monster.y);
+
+    // Death animation - fade out and rotate (enhanced)
+    scene.tweens.add({
+        targets: monster,
+        alpha: 0,
+        angle: 360,
+        scale: 0,
+        duration: 500,
+        ease: 'Power2'
+    });
+
+    // Give XP (based on monster type)
+    const xpGain = monster.xpReward || 10;
+    playerStats.xp += xpGain;
+    showDamageNumber(monster.x, monster.y, `+${xpGain} XP`, 0xffd700, false, 'xp');
+    addChatMessage(`Gained ${xpGain} XP`, 0xffd700, '✨');
+
+    // Track quest progress - legacy
+    playerStats.questStats.monstersKilled++;
+
+    // UQE Bridge Event - FIX: Ensure this is called for ALL deaths
+    if (typeof uqe !== 'undefined') {
+        uqe.eventBus.emit(UQE_EVENTS.MONSTER_KILLED, {
+            id: monster.monsterId || monster.monsterType.toLowerCase(),
+            type: monster.monsterType.toLowerCase()
+        });
+    }
+
+    // Add chat message for monster death
+    const monsterName = monster.monsterType || 'Monster';
+    addChatMessage(`${monsterName} defeated`, 0xff6b6b, '💀');
+
+    // Check level up & Drop items
+    checkLevelUp();
+    dropItemsFromMonster(monster.x, monster.y);
+
+    // Play death sound
+    playSound('monster_die');
+
+    // Remove monster after animation completes
+    scene.time.delayedCall(300, () => {
+        if (monster && monster.active) {
+            monster.destroy();
+            const index = monsters.indexOf(monster);
+            if (index !== -1) {
+                monsters.splice(index, 1);
+            }
         }
+    });
+}
+// Items are now manually picked up with Spacebar (handled above)
+// No automatic pickup - player must press Spacebar when near items
+
+// Check if combat just ended and show pending quest modals
+const currentlyInCombat = isInCombat();
+if (!currentlyInCombat && (pendingCompletedQuest || pendingNewQuest)) {
+    // Combat ended, show pending quest modals
+    if (pendingCompletedQuest) {
+        const questToShow = pendingCompletedQuest;
+        pendingCompletedQuest = null;
+        showQuestCompletedModal(questToShow);
+    } else if (pendingNewQuest) {
+        // Only show new quest if no completed quest was pending
+        const questToShow = pendingNewQuest;
+        pendingNewQuest = null;
+        showNewQuestModal(questToShow);
     }
 }
 
@@ -7289,10 +7357,36 @@ function generateRandomItemOfType(itemType, quality = 'Common') {
 function dropItemsFromMonster(x, y) {
     const scene = game.scene.scenes[0];
 
-    // 70% chance to drop something
+    // 70% chance to drop random loot
+    let droppedItem = null;
     if (Math.random() < 0.7) {
-        const item = generateRandomItem();
+        droppedItem = generateRandomItem();
+    }
 
+    // NEW: Quest-specific loot logic
+    // If the player has an active quest for a specific item, give it a chance to drop
+    if (typeof uqe !== 'undefined') {
+        uqe.activeQuests.forEach(quest => {
+            quest.objectives.forEach(obj => {
+                if (obj.type === 'collect' && !obj.completed) {
+                    // 30% chance to drop quest-specific item
+                    if (Math.random() < 0.3) {
+                        droppedItem = {
+                            id: obj.itemId,
+                            type: 'quest_item',
+                            name: obj.label.replace('Gather ', '').replace('Collect ', ''),
+                            quality: 'Uncommon',
+                            amount: 1
+                        };
+                        console.log(`🎁 [UQE Bridge] Dropping quest item: ${droppedItem.name}`);
+                    }
+                }
+            });
+        });
+    }
+
+    if (droppedItem) {
+        const item = droppedItem;
         // Create item sprite on ground
         let spriteKey = 'item_gold';
         if (item.type === 'weapon') spriteKey = 'item_weapon';
@@ -7304,6 +7398,7 @@ function dropItemsFromMonster(x, y) {
         else if (item.type === 'gloves') spriteKey = 'item_gloves';
         else if (item.type === 'belt') spriteKey = 'item_belt';
         else if (item.type === 'consumable') spriteKey = 'item_consumable';
+        else if (item.type === 'quest_item') spriteKey = 'item_consumable'; // Use consumable sprite for shards etc.
 
         const itemSprite = scene.add.sprite(x, y, spriteKey);
         itemSprite.setDepth(8); // Above tiles, below monsters
@@ -7371,7 +7466,11 @@ function pickupItem(item, index) {
 
         // UQE Bridge Event
         if (typeof uqe !== 'undefined') {
-            uqe.eventBus.emit(UQE_EVENTS.ITEM_PICKUP, { id: item.type, amount: 1 });
+            uqe.eventBus.emit(UQE_EVENTS.ITEM_PICKUP, {
+                id: item.id || item.name,
+                type: item.type,
+                amount: 1
+            });
         }
     }
 
@@ -9103,10 +9202,17 @@ function initializeQuests() {
 
         if (!hasMainStarted) {
             // Keep the very first main quest active by default for player guidance
+            // BUT SKIP IF MIGRATED TO UQE
             const firstMain = allMainQuests[0];
-            firstMain.startValue = questManager.getStatValue(firstMain.type, playerStats);
-            playerStats.quests.main.push(firstMain);
-            console.log(`✅ Started primary main quest: ${firstMain.title}`);
+            const isMigrated = typeof uqe !== 'undefined' && uqe.allDefinitions[firstMain.id];
+
+            if (!isMigrated) {
+                firstMain.startValue = questManager.getStatValue(firstMain.type, playerStats);
+                playerStats.quests.main.push(firstMain);
+                console.log(`✅ Started primary main quest: ${firstMain.title}`);
+            } else {
+                console.log(`ℹ️ [UQE Bridge] Skipping legacy auto-start for migrated quest: ${firstMain.id}`);
+            }
         }
     }
 
@@ -9663,13 +9769,14 @@ function updateQuestLogItems() {
             const totalProgress = q.objectives.reduce((sum, obj) => sum + obj.progress, 0);
             const totalTarget = q.objectives.reduce((sum, obj) => sum + obj.target, 0);
             return {
+                id: q.id,
                 title: q.title,
                 description: q.description,
                 progress: totalProgress,
                 target: totalTarget,
                 completed: q.completed,
-                rewards: q.rewards || {}, // FIX: Include rewards
-                objectives: q.objectives // Pass for detail rendering
+                rewards: q.rewards || {},
+                objectives: q.objectives
             };
         }) : [];
 
@@ -9682,6 +9789,7 @@ function updateQuestLogItems() {
         // Get completed quests
         const v2Completed = (uqe && uqe.completedQuests) ? uqe.completedQuests.map(q => {
             return {
+                id: q.id,
                 title: q.title,
                 description: q.description,
                 completed: true,
@@ -10803,32 +10911,28 @@ function updateNPCIndicators() {
 
         if (npc.questGiver) {
             const npcName = npc.name || npc.title;
-            const hasStoryActive = playerStats.quests.main.some(q => q.type === 'story' && q.giver === npcName && !playerStats.quests.completed.includes(q.id));
-            const hasSideAvailable = playerStats.quests.available && playerStats.quests.available.some(q => q.giver === npcName);
 
-            // NEW: Check for available but not yet accepted main quests
-            let hasStoryAvailable = false;
-            if (questManager) {
-                const allMain = questManager.getMainQuests();
-                const completedIds = playerStats.quests.completed || [];
-                const activeIds = playerStats.quests.main.map(q => q.id);
+            // Check UQE for available quests for this NPC
+            let hasQuestAvailable = false;
+            if (typeof uqe !== 'undefined' && uqe.allDefinitions) {
+                const uqeCompletedIds = uqe.completedQuests.map(q => q.id);
+                const uqeActiveIds = uqe.activeQuests.map(q => q.id);
 
-                // Find highest completed step in any chapter
-                const nextQuests = allMain.filter(q => {
-                    // It's not completed and not active
-                    if (completedIds.includes(q.id) || activeIds.includes(q.id)) return false;
-
-                    // It's step 1 or its predecessor is completed
-                    if (q.step === 1) return true;
-                    const prevQuest = allMain.find(prev => prev.chapter === q.chapter && prev.step === q.step - 1);
-                    return prevQuest && completedIds.includes(prevQuest.id);
+                // Get quests for this NPC that are available (not active, not completed, prereqs met)
+                const npcQuests = Object.values(uqe.allDefinitions).filter(q => q.giver === npcName);
+                hasQuestAvailable = npcQuests.some(questDef => {
+                    const isActive = uqeActiveIds.includes(questDef.id);
+                    const isCompleted = uqeCompletedIds.includes(questDef.id);
+                    let prereqMet = true;
+                    if (questDef.requires) {
+                        prereqMet = uqeCompletedIds.includes(questDef.requires);
+                    }
+                    return !isActive && !isCompleted && prereqMet;
                 });
-
-                hasStoryAvailable = nextQuests.some(q => q.giver === npcName);
             }
 
-            if (!hasStoryActive && !hasSideAvailable && !hasStoryAvailable) {
-                iconText = '💬'; // No urgent quests, just chat
+            if (!hasQuestAvailable) {
+                iconText = '💬'; // No available quests, just chat
                 iconColor = '#ffffff';
             }
         } else {
@@ -11075,45 +11179,9 @@ const dialogDatabase = {
             'start': {
                 text: 'Welcome, traveler! I am Elder Malik, the leader of this village. How may I assist you?',
                 choices: [
-                    {
-                        text: 'Test Unified Engine (V2)',
-                        action: 'quest_accept_v2',
-                        questId: 'v2_demo_quest',
-                        next: 'end'
-                    },
-                    {
-                        text: 'About the tremors in the earth...',
-                        next: 'quakes',
-                        isQuest: true,
-                        condition: (stats) => stats.quests.main.some(q => q.id === 'main_01_001') && !stats.quests.completed.includes('main_01_001')
-                    },
-                    {
-                        text: 'How can I stop the tremors?',
-                        next: 'echoes_intro',
-                        isQuest: true,
-                        condition: (stats) => stats.quests.completed.includes('main_01_001') && !stats.quests.completed.includes('main_01_002') && !stats.quests.main.some(q => q.id === 'main_01_002')
-                    },
+                    // All UQE quests are dynamically injected at dialog open time
                     { text: 'Tell me about this place', next: 'about_place' },
                     { text: 'Goodbye', next: 'end' }
-                ]
-            },
-            'quakes': {
-                text: 'Ah, so you\'ve felt them too. The ground has been restless of late. It began shortly after the corruption started spreading from the old Watchtower. I fear something ancient has been disturbed.',
-                choices: [
-                    { text: 'I\'ll investigate the Watchtower', action: 'quest_advance', questId: 'main_01_001', next: 'quakes_conclusion' }
-                ]
-            },
-            'echoes_intro': {
-                text: 'To stop the tremors, you must delve into the Watchtower basement. The corruption is strongest there, manifesting as Echo Mites. Clear them out, and we may find a way to stabilize the earth.',
-                choices: [
-                    { text: 'I\'ll clear out the Mites', action: 'quest_accept', questId: 'main_01_002', next: 'end' },
-                    { text: 'I need to prepare first', next: 'end' }
-                ]
-            },
-            'quakes_conclusion': {
-                text: 'Thank you, brave soul. Be careful—the Watchtower basement is filled with Echo Mites. They are drawn to the tremors.',
-                choices: [
-                    { text: 'I will be careful', next: 'end' }
                 ]
             },
             'about_place': {
@@ -11153,14 +11221,14 @@ const dialogDatabase = {
                         action: 'quest_accept_side',
                         questId: 'quest_002',
                         next: 'end',
-                        condition: (stats) => stats.quests.available.some(q => q.id === 'quest_002')
+                        condition: (stats) => !isQuestActive('quest_002') && !isQuestCompleted('quest_002')
                     },
                     {
                         text: 'I can help you with gold',
                         action: 'quest_accept_side',
                         questId: 'quest_004',
                         next: 'end',
-                        condition: (stats) => stats.quests.available.some(q => q.id === 'quest_004')
+                        condition: (stats) => !isQuestActive('quest_004') && !isQuestCompleted('quest_004')
                     },
                     { text: 'Maybe another time', next: 'end' }
                 ]
@@ -11189,7 +11257,7 @@ const dialogDatabase = {
                         text: 'I want to help with the monsters',
                         next: 'hunting',
                         isQuest: true,
-                        condition: (stats) => stats.quests.available.some(q => q.id === 'quest_001')
+                        condition: (stats) => !isQuestActive('quest_001') && !isQuestCompleted('quest_001')
                     },
                     { text: 'Tell me about the monsters', next: 'help' },
                     { text: 'Just passing through', next: 'end' }
@@ -11232,6 +11300,25 @@ const dialogDatabase = {
     }
 };
 
+
+/**
+ * Deep clone dialog data while preserving functions (like condition)
+ * JSON.parse/stringify destroys functions, so we need this custom clone
+ */
+function deepCloneDialog(obj) {
+    if (obj === null || typeof obj !== 'object') return obj;
+    if (typeof obj === 'function') return obj; // Preserve functions!
+    if (Array.isArray(obj)) return obj.map(item => deepCloneDialog(item));
+
+    const cloned = {};
+    for (const key in obj) {
+        if (obj.hasOwnProperty(key)) {
+            cloned[key] = deepCloneDialog(obj[key]);
+        }
+    }
+    return cloned;
+}
+
 /**
  * Start dialog with an NPC
  */
@@ -11241,66 +11328,60 @@ function startDialog(npc) {
         dialogData = dialogDatabase['generic_npc'];
     }
 
-    // Clone to avoid modifying the original database
-    const activeDialog = JSON.parse(JSON.stringify(dialogData));
+    // Clone to avoid modifying the original database - use custom clone to preserve functions
+    const activeDialog = deepCloneDialog(dialogData);
 
-    // UQE Bridge Event
-    if (typeof uqe !== 'undefined') {
-        uqe.eventBus.emit(UQE_EVENTS.NPC_TALK, { id: npc.name });
-    }
     activeDialog.npcName = npc.name || activeDialog.npcName;
     activeDialog.npcTitle = npc.title || activeDialog.npcTitle;
 
+    // UQE Bridge Event - EMIT EARLY so TalkObjectives complete BEFORE we check quest state
+    if (typeof uqe !== 'undefined') {
+        uqe.eventBus.emit(UQE_EVENTS.NPC_TALK, { id: npc.name });
+        // Run UQE update to process any completed quests immediately
+        uqe.update();
+    }
+
     // Check for available main quests from this NPC
-    if (questManager) {
-        const allMainQuests = questManager.getMainQuests();
-        const completedIds = playerStats.quests.completed;
-        const activeIds = playerStats.quests.main.map(q => q.id);
+    // IMPORTANT: We gather state AFTER the NPC_TALK event so we have fresh quest state
+    if (typeof uqe !== 'undefined' && uqe.allDefinitions) {
+        // Gather current quest state from UQE
+        const uqeCompletedIds = uqe.completedQuests.map(q => q.id);
+        const uqeActiveIds = uqe.activeQuests.map(q => q.id);
 
-        // Find if this NPC can either advance an active quest or give a new one
+        // Get all quests for this NPC from UQE definitions
+        const npcQuests = Object.values(uqe.allDefinitions).filter(q => q.giver === npc.name);
 
-        // 1. Check for TURN IN / ADVANCE of active story quest
-        const currentActiveMain = playerStats.quests.main.find(q => q.giver === npc.name);
-        if (currentActiveMain && currentActiveMain.type === 'story') {
-            activeDialog.nodes.start.choices.unshift({
-                text: `About ${currentActiveMain.title}...`,
-                isQuest: true,
-                action: 'quest_advance',
-                questId: currentActiveMain.id,
-                next: 'quest_advanced'
-            });
+        // Inject available quests (not active, not completed, prerequisites met)
+        npcQuests.forEach(questDef => {
+            const isActive = uqeActiveIds.includes(questDef.id);
+            const isCompleted = uqeCompletedIds.includes(questDef.id);
 
-            activeDialog.nodes.quest_advanced = {
-                text: `Ah, I see. You've made progress. Well done.`,
-                choices: [{ text: 'Thank you', next: 'end' }]
-            };
-        }
+            // Check if prerequisites are met (requires field)
+            let prereqMet = true;
+            if (questDef.requires) {
+                prereqMet = uqeCompletedIds.includes(questDef.requires);
+            }
 
-        // 2. Check for NEW main quest available from this NPC
-        // It must be the next step in the sequence
-        const lastStep = completedIds.length > 0 ?
-            Math.max(...allMainQuests.filter(q => completedIds.includes(q.id)).map(q => q.step || 0), 0) : 0;
+            // Only show quest if: not active, not completed, and prereqs met
+            if (!isActive && !isCompleted && prereqMet) {
+                activeDialog.nodes.start.choices.unshift({
+                    text: questDef.title,
+                    isQuest: true,
+                    action: 'quest_accept_v2',
+                    questId: questDef.id,
+                    next: 'quest_accepted',
+                    condition: (stats) => !isQuestActive(questDef.id) && !isQuestCompleted(questDef.id)
+                });
 
-        const nextMain = allMainQuests.find(q =>
-            q.step === lastStep + 1 &&
-            !activeIds.includes(q.id) &&
-            q.giver === npc.name
-        );
-
-        if (nextMain) {
-            activeDialog.nodes.start.choices.unshift({
-                text: `${nextMain.title}`,
-                isQuest: true,
-                action: 'quest_accept',
-                questId: nextMain.id,
-                next: 'quest_accepted'
-            });
-
-            activeDialog.nodes.quest_accepted = {
-                text: `Excellent. Here's what I need you to do: ${nextMain.description}`,
-                choices: [{ text: 'I\'ll get right on it', next: 'end' }]
-            };
-        }
+                // Create the acceptance node if not already present
+                if (!activeDialog.nodes.quest_accepted) {
+                    activeDialog.nodes.quest_accepted = {
+                        text: `Excellent. Here's what I need you to do: ${questDef.description}`,
+                        choices: [{ text: 'I\'ll get right on it', next: 'end' }]
+                    };
+                }
+            }
+        });
     }
 
     currentDialog = activeDialog;
@@ -11341,7 +11422,7 @@ function createDialogUI(npc) {
     const scene = game.scene.scenes[0];
 
     const panelWidth = 700;
-    const panelHeight = 450;
+    const panelHeight = 550;
     const centerX = scene.cameras.main.width / 2;
     const centerY = scene.cameras.main.height / 2 + 50;
 
@@ -11379,7 +11460,7 @@ function updateDialogUI(node) {
     const centerX = dialogPanel.bg.x;
     const centerY = dialogPanel.bg.y;
     const panelWidth = 700;
-    const panelHeight = 450;
+    const panelHeight = 550; // Corrected from 450 to match creation
 
     // Dialog text
     dialogPanel.dialogText = scene.add.text(
@@ -11401,7 +11482,16 @@ function updateDialogUI(node) {
     let visibleChoiceCount = 0;
     node.choices.forEach((choice) => {
         // Skip choices that don't meet their condition
-        if (choice.condition && !choice.condition(playerStats)) return;
+        if (choice.condition) {
+            try {
+                const result = choice.condition(playerStats);
+                console.log(`[UQE] Choice '${choice.text}' (Quest: ${choice.questId || 'none'}, Action: ${choice.action || 'next'}) condition: ${result}`);
+                if (!result) return;
+            } catch (err) {
+                console.error(`❌ [Dialog] Condition error for '${choice.text}':`, err);
+                return; // Hide on error for safety
+            }
+        }
 
         const buttonY = startY + visibleChoiceCount * (buttonHeight + buttonSpacing);
         visibleChoiceCount++;
@@ -11435,10 +11525,6 @@ function updateDialogUI(node) {
 
         // Apply yellow color to the marker if it's a quest
         if (isQuest) {
-            // Note: Basic Phaser Text doesn't support BBCode like style tags easily without a plugin
-            // For now, let's just make the whole text a bit more yellow, or just leave as is if we want just the ! yellow
-            // Actually, if we want just the ! yellow, we'd need multiple text objects or a more complex solution.
-            // Let's at least make the whole line yellow-ish to signal quest value
             buttonText.setFill('#ffff00');
         }
 
@@ -11452,41 +11538,39 @@ function updateDialogUI(node) {
 
         // Button click handler
         buttonBg.on('pointerdown', () => {
-            if (choice.action === 'open_shop') {
+            const questId = choice.questId;
+            const action = choice.action;
+
+            if (action === 'open_shop') {
                 openShop(currentShopNPC);
-            } else if (choice.action === 'quest_advance') {
-                advanceQuest(choice.questId);
-                if (choice.next) {
-                    showDialogNode(choice.next);
-                } else {
-                    closeDialog();
-                }
-            } else if (choice.action === 'accept_all') {
-                acceptAllAvailableQuests();
-                if (choice.next) {
-                    showDialogNode(choice.next);
-                } else {
-                    closeDialog();
-                }
-            } else if (choice.action === 'quest_accept') {
-                acceptMainQuest(choice.questId);
-                if (choice.next) {
-                    showDialogNode(choice.next);
-                } else {
-                    closeDialog();
-                }
-            } else if (choice.action === 'quest_accept_side') {
-                acceptSideQuest(choice.questId);
-                if (choice.next) {
-                    showDialogNode(choice.next);
-                } else {
-                    closeDialog();
-                }
-            } else if (choice.action === 'quest_accept_v2') {
-                if (typeof uqe !== 'undefined') {
-                    uqe.acceptQuest(choice.questId);
+            } else if (action === 'quest_advance' || action === 'quest_accept' || action === 'quest_accept_side' || action === 'quest_accept_v2') {
+                // UNIFIED UQE BRIDGE REDIRECT
+                const questEngine = window.uqe;
+                if (questId && typeof questEngine !== 'undefined' && questEngine.allDefinitions[questId]) {
+                    console.log(`🔗 [UQE Bridge] Redirecting action '${action}' for quest: ${questId}`);
+                    questEngine.acceptQuest(questId);
+
+                    // Sync: Remove from legacy lists if it exists there
+                    playerStats.quests.main = playerStats.quests.main.filter(q => q.id !== questId);
+                    playerStats.quests.active = playerStats.quests.active.filter(q => q.id !== questId);
+                    playerStats.quests.available = playerStats.quests.available.filter(q => q.id !== questId);
+
                     showDamageNumber(player.x, player.y - 40, "New Era Quest Accepted!", 0xffff00);
+                } else if (action === 'quest_advance') {
+                    advanceQuest(questId);
+                } else if (action === 'quest_accept') {
+                    acceptMainQuest(questId);
+                } else if (action === 'quest_accept_side') {
+                    acceptSideQuest(questId);
                 }
+
+                if (choice.next) {
+                    showDialogNode(choice.next);
+                } else {
+                    closeDialog();
+                }
+            } else if (action === 'accept_all') {
+                acceptAllAvailableQuests();
                 if (choice.next) {
                     showDialogNode(choice.next);
                 } else {
@@ -13289,27 +13373,7 @@ function castAbility(abilityId, time) {
 
                 // Check if monster died
                 if (monster.hp <= 0 && !monster.isDead) {
-                    monster.isDead = true;
-
-                    // Check if this was a boss in a dungeon
-                    if (monster.isBoss && currentMap === 'dungeon') {
-                        onBossDefeated(dungeonLevel, monster.x, monster.y);
-                    }
-                    if (monster.hpBarBg) monster.hpBarBg.destroy();
-                    if (monster.hpBar) monster.hpBar.destroy();
-
-                    const xpGain = monster.xpReward || 10;
-                    playerStats.xp += xpGain;
-                    playerStats.questStats.monstersKilled++;
-                    showDamageNumber(monster.x, monster.y, `+${xpGain} XP`, 0xffd700, false, 'xp'); // Gold color for XP
-
-                    checkLevelUp();
-                    dropItemsFromMonster(monster.x, monster.y);
-
-                    game.scene.scenes[0].time.delayedCall(100, () => {
-                        monster.destroy();
-                        monsters.splice(monsters.indexOf(monster), 1);
-                    });
+                    handleMonsterDeath(monster);
                 }
             }
         });
@@ -13665,6 +13729,7 @@ function spawnMonster(x, y, type, hpOverride, attackOverride, xpOverride, isBoss
         if (monster) {
             // Add name and stats for common game logic
             monster.name = type.name;
+            monster.monsterId = type.id;
             monster.monsterType = type.name.toLowerCase();
             monster.blueprintId = blueprintId; // Crucial for animation skip check
             monster.setDepth(5); // Ensure they appear above tiles
@@ -13687,6 +13752,7 @@ function spawnMonster(x, y, type, hpOverride, attackOverride, xpOverride, isBoss
     if (monster) {
         // Shared properties for ALL monsters (Method 1 & 2)
         monster.name = type.name;
+        monster.monsterId = type.id;
         monster.monsterType = type.name.toLowerCase();
         monster.hp = hpOverride !== undefined ? hpOverride : type.hp;
         monster.maxHp = monster.hp;
@@ -14154,7 +14220,6 @@ function updateGrassDebugWindow() {
     }
 
     console.log('🔄 Updating grass debug window...');
-
     // Clear existing content
     if (grassDebugPanel.spritesheetImage && grassDebugPanel.spritesheetImage.active) {
         grassDebugPanel.spritesheetImage.destroy();
@@ -14823,5 +14888,77 @@ function playMonsterDeathAnimation(monster) {
  * 5. Quest system (press 'Q') - Phase 5
  * 6. Multiple monster types
  * 7. Special abilities/spells
- * 8. Save/Load system
  */
+
+/**
+ * Show a temporary HUD notification for quest progress
+ */
+let activeHUDNotifications = [];
+function showQuestUpdateHUD(message, isComplete) {
+    const scene = game.scene.scenes[0];
+    const screenWidth = scene.cameras.main.width;
+
+    // Position on right-side, buffered from edge
+    const x = screenWidth - 320;
+    let y = 150 + (activeHUDNotifications.length * 50);
+
+    // Create container for notification - Sleek semi-transparent dark box
+    const bg = scene.add.rectangle(x + 130, y, 280, 42, 0x000000, 0.8)
+        .setScrollFactor(0)
+        .setDepth(10000)
+        .setStrokeStyle(2, isComplete ? 0x00ff00 : 0x00d4ff);
+
+    const text = scene.add.text(x + 130, y, message, {
+        fontSize: '16px',
+        fill: isComplete ? '#00ff00' : '#ffffff',
+        fontStyle: 'bold',
+        fontFamily: 'Inter, Arial, sans-serif'
+    }).setScrollFactor(0).setDepth(10001).setOrigin(0.5, 0.5);
+
+    const notification = { bg, text };
+    activeHUDNotifications.push(notification);
+
+    // Smooth Entrance
+    bg.alpha = 0;
+    text.alpha = 0;
+    bg.x += 20; // Slide from right
+    text.x += 20;
+
+    scene.tweens.add({
+        targets: [bg, text],
+        alpha: 1,
+        x: '-=20',
+        duration: 400,
+        ease: 'Power2'
+    });
+
+    // Auto-remove after 5 seconds
+    scene.time.delayedCall(5000, () => {
+        if (!scene || !scene.tweens) return;
+        scene.tweens.add({
+            targets: [bg, text],
+            alpha: 0,
+            x: '+=30', // Slide out to right
+            duration: 600,
+            onComplete: () => {
+                if (bg) bg.destroy();
+                if (text) text.destroy();
+                const index = activeHUDNotifications.indexOf(notification);
+                if (index !== -1) {
+                    activeHUDNotifications.splice(index, 1);
+                    // Shift others up smoothly
+                    activeHUDNotifications.forEach((n, i) => {
+                        if (n.bg && n.text && scene.tweens) {
+                            scene.tweens.add({
+                                targets: [n.bg, n.text],
+                                y: 150 + (i * 50),
+                                duration: 300,
+                                ease: 'Back.easeOut'
+                            });
+                        }
+                    });
+                }
+            }
+        });
+    });
+}

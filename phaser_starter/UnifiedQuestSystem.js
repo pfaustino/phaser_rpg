@@ -25,11 +25,14 @@ const UQE_EVENTS = {
     MONSTER_KILLED: 'monster_killed',
     ITEM_PICKUP: 'item_pickup',
     NPC_TALK: 'npc_talk',
-    STAT_CHANGE: 'stat_change'
+    STAT_CHANGE: 'stat_change',
+    QUEST_COMPLETED: 'quest_completed',
+    OBJECTIVE_UPDATED: 'objective_updated'
 };
 
 class UqeObjective {
-    constructor(data) {
+    constructor(data, eventBus) {
+        this.eventBus = eventBus;
         this.id = data.id || Math.random().toString(36).substr(2, 9);
         this.type = data.type;
         this.label = data.label || '';
@@ -40,10 +43,22 @@ class UqeObjective {
 
     updateProgress(amount) {
         if (this.completed) return;
+        const prevProgress = this.progress;
         this.progress = Math.min(this.progress + amount, this.target);
+
+        if (this.progress > prevProgress) {
+            console.log(`📈 [UQE] Objective Progress: ${this.label} (${this.progress}/${this.target})`);
+            if (this.eventBus) {
+                this.eventBus.emit(UQE_EVENTS.OBJECTIVE_UPDATED, {
+                    objective: this,
+                    amount: amount
+                });
+            }
+        }
+
         if (this.progress >= this.target) {
             this.completed = true;
-            console.log(`✅ Objective Complete: ${this.label}`);
+            console.log(`✅ [UQE] Objective Complete: ${this.label}`);
         }
     }
 
@@ -69,19 +84,30 @@ class UqeObjective {
 
 class KillObjective extends UqeObjective {
     constructor(data, eventBus) {
-        super(data);
+        super(data, eventBus);
         this.monsterId = data.monsterId;
         eventBus.on(UQE_EVENTS.MONSTER_KILLED, (data) => {
-            if (data.id === this.monsterId) this.updateProgress(1);
+            const target = this.monsterId.toLowerCase();
+            const killedId = data.id.toLowerCase();
+            const killedType = data.type.toLowerCase();
+
+            // 1. Exact ID match (e.g. "procedural_slime")
+            // 2. Exact type match (e.g. "slime")
+            // 3. Smart variant match (e.g. "prism slime" or "echo_mite" contains "slime" or "mite")
+            const words = killedType.split(/[ _-]/);
+            if (killedId === target || killedType === target || words.includes(target)) {
+                this.updateProgress(1);
+            }
         });
     }
 }
 
 class TalkObjective extends UqeObjective {
     constructor(data, eventBus) {
-        super(data);
+        super(data, eventBus);
         this.npcId = data.npcId;
         eventBus.on(UQE_EVENTS.NPC_TALK, (data) => {
+            console.log(`🗣️ [UQE] TalkObjective checking: '${this.npcId}' vs '${data.id}'`);
             if (data.id === this.npcId) this.updateProgress(1);
         });
     }
@@ -89,10 +115,13 @@ class TalkObjective extends UqeObjective {
 
 class CollectObjective extends UqeObjective {
     constructor(data, eventBus) {
-        super(data);
+        super(data, eventBus);
         this.itemId = data.itemId;
         eventBus.on(UQE_EVENTS.ITEM_PICKUP, (data) => {
-            if (data.id === this.itemId) this.updateProgress(data.amount || 1);
+            // Match specific ID, type, or wildcard 'any'
+            if (this.itemId === 'any' || data.id === this.itemId || data.type === this.itemId) {
+                this.updateProgress(data.amount || 1);
+            }
         });
     }
 }
@@ -109,12 +138,15 @@ class Quest {
 
     createObjectives(objData, eventBus) {
         return objData.map(data => {
+            let obj;
             switch (data.type) {
-                case 'kill': return new KillObjective(data, eventBus);
-                case 'talk': return new TalkObjective(data, eventBus);
-                case 'collect': return new CollectObjective(data, eventBus);
-                default: return new UqeObjective(data);
+                case 'kill': obj = new KillObjective(data, eventBus); break;
+                case 'talk': obj = new TalkObjective(data, eventBus); break;
+                case 'collect': obj = new CollectObjective(data, eventBus); break;
+                default: obj = new UqeObjective(data, eventBus); break;
             }
+            obj.parentQuest = this; // Link to parent
+            return obj;
         });
     }
 
@@ -123,7 +155,7 @@ class Quest {
         const allDone = this.objectives.every(o => o.isComplete());
         if (allDone) {
             this.completed = true;
-            console.log(`🏆 QUEST COMPLETE: ${this.title}`);
+            console.log(`🏆 [UQE] QUEST COMPLETE: ${this.title}`);
         }
         return allDone;
     }
@@ -161,14 +193,25 @@ class UqeEngine {
     }
 
     acceptQuest(questId) {
-        if (this.activeQuests.some(q => q.id === questId)) return;
-        if (this.completedQuests.some(q => q.id === questId)) return; // Don't re-accept
+        console.log(`📝 [UQE Engine] acceptQuest called with: ${questId}`);
+        if (this.activeQuests.some(q => q.id === questId)) {
+            console.log(`⚠️ [UQE Engine] Quest already active: ${questId}`);
+            return;
+        }
+        if (this.completedQuests.some(q => q.id === questId)) {
+            console.log(`⚠️ [UQE Engine] Quest already completed: ${questId}`);
+            return;
+        }
 
         const def = this.allDefinitions[questId];
         if (def) {
             const quest = new Quest(def, this.eventBus);
             this.activeQuests.push(quest);
-            console.log(`📝 [UQE Engine] Quest Accepted: ${quest.title}`);
+            console.log(`✅ [UQE Engine] Quest Accepted: ${quest.title} (ID: ${quest.id})`);
+            console.log(`📊 [UQE Engine] Active quests now: ${this.activeQuests.length}`);
+        } else {
+            console.error(`❌ [UQE Engine] QUEST DEFINITION NOT FOUND: ${questId}`);
+            console.log(`📊 [UQE Engine] Available keys:`, Object.keys(this.allDefinitions));
         }
     }
 
@@ -210,11 +253,11 @@ class UqeEngine {
     }
 
     update() {
-        // Iterate backwards to safely remove items
+        // Iterate backwards to safely remove
         for (let i = this.activeQuests.length - 1; i >= 0; i--) {
             const quest = this.activeQuests[i];
             if (quest.checkCompletion()) {
-                console.log(`🏆 [UQE Engine] Moving quest to completed: ${quest.title}`);
+                console.log(`🏁 [UQE Engine] Quest Completed: ${quest.title}`);
                 this.activeQuests.splice(i, 1);
                 this.completedQuests.push(quest);
                 this.eventBus.emit(UQE_EVENTS.QUEST_COMPLETED, quest);
@@ -225,3 +268,5 @@ class UqeEngine {
 
 // Global instance
 const uqe = new UqeEngine();
+window.uqe = uqe;
+console.log("💎 [UQE Engine] Global instance created and attached to window.");

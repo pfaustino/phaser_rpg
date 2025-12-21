@@ -295,6 +295,14 @@ function preload() {
     // Load Method 2 monster data
     this.load.json('monsterData', 'monsters.json');
 
+    // Load dialog/lore system data
+    this.load.json('milestoneData', 'milestones.json');
+    this.load.json('loreData', 'lore.json');
+    this.load.json('dialogData', 'dialogs.json');
+
+    // Load NPC portraits for dialog system
+    this.load.image('portrait_elder_malik', 'assets/images/ElderMalik-Portrait.jpg');
+
 
     // Add load event listeners for debugging - MUST be before load calls
     this.load.on('filecomplete', (key, type, data) => {
@@ -15414,3 +15422,186 @@ function showQuestUpdateHUD(message, isComplete) {
     // Just trigger an update
     updateQuestTrackerHUD();
 }
+
+// ============================================
+// DIALOG & LORE SYSTEM INTEGRATION
+// ============================================
+
+// Global manager instances
+let milestoneManager = null;
+let loreManager = null;
+let dialogManager = null;
+
+/**
+ * Initialize the Dialog & Lore System
+ * Call this from your game's create() function after other systems are ready
+ * @param {Phaser.Scene} scene - The current Phaser scene
+ */
+function initializeDialogLoreSystem(scene) {
+    console.log('🎭 Initializing Dialog & Lore System...');
+
+    // Create managers
+    milestoneManager = new MilestoneManager(scene);
+    loreManager = new LoreManager(scene);
+    dialogManager = new DialogManager(scene);
+
+    // Attach to scene for access by managers
+    scene.milestoneManager = milestoneManager;
+    scene.loreManager = loreManager;
+    scene.dialogManager = dialogManager;
+
+    // Initialize from cached data
+    milestoneManager.init();
+    loreManager.init();
+    dialogManager.init();
+
+    // Set up event listeners for milestone triggers
+    setupMilestoneListeners(scene);
+
+    // Trigger game start milestone
+    milestoneManager.onGameStart();
+
+    console.log('✅ Dialog & Lore System initialized');
+
+    return { milestoneManager, loreManager, dialogManager };
+}
+
+/**
+ * Set up event listeners for milestone triggers
+ */
+function setupMilestoneListeners(scene) {
+    // Listen for quest completion events (from existing quest system)
+    scene.events.on('quest_completed', (questId) => {
+        if (milestoneManager) {
+            milestoneManager.onQuestComplete(questId);
+        }
+    });
+
+    // Listen for UQE quest completion
+    scene.events.on('uqe_quest_completed', (quest) => {
+        if (milestoneManager && quest && quest.id) {
+            milestoneManager.onQuestComplete(quest.id);
+        }
+    });
+
+    // Listen for level up
+    scene.events.on('player_level_up', (level) => {
+        if (milestoneManager) {
+            milestoneManager.onLevelUp(level);
+        }
+    });
+
+    // Listen for dialog quest acceptance
+    scene.events.on('dialog_accept_quest', (questId) => {
+        console.log('📜 Quest accepted via dialog:', questId);
+        // TODO: Integrate with quest activation system
+    });
+
+    // Listen for milestone quest unlocks
+    scene.events.on('milestone_quest_unlock', (questIds) => {
+        console.log('🔓 Milestone unlocking quests:', questIds);
+        // TODO: Integrate with quest activation system
+    });
+}
+
+/**
+ * Talk to an NPC - shows appropriate dialog based on game state
+ * @param {string} npcId - The NPC's ID from npc.json
+ * @returns {boolean} - True if dialog was started
+ */
+function talkToNPC(npcId) {
+    if (!dialogManager) {
+        console.warn('DialogManager not initialized. Call initializeDialogLoreSystem first.');
+        return false;
+    }
+
+    return dialogManager.startDialog(npcId);
+}
+
+/**
+ * Check if dialog system is active (blocks other input)
+ */
+function isDialogActive() {
+    return dialogManager ? dialogManager.isActive() : false;
+}
+
+/**
+ * Get lore stats for UI display
+ */
+function getLoreStats() {
+    return loreManager ? loreManager.getStats() : { total: 0, unlocked: 0, percentage: 0 };
+}
+
+/**
+ * Get unlocked lore for Codex UI
+ */
+function getUnlockedLore() {
+    return loreManager ? loreManager.getUnlockedLore() : [];
+}
+
+/**
+ * Get lore categories for Codex UI
+ */
+function getLoreCategories() {
+    return loreManager ? loreManager.getCategoryCounts() : {};
+}
+
+// ============================================
+// NPC INTERACTION HELPER
+// ============================================
+
+/**
+ * Check if player is near an NPC and can interact
+ * Call this from your update() loop or NPC click handler
+ * @param {number} playerX - Player X position
+ * @param {number} playerY - Player Y position
+ * @param {number} interactRadius - Distance for interaction (default 50px)
+ * @returns {object|null} - Nearest NPC within radius, or null
+ */
+function getNearbyNPC(playerX, playerY, interactRadius = 50) {
+    let nearestNPC = null;
+    let nearestDist = interactRadius;
+
+    for (const npc of npcs) {
+        if (!npc || !npc.sprite) continue;
+
+        const dist = Phaser.Math.Distance.Between(
+            playerX, playerY,
+            npc.sprite.x, npc.sprite.y
+        );
+
+        if (dist < nearestDist) {
+            nearestDist = dist;
+            nearestNPC = npc;
+        }
+    }
+
+    return nearestNPC;
+}
+
+/**
+ * Handle 'F' key for NPC interaction
+ * Add this to your key handlers in update()
+ */
+function handleNPCInteraction(scene) {
+    if (!player || isDialogActive()) return;
+
+    const nearbyNPC = getNearbyNPC(player.x, player.y, 60);
+
+    if (nearbyNPC && nearbyNPC.data) {
+        console.log('Interacting with NPC:', nearbyNPC.data.name);
+        talkToNPC(nearbyNPC.data.id);
+    }
+}
+
+// Export functions to global scope
+window.initializeDialogLoreSystem = initializeDialogLoreSystem;
+window.talkToNPC = talkToNPC;
+window.isDialogActive = isDialogActive;
+window.getLoreStats = getLoreStats;
+window.getUnlockedLore = getUnlockedLore;
+window.getLoreCategories = getLoreCategories;
+window.getNearbyNPC = getNearbyNPC;
+window.handleNPCInteraction = handleNPCInteraction;
+
+console.log('🎭 Dialog & Lore System functions loaded. Call initializeDialogLoreSystem(scene) to activate.');

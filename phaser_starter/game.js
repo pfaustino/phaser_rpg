@@ -15458,10 +15458,14 @@ function initializeDialogLoreSystem(scene) {
     // Set up event listeners for milestone triggers
     setupMilestoneListeners(scene);
 
+    // Set up F key for NPC interaction
+    setupNPCInteractionKey(scene);
+
     // Trigger game start milestone
     milestoneManager.onGameStart();
 
     console.log('✅ Dialog & Lore System initialized');
+    console.log('💡 Press F near an NPC to talk');
 
     return { milestoneManager, loreManager, dialogManager };
 }
@@ -15544,6 +15548,44 @@ function getUnlockedLore() {
  */
 function getLoreCategories() {
     return loreManager ? loreManager.getCategoryCounts() : {};
+}
+
+// ============================================
+// NPC INTERACTION KEY SETUP
+// ============================================
+
+// Track the F key for NPC interaction
+let npcInteractKey = null;
+
+/**
+ * Set up F key for NPC interaction
+ * @param {Phaser.Scene} scene - The current Phaser scene
+ */
+function setupNPCInteractionKey(scene) {
+    // Create F key input
+    npcInteractKey = scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.F);
+
+    // Add key press handler
+    npcInteractKey.on('down', () => {
+        // Don't process if dialog is already active
+        if (isDialogActive()) return;
+
+        // Don't process if player doesn't exist
+        if (!player) return;
+
+        // Check for nearby NPC
+        const nearbyNPC = getNearbyNPC(player.x, player.y, 80);
+
+        if (nearbyNPC && nearbyNPC.data) {
+            console.log('🗣️ Starting dialog with:', nearbyNPC.data.name);
+            talkToNPC(nearbyNPC.data.id);
+        } else {
+            // Optional: show "no one nearby" message
+            console.log('No NPC nearby to talk to');
+        }
+    });
+
+    console.log('⌨️ F key registered for NPC interaction');
 }
 
 // ============================================

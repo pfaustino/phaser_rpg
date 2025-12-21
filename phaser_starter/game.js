@@ -3674,6 +3674,11 @@ function dropBossLoot(x, y, level) {
     playerStats.gold += goldAmount;
     showDamageNumber(x, y - 20, `+${goldAmount} Gold`, 0xffd700);
 
+    // UQE: Emit gold earned event
+    if (typeof uqe !== 'undefined') {
+        uqe.eventBus.emit(UQE_EVENTS.GOLD_EARNED, { amount: goldAmount });
+    }
+
     console.log(`💰 Boss dropped ${numItems} items (quality: ${quality})`);
 }
 
@@ -5020,13 +5025,26 @@ function update(time, delta) {
     if (scene.lastPlayerTileX !== undefined && scene.lastPlayerTileY !== undefined) {
         if (currentTileX !== scene.lastPlayerTileX || currentTileY !== scene.lastPlayerTileY) {
             playerStats.questStats.tilesTraveled++;
+            // UQE: Emit tile traveled event
+            if (typeof uqe !== 'undefined') {
+                uqe.eventBus.emit(UQE_EVENTS.TILE_TRAVELED, { amount: 1 });
+            }
         }
     }
     scene.lastPlayerTileX = currentTileX;
     scene.lastPlayerTileY = currentTileY;
 
-    // Track survival time
+    // Track survival time - emit UQE event every second
     playerStats.questStats.survivalTime += delta;
+    if (!scene.lastSurvivalEmit) scene.lastSurvivalEmit = 0;
+    scene.lastSurvivalEmit += delta;
+    if (scene.lastSurvivalEmit >= 1000) {
+        const seconds = Math.floor(scene.lastSurvivalEmit / 1000);
+        scene.lastSurvivalEmit = scene.lastSurvivalEmit % 1000;
+        if (typeof uqe !== 'undefined') {
+            uqe.eventBus.emit(UQE_EVENTS.TIME_SURVIVED, { seconds: seconds });
+        }
+    }
 
     // Check quest progress
     checkQuestProgress();
@@ -6689,6 +6707,12 @@ function checkLevelUp() {
         showDamageNumber(player.x, player.y - 40, 'LEVEL UP!', 0x00ffff);
         addChatMessage(`Level Up! Now Level ${stats.level}`, 0x00ffff, '⭐');
         console.log(`Level up! Now level ${stats.level}`);
+
+        // UQE: Emit level up event
+        if (typeof uqe !== 'undefined') {
+            uqe.eventBus.emit(UQE_EVENTS.LEVEL_UP, { level: stats.level });
+            uqe.update(); // Check for quest completion
+        }
     }
 }
 
@@ -9517,7 +9541,7 @@ function createQuestLogUI() {
         .setScrollFactor(0).setDepth(300).setStrokeStyle(3, 0xffffff);
 
     // Title
-    const title = scene.add.text(centerX, centerY - panelHeight / 2 + 20, 'QUEST LOG', {
+    const title = scene.add.text(centerX, centerY - panelHeight / 2 + 15, 'QUEST LOG', {
         fontSize: '28px',
         fill: '#ffffff',
         fontStyle: 'bold'
@@ -9679,12 +9703,19 @@ function createQuestLogUI() {
         containerStartY: listStartY,
         containerOffset: 0,
         wheelHitArea: bg, // Scroll when over the panel
-        visibleHeight: listHeight
+        visibleHeight: listHeight,
+        // Re-render quest list items on scroll so visible items update
+        onScroll: (newPosition) => {
+            updateQuestLogItems();
+        }
     });
 
-    // Divider between list and details
+    // Divider between list and details (starts below tabs)
     const dividerX = centerX - panelWidth / 2 + 350;
-    const divider = scene.add.line(dividerX, centerY - panelHeight / 2 + 90, 0, 0, 0, panelHeight - 180, 0x666666, 1)
+    const dividerTopY = centerY - panelHeight / 2 + 100; // Below tab bar (was 90)
+    const dividerBottomPadding = 40;
+    const dividerHeight = panelHeight - 140; // Height of content area
+    const divider = scene.add.rectangle(dividerX, dividerTopY + dividerHeight / 2, 2, dividerHeight, 0x666666, 1)
         .setScrollFactor(0).setDepth(301);
 
     questPanel = {
@@ -9727,9 +9758,16 @@ function createQuestLogUI() {
 /**
  * Update quest log items display
  */
+let isUpdatingQuestLog = false; // Recursion guard
 function updateQuestLogItems() {
+    if (isUpdatingQuestLog) return; // Prevent recursive calls
+    isUpdatingQuestLog = true;
+
     const scene = game.scene.scenes[0];
-    if (!questPanel) return;
+    if (!questPanel) {
+        isUpdatingQuestLog = false;
+        return;
+    }
 
     // Clear existing quest displays
     if (questPanel.container) {
@@ -9831,6 +9869,8 @@ function updateQuestLogItems() {
 
                 // Show if not active, not completed, and prereqs met
                 if (!isActive && !isCompleted && prereqMet) {
+                    // Calculate total target from objectives
+                    const totalTarget = questDef.objectives.reduce((sum, obj) => sum + (obj.target || 1), 0);
                     availableQuests.push({
                         id: questDef.id,
                         title: questDef.title,
@@ -9838,7 +9878,9 @@ function updateQuestLogItems() {
                         giver: questDef.giver,
                         objectives: questDef.objectives,
                         rewards: questDef.rewards || {},
-                        isUQE: true
+                        isUQE: true,
+                        progress: 0, // Not started yet
+                        target: totalTarget
                     });
                 }
             });
@@ -9852,12 +9894,16 @@ function updateQuestLogItems() {
         const completedQuests = [];
         if (typeof uqe !== 'undefined' && uqe.completedQuests) {
             uqe.completedQuests.forEach(q => {
+                const totalTarget = q.objectives.reduce((sum, obj) => sum + obj.target, 0);
                 completedQuests.push({
                     id: q.id,
                     title: q.title,
                     description: q.description,
                     completed: true,
-                    rewards: q.rewards || {}
+                    progress: totalTarget, // Completed = full progress
+                    target: totalTarget,
+                    rewards: q.rewards || {},
+                    objectives: q.objectives
                 });
             });
         }
@@ -9999,7 +10045,8 @@ function updateQuestLogItems() {
 
             quest.objectives.forEach(obj => {
                 const statusStr = obj.completed ? '✅' : '⏳';
-                const objText = scene.add.text(detailStartX + 20, detailY, `${statusStr} ${obj.label}: ${obj.progress}/${obj.target}`, {
+                const objProgress = obj.progress !== undefined ? obj.progress : 0;
+                const objText = scene.add.text(detailStartX + 20, detailY, `${statusStr} ${obj.label}: ${objProgress}/${obj.target}`, {
                     fontSize: '14px',
                     fill: obj.completed ? '#00ff00' : '#cccccc'
                 }).setScrollFactor(0).setDepth(302).setOrigin(0, 0);
@@ -10124,6 +10171,8 @@ function updateQuestLogItems() {
     } else if (quests.length === 0) {
         // No quests message already shown in list
     }
+
+    isUpdatingQuestLog = false; // Reset recursion guard
 }
 
 /**

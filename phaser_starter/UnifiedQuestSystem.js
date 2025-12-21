@@ -14,7 +14,10 @@ class UqeEventBus {
     }
 
     emit(event, data) {
-        console.log(`📡 [UQE EventBus] ${event}`, data);
+        // Skip logging for high-frequency events
+        if (event !== 'time_survived' && event !== 'tile_traveled') {
+            console.log(`📡 [UQE EventBus] ${event}`, data);
+        }
         if (this.listeners[event]) {
             this.listeners[event].forEach(callback => callback(data));
         }
@@ -27,7 +30,12 @@ const UQE_EVENTS = {
     NPC_TALK: 'npc_talk',
     STAT_CHANGE: 'stat_change',
     QUEST_COMPLETED: 'quest_completed',
-    OBJECTIVE_UPDATED: 'objective_updated'
+    OBJECTIVE_UPDATED: 'objective_updated',
+    // New event types for additional objectives
+    TILE_TRAVELED: 'tile_traveled',
+    TIME_SURVIVED: 'time_survived',
+    LEVEL_UP: 'level_up',
+    GOLD_EARNED: 'gold_earned'
 };
 
 class UqeObjective {
@@ -126,6 +134,49 @@ class CollectObjective extends UqeObjective {
     }
 }
 
+class ExploreObjective extends UqeObjective {
+    constructor(data, eventBus) {
+        super(data, eventBus);
+        eventBus.on(UQE_EVENTS.TILE_TRAVELED, (data) => {
+            this.updateProgress(data.amount || 1);
+        });
+    }
+}
+
+class SurviveObjective extends UqeObjective {
+    constructor(data, eventBus) {
+        super(data, eventBus);
+        eventBus.on(UQE_EVENTS.TIME_SURVIVED, (data) => {
+            this.updateProgress(data.seconds || 1);
+        });
+    }
+}
+
+class LevelObjective extends UqeObjective {
+    constructor(data, eventBus) {
+        super(data, eventBus);
+        eventBus.on(UQE_EVENTS.LEVEL_UP, (data) => {
+            // Set progress to current level
+            if (data.level >= this.target) {
+                this.progress = this.target;
+                this.completed = true;
+                console.log(`✅ [UQE] Level Objective Complete: ${this.label}`);
+            } else {
+                this.progress = data.level;
+            }
+        });
+    }
+}
+
+class GoldObjective extends UqeObjective {
+    constructor(data, eventBus) {
+        super(data, eventBus);
+        eventBus.on(UQE_EVENTS.GOLD_EARNED, (data) => {
+            this.updateProgress(data.amount || 0);
+        });
+    }
+}
+
 class Quest {
     constructor(data, eventBus) {
         this.id = data.id;
@@ -143,6 +194,10 @@ class Quest {
                 case 'kill': obj = new KillObjective(data, eventBus); break;
                 case 'talk': obj = new TalkObjective(data, eventBus); break;
                 case 'collect': obj = new CollectObjective(data, eventBus); break;
+                case 'explore': obj = new ExploreObjective(data, eventBus); break;
+                case 'survive': obj = new SurviveObjective(data, eventBus); break;
+                case 'level': obj = new LevelObjective(data, eventBus); break;
+                case 'gold': obj = new GoldObjective(data, eventBus); break;
                 default: obj = new UqeObjective(data, eventBus); break;
             }
             obj.parentQuest = this; // Link to parent

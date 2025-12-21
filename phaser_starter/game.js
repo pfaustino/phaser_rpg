@@ -3731,12 +3731,9 @@ function create() {
             if (questVisible) updateQuestLogItems();
         });
 
-        // Handle Objective Progress HUD
+        // Handle Objective Progress HUD - WoW-style persistent tracker
         uqe.eventBus.on(UQE_EVENTS.OBJECTIVE_UPDATED, (data) => {
-            const obj = data.objective;
-            const questTitle = obj.parentQuest ? obj.parentQuest.title : 'Quest';
-            const message = `${questTitle}: ${obj.label} (${obj.progress}/${obj.target})`;
-            showQuestUpdateHUD(message, obj.completed);
+            handleObjectiveUpdate(data);
         });
     }
 
@@ -10563,6 +10560,198 @@ function hideNewQuestModal() {
     }
 }
 
+// Quest preview modal for NPC dialog offers
+let questPreviewModal = null;
+
+/**
+ * Show quest preview modal from NPC dialog (before accepting)
+ * @param {string} questId - The quest ID to preview
+ * @param {Function} onAccept - Callback when quest is accepted
+ * @param {Function} onDecline - Callback when quest is declined
+ */
+function showQuestPreviewModal(questId, onAccept, onDecline) {
+    const scene = game.scene.scenes[0];
+
+    // Get quest definition from UQE
+    const questDef = uqe.allDefinitions[questId];
+    if (!questDef) {
+        console.error(`Quest ${questId} not found in UQE definitions`);
+        if (onDecline) onDecline();
+        return;
+    }
+
+    // Hide any existing preview modal
+    if (questPreviewModal) {
+        hideQuestPreviewModal();
+    }
+
+    const centerX = scene.cameras.main.width / 2;
+    const centerY = scene.cameras.main.height / 2;
+    const modalWidth = 520;
+    const modalHeight = 480;
+
+    // Background overlay
+    const overlay = scene.add.rectangle(centerX, centerY, scene.cameras.main.width, scene.cameras.main.height, 0x000000, 0.85)
+        .setScrollFactor(0).setDepth(700).setInteractive();
+
+    // Modal background
+    const modalBg = scene.add.rectangle(centerX, centerY, modalWidth, modalHeight, 0x1a1a1a, 0.98)
+        .setScrollFactor(0).setDepth(701).setStrokeStyle(4, 0xffd700);
+
+    // Header
+    const header = scene.add.text(centerX, centerY - modalHeight / 2 + 30, 'QUEST OFFER', {
+        fontSize: '24px',
+        fill: '#ffd700',
+        fontStyle: 'bold'
+    }).setScrollFactor(0).setDepth(702).setOrigin(0.5, 0);
+
+    // Quest title
+    const questTitle = scene.add.text(centerX, centerY - modalHeight / 2 + 70, questDef.title, {
+        fontSize: '22px',
+        fill: '#ffffff',
+        fontStyle: 'bold'
+    }).setScrollFactor(0).setDepth(702).setOrigin(0.5, 0);
+
+    // Quest description
+    const questDesc = scene.add.text(centerX, centerY - modalHeight / 2 + 105, questDef.description, {
+        fontSize: '15px',
+        fill: '#cccccc',
+        wordWrap: { width: modalWidth - 50 },
+        align: 'center'
+    }).setScrollFactor(0).setDepth(702).setOrigin(0.5, 0);
+
+    // Objectives section
+    let objY = centerY - 60;
+    const objLabel = scene.add.text(centerX - modalWidth / 2 + 30, objY, 'Objectives:', {
+        fontSize: '18px',
+        fill: '#ffffff',
+        fontStyle: 'bold'
+    }).setScrollFactor(0).setDepth(702).setOrigin(0, 0);
+    objY += 28;
+
+    const objectiveTexts = [];
+    questDef.objectives.forEach(obj => {
+        const objText = scene.add.text(centerX - modalWidth / 2 + 45, objY, `⏳ ${obj.label}: 0/${obj.target}`, {
+            fontSize: '14px',
+            fill: '#aaaaaa'
+        }).setScrollFactor(0).setDepth(702).setOrigin(0, 0);
+        objectiveTexts.push(objText);
+        objY += 22;
+    });
+
+    // Rewards section
+    objY += 15;
+    const rewardsLabel = scene.add.text(centerX - modalWidth / 2 + 30, objY, 'Rewards:', {
+        fontSize: '18px',
+        fill: '#ffd700',
+        fontStyle: 'bold'
+    }).setScrollFactor(0).setDepth(702).setOrigin(0, 0);
+    objY += 28;
+
+    const rewardTexts = [];
+    if (questDef.rewards) {
+        if (questDef.rewards.xp) {
+            const xpText = scene.add.text(centerX - modalWidth / 2 + 45, objY, `+${questDef.rewards.xp} XP`, {
+                fontSize: '14px',
+                fill: '#00ff00'
+            }).setScrollFactor(0).setDepth(702).setOrigin(0, 0);
+            rewardTexts.push(xpText);
+            objY += 22;
+        }
+        if (questDef.rewards.gold) {
+            const goldText = scene.add.text(centerX - modalWidth / 2 + 45, objY, `+${questDef.rewards.gold} Gold`, {
+                fontSize: '14px',
+                fill: '#ffd700'
+            }).setScrollFactor(0).setDepth(702).setOrigin(0, 0);
+            rewardTexts.push(goldText);
+        }
+    }
+
+    // Accept button
+    const acceptBtn = scene.add.rectangle(centerX - 90, centerY + modalHeight / 2 - 50, 150, 45, 0x00aa00, 0.95)
+        .setScrollFactor(0).setDepth(702).setStrokeStyle(2, 0x00ff00).setInteractive({ useHandCursor: true });
+
+    const acceptBtnText = scene.add.text(centerX - 90, centerY + modalHeight / 2 - 50, 'Accept Quest', {
+        fontSize: '16px',
+        fill: '#ffffff',
+        fontStyle: 'bold'
+    }).setScrollFactor(0).setDepth(703).setOrigin(0.5, 0.5);
+
+    // Decline button
+    const declineBtn = scene.add.rectangle(centerX + 90, centerY + modalHeight / 2 - 50, 150, 45, 0x666666, 0.95)
+        .setScrollFactor(0).setDepth(702).setStrokeStyle(2, 0xaaaaaa).setInteractive({ useHandCursor: true });
+
+    const declineBtnText = scene.add.text(centerX + 90, centerY + modalHeight / 2 - 50, 'Decline', {
+        fontSize: '16px',
+        fill: '#ffffff',
+        fontStyle: 'bold'
+    }).setScrollFactor(0).setDepth(703).setOrigin(0.5, 0.5);
+
+    // Accept handler
+    const acceptHandler = () => {
+        hideQuestPreviewModal();
+        if (onAccept) onAccept();
+    };
+
+    // Decline handler  
+    const declineHandler = () => {
+        hideQuestPreviewModal();
+        if (onDecline) onDecline();
+    };
+
+    acceptBtn.on('pointerover', () => acceptBtn.setFillStyle(0x00cc00));
+    acceptBtn.on('pointerout', () => acceptBtn.setFillStyle(0x00aa00));
+    acceptBtn.on('pointerdown', acceptHandler);
+    acceptBtnText.setInteractive({ useHandCursor: true }).on('pointerdown', acceptHandler);
+
+    declineBtn.on('pointerover', () => declineBtn.setFillStyle(0x888888));
+    declineBtn.on('pointerout', () => declineBtn.setFillStyle(0x666666));
+    declineBtn.on('pointerdown', declineHandler);
+    declineBtnText.setInteractive({ useHandCursor: true }).on('pointerdown', declineHandler);
+
+    // ESC to decline
+    const escKey = scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ESC);
+    const escHandler = () => {
+        if (questPreviewModal) {
+            declineHandler();
+            escKey.removeListener('down', escHandler);
+        }
+    };
+    escKey.on('down', escHandler);
+
+    questPreviewModal = {
+        overlay, modalBg, header, questTitle, questDesc,
+        objLabel, objectiveTexts, rewardsLabel, rewardTexts,
+        acceptBtn, acceptBtnText, declineBtn, declineBtnText,
+        escKey, escHandler
+    };
+}
+
+/**
+ * Hide quest preview modal
+ */
+function hideQuestPreviewModal() {
+    if (questPreviewModal) {
+        if (questPreviewModal.overlay) questPreviewModal.overlay.destroy();
+        if (questPreviewModal.modalBg) questPreviewModal.modalBg.destroy();
+        if (questPreviewModal.header) questPreviewModal.header.destroy();
+        if (questPreviewModal.questTitle) questPreviewModal.questTitle.destroy();
+        if (questPreviewModal.questDesc) questPreviewModal.questDesc.destroy();
+        if (questPreviewModal.objLabel) questPreviewModal.objLabel.destroy();
+        questPreviewModal.objectiveTexts.forEach(t => t.destroy());
+        if (questPreviewModal.rewardsLabel) questPreviewModal.rewardsLabel.destroy();
+        questPreviewModal.rewardTexts.forEach(t => t.destroy());
+        if (questPreviewModal.acceptBtn) questPreviewModal.acceptBtn.destroy();
+        if (questPreviewModal.acceptBtnText) questPreviewModal.acceptBtnText.destroy();
+        if (questPreviewModal.declineBtn) questPreviewModal.declineBtn.destroy();
+        if (questPreviewModal.declineBtnText) questPreviewModal.declineBtnText.destroy();
+        if (questPreviewModal.escKey && questPreviewModal.escHandler) {
+            questPreviewModal.escKey.removeListener('down', questPreviewModal.escHandler);
+        }
+        questPreviewModal = null;
+    }
+}
+
 // ============================================
 // NPC SYSTEM
 // ============================================
@@ -11657,30 +11846,62 @@ function updateDialogUI(node) {
             if (action === 'open_shop') {
                 openShop(currentShopNPC);
             } else if (action === 'quest_advance' || action === 'quest_accept' || action === 'quest_accept_side' || action === 'quest_accept_v2') {
-                // UNIFIED UQE BRIDGE REDIRECT
+                // UNIFIED UQE BRIDGE REDIRECT with PREVIEW MODAL
                 const questEngine = window.uqe;
                 if (questId && typeof questEngine !== 'undefined' && questEngine.allDefinitions[questId]) {
-                    console.log(`🔗 [UQE Bridge] Redirecting action '${action}' for quest: ${questId}`);
-                    questEngine.acceptQuest(questId);
+                    console.log(`🔗 [UQE Bridge] Showing preview for quest: ${questId}`);
 
-                    // Sync: Remove from legacy lists if it exists there
-                    playerStats.quests.main = playerStats.quests.main.filter(q => q.id !== questId);
-                    playerStats.quests.active = playerStats.quests.active.filter(q => q.id !== questId);
-                    playerStats.quests.available = playerStats.quests.available.filter(q => q.id !== questId);
+                    // Store current NPC for reopening dialog on decline
+                    const currentNPC = dialogPanel ? dialogPanel.npc : null;
 
-                    showDamageNumber(player.x, player.y - 40, "New Era Quest Accepted!", 0xffff00);
+                    // Close dialog first
+                    closeDialog();
+
+                    // Show quest preview modal
+                    showQuestPreviewModal(questId,
+                        // On Accept
+                        () => {
+                            questEngine.acceptQuest(questId);
+
+                            // Sync: Remove from legacy lists if it exists there
+                            playerStats.quests.main = playerStats.quests.main.filter(q => q.id !== questId);
+                            playerStats.quests.active = playerStats.quests.active.filter(q => q.id !== questId);
+                            playerStats.quests.available = playerStats.quests.available.filter(q => q.id !== questId);
+
+                            showDamageNumber(player.x, player.y - 40, "Quest Accepted!", 0x00ff00);
+                            playSound('item_pickup');
+
+                            // Update the quest tracker HUD to show the new quest
+                            updateQuestTrackerHUD();
+                        },
+                        // On Decline - reopen dialog with NPC
+                        () => {
+                            if (currentNPC) {
+                                startDialog(currentNPC);
+                            }
+                        }
+                    );
                 } else if (action === 'quest_advance') {
                     advanceQuest(questId);
+                    if (choice.next) {
+                        showDialogNode(choice.next);
+                    } else {
+                        closeDialog();
+                    }
                 } else if (action === 'quest_accept') {
                     acceptMainQuest(questId);
+                    if (choice.next) {
+                        showDialogNode(choice.next);
+                    } else {
+                        closeDialog();
+                    }
                 } else if (action === 'quest_accept_side') {
                     acceptSideQuest(questId);
-                }
-
-                if (choice.next) {
-                    showDialogNode(choice.next);
-                } else {
-                    closeDialog();
+                    if (choice.next) {
+                        showDialogNode(choice.next);
+                    } else {
+                        closeDialog();
+                    }
                 }
             } else if (action === 'accept_all') {
                 acceptAllAvailableQuests();
@@ -15005,73 +15226,156 @@ function playMonsterDeathAnimation(monster) {
 
 /**
  * Show a temporary HUD notification for quest progress
+ */// ============================================
+// QUEST TRACKER HUD (WoW-style persistent tracker)
+// ============================================
+let questTrackerHUD = null;
+let questTrackerEntries = {}; // keyed by quest ID
+
+/**
+ * Initialize/Update the persistent quest tracker HUD
  */
-let activeHUDNotifications = [];
-function showQuestUpdateHUD(message, isComplete) {
+function updateQuestTrackerHUD() {
     const scene = game.scene.scenes[0];
+    if (!scene) return;
+
     const screenWidth = scene.cameras.main.width;
+    const startX = screenWidth - 300;
+    let startY = 120;
 
-    // Position on right-side, buffered from edge
-    const x = screenWidth - 320;
-    let y = 150 + (activeHUDNotifications.length * 50);
+    // Get active quests from UQE
+    const activeQuests = (typeof uqe !== 'undefined' && uqe.activeQuests) ? uqe.activeQuests : [];
 
-    // Create container for notification - Sleek semi-transparent dark box
-    const bg = scene.add.rectangle(x + 130, y, 280, 42, 0x000000, 0.8)
-        .setScrollFactor(0)
-        .setDepth(10000)
-        .setStrokeStyle(2, isComplete ? 0x00ff00 : 0x00d4ff);
-
-    const text = scene.add.text(x + 130, y, message, {
-        fontSize: '16px',
-        fill: isComplete ? '#00ff00' : '#ffffff',
-        fontStyle: 'bold',
-        fontFamily: 'Inter, Arial, sans-serif'
-    }).setScrollFactor(0).setDepth(10001).setOrigin(0.5, 0.5);
-
-    const notification = { bg, text };
-    activeHUDNotifications.push(notification);
-
-    // Smooth Entrance
-    bg.alpha = 0;
-    text.alpha = 0;
-    bg.x += 20; // Slide from right
-    text.x += 20;
-
-    scene.tweens.add({
-        targets: [bg, text],
-        alpha: 1,
-        x: '-=20',
-        duration: 400,
-        ease: 'Power2'
+    // Remove entries for quests no longer active
+    Object.keys(questTrackerEntries).forEach(questId => {
+        if (!activeQuests.find(q => q.id === questId)) {
+            const entry = questTrackerEntries[questId];
+            if (entry.title) entry.title.destroy();
+            entry.objectives.forEach(obj => {
+                if (obj.text) obj.text.destroy();
+            });
+            delete questTrackerEntries[questId];
+        }
     });
 
-    // Auto-remove after 5 seconds
-    scene.time.delayedCall(5000, () => {
-        if (!scene || !scene.tweens) return;
-        scene.tweens.add({
-            targets: [bg, text],
-            alpha: 0,
-            x: '+=30', // Slide out to right
-            duration: 600,
-            onComplete: () => {
-                if (bg) bg.destroy();
-                if (text) text.destroy();
-                const index = activeHUDNotifications.indexOf(notification);
-                if (index !== -1) {
-                    activeHUDNotifications.splice(index, 1);
-                    // Shift others up smoothly
-                    activeHUDNotifications.forEach((n, i) => {
-                        if (n.bg && n.text && scene.tweens) {
-                            scene.tweens.add({
-                                targets: [n.bg, n.text],
-                                y: 150 + (i * 50),
-                                duration: 300,
-                                ease: 'Back.easeOut'
-                            });
-                        }
-                    });
+    // Create/update entries for each active quest
+    let yOffset = 0;
+    activeQuests.forEach(quest => {
+        if (!questTrackerEntries[quest.id]) {
+            // Create new entry
+            const titleText = scene.add.text(startX, startY + yOffset, quest.title, {
+                fontSize: '14px',
+                fill: '#ffd700',
+                fontStyle: 'bold',
+                fontFamily: 'Inter, Arial, sans-serif'
+            }).setScrollFactor(0).setDepth(200).setOrigin(0, 0);
+
+            questTrackerEntries[quest.id] = {
+                title: titleText,
+                objectives: [],
+                yStart: startY + yOffset
+            };
+            yOffset += 20;
+
+            // Create objective entries
+            quest.objectives.forEach((obj, idx) => {
+                const objStr = `  ${obj.completed ? '✅' : '⏳'} ${obj.label}: ${obj.progress}/${obj.target}`;
+                const objText = scene.add.text(startX, startY + yOffset, objStr, {
+                    fontSize: '12px',
+                    fill: obj.completed ? '#00ff00' : '#cccccc',
+                    fontFamily: 'Inter, Arial, sans-serif'
+                }).setScrollFactor(0).setDepth(200).setOrigin(0, 0);
+
+                questTrackerEntries[quest.id].objectives.push({
+                    text: objText,
+                    objId: obj.id,
+                    lastProgress: obj.progress
+                });
+                yOffset += 18;
+            });
+            yOffset += 8; // Spacing between quests
+        } else {
+            // Update existing entry
+            const entry = questTrackerEntries[quest.id];
+            entry.yStart = startY + yOffset;
+            entry.title.y = startY + yOffset;
+            yOffset += 20;
+
+            // Update objective texts
+            quest.objectives.forEach((obj, idx) => {
+                if (entry.objectives[idx]) {
+                    const objEntry = entry.objectives[idx];
+                    const objStr = `  ${obj.completed ? '✅' : '⏳'} ${obj.label}: ${obj.progress}/${obj.target}`;
+                    objEntry.text.setText(objStr);
+                    objEntry.text.setFill(obj.completed ? '#00ff00' : '#cccccc');
+                    objEntry.text.y = startY + yOffset;
+                    yOffset += 18;
                 }
+            });
+            yOffset += 8;
+        }
+    });
+}
+
+/**
+ * Handle objective update - flash the updated objective
+ */
+function handleObjectiveUpdate(data) {
+    const obj = data.objective;
+    const questId = obj.parentQuest ? obj.parentQuest.id : null;
+
+    if (!questId || !questTrackerEntries[questId]) {
+        updateQuestTrackerHUD(); // Create tracker if doesn't exist
+        return;
+    }
+
+    const scene = game.scene.scenes[0];
+    const entry = questTrackerEntries[questId];
+
+    // Find the objective entry and update it
+    entry.objectives.forEach(objEntry => {
+        if (objEntry.objId === obj.id) {
+            // Update text
+            const objStr = `  ${obj.completed ? '✅' : '⏳'} ${obj.label}: ${obj.progress}/${obj.target}`;
+            objEntry.text.setText(objStr);
+
+            // Flash effect - brief highlight on update
+            if (objEntry.lastProgress !== obj.progress) {
+                objEntry.text.setFill(obj.completed ? '#00ff00' : '#ffff00'); // Flash yellow
+                scene.time.delayedCall(500, () => {
+                    if (objEntry.text && objEntry.text.active) {
+                        objEntry.text.setFill(obj.completed ? '#00ff00' : '#cccccc');
+                    }
+                });
+                objEntry.lastProgress = obj.progress;
             }
+
+            // If completed, mark green
+            if (obj.completed) {
+                objEntry.text.setFill('#00ff00');
+            }
+        }
+    });
+}
+
+/**
+ * Clear the quest tracker HUD
+ */
+function clearQuestTrackerHUD() {
+    Object.keys(questTrackerEntries).forEach(questId => {
+        const entry = questTrackerEntries[questId];
+        if (entry.title) entry.title.destroy();
+        entry.objectives.forEach(obj => {
+            if (obj.text) obj.text.destroy();
         });
     });
+    questTrackerEntries = {};
+}
+
+// Legacy compatibility - keep old function but redirect to new system  
+let activeHUDNotifications = [];
+function showQuestUpdateHUD(message, isComplete) {
+    // This is now handled by the persistent tracker
+    // Just trigger an update
+    updateQuestTrackerHUD();
 }

@@ -11952,6 +11952,18 @@ function updateDialogUI(node) {
             choice: choice
         });
     });
+
+    // Dynamically resize panel to fit content
+    if (visibleChoiceCount > 0) {
+        const lastButtonY = startY + (visibleChoiceCount - 1) * (buttonHeight + buttonSpacing);
+        const bottomPadding = 30;
+        const topY = dialogPanel.npcNameText.y - 20;
+        const actualHeight = (lastButtonY + buttonHeight / 2 + bottomPadding) - topY;
+        const newCenterY = topY + actualHeight / 2;
+
+        dialogPanel.bg.setSize(panelWidth, actualHeight);
+        dialogPanel.bg.setPosition(centerX, newCenterY);
+    }
 }
 
 /**

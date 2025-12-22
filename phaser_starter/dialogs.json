@@ -1,0 +1,277 @@
+{
+    "elder_intro": {
+        "npcName": "Elder Malik",
+        "npcTitle": "Village Elder",
+        "nodes": {
+            "start": {
+                "text": "Welcome, traveler! I am Elder Malik, the leader of this village. How may I assist you?",
+                "choices": [
+                    {
+                        "text": "How do I survive out there?",
+                        "next": "controls_tutorial"
+                    },
+                    {
+                        "text": "Tell me about this place",
+                        "next": "about_place",
+                        "action": "unlock_lore",
+                        "loreId": "lore_ch1_hearthwell"
+                    },
+                    {
+                        "text": "What are these tremors?",
+                        "next": "about_tremors",
+                        "action": "unlock_lore",
+                        "loreId": "lore_ch1_intro"
+                    },
+                    {
+                        "text": "Goodbye",
+                        "next": "end"
+                    }
+                ]
+            },
+            "controls_tutorial": {
+                "text": "Ah, a wise question! Let me share the essential knowledge:\n\n⚔️ MOVEMENT: WASD or Arrow Keys\n🗡️ ATTACK: Spacebar (attack nearby enemies)\n✨ SPECIAL ATTACKS: 1-9 (use learned abilities)\n📜 QUEST LOG: Q (view your active quests)\n🎒 INVENTORY: I (manage your items)\n💾 SAVE GAME: F5\n📂 LOAD GAME: F9\n❓ HELP: H (quick controls reminder)\n\nRemember: Talk to villagers for quests, and defeat monsters to grow stronger!",
+                "choices": [
+                    {
+                        "text": "Tell me more about this place",
+                        "next": "about_place",
+                        "action": "unlock_lore",
+                        "loreId": "lore_ch1_hearthwell"
+                    },
+                    {
+                        "text": "Thank you, Elder",
+                        "next": "end"
+                    }
+                ]
+            },
+            "about_place": {
+                "text": "Hearthwell was built around the ancient Watchtower, a relic from the time of the Resonance Keepers. We've prospered for generations from the mines below. But lately... the tremors have awakened something. Creatures emerge from the depths, and a strange corruption spreads.",
+                "choices": [
+                    {
+                        "text": "Tell me about the Resonance Keepers",
+                        "next": "about_keepers",
+                        "action": "unlock_lore",
+                        "loreId": "lore_ch1_resonance_keepers"
+                    },
+                    {
+                        "text": "What is this corruption?",
+                        "next": "about_echo",
+                        "action": "unlock_lore",
+                        "loreId": "lore_ch1_echo_corruption"
+                    },
+                    {
+                        "text": "Thank you",
+                        "next": "end"
+                    }
+                ]
+            },
+            "about_tremors": {
+                "text": "The Aegis—an ancient barrier that protects our world—is failing. The tremors are symptoms of its decay. Something called the Echo Primordial stirs in its prison, and its influence seeps through the cracks.",
+                "choices": [
+                    {
+                        "text": "What is the Aegis?",
+                        "next": "about_aegis",
+                        "action": "unlock_lore",
+                        "loreId": "lore_ch1_aegis_history"
+                    },
+                    {
+                        "text": "I understand",
+                        "next": "end"
+                    }
+                ]
+            },
+            "about_keepers": {
+                "text": "The Resonance Keepers were an ancient order of scholars and mages. They discovered the Echo Primordial's intrusion and created the Aegis to seal it away. They sacrificed their mortal existence to become eternal wardens.",
+                "choices": [
+                    {
+                        "text": "How can I help?",
+                        "next": "how_to_help"
+                    },
+                    {
+                        "text": "Thank you for the knowledge",
+                        "next": "end"
+                    }
+                ]
+            },
+            "about_echo": {
+                "text": "The Echo is a crystalline corruption that transforms organic matter. Those touched by it hear whispers in alien frequencies. Extended exposure leads to... changes. The creatures attacking our village are victims of this corruption.",
+                "choices": [
+                    {
+                        "text": "How do I fight it?",
+                        "next": "how_to_help"
+                    },
+                    {
+                        "text": "I'll be careful",
+                        "next": "end"
+                    }
+                ]
+            },
+            "about_aegis": {
+                "text": "Few know this truth: the Aegis was never meant to be permanent. The Keepers left behind shards as keys, hoping future generations would find a way to forge a new, permanent barrier. Perhaps... you are that hope.",
+                "choices": [
+                    {
+                        "text": "I will find these shards",
+                        "next": "how_to_help"
+                    },
+                    {
+                        "text": "This is a lot to take in",
+                        "next": "end"
+                    }
+                ]
+            },
+            "how_to_help": {
+                "text": "Speak with the villagers. Guard Thorne can direct you to fight the creatures. Merchant Lysa may have supplies. And when you're ready... the Undermines await. That's where the corruption is strongest.",
+                "action": "unlock_lore",
+                "loreId": "lore_ch1_undermines",
+                "choices": [
+                    {
+                        "text": "I'll do what I can",
+                        "next": "end"
+                    }
+                ]
+            },
+            "end": {
+                "text": "Farewell, traveler. May your journey be safe. Press L to review the lore you've learned.",
+                "choices": []
+            }
+        }
+    },
+    "merchant_shop": {
+        "npcName": "Merchant Lysa",
+        "npcTitle": "Village Trader",
+        "nodes": {
+            "start": {
+                "text": "Welcome to my shop! I have the finest wares in the village. Are you looking to buy something, or perhaps you could help me with a business favor?",
+                "choices": [
+                    {
+                        "text": "I'd like to browse your wares",
+                        "next": "shop"
+                    },
+                    {
+                        "text": "About that favor...",
+                        "next": "favors",
+                        "isQuest": true,
+                        "condition": "has_available_quest:Merchant Lysa"
+                    },
+                    {
+                        "text": "Goodbye",
+                        "next": "end"
+                    }
+                ]
+            },
+            "favors": {
+                "text": "Business has been tough with the tremors. I need more inventory to stay afloat. Could you help me gather some items or perhaps earn some extra gold for me?",
+                "choices": [
+                    {
+                        "text": "I can gather items for you",
+                        "isQuest": true,
+                        "action": "quest_accept_side",
+                        "questId": "quest_002",
+                        "next": "end",
+                        "condition": "quest_available:quest_002"
+                    },
+                    {
+                        "text": "I can help you with gold",
+                        "isQuest": true,
+                        "action": "quest_accept_side",
+                        "questId": "quest_004",
+                        "next": "end",
+                        "condition": "quest_available:quest_004"
+                    },
+                    {
+                        "text": "Maybe another time",
+                        "next": "end"
+                    }
+                ]
+            },
+            "shop": {
+                "text": "Here are my wares. What would you like to buy?",
+                "choices": [
+                    {
+                        "text": "Open Shop",
+                        "action": "open_shop"
+                    },
+                    {
+                        "text": "Nevermind",
+                        "next": "start"
+                    }
+                ]
+            },
+            "end": {
+                "text": "Come back anytime!",
+                "choices": []
+            }
+        }
+    },
+    "guard_info": {
+        "npcName": "Guard Thorne",
+        "npcTitle": "Guard Captain",
+        "nodes": {
+            "start": {
+                "text": "Halt! I am Captain Thorne, head of the village guard. State your business.",
+                "choices": [
+                    {
+                        "text": "I want to help with the monsters",
+                        "next": "hunting",
+                        "isQuest": true,
+                        "condition": "quest_available:quest_007"
+                    },
+                    {
+                        "text": "Tell me about the monsters",
+                        "next": "help"
+                    },
+                    {
+                        "text": "Just passing through",
+                        "next": "end"
+                    }
+                ]
+            },
+            "hunting": {
+                "text": "A volunteer? Excellent. My guards are spread thin. If you can eliminate some of the local pests, I'll make sure the village compensates you.",
+                "choices": [
+                    {
+                        "text": "I'll take the contract",
+                        "action": "quest_accept_side",
+                        "questId": "quest_007",
+                        "next": "end"
+                    },
+                    {
+                        "text": "Not right now",
+                        "next": "end"
+                    }
+                ]
+            },
+            "help": {
+                "text": "The monsters have been getting bolder since the quakes started. They seem drawn to the tremors. Stay safe out there.",
+                "choices": [
+                    {
+                        "text": "I will",
+                        "next": "end"
+                    }
+                ]
+            },
+            "end": {
+                "text": "Stay vigilant!",
+                "choices": []
+            }
+        }
+    },
+    "generic_npc": {
+        "npcName": "NPC",
+        "npcTitle": "Villager",
+        "nodes": {
+            "start": {
+                "text": "Greetings. How can I help you?",
+                "choices": [
+                    {
+                        "text": "Goodbye",
+                        "next": "end"
+                    }
+                ]
+            },
+            "end": {
+                "text": "Farewell.",
+                "choices": []
+            }
+        }
+    }
+}

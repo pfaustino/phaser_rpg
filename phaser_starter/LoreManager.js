@@ -67,7 +67,7 @@ class LoreManager {
     loadProgress() {
         try {
             // Load unified list
-            const saved = localStorage.getItem('rpg_lore_unlocked');
+            const saved = localStorage.getItem('rpg_unlocked_lore');
             if (saved) {
                 const parsed = JSON.parse(saved);
                 parsed.forEach(id => this.unlockedLore.add(id));
@@ -98,7 +98,7 @@ class LoreManager {
     saveProgress() {
         try {
             const array = Array.from(this.unlockedLore);
-            localStorage.setItem('rpg_lore_unlocked', JSON.stringify(array));
+            localStorage.setItem('rpg_unlocked_lore', JSON.stringify(array));
         } catch (e) {
             console.warn('LoreManager: Failed to save progress', e);
         }

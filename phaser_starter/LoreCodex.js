@@ -262,7 +262,8 @@ function populateLoreList(scene, width) {
     if (scene.loreManager && scene.loreManager.unlockedLore) {
         unlockedIds = scene.loreManager.unlockedLore;
     } else {
-        const saved = localStorage.getItem('rpg_lore_unlocked');
+        // Use standardized localStorage key
+        const saved = localStorage.getItem('rpg_unlocked_lore');
         if (saved) JSON.parse(saved).forEach(id => unlockedIds.add(id));
         Object.keys(localStorage).forEach(key => {
             if (key.startsWith('lore_read_')) {

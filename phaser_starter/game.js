@@ -3709,6 +3709,9 @@ function create() {
     this.dialogManager = new DialogManager(this);
     this.dialogManager.init();
 
+    // Load dialog data from JSON
+    loadDialogs();
+
     this.milestoneManager = new MilestoneManager(this);
     if (this.cache.json.exists('milestoneData')) {
         this.milestoneManager.init(this.cache.json.get('milestoneData'));
@@ -11562,153 +11565,82 @@ function checkNPCInteraction() {
 // ============================================
 
 /**
- * Sample dialog data (in a real game, this would be loaded from JSON)
+ * Dialog database - loaded from dialogs.json
  */
-const dialogDatabase = {
-    'elder_intro': {
-        npcName: 'Elder Malik',
-        npcTitle: 'Village Elder',
-        nodes: {
-            'start': {
-                text: 'Welcome, traveler! I am Elder Malik, the leader of this village. How may I assist you?',
-                choices: [
-                    // All UQE quests are dynamically injected at dialog open time
-                    { text: 'How do I survive out there?', next: 'controls_tutorial' },
-                    { text: 'Tell me about this place', next: 'about_place' },
-                    { text: 'Goodbye', next: 'end' }
-                ]
-            },
-            'controls_tutorial': {
-                text: 'Ah, a wise question! Let me share the essential knowledge:\n\n' +
-                    '⚔️ MOVEMENT: WASD or Arrow Keys\n' +
-                    '🗡️ ATTACK: Spacebar (attack nearby enemies)\n' +
-                    '✨ SPECIAL ATTACKS: 1-9 (use learned abilities)\n' +
-                    '📜 QUEST LOG: Q (view your active quests)\n' +
-                    '🎒 INVENTORY: I (manage your items)\n' +
-                    '💾 SAVE GAME: F5\n' +
-                    '📂 LOAD GAME: F9\n' +
-                    '❓ HELP: H (quick controls reminder)\n\n' +
-                    'Remember: Talk to villagers for quests, and defeat monsters to grow stronger!',
-                choices: [
-                    { text: 'Tell me more about this place', next: 'about_place' },
-                    { text: 'Thank you, Elder', next: 'end' }
-                ]
-            },
-            'about_place': {
-                text: 'This is a peaceful village, though we have been troubled by monsters lately. The brave adventurers who help us are always welcome.',
-                choices: [
-                    { text: 'Thank you', next: 'end' }
-                ]
-            },
-            'end': {
-                text: 'Farewell, traveler. May your journey be safe.',
-                choices: []
+let dialogDatabase = {};
+
+/**
+ * Load dialogs from JSON file
+ */
+async function loadDialogs() {
+    try {
+        const response = await fetch('dialogs.json');
+        dialogDatabase = await response.json();
+        console.log('💬 Dialogs loaded:', Object.keys(dialogDatabase).length, 'dialogs');
+    } catch (e) {
+        console.error('❌ Failed to load dialogs.json:', e);
+        // Fallback to empty generic dialog
+        dialogDatabase = {
+            'generic_npc': {
+                npcName: 'NPC',
+                npcTitle: 'Villager',
+                nodes: {
+                    'start': { text: 'Hello there!', choices: [{ text: 'Goodbye', next: 'end' }] },
+                    'end': { text: 'Farewell.', choices: [] }
+                }
             }
-        }
-    },
-    'merchant_shop': {
-        npcName: 'Merchant Lysa',
-        npcTitle: 'Village Trader',
-        nodes: {
-            'start': {
-                text: 'Welcome to my shop! I have the finest wares in the village. Are you looking to buy something, or perhaps you could help me with a business favor?',
-                choices: [
-                    { text: 'I\'d like to browse your wares', next: 'shop' },
-                    {
-                        text: 'About that favor...',
-                        next: 'favors',
-                        isQuest: true,
-                        condition: (stats) => stats.quests.available.some(q => q.giver === 'Merchant Lysa')
-                    },
-                    { text: 'Goodbye', next: 'end' }
-                ]
-            },
-            'favors': {
-                text: 'Business has been tough with the tremors. I need more inventory to stay afloat. Could you help me gather some items or perhaps earn some extra gold for me?',
-                choices: [
-                    {
-                        text: 'I can gather items for you',
-                        action: 'quest_accept_side',
-                        questId: 'quest_002',
-                        next: 'end',
-                        condition: (stats) => !isQuestActive('quest_002') && !isQuestCompleted('quest_002')
-                    },
-                    {
-                        text: 'I can help you with gold',
-                        action: 'quest_accept_side',
-                        questId: 'quest_004',
-                        next: 'end',
-                        condition: (stats) => !isQuestActive('quest_004') && !isQuestCompleted('quest_004')
-                    },
-                    { text: 'Maybe another time', next: 'end' }
-                ]
-            },
-            'shop': {
-                text: 'Here are my wares. What would you like to buy?',
-                choices: [
-                    { text: 'Open Shop', action: 'open_shop' },
-                    { text: 'Nevermind', next: 'start' }
-                ]
-            },
-            'end': {
-                text: 'Come back anytime!',
-                choices: []
-            }
-        }
-    },
-    'guard_info': {
-        npcName: 'Guard Thorne',
-        npcTitle: 'Guard Captain',
-        nodes: {
-            'start': {
-                text: 'Halt! I am Captain Thorne, head of the village guard. State your business.',
-                choices: [
-                    {
-                        text: 'I want to help with the monsters',
-                        next: 'hunting',
-                        isQuest: true,
-                        condition: (stats) => !isQuestActive('quest_001') && !isQuestCompleted('quest_001')
-                    },
-                    { text: 'Tell me about the monsters', next: 'help' },
-                    { text: 'Just passing through', next: 'end' }
-                ]
-            },
-            'hunting': {
-                text: 'A volunteer? Excellent. My guards are spread thin. If you can eliminate some of the local pests, I\'ll make sure the village compensates you.',
-                choices: [
-                    { text: 'I\'ll take the contract', action: 'quest_accept_side', questId: 'quest_001', next: 'end' },
-                    { text: 'Not right now', next: 'end' }
-                ]
-            },
-            'help': {
-                text: 'The monsters have been getting bolder since the quakes started. They seem drawn to the tremors. Stay safe out there.',
-                choices: [
-                    { text: 'I will', next: 'end' }
-                ]
-            },
-            'end': {
-                text: 'Stay vigilant!',
-                choices: []
-            }
-        }
-    },
-    'generic_npc': {
-        npcName: 'NPC',
-        npcTitle: 'Villager',
-        nodes: {
-            'start': {
-                text: 'Greetings. How can I help you?',
-                choices: [
-                    { text: 'Goodbye', next: 'end' }
-                ]
-            },
-            'end': {
-                text: 'Farewell.',
-                choices: []
-            }
-        }
+        };
     }
-};
+}
+
+/**
+ * Evaluate a condition string from dialogs.json
+ * Format: "condition_type:parameter"
+ * @param {string} conditionStr - The condition string
+ * @param {object} stats - Player stats object
+ * @returns {boolean} - Whether the condition is met
+ */
+function evaluateDialogCondition(conditionStr, stats) {
+    if (!conditionStr) return true; // No condition = always show
+
+    const [type, param] = conditionStr.split(':');
+
+    switch (type) {
+        case 'quest_available':
+            // Quest is neither active nor completed
+            return !isQuestActive(param) && !isQuestCompleted(param);
+
+        case 'quest_active':
+            return isQuestActive(param);
+
+        case 'quest_completed':
+            return isQuestCompleted(param);
+
+        case 'quest_not_active':
+            return !isQuestActive(param);
+
+        case 'quest_not_completed':
+            return !isQuestCompleted(param);
+
+        case 'has_available_quest':
+            // Check if any quest from this giver is available
+            return stats.quests && stats.quests.available &&
+                stats.quests.available.some(q => q.giver === param);
+
+        case 'level_at_least':
+            return stats.level >= parseInt(param);
+
+        case 'has_item':
+            return stats.inventory && stats.inventory.some(item => item.id === param);
+
+        case 'gold_at_least':
+            return stats.gold >= parseInt(param);
+
+        default:
+            console.warn(`Unknown dialog condition type: ${type}`);
+            return true;
+    }
+}
 
 
 /**
@@ -11897,7 +11829,13 @@ function updateDialogUI(node) {
         // Skip choices that don't meet their condition
         if (choice.condition) {
             try {
-                const result = choice.condition(playerStats);
+                // Support both string conditions (from JSON) and legacy function conditions
+                let result;
+                if (typeof choice.condition === 'function') {
+                    result = choice.condition(playerStats);
+                } else {
+                    result = evaluateDialogCondition(choice.condition, playerStats);
+                }
                 console.log(`[UQE] Choice '${choice.text}' (Quest: ${choice.questId || 'none'}, Action: ${choice.action || 'next'}) condition: ${result}`);
                 if (!result) return;
             } catch (err) {
@@ -11922,9 +11860,26 @@ function updateDialogUI(node) {
             .setStrokeStyle(2, 0x666666)
             .setInteractive({ useHandCursor: true });
 
-        // Button text
+        // Button text with indicators
         const isQuest = choice.isQuest;
-        const displayText = isQuest ? `(!) ${choice.text}` : choice.text;
+        const isLore = choice.action === 'unlock_lore' && choice.loreId;
+
+        // Check if lore is already unlocked
+        let loreAlreadyUnlocked = false;
+        if (isLore) {
+            try {
+                const unlockedLore = JSON.parse(localStorage.getItem('rpg_unlocked_lore') || '[]');
+                loreAlreadyUnlocked = unlockedLore.includes(choice.loreId);
+            } catch (e) { /* ignore */ }
+        }
+
+        // Build display text with appropriate prefix
+        let displayText = choice.text;
+        if (isQuest) {
+            displayText = `(!) ${choice.text}`;
+        } else if (isLore) {
+            displayText = loreAlreadyUnlocked ? `✓ ${choice.text}` : `○ ${choice.text}`;
+        }
 
         const buttonText = scene.add.text(
             centerX,
@@ -11936,9 +11891,11 @@ function updateDialogUI(node) {
             }
         ).setScrollFactor(0).setDepth(402).setOrigin(0.5, 0.5);
 
-        // Apply yellow color to the marker if it's a quest
+        // Apply colors based on type
         if (isQuest) {
-            buttonText.setFill('#ffff00');
+            buttonText.setFill('#ffff00'); // Yellow for quests
+        } else if (isLore) {
+            buttonText.setFill(loreAlreadyUnlocked ? '#88ff88' : '#9370DB'); // Green if read, purple if new
         }
 
         // Button hover effects
@@ -11953,6 +11910,27 @@ function updateDialogUI(node) {
         buttonBg.on('pointerdown', () => {
             const questId = choice.questId;
             const action = choice.action;
+
+            // Handle lore unlock action
+            if (action === 'unlock_lore' && choice.loreId) {
+                if (window.loreManager && typeof window.loreManager.unlock === 'function') {
+                    window.loreManager.unlock(choice.loreId);
+                    console.log(`📖 [Dialog] Unlocked lore: ${choice.loreId}`);
+                } else {
+                    // Fallback: directly add to localStorage
+                    try {
+                        const unlockedLore = JSON.parse(localStorage.getItem('rpg_unlocked_lore') || '[]');
+                        if (!unlockedLore.includes(choice.loreId)) {
+                            unlockedLore.push(choice.loreId);
+                            localStorage.setItem('rpg_unlocked_lore', JSON.stringify(unlockedLore));
+                            console.log(`📖 [Dialog] Unlocked lore (fallback): ${choice.loreId}`);
+                            addChatMessage(`New lore discovered: Press L to read`, 0x9370DB, '📜');
+                        }
+                    } catch (e) {
+                        console.warn('Failed to save lore unlock:', e);
+                    }
+                }
+            }
 
             if (action === 'open_shop') {
                 openShop(currentShopNPC);

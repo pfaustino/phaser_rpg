@@ -242,10 +242,17 @@ function openLoreCodex() {
     }).setScrollFactor(0).setDepth(502).setOrigin(0.5, 0.5);
     codexPanel.elements.push(progressText);
 
-    // Lore list area
+    // Lore list area with scrolling
     const listStartY = centerY - panelHeight / 2 + 100;
     const listPadding = 30;
-    let currentY = listStartY;
+    const listHeight = panelHeight - 160; // Height of visible scroll area
+    const listTop = listStartY;
+    const listBottom = listStartY + listHeight;
+
+    // Create scrollable content container
+    codexPanel.scrollableItems = [];
+    codexPanel.scrollOffset = 0;
+    let currentY = 0; // Relative Y position within scroll content
 
     if (categories.length === 0) {
         // No lore unlocked yet
@@ -257,23 +264,24 @@ function openLoreCodex() {
         }).setScrollFactor(0).setDepth(502).setOrigin(0.5, 0.5);
         codexPanel.elements.push(noLoreText);
     } else {
-        // Show categories and entries
+        // Show categories and entries as scrollable items
         categories.forEach(category => {
             const catInfo = LORE_CATEGORIES[category] || { color: '#ffffff', icon: '📄' };
 
             // Category header
-            const catHeader = scene.add.text(centerX - panelWidth / 2 + listPadding, currentY,
+            const catHeader = scene.add.text(centerX - panelWidth / 2 + listPadding, listStartY + currentY,
                 `${catInfo.icon} ${category}`, {
                 fontSize: '18px',
                 fill: catInfo.color,
                 fontStyle: 'bold'
             }).setScrollFactor(0).setDepth(502).setOrigin(0, 0);
             codexPanel.elements.push(catHeader);
+            codexPanel.scrollableItems.push({ element: catHeader, baseY: currentY });
             currentY += 30;
 
             // Entries in this category
             loreByCategory[category].forEach(entry => {
-                const entryText = scene.add.text(centerX - panelWidth / 2 + listPadding + 25, currentY,
+                const entryText = scene.add.text(centerX - panelWidth / 2 + listPadding + 25, listStartY + currentY,
                     `• ${entry.title}`, {
                     fontSize: '15px',
                     fill: '#cccccc'
@@ -286,12 +294,43 @@ function openLoreCodex() {
                 entryText.on('pointerdown', () => showLoreDetail(entry));
 
                 codexPanel.elements.push(entryText);
+                codexPanel.scrollableItems.push({ element: entryText, baseY: currentY });
                 currentY += 25;
             });
 
             currentY += 10; // Space between categories
         });
     }
+
+    // Store scroll boundaries
+    codexPanel.contentHeight = currentY;
+    codexPanel.listHeight = listHeight;
+    codexPanel.listStartY = listStartY;
+    codexPanel.listTop = listTop;
+    codexPanel.listBottom = listBottom;
+
+    // Mouse wheel scroll handler
+    codexPanel.wheelHandler = (pointer, gameObjects, deltaX, deltaY) => {
+        if (!codexVisible) return;
+
+        const scrollSpeed = 30;
+        codexPanel.scrollOffset += deltaY > 0 ? scrollSpeed : -scrollSpeed;
+
+        // Clamp scroll offset
+        const maxScroll = Math.max(0, codexPanel.contentHeight - codexPanel.listHeight);
+        codexPanel.scrollOffset = Math.max(0, Math.min(codexPanel.scrollOffset, maxScroll));
+
+        // Update positions of scrollable items
+        codexPanel.scrollableItems.forEach(item => {
+            const newY = codexPanel.listStartY + item.baseY - codexPanel.scrollOffset;
+            item.element.setY(newY);
+
+            // Hide items outside visible area
+            const visible = newY >= codexPanel.listTop - 20 && newY <= codexPanel.listBottom + 20;
+            item.element.setVisible(visible);
+        });
+    };
+    scene.input.on('wheel', codexPanel.wheelHandler);
 
     // ESC key handler using keyboard event listener
     codexPanel.escHandler = (event) => {
@@ -312,11 +351,17 @@ function openLoreCodex() {
 function closeLoreCodex() {
     if (!codexPanel) return;
 
+    const scene = game.scene.scenes[0];
+
     codexPanel.elements.forEach(el => el.destroy());
 
     // Remove ESC handler
     if (codexPanel.escHandler) {
         document.removeEventListener('keydown', codexPanel.escHandler, true);
+    }
+    // Remove wheel handler
+    if (codexPanel.wheelHandler && scene) {
+        scene.input.off('wheel', codexPanel.wheelHandler);
     }
     if (codexPanel.detailElements) {
         codexPanel.detailElements.forEach(el => el.destroy());

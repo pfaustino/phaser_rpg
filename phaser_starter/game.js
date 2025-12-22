@@ -11804,8 +11804,9 @@ function updateDialogUI(node) {
         }
     ).setScrollFactor(0).setDepth(401).setOrigin(0, 0);
 
-    // Choice buttons
-    const startY = centerY + 80; // Pushed down to fit longer text
+    // Choice buttons - position below dialog text with proper spacing
+    const textBounds = dialogPanel.dialogText.getBounds();
+    const startY = textBounds.bottom + 30; // 30px padding after text
     const buttonHeight = 40;
     const buttonSpacing = 10;
 

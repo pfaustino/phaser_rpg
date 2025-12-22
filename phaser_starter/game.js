@@ -11843,21 +11843,28 @@ function createDialogUI(npc) {
     const scene = game.scene.scenes[0];
 
     const panelWidth = 700;
-    const panelHeight = 620;
+    const initialHeight = 400; // Starting height, will be resized dynamically
     const centerX = scene.cameras.main.width / 2;
-    const centerY = scene.cameras.main.height / 2 + 50;
+    const panelTopY = 40; // Fixed top position
+    const panelLeftX = centerX - panelWidth / 2;
 
     dialogPanel = {
-        bg: scene.add.rectangle(centerX, centerY, panelWidth, panelHeight, 0x1a1a1a, 0.95)
-            .setScrollFactor(0).setDepth(400).setStrokeStyle(3, 0xffffff),
-        npcNameText: scene.add.text(centerX - panelWidth / 2 + 20, centerY - panelHeight / 2 + 20,
+        bg: scene.add.rectangle(centerX, panelTopY, panelWidth, initialHeight, 0x1a1a1a, 0.95)
+            .setScrollFactor(0).setDepth(400).setStrokeStyle(3, 0xffffff)
+            .setOrigin(0.5, 0), // Origin at top-center
+        npcNameText: scene.add.text(panelLeftX + 20, panelTopY + 20,
             `${npc.name}${npc.title ? ' - ' + npc.title : ''}`, {
             fontSize: '24px',
             fill: '#ffffff',
             fontStyle: 'bold'
         }).setScrollFactor(0).setDepth(401).setOrigin(0, 0),
         dialogText: null,
-        choiceButtons: []
+        choiceButtons: [],
+        // Store layout constants for updateDialogUI
+        panelWidth: panelWidth,
+        panelTopY: panelTopY,
+        panelLeftX: panelLeftX,
+        centerX: centerX
     };
 }
 
@@ -11878,15 +11885,17 @@ function updateDialogUI(node) {
     });
     dialogPanel.choiceButtons = [];
 
-    const centerX = dialogPanel.bg.x;
-    const centerY = dialogPanel.bg.y;
-    const panelWidth = 700;
-    const panelHeight = 620; // Increased to fit longer text like tutorials
+    // Use stored layout constants
+    const panelWidth = dialogPanel.panelWidth;
+    const panelTopY = dialogPanel.panelTopY;
+    const panelLeftX = dialogPanel.panelLeftX;
+    const centerX = dialogPanel.centerX;
 
-    // Dialog text
+    // Dialog text - positioned below NPC name
+    const textY = panelTopY + 60;
     dialogPanel.dialogText = scene.add.text(
-        centerX - panelWidth / 2 + 20,
-        centerY - panelHeight / 2 + 70,
+        panelLeftX + 20,
+        textY,
         node.text,
         {
             fontSize: '18px',
@@ -12044,9 +12053,8 @@ function updateDialogUI(node) {
         });
     });
 
-    // Dynamically resize panel to fit content
+    // Dynamically resize panel height to fit content (panel is top-aligned)
     const bottomPadding = 30;
-    const topY = dialogPanel.npcNameText.y - 20;
     let panelBottom;
 
     if (visibleChoiceCount > 0) {
@@ -12057,11 +12065,9 @@ function updateDialogUI(node) {
         panelBottom = textBounds.bottom + bottomPadding;
     }
 
-    const actualHeight = panelBottom - topY;
-    const newCenterY = topY + actualHeight / 2;
-
+    const actualHeight = panelBottom - panelTopY;
     dialogPanel.bg.setSize(panelWidth, actualHeight);
-    dialogPanel.bg.setPosition(centerX, newCenterY);
+    // No need to reposition - origin is top-center so it expands downward
 }
 
 /**

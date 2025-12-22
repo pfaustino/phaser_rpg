@@ -11512,9 +11512,100 @@ const dialogDatabase = {
                 ]
             },
             'about_place': {
-                text: 'This is a peaceful village, though we have been troubled by monsters lately. The brave adventurers who help us are always welcome.',
+                text: 'Hearthwell has stood for generations, a beacon of peace in these lands. But lately... the ground shakes, and strange creatures emerge from below.',
                 choices: [
-                    { text: 'Thank you', next: 'end' }
+                    { text: 'What are these tremors?', next: 'lore_tremors' },
+                    { text: 'What creatures have appeared?', next: 'lore_creatures' },
+                    { text: 'Is there a way to stop this?', next: 'lore_solution' },
+                    { text: 'Thank you for the information', next: 'end' }
+                ]
+            },
+            'lore_tremors': {
+                text: 'The tremors began three moons ago. At first, we thought it mere earthquakes, but then came the Echo—a resonance that warps reality itself. Our scholars believe something ancient stirs beneath the earth, something connected to a relic called the Shattered Aegis.',
+                choices: [
+                    { text: 'What is the Shattered Aegis?', next: 'lore_aegis' },
+                    { text: 'Tell me about the Echo', next: 'lore_echo' },
+                    { text: 'I understand. Thank you.', next: 'end' }
+                ]
+            },
+            'lore_aegis': {
+                text: 'Long ago, a divine shield called the Aegis protected our world from chaos. When it shattered, its fragments—the Shards of Resonance—scattered across the land. Each shard pulses with ancient power. Some say gathering them could restore the Aegis... or unleash something far worse.',
+                choices: [
+                    { text: 'Where can I find these shards?', next: 'lore_shards' },
+                    { text: 'What happens if they fall into wrong hands?', next: 'lore_danger' },
+                    { text: 'I will seek them out.', next: 'end' }
+                ]
+            },
+            'lore_echo': {
+                text: 'The Echo is a corruption that seeps from the broken Aegis. It twists creatures into monstrous forms—the Echo Mites and Echo Rats you see in our mines are proof. Those exposed too long become lost to its influence, hearing whispers that drive them mad.',
+                choices: [
+                    { text: 'How do I protect myself?', next: 'lore_protection' },
+                    { text: 'Are the miners safe?', next: 'lore_miners' },
+                    { text: 'I will be careful.', next: 'end' }
+                ]
+            },
+            'lore_creatures': {
+                text: 'We have seen Echo Mites—small crystalline insects that drain life force. Echo Rats, larger and more aggressive, lurk in the shadows. And rumors speak of an Echo Beholder in the deepest mines—a creature of pure corruption with a gaze that paralyzes.',
+                choices: [
+                    { text: 'How do I defeat them?', next: 'lore_combat' },
+                    { text: 'Where do they come from?', next: 'lore_origin' },
+                    { text: 'I will face them bravely.', next: 'end' }
+                ]
+            },
+            'lore_solution': {
+                text: 'The Resonance Keepers of old sought to reunite the shards. One such Keeper, Warden Sylara, resides near the forest\\s edge. Seek her wisdom—she may know how to end this corruption. But beware, for others seek the shards for darker purposes.',
+                choices: [
+                    { text: 'Who are these others?', next: 'lore_enemies' },
+                    { text: 'Where can I find Sylara?', next: 'lore_sylara' },
+                    { text: 'I will seek her out.', next: 'end' }
+                ]
+            },
+            'lore_shards': {
+                text: 'The first shard, the Shard of Resonance, lies within the Undermines—our old mine system now overrun with Echo corruption. Clear the creatures and you may find it at the heart of the infestation.',
+                choices: [
+                    { text: 'I will venture into the Undermines.', next: 'end' }
+                ]
+            },
+            'lore_danger': {
+                text: 'In the wrong hands, the shards could tear reality asunder. Some cultists already worship the Echo as a god. They seek to gather the shards and complete what they call \"The Unmaking.\" We cannot let this happen.',
+                choices: [
+                    { text: 'I will stop them.', next: 'end' }
+                ]
+            },
+            'lore_protection': {
+                text: 'Keep moving—the Echo feeds on stillness. Resonance Crystals can shield you briefly, and our blacksmith can forge protective gear from corrupted materials, turning their power against them.',
+                choices: [
+                    { text: 'I will speak to the blacksmith.', next: 'end' }
+                ]
+            },
+            'lore_miners': {
+                text: 'Sadly, many were lost before we sealed the deeper tunnels. Some may yet live, driven mad by the Echo\\s whispers. If you find them, there may yet be hope for their salvation.',
+                choices: [
+                    { text: 'I will look for survivors.', next: 'end' }
+                ]
+            },
+            'lore_combat': {
+                text: 'Strike fast and true. Echo creatures are vulnerable to consistent damage—they regenerate slowly but can overwhelm with numbers. The Beholder\\s gaze can be interrupted by breaking line of sight. Good luck, adventurer.',
+                choices: [
+                    { text: 'Thank you for the advice.', next: 'end' }
+                ]
+            },
+            'lore_origin': {
+                text: 'They emerge from rifts in reality—tears where the Echo bleeds through. These rifts appear near shard fragments. Destroy the source, and the creatures fade. Let the rifts grow, and they become permanent.',
+                choices: [
+                    { text: 'I will seal them.', next: 'end' }
+                ]
+            },
+            'lore_enemies': {
+                text: 'The Shadow Concord—cultists who believe the Aegis\\s destruction was divine will. They see the Echo as salvation. Their leader, a fallen Keeper called Thessaly the Lost, has already claimed two shards.',
+                choices: [
+                    { text: 'I will stop Thessaly.', next: 'end' }
+                ]
+            },
+            'lore_sylara': {
+                text: 'Warden Sylara protects a sacred grove east of the village. She is a druid of the old ways, one of the last who remembers how to harmonize with the shards. Speak to her before descending into the Undermines.',
+                choices: [
+                    { text: 'I will find her.', next: 'end' }
                 ]
             },
             'end': {

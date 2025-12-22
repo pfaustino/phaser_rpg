@@ -309,88 +309,39 @@ function openLoreCodex() {
     codexPanel.listTop = listTop;
     codexPanel.listBottom = listBottom;
 
-    // Create scrollbar (only if content overflows)
+    // Create scrollbar using universal utility (only if content overflows)
     const maxScroll = Math.max(0, codexPanel.contentHeight - codexPanel.listHeight);
-    if (maxScroll > 0) {
+    if (maxScroll > 0 && typeof setupScrollbar === 'function') {
         const scrollbarX = centerX + panelWidth / 2 - 20;
-        const scrollbarHeight = listHeight;
-        const thumbHeight = Math.max(30, (listHeight / codexPanel.contentHeight) * listHeight);
 
-        // Scrollbar track
-        const scrollTrack = scene.add.rectangle(scrollbarX, listStartY + listHeight / 2, 8, scrollbarHeight, 0x333333)
-            .setScrollFactor(0).setDepth(503).setOrigin(0.5, 0.5);
-        codexPanel.elements.push(scrollTrack);
-
-        // Scrollbar thumb
-        const scrollThumb = scene.add.rectangle(scrollbarX, listStartY + thumbHeight / 2, 8, thumbHeight, 0x666666)
-            .setScrollFactor(0).setDepth(504).setOrigin(0.5, 0.5)
-            .setInteractive({ useHandCursor: true, draggable: true });
-        codexPanel.elements.push(scrollThumb);
-        codexPanel.scrollThumb = scrollThumb;
-        codexPanel.thumbHeight = thumbHeight;
-        codexPanel.scrollbarHeight = scrollbarHeight;
-
-        // Thumb drag handling
-        scene.input.setDraggable(scrollThumb);
-        scrollThumb.on('drag', (pointer, dragX, dragY) => {
-            // Clamp thumb position
-            const minY = listStartY + thumbHeight / 2;
-            const maxY = listStartY + listHeight - thumbHeight / 2;
-            const clampedY = Math.max(minY, Math.min(maxY, dragY));
-            scrollThumb.setY(clampedY);
-
-            // Calculate scroll offset from thumb position
-            const scrollRatio = (clampedY - minY) / (maxY - minY);
-            codexPanel.scrollOffset = scrollRatio * maxScroll;
-
-            // Update content positions
-            codexPanel.scrollableItems.forEach(item => {
-                const newY = codexPanel.listStartY + item.baseY - codexPanel.scrollOffset;
-                item.element.setY(newY);
-                const visible = newY >= codexPanel.listTop - 20 && newY <= codexPanel.listBottom + 20;
-                item.element.setVisible(visible);
-            });
+        codexPanel.scrollbar = setupScrollbar({
+            scene: scene,
+            x: scrollbarX,
+            y: listStartY,
+            width: 12,
+            height: listHeight,
+            depth: 503,
+            minScroll: 0,
+            initialScroll: 0,
+            visibleHeight: listHeight,
+            wheelHitArea: bg,
+            onScroll: (scrollPosition) => {
+                codexPanel.scrollOffset = scrollPosition;
+                // Update positions of scrollable items
+                codexPanel.scrollableItems.forEach(item => {
+                    const newY = codexPanel.listStartY + item.baseY - scrollPosition;
+                    item.element.setY(newY);
+                    // Hide items outside visible area
+                    const visible = newY >= codexPanel.listTop - 20 && newY <= codexPanel.listBottom + 20;
+                    item.element.setVisible(visible);
+                });
+            }
         });
 
-        // Thumb hover effects
-        scrollThumb.on('pointerover', () => scrollThumb.setFillStyle(0x888888));
-        scrollThumb.on('pointerout', () => scrollThumb.setFillStyle(0x666666));
+        // Set max scroll for proper thumb sizing
+        codexPanel.scrollbar.updateMaxScroll(maxScroll, currentY);
     }
 
-    // Helper function to update thumb position
-    function updateScrollThumb() {
-        if (codexPanel.scrollThumb && maxScroll > 0) {
-            const scrollRatio = codexPanel.scrollOffset / maxScroll;
-            const minY = listStartY + codexPanel.thumbHeight / 2;
-            const maxY = listStartY + listHeight - codexPanel.thumbHeight / 2;
-            codexPanel.scrollThumb.setY(minY + scrollRatio * (maxY - minY));
-        }
-    }
-
-    // Mouse wheel scroll handler
-    codexPanel.wheelHandler = (pointer, gameObjects, deltaX, deltaY) => {
-        if (!codexVisible) return;
-
-        const scrollSpeed = 30;
-        codexPanel.scrollOffset += deltaY > 0 ? scrollSpeed : -scrollSpeed;
-
-        // Clamp scroll offset
-        codexPanel.scrollOffset = Math.max(0, Math.min(codexPanel.scrollOffset, maxScroll));
-
-        // Update positions of scrollable items
-        codexPanel.scrollableItems.forEach(item => {
-            const newY = codexPanel.listStartY + item.baseY - codexPanel.scrollOffset;
-            item.element.setY(newY);
-
-            // Hide items outside visible area
-            const visible = newY >= codexPanel.listTop - 20 && newY <= codexPanel.listBottom + 20;
-            item.element.setVisible(visible);
-        });
-
-        // Update thumb position
-        updateScrollThumb();
-    };
-    scene.input.on('wheel', codexPanel.wheelHandler);
 
     // ESC key handler using keyboard event listener
     codexPanel.escHandler = (event) => {
@@ -419,9 +370,9 @@ function closeLoreCodex() {
     if (codexPanel.escHandler) {
         document.removeEventListener('keydown', codexPanel.escHandler, true);
     }
-    // Remove wheel handler
-    if (codexPanel.wheelHandler && scene) {
-        scene.input.off('wheel', codexPanel.wheelHandler);
+    // Destroy scrollbar (handles its own cleanup)
+    if (codexPanel.scrollbar) {
+        codexPanel.scrollbar.destroy();
     }
     if (codexPanel.detailElements) {
         codexPanel.detailElements.forEach(el => el.destroy());

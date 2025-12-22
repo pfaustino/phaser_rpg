@@ -15906,6 +15906,12 @@ function setupNPCInteractionKey(scene) {
     });
 
     console.log('⌨️ F key registered for NPC interaction');
+
+    // Set up Lore Codex keybinds (L key)
+    if (typeof setupLoreCodexKeys === 'function') {
+        setupLoreCodexKeys(scene);
+        console.log('📜 L key registered for Lore Codex');
+    }
 }
 
 // ============================================

@@ -259,6 +259,11 @@ class UqeEngine {
                 this.acceptQuest(questDef.id);
             }
         });
+
+        // Update the quest tracker HUD if available
+        if (typeof updateQuestTrackerHUD === 'function') {
+            updateQuestTrackerHUD();
+        }
     }
 
     acceptQuest(questId) {

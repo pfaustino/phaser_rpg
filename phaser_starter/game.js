@@ -11926,7 +11926,9 @@ function getPortraitKey(npcName) {
         'Elder Malik': 'portrait_elder_malik',
         'Merchant Lysa': 'portrait_merchant_lysa',
         'Mage Elara': 'portrait_mage_elara',
+        'Guard Thorne': 'portrait_captain_thorne',
         'Captain Thorne': 'portrait_captain_thorne',
+        'Captain Kael': 'portrait_captain_kael',
         'Blacksmith Brond': 'portrait_blacksmith_brond'
     };
     return portraitMap[npcName] || null;

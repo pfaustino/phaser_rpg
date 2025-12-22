@@ -305,6 +305,7 @@ function preload() {
     this.load.image('portrait_merchant_lysa', 'assets/images/MerchantLysa-Portrait.jpg');
     this.load.image('portrait_mage_elara', 'assets/images/MageElara-Portrait.jpg');
     this.load.image('portrait_captain_thorne', 'assets/images/CaptainThorne-Portrait.jpg');
+    this.load.image('portrait_captain_kael', 'assets/images/CaptainKael-Portrait.jpg');
     this.load.image('portrait_blacksmith_brond', 'assets/images/BlacksmithBrond-Portrait.jpg');
 
 
@@ -11858,8 +11859,8 @@ function createDialogUI(npc) {
     const portraitY = panelTopY + 20;
     const contentLeftX = panelLeftX + portraitSize + 40; // Content starts after portrait
 
-    // Get portrait key based on NPC name
-    const portraitKey = getPortraitKey(npc.name);
+    // Get portrait key from NPC data or fallback to name-based lookup
+    const portraitKey = npc.portraitKey || getPortraitKey(npc.name);
 
     dialogPanel = {
         bg: scene.add.rectangle(centerX, panelTopY, panelWidth, initialHeight, 0x1a1a1a, 0.95)

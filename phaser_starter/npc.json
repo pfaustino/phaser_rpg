@@ -8,7 +8,8 @@
         "offsetY": -3,
         "dialogId": "elder_intro",
         "questGiver": true,
-        "spriteKey": "npc_elder_malik"
+        "spriteKey": "npc_elder_malik",
+        "portraitKey": "portrait_elder_malik"
     },
     {
         "id": "npc_002",
@@ -20,7 +21,8 @@
         "dialogId": "merchant_shop",
         "merchant": true,
         "questGiver": true,
-        "spriteKey": "npc_lysa"
+        "spriteKey": "npc_lysa",
+        "portraitKey": "portrait_merchant_lysa"
     },
     {
         "id": "npc_003",
@@ -31,7 +33,8 @@
         "offsetY": -6,
         "dialogId": "guard_info",
         "questGiver": true,
-        "spriteKey": "npc_captain_thorne"
+        "spriteKey": "npc_captain_thorne",
+        "portraitKey": "portrait_captain_thorne"
     },
     {
         "id": "npc_004",
@@ -42,7 +45,8 @@
         "offsetY": -9,
         "dialogId": "generic_npc",
         "questGiver": true,
-        "spriteKey": "npc_captain_kael"
+        "spriteKey": "npc_captain_kael",
+        "portraitKey": "portrait_captain_kael"
     },
     {
         "id": "npc_005",
@@ -53,7 +57,8 @@
         "offsetY": -5,
         "dialogId": "generic_npc",
         "questGiver": true,
-        "spriteKey": "npc_mage_elara"
+        "spriteKey": "npc_mage_elara",
+        "portraitKey": "portrait_mage_elara"
     },
     {
         "id": "npc_006",
@@ -64,6 +69,7 @@
         "targetY": 20,
         "dialogId": "generic_npc",
         "questGiver": true,
-        "spriteKey": "npc_blacksmith_brond"
+        "spriteKey": "npc_blacksmith_brond",
+        "portraitKey": "portrait_blacksmith_brond"
     }
 ]

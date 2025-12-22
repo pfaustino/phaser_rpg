@@ -125,7 +125,7 @@ let codexVisible = false;
 /**
  * Get all unlocked lore entries from localStorage
  */
-function getUnlockedLore() {
+function getCodexUnlockedLore() {
     const unlocked = [];
 
     console.log('📜 [Lore Debug] Scanning localStorage for lore entries...');
@@ -163,7 +163,7 @@ function getUnlockedLore() {
  * Get lore entries grouped by category
  */
 function getLoreByCategory() {
-    const unlocked = getUnlockedLore();
+    const unlocked = getCodexUnlockedLore();
     const grouped = {};
 
     unlocked.forEach(entry => {
@@ -231,7 +231,7 @@ function openLoreCodex() {
     // Get lore entries
     const loreByCategory = getLoreByCategory();
     const categories = Object.keys(loreByCategory);
-    const totalUnlocked = getUnlockedLore().length;
+    const totalUnlocked = getCodexUnlockedLore().length;
     const totalEntries = Object.keys(LORE_ENTRIES).length;
 
     // Progress counter

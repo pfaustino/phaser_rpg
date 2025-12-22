@@ -302,6 +302,10 @@ function preload() {
 
     // Load NPC portraits for dialog system
     this.load.image('portrait_elder_malik', 'assets/images/ElderMalik-Portrait.jpg');
+    this.load.image('portrait_merchant_lysa', 'assets/images/MerchantLysa-Portrait.jpg');
+    this.load.image('portrait_mage_elara', 'assets/images/MageElara-Portrait.jpg');
+    this.load.image('portrait_captain_thorne', 'assets/images/CaptainThorne-Portrait.jpg');
+    this.load.image('portrait_blacksmith_brond', 'assets/images/BlacksmithBrond-Portrait.jpg');
 
 
     // Add load event listeners for debugging - MUST be before load calls
@@ -11848,11 +11852,21 @@ function createDialogUI(npc) {
     const panelTopY = 40; // Fixed top position
     const panelLeftX = centerX - panelWidth / 2;
 
+    // Portrait settings
+    const portraitSize = 100;
+    const portraitX = panelLeftX + 20;
+    const portraitY = panelTopY + 20;
+    const contentLeftX = panelLeftX + portraitSize + 40; // Content starts after portrait
+
+    // Get portrait key based on NPC name
+    const portraitKey = getPortraitKey(npc.name);
+
     dialogPanel = {
         bg: scene.add.rectangle(centerX, panelTopY, panelWidth, initialHeight, 0x1a1a1a, 0.95)
             .setScrollFactor(0).setDepth(400).setStrokeStyle(3, 0xffffff)
             .setOrigin(0.5, 0), // Origin at top-center
-        npcNameText: scene.add.text(panelLeftX + 20, panelTopY + 20,
+        portrait: null,
+        npcNameText: scene.add.text(contentLeftX, panelTopY + 20,
             `${npc.name}${npc.title ? ' - ' + npc.title : ''}`, {
             fontSize: '24px',
             fill: '#ffffff',
@@ -11864,8 +11878,38 @@ function createDialogUI(npc) {
         panelWidth: panelWidth,
         panelTopY: panelTopY,
         panelLeftX: panelLeftX,
-        centerX: centerX
+        centerX: centerX,
+        contentLeftX: contentLeftX,
+        portraitSize: portraitSize
     };
+
+    // Add portrait if available
+    if (portraitKey && scene.textures.exists(portraitKey)) {
+        dialogPanel.portrait = scene.add.image(portraitX, portraitY, portraitKey)
+            .setScrollFactor(0).setDepth(401).setOrigin(0, 0)
+            .setDisplaySize(portraitSize, portraitSize);
+
+        // Add border around portrait
+        dialogPanel.portraitBorder = scene.add.rectangle(
+            portraitX + portraitSize / 2,
+            portraitY + portraitSize / 2,
+            portraitSize + 4, portraitSize + 4
+        ).setScrollFactor(0).setDepth(400).setStrokeStyle(2, 0xffffff).setFillStyle(0x000000, 0);
+    }
+}
+
+/**
+ * Get portrait texture key for an NPC name
+ */
+function getPortraitKey(npcName) {
+    const portraitMap = {
+        'Elder Malik': 'portrait_elder_malik',
+        'Merchant Lysa': 'portrait_merchant_lysa',
+        'Mage Elara': 'portrait_mage_elara',
+        'Captain Thorne': 'portrait_captain_thorne',
+        'Blacksmith Brond': 'portrait_blacksmith_brond'
+    };
+    return portraitMap[npcName] || null;
 }
 
 /**
@@ -12076,6 +12120,8 @@ function updateDialogUI(node) {
 function closeDialog() {
     if (dialogPanel) {
         if (dialogPanel.bg) dialogPanel.bg.destroy();
+        if (dialogPanel.portrait) dialogPanel.portrait.destroy();
+        if (dialogPanel.portraitBorder) dialogPanel.portraitBorder.destroy();
         if (dialogPanel.npcNameText) dialogPanel.npcNameText.destroy();
         if (dialogPanel.dialogText) dialogPanel.dialogText.destroy();
 

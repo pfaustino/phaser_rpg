@@ -11934,6 +11934,45 @@ function getPortraitKey(npcName) {
     return portraitMap[npcName] || null;
 }
 
+// ============================================
+// LORE READ TRACKING
+// ============================================
+
+/**
+ * Check if a lore dialog node has been read
+ * @param {string} npcId - NPC identifier
+ * @param {string} nodeId - Dialog node ID
+ * @returns {boolean} - True if node has been read
+ */
+function isLoreNodeRead(npcId, nodeId) {
+    const key = `lore_read_${npcId}`;
+    const readNodes = JSON.parse(localStorage.getItem(key) || '[]');
+    return readNodes.includes(nodeId);
+}
+
+/**
+ * Mark a lore dialog node as read
+ * @param {string} npcId - NPC identifier  
+ * @param {string} nodeId - Dialog node ID
+ */
+function markLoreNodeRead(npcId, nodeId) {
+    const key = `lore_read_${npcId}`;
+    const readNodes = JSON.parse(localStorage.getItem(key) || '[]');
+    if (!readNodes.includes(nodeId)) {
+        readNodes.push(nodeId);
+        localStorage.setItem(key, JSON.stringify(readNodes));
+    }
+}
+
+/**
+ * Check if a dialog choice leads to a lore node (starts with 'lore_')
+ * @param {string} nextNode - The 'next' target of the choice
+ * @returns {boolean} - True if it's a lore choice
+ */
+function isLoreChoice(nextNode) {
+    return nextNode && nextNode.startsWith('lore_');
+}
+
 /**
  * Update dialog UI with current node
  */
@@ -12009,9 +12048,20 @@ function updateDialogUI(node) {
             .setStrokeStyle(2, 0x666666)
             .setInteractive({ useHandCursor: true });
 
-        // Button text
+        // Button text - add checkmark for read lore nodes
         const isQuest = choice.isQuest;
-        const displayText = isQuest ? `(!) ${choice.text}` : choice.text;
+        const isLore = isLoreChoice(choice.next);
+        const npcId = currentDialog ? currentDialog.npcName : 'unknown';
+        const isRead = isLore && isLoreNodeRead(npcId, choice.next);
+
+        let displayText = choice.text;
+        if (isQuest) {
+            displayText = `(!) ${choice.text}`;
+        } else if (isLore && isRead) {
+            displayText = `✓ ${choice.text}`;
+        } else if (isLore) {
+            displayText = `○ ${choice.text}`;
+        }
 
         const buttonText = scene.add.text(
             centerX,
@@ -12023,9 +12073,11 @@ function updateDialogUI(node) {
             }
         ).setScrollFactor(0).setDepth(402).setOrigin(0.5, 0.5);
 
-        // Apply yellow color to the marker if it's a quest
+        // Apply colors based on type
         if (isQuest) {
-            buttonText.setFill('#ffff00');
+            buttonText.setFill('#ffff00'); // Yellow for quests
+        } else if (isRead) {
+            buttonText.setFill('#88ff88'); // Green for read lore
         }
 
         // Button hover effects
@@ -12109,6 +12161,10 @@ function updateDialogUI(node) {
                     closeDialog();
                 }
             } else if (choice.next) {
+                // Mark lore node as read when navigating to it
+                if (isLoreChoice(choice.next)) {
+                    markLoreNodeRead(npcId, choice.next);
+                }
                 showDialogNode(choice.next);
             } else {
                 closeDialog();

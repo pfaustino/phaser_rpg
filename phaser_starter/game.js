@@ -11821,23 +11821,48 @@ function startDialog(npc) {
 
 /**
  * Show a specific dialog node
+ * @param {string} nodeId - The node to navigate to
+ * @param {boolean} isBack - True if this is a back navigation (don't add to history)
  */
-function showDialogNode(nodeId) {
+let dialogHistory = []; // Stack of visited node IDs for Back navigation
+
+function showDialogNode(nodeId, isBack = false) {
     if (!currentDialog || !currentDialog.nodes[nodeId]) {
         closeDialog();
         return;
     }
 
+    // Track history for back navigation (don't add if going back or at start)
+    if (!isBack && currentDialogNode && currentDialogNode !== nodeId) {
+        dialogHistory.push(currentDialogNode);
+    }
+
+    // Reset history when starting fresh
+    if (nodeId === 'start') {
+        dialogHistory = [];
+    }
+
     currentDialogNode = nodeId;
     const node = currentDialog.nodes[nodeId];
 
-    updateDialogUI(node);
+    // Pass history status to UI
+    updateDialogUI(node, dialogHistory.length > 0);
 
     // If no choices, auto-close after a moment
     if (node.choices.length === 0) {
         game.scene.scenes[0].time.delayedCall(2000, () => {
             closeDialog();
         });
+    }
+}
+
+/**
+ * Go back to the previous dialog node
+ */
+function goBackInDialog() {
+    if (dialogHistory.length > 0) {
+        const previousNode = dialogHistory.pop();
+        showDialogNode(previousNode, true);
     }
 }
 
@@ -11975,8 +12000,10 @@ function isLoreChoice(nextNode) {
 
 /**
  * Update dialog UI with current node
+ * @param {Object} node - The dialog node to display
+ * @param {boolean} hasHistory - True if there's navigation history (show Back button)
  */
-function updateDialogUI(node) {
+function updateDialogUI(node, hasHistory = false) {
     const scene = game.scene.scenes[0];
     if (!dialogPanel) return;
 
@@ -12177,6 +12204,55 @@ function updateDialogUI(node) {
             choice: choice
         });
     });
+
+    // Add "Back" button if there's navigation history
+    if (hasHistory) {
+        const backButtonY = startY + visibleChoiceCount * (buttonHeight + buttonSpacing);
+        visibleChoiceCount++;
+        const buttonWidth = panelWidth - 40;
+
+        const backBg = scene.add.rectangle(
+            centerX,
+            backButtonY,
+            buttonWidth,
+            buttonHeight,
+            0x2a2a2a,
+            0.9
+        ).setScrollFactor(0).setDepth(401)
+            .setStrokeStyle(2, 0x555555)
+            .setInteractive({ useHandCursor: true });
+
+        const backText = scene.add.text(
+            centerX,
+            backButtonY,
+            '← Back',
+            {
+                fontSize: '16px',
+                fill: '#aaaaaa'
+            }
+        ).setScrollFactor(0).setDepth(402).setOrigin(0.5, 0.5);
+
+        // Hover effects
+        backBg.on('pointerover', () => {
+            backBg.setFillStyle(0x3a3a3a);
+            backText.setFill('#ffffff');
+        });
+        backBg.on('pointerout', () => {
+            backBg.setFillStyle(0x2a2a2a);
+            backText.setFill('#aaaaaa');
+        });
+
+        // Click handler - go back in history
+        backBg.on('pointerdown', () => {
+            goBackInDialog();
+        });
+
+        dialogPanel.choiceButtons.push({
+            bg: backBg,
+            text: backText,
+            isBack: true
+        });
+    }
 
     // Dynamically resize panel height to fit content (panel is top-aligned)
     const bottomPadding = 30;

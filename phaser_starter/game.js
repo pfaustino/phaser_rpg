@@ -11848,16 +11848,20 @@ function createDialogUI(npc) {
     const scene = game.scene.scenes[0];
 
     const panelWidth = 700;
-    const initialHeight = 400; // Starting height, will be resized dynamically
+    const initialHeight = 500; // Starting height, will be resized dynamically
     const centerX = scene.cameras.main.width / 2;
-    const panelTopY = 40; // Fixed top position
+    const panelTopY = 20; // Fixed top position
     const panelLeftX = centerX - panelWidth / 2;
+    const padding = 15;
 
-    // Portrait settings
-    const portraitSize = 100;
-    const portraitX = panelLeftX + 20;
-    const portraitY = panelTopY + 20;
-    const contentLeftX = panelLeftX + portraitSize + 40; // Content starts after portrait
+    // Portrait settings - landscape format spanning dialog width
+    const portraitWidth = panelWidth - (padding * 2);
+    const portraitHeight = 150; // Height for landscape portrait
+    const portraitX = panelLeftX + padding;
+    const portraitY = panelTopY + padding;
+
+    // Content starts below portrait
+    const contentTopY = portraitY + portraitHeight + 15;
 
     // Get portrait key from NPC data or fallback to name-based lookup
     const portraitKey = npc.portraitKey || getPortraitKey(npc.name);
@@ -11867,7 +11871,8 @@ function createDialogUI(npc) {
             .setScrollFactor(0).setDepth(400).setStrokeStyle(3, 0xffffff)
             .setOrigin(0.5, 0), // Origin at top-center
         portrait: null,
-        npcNameText: scene.add.text(contentLeftX, panelTopY + 20,
+        portraitBorder: null,
+        npcNameText: scene.add.text(panelLeftX + padding, contentTopY,
             `${npc.name}${npc.title ? ' - ' + npc.title : ''}`, {
             fontSize: '24px',
             fill: '#ffffff',
@@ -11880,21 +11885,35 @@ function createDialogUI(npc) {
         panelTopY: panelTopY,
         panelLeftX: panelLeftX,
         centerX: centerX,
-        contentLeftX: contentLeftX,
-        portraitSize: portraitSize
+        contentTopY: contentTopY,
+        padding: padding
     };
 
-    // Add portrait if available
+    // Add landscape portrait if available
     if (portraitKey && scene.textures.exists(portraitKey)) {
+        const texture = scene.textures.get(portraitKey);
+        const frame = texture.getSourceImage();
+        const aspectRatio = frame.width / frame.height;
+
+        // Scale to fit width while maintaining aspect ratio
+        const scaledWidth = portraitWidth;
+        const scaledHeight = portraitWidth / aspectRatio;
+
         dialogPanel.portrait = scene.add.image(portraitX, portraitY, portraitKey)
             .setScrollFactor(0).setDepth(401).setOrigin(0, 0)
-            .setDisplaySize(portraitSize, portraitSize);
+            .setDisplaySize(scaledWidth, scaledHeight);
+
+        // Update contentTopY based on actual portrait height
+        const actualPortraitHeight = scaledHeight;
+        const newContentTopY = portraitY + actualPortraitHeight + 15;
+        dialogPanel.contentTopY = newContentTopY;
+        dialogPanel.npcNameText.setY(newContentTopY);
 
         // Add border around portrait
         dialogPanel.portraitBorder = scene.add.rectangle(
-            portraitX + portraitSize / 2,
-            portraitY + portraitSize / 2,
-            portraitSize + 4, portraitSize + 4
+            portraitX + scaledWidth / 2,
+            portraitY + scaledHeight / 2,
+            scaledWidth + 4, scaledHeight + 4
         ).setScrollFactor(0).setDepth(400).setStrokeStyle(2, 0xffffff).setFillStyle(0x000000, 0);
     }
 }
@@ -11935,17 +11954,20 @@ function updateDialogUI(node) {
     const panelTopY = dialogPanel.panelTopY;
     const panelLeftX = dialogPanel.panelLeftX;
     const centerX = dialogPanel.centerX;
+    const contentTopY = dialogPanel.contentTopY;
+    const padding = dialogPanel.padding || 15;
 
     // Dialog text - positioned below NPC name
-    const textY = panelTopY + 60;
+    const npcNameBottom = dialogPanel.npcNameText.y + dialogPanel.npcNameText.height;
+    const textY = npcNameBottom + 10;
     dialogPanel.dialogText = scene.add.text(
-        panelLeftX + 20,
+        panelLeftX + padding,
         textY,
         node.text,
         {
             fontSize: '18px',
             fill: '#ffffff',
-            wordWrap: { width: panelWidth - 40 }
+            wordWrap: { width: panelWidth - (padding * 2) }
         }
     ).setScrollFactor(0).setDepth(401).setOrigin(0, 0);
 

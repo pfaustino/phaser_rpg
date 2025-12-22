@@ -128,18 +128,22 @@ let codexVisible = false;
 function getUnlockedLore() {
     const unlocked = [];
 
-    // Check each NPC's read lore
-    const npcIds = ['Elder Malik', 'Blacksmith Brond', 'Mage Elara', 'Merchant Lysa', 'Guard Thorne', 'Captain Kael'];
-
-    npcIds.forEach(npcId => {
-        const key = `lore_read_${npcId}`;
-        const readNodes = JSON.parse(localStorage.getItem(key) || '[]');
-        readNodes.forEach(nodeId => {
-            if (LORE_ENTRIES[nodeId] && !unlocked.find(e => e.id === nodeId)) {
-                unlocked.push(LORE_ENTRIES[nodeId]);
+    // Scan all localStorage keys for lore_read_ entries
+    for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith('lore_read_')) {
+            try {
+                const readNodes = JSON.parse(localStorage.getItem(key) || '[]');
+                readNodes.forEach(nodeId => {
+                    if (LORE_ENTRIES[nodeId] && !unlocked.find(e => e.id === nodeId)) {
+                        unlocked.push(LORE_ENTRIES[nodeId]);
+                    }
+                });
+            } catch (e) {
+                console.warn('Error parsing lore key:', key, e);
             }
-        });
-    });
+        }
+    }
 
     return unlocked;
 }
@@ -278,9 +282,15 @@ function openLoreCodex() {
         });
     }
 
-    // ESC and L key to close
-    codexPanel.escKey = scene.input.keyboard.addKey('ESC');
-    codexPanel.lKey = scene.input.keyboard.addKey('L');
+    // ESC key handler using keyboard event listener
+    codexPanel.escHandler = (event) => {
+        if (event.keyCode === 27 && codexVisible) { // 27 = ESC
+            event.preventDefault();
+            event.stopPropagation();
+            closeLoreCodex();
+        }
+    };
+    document.addEventListener('keydown', codexPanel.escHandler, true);
 
     codexVisible = true;
 }
@@ -293,8 +303,10 @@ function closeLoreCodex() {
 
     codexPanel.elements.forEach(el => el.destroy());
 
-    if (codexPanel.escKey) codexPanel.escKey.destroy();
-    if (codexPanel.lKey) codexPanel.lKey.destroy();
+    // Remove ESC handler
+    if (codexPanel.escHandler) {
+        document.removeEventListener('keydown', codexPanel.escHandler, true);
+    }
     if (codexPanel.detailElements) {
         codexPanel.detailElements.forEach(el => el.destroy());
     }

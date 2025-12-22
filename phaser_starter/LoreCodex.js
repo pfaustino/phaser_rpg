@@ -386,4 +386,17 @@ window.closeLoreCodex = closeLoreCodex;
 window.setupLoreCodexKeys = setupLoreCodexKeys;
 window.LORE_ENTRIES = LORE_ENTRIES;
 
+// Auto-initialize when game is ready
+let loreCodexInitialized = false;
+const loreCodexInitInterval = setInterval(() => {
+    if (typeof game !== 'undefined' && game.scene && game.scene.scenes[0] && game.scene.scenes[0].input) {
+        if (!loreCodexInitialized) {
+            setupLoreCodexKeys(game.scene.scenes[0]);
+            loreCodexInitialized = true;
+            console.log('📜 Lore Codex L key initialized');
+            clearInterval(loreCodexInitInterval);
+        }
+    }
+}, 500);
+
 console.log('📜 LoreCodex.js loaded');

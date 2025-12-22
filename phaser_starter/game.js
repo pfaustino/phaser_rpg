@@ -11981,11 +11981,15 @@ function isLoreNodeRead(npcId, nodeId) {
  * @param {string} nodeId - Dialog node ID
  */
 function markLoreNodeRead(npcId, nodeId) {
+    console.log('📜 [Lore Track] markLoreNodeRead called with npcId:', npcId, 'nodeId:', nodeId);
     const key = `lore_read_${npcId}`;
     const readNodes = JSON.parse(localStorage.getItem(key) || '[]');
     if (!readNodes.includes(nodeId)) {
         readNodes.push(nodeId);
         localStorage.setItem(key, JSON.stringify(readNodes));
+        console.log('📜 [Lore Track] Saved to localStorage:', key, '->', readNodes);
+    } else {
+        console.log('📜 [Lore Track] Already read:', nodeId);
     }
 }
 

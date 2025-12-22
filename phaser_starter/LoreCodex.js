@@ -128,15 +128,24 @@ let codexVisible = false;
 function getUnlockedLore() {
     const unlocked = [];
 
+    console.log('📜 [Lore Debug] Scanning localStorage for lore entries...');
+    console.log('📜 [Lore Debug] Total localStorage keys:', localStorage.length);
+    console.log('📜 [Lore Debug] LORE_ENTRIES has:', Object.keys(LORE_ENTRIES).length, 'entries');
+    console.log('📜 [Lore Debug] LORE_ENTRIES keys:', Object.keys(LORE_ENTRIES));
+
     // Scan all localStorage keys for lore_read_ entries
     for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i);
+        console.log('📜 [Lore Debug] Checking key:', key);
         if (key && key.startsWith('lore_read_')) {
             try {
                 const readNodes = JSON.parse(localStorage.getItem(key) || '[]');
+                console.log('📜 [Lore Debug] Found lore key:', key, '-> nodes:', readNodes);
                 readNodes.forEach(nodeId => {
+                    console.log('📜 [Lore Debug] Checking nodeId:', nodeId, 'exists in LORE_ENTRIES:', !!LORE_ENTRIES[nodeId]);
                     if (LORE_ENTRIES[nodeId] && !unlocked.find(e => e.id === nodeId)) {
                         unlocked.push(LORE_ENTRIES[nodeId]);
+                        console.log('📜 [Lore Debug] Added to unlocked:', nodeId);
                     }
                 });
             } catch (e) {
@@ -144,6 +153,8 @@ function getUnlockedLore() {
             }
         }
     }
+
+    console.log('📜 [Lore Debug] Total unlocked entries:', unlocked.length);
 
     return unlocked;
 }

@@ -6,6 +6,7 @@
             "description": "The ground shakes beneath our feet. Speak with the Town Elder to understand these strange quakes.",
             "giver": "Elder Malik",
             "step": 1,
+            "autoStart": true,
             "objectives": [
                 {
                     "id": "talk_malik",

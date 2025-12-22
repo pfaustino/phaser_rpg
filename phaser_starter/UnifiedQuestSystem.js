@@ -251,6 +251,14 @@ class UqeEngine {
     init(definitions) {
         this.allDefinitions = definitions;
         console.log("🚀 [UQE Engine] Initialized with", Object.keys(definitions).length, "definitions");
+
+        // Auto-start any quests marked with autoStart: true
+        Object.values(definitions).forEach(questDef => {
+            if (questDef.autoStart) {
+                console.log(`🎯 [UQE Engine] Auto-starting quest: ${questDef.title}`);
+                this.acceptQuest(questDef.id);
+            }
+        });
     }
 
     acceptQuest(questId) {

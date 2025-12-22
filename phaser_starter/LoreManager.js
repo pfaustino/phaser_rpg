@@ -1,225 +1,141 @@
 /**
- * LoreManager - Manages lore entries and the Codex system
- * 
- * Tracks which lore entries have been unlocked, provides data for the
- * Codex UI, and shows notifications when new lore is discovered.
+ * LoreManager.js
+ * Manages the discovery and storage of lore entries.
+ * Acts as the bridge between game events (Milestones) and the UI (LoreCodex).
  */
 class LoreManager {
     constructor(scene) {
         this.scene = scene;
-        this.data = null;
         this.unlockedLore = new Set();
-        this.newlyUnlocked = []; // Track entries unlocked this session for notifications
+        this.initialized = false;
     }
 
     /**
-     * Initialize data from Phaser cache and load saved progress
-     */
-    init() {
-        this.data = this.scene.cache.json.get('loreData');
-        if (!this.data) {
-            console.error('LoreManager: Failed to load loreData from cache');
-            return;
-        }
-
-        // Load previously unlocked lore from localStorage
-        this.loadProgress();
-
-        console.log('LoreManager initialized with', this.data.entries?.length || 0, 'lore entries');
-    }
-
-    /**
+     * Initialize the manager
      * Load unlocked lore from localStorage
      */
-    loadProgress() {
-        try {
-            const saved = localStorage.getItem('rpg_unlocked_lore');
-            if (saved) {
-                const parsed = JSON.parse(saved);
-                this.unlockedLore = new Set(parsed);
-            }
-        } catch (e) {
-            console.warn('LoreManager: Failed to load saved lore progress', e);
-        }
+    init() {
+        if (this.initialized) return;
+
+        this.loadProgress();
+        this.initialized = true;
+        console.log(`📜 LoreManager initialized. ${this.unlockedLore.size} entries discovered.`);
     }
 
     /**
-     * Save unlocked lore to localStorage
+     * Unlock a specific lore entry
+     * @param {string} loreId - The ID of the lore entry to unlock
+     * @param {string} source - Optional source for categorization (e.g., 'npc_malik', 'world')
      */
-    saveProgress() {
-        try {
-            localStorage.setItem('rpg_unlocked_lore', JSON.stringify([...this.unlockedLore]));
-        } catch (e) {
-            console.warn('LoreManager: Failed to save lore progress', e);
-        }
-    }
+    unlockLore(loreId, source = 'general') {
+        // If already unlocked, do nothing
+        if (this.isLoreUnlocked(loreId)) return;
 
-    /**
-     * Unlock a lore entry by ID
-     * @param {string} loreId - ID of the lore entry to unlock
-     * @returns {object|null} - The unlocked lore entry, or null if not found
-     */
-    unlockLore(loreId) {
-        if (!this.data || !this.data.entries) return null;
+        console.log(`📜 Unlocking lore: ${loreId}`);
 
-        // Don't re-unlock already unlocked lore
-        if (this.unlockedLore.has(loreId)) return null;
-
-        // Find the lore entry
-        const entry = this.data.entries.find(e => e.id === loreId);
-        if (!entry) {
-            console.warn('LoreManager: Lore entry not found:', loreId);
-            return null;
-        }
-
-        // Unlock it
+        // Add to set
         this.unlockedLore.add(loreId);
-        this.newlyUnlocked.push(entry);
+
+        // Save to specific key format expected by LoreCodex
+        // LoreCodex currently looks for 'lore_read_Source' keys
+        // We will adapt to that or use a unified 'lore_unlocked' key
+        // For backwards compatibility and LoreCodex.js support:
+        this.saveLegacyFormat(loreId, source);
+
+        // Save to modern unified set
         this.saveProgress();
 
-        console.log('Lore unlocked:', entry.title);
-
-        // Show notification
-        this.showUnlockNotification(entry);
-
-        // Emit event
+        // Emit event for UI to update
         if (this.scene.events) {
-            this.scene.events.emit('lore_unlocked', entry);
+            this.scene.events.emit('lore_unlocked', loreId);
         }
 
-        return entry;
+        // Show toast notification
+        this.showUnlockNotification(`New Lore Unlocked`);
     }
 
     /**
-     * Show a notification when lore is unlocked
+     * Check if lore is unlocked
      */
-    showUnlockNotification(entry) {
-        // Create notification text
-        const categoryName = this.data.categories[entry.category] || entry.category;
-
-        // Use scene's notification system if available, otherwise console
-        if (this.scene.showNotification) {
-            this.scene.showNotification(`📖 New Lore: ${entry.title}`, 0xFFD700);
-        } else if (this.scene.addCombatText) {
-            // Fallback to combat text if available
-            this.scene.addCombatText(
-                this.scene.cameras.main.width / 2,
-                100,
-                `📖 New Lore: ${entry.title}`,
-                '#FFD700'
-            );
-        } else {
-            console.log(`[LORE NOTIFICATION] New ${categoryName}: ${entry.title}`);
-        }
-    }
-
-    /**
-     * Check if a lore entry is unlocked
-     */
-    isUnlocked(loreId) {
+    isLoreUnlocked(loreId) {
         return this.unlockedLore.has(loreId);
     }
 
     /**
-     * Get all unlocked lore entries
-     * @returns {array} - Array of unlocked lore entry objects
+     * Load unlocking progress
      */
-    getUnlockedLore() {
-        if (!this.data || !this.data.entries) return [];
+    loadProgress() {
+        try {
+            // Load unified list
+            const saved = localStorage.getItem('rpg_lore_unlocked');
+            if (saved) {
+                const parsed = JSON.parse(saved);
+                parsed.forEach(id => this.unlockedLore.add(id));
+            }
 
-        return this.data.entries.filter(e => this.unlockedLore.has(e.id));
-    }
-
-    /**
-     * Get unlocked lore filtered by category
-     * @param {string} category - Category key to filter by
-     */
-    getLoreByCategory(category) {
-        return this.getUnlockedLore().filter(e => e.category === category);
-    }
-
-    /**
-     * Get unlocked lore filtered by chapter
-     * @param {number} chapter - Chapter number to filter by
-     */
-    getLoreByChapter(chapter) {
-        return this.getUnlockedLore().filter(e => e.chapter === chapter);
-    }
-
-    /**
-     * Get all available categories with their display names
-     */
-    getCategories() {
-        if (!this.data || !this.data.categories) return {};
-        return { ...this.data.categories };
-    }
-
-    /**
-     * Get category counts for Codex UI
-     * @returns {object} - Object with category keys and {total, unlocked} counts
-     */
-    getCategoryCounts() {
-        if (!this.data || !this.data.entries) return {};
-
-        const counts = {};
-        for (const [key, name] of Object.entries(this.data.categories)) {
-            const categoryEntries = this.data.entries.filter(e => e.category === key);
-            const unlockedEntries = categoryEntries.filter(e => this.unlockedLore.has(e.id));
-            counts[key] = {
-                name,
-                total: categoryEntries.length,
-                unlocked: unlockedEntries.length
-            };
+            // Also scan legacy keys to sync up
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                if (key && key.startsWith('lore_read_')) {
+                    try {
+                        const ids = JSON.parse(localStorage.getItem(key));
+                        if (Array.isArray(ids)) {
+                            ids.forEach(id => this.unlockedLore.add(id));
+                        }
+                    } catch (e) {
+                        console.warn('Failed to parse legacy lore key:', key);
+                    }
+                }
+            }
+        } catch (e) {
+            console.warn('LoreManager: Failed to load progress', e);
         }
-        return counts;
     }
 
     /**
-     * Get a specific lore entry by ID (only if unlocked)
+     * Save progress to unified storage
      */
-    getLoreEntry(loreId) {
-        if (!this.isUnlocked(loreId)) return null;
-        return this.data.entries.find(e => e.id === loreId);
-    }
-
-    /**
-     * Get newly unlocked lore from this session
-     */
-    getNewlyUnlocked() {
-        return [...this.newlyUnlocked];
-    }
-
-    /**
-     * Clear newly unlocked list (after viewing)
-     */
-    clearNewlyUnlocked() {
-        this.newlyUnlocked = [];
-    }
-
-    /**
-     * Get total lore statistics
-     */
-    getStats() {
-        if (!this.data || !this.data.entries) {
-            return { total: 0, unlocked: 0, percentage: 0 };
+    saveProgress() {
+        try {
+            const array = Array.from(this.unlockedLore);
+            localStorage.setItem('rpg_lore_unlocked', JSON.stringify(array));
+        } catch (e) {
+            console.warn('LoreManager: Failed to save progress', e);
         }
-
-        const total = this.data.entries.length;
-        const unlocked = this.unlockedLore.size;
-        const percentage = total > 0 ? Math.round((unlocked / total) * 100) : 0;
-
-        return { total, unlocked, percentage };
     }
 
     /**
-     * Reset all lore progress (for new game)
+     * Save in the format LoreCodex.js currently expects (lore_read_SOURCE)
      */
-    resetProgress() {
-        this.unlockedLore.clear();
-        this.newlyUnlocked = [];
-        this.saveProgress();
+    saveLegacyFormat(loreId, source) {
+        // Default source if not provided, or try to infer from ID (e.g. lore_ch1_...)
+        let key = `lore_read_${source}`;
+
+        try {
+            // Get existing array for this source
+            const existing = JSON.parse(localStorage.getItem(key) || '[]');
+            if (!existing.includes(loreId)) {
+                existing.push(loreId);
+                localStorage.setItem(key, JSON.stringify(existing));
+            }
+        } catch (e) {
+            console.warn('LoreManager: Failed to save legacy format', e);
+        }
+    }
+
+    /**
+     * Show a simple notification
+     */
+    showUnlockNotification(text) {
+        // Reuse global notification system if available
+        if (window.showDamageNumber) {
+            // center of screen ish
+            const x = this.scene.cameras.main.midPoint.x;
+            const y = this.scene.cameras.main.midPoint.y - 100;
+            window.showDamageNumber(x, y, text, 0x00FFFF);
+        }
     }
 }
 
-// Export for global use
+// Export global
 window.LoreManager = LoreManager;

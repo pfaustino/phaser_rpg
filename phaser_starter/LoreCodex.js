@@ -1,481 +1,360 @@
 /**
- * LoreCodex.js - Lore Codex System
- * A UI for viewing unlocked lore entries discovered through NPC conversations
+ * LoreCodex.js - UI for the Lore Codex
  */
 
-// ============================================
-// LORE CODEX DATA
-// ============================================
-
-/**
- * All lore entries organized by category
- * Each entry contains: id, title, content, category, source (NPC who reveals it)
- */
 const LORE_ENTRIES = {
+    // CHAPTER 1 - THE AWAKENING
+    'lore_ch1_intro': {
+        title: "The Awakening",
+        category: "Main Story",
+        text: "The world feels different today. The air hums with a strange energy, and the ground beneath Hearthwell trembles intermittently. Elder Malik has summoned all capable villagers.",
+        source: 'Game Start'
+    },
+    'lore_ch1_hearthwell': {
+        title: "Hearthwell Village",
+        category: "Places",
+        text: "Founded three centuries ago near the Mana Springs. It has always been a sanctuary, but recent tremors threaten its foundations. The villagers are resilient, but fear is growing.",
+        source: 'Game Start'
+    },
+    'lore_ch1_echo_corruption': {
+        title: "Echo Corruption",
+        category: "Bestiary",
+        text: "The local wildlife is being twisted by a crystalline substance. 'Echo Mites' are the first sign—small, aggressive, and feeding on mana. They are not natural.",
+        source: 'Quest: First Investigation'
+    },
     'lore_tremors': {
-        id: 'lore_tremors',
-        title: 'The Tremors',
-        category: 'The Echo',
-        source: 'Elder Malik',
-        content: 'The tremors began three moons ago. At first, we thought it mere earthquakes, but then came the Echo—a resonance that warps reality itself. Our scholars believe something ancient stirs beneath the earth, something connected to a relic called the Shattered Aegis.'
-    },
-    'lore_aegis': {
-        id: 'lore_aegis',
-        title: 'The Shattered Aegis',
-        category: 'Ancient Relics',
-        source: 'Elder Malik',
-        content: 'Long ago, a divine shield called the Aegis protected our world from chaos. When it shattered, its fragments—the Shards of Resonance—scattered across the land. Each shard pulses with ancient power. Some say gathering them could restore the Aegis... or unleash something far worse.'
-    },
-    'lore_echo': {
-        id: 'lore_echo',
-        title: 'The Echo',
-        category: 'The Echo',
-        source: 'Elder Malik',
-        content: 'The Echo is a corruption that seeps from the broken Aegis. It twists creatures into monstrous forms—the Echo Mites and Echo Rats you see in our mines are proof. Those exposed too long become lost to its influence, hearing whispers that drive them mad.'
-    },
-    'lore_creatures': {
-        id: 'lore_creatures',
-        title: 'Echo Creatures',
-        category: 'Bestiary',
-        source: 'Elder Malik',
-        content: 'We have seen Echo Mites—small crystalline insects that drain life force. Echo Rats, larger and more aggressive, lurk in the shadows. And rumors speak of an Echo Beholder in the deepest mines—a creature of pure corruption with a gaze that paralyzes.'
-    },
-    'lore_solution': {
-        id: 'lore_solution',
-        title: 'Hope for Salvation',
-        category: 'Characters',
-        source: 'Elder Malik',
-        content: 'The Resonance Keepers of old sought to reunite the shards. One such Keeper, Warden Sylara, resides near the forest\'s edge. Seek her wisdom—she may know how to end this corruption. But beware, for others seek the shards for darker purposes.'
-    },
-    'lore_shards': {
-        id: 'lore_shards',
-        title: 'Shard Locations',
-        category: 'Ancient Relics',
-        source: 'Elder Malik',
-        content: 'The first shard, the Shard of Resonance, lies within the Undermines—our old mine system now overrun with Echo corruption. Clear the creatures and you may find it at the heart of the infestation.'
-    },
-    'lore_danger': {
-        id: 'lore_danger',
-        title: 'The Unmaking',
-        category: 'The Shadow Concord',
-        source: 'Elder Malik',
-        content: 'In the wrong hands, the shards could tear reality asunder. Some cultists already worship the Echo as a god. They seek to gather the shards and complete what they call "The Unmaking." We cannot let this happen.'
-    },
-    'lore_protection': {
-        id: 'lore_protection',
-        title: 'Defending Against the Echo',
-        category: 'Survival',
-        source: 'Elder Malik',
-        content: 'Keep moving—the Echo feeds on stillness. Resonance Crystals can shield you briefly, and our blacksmith can forge protective gear from corrupted materials, turning their power against them.'
-    },
-    'lore_miners': {
-        id: 'lore_miners',
-        title: 'The Lost Miners',
-        category: 'Characters',
-        source: 'Elder Malik',
-        content: 'Sadly, many were lost before we sealed the deeper tunnels. Some may yet live, driven mad by the Echo\'s whispers. If you find them, there may yet be hope for their salvation.'
-    },
-    'lore_combat': {
-        id: 'lore_combat',
-        title: 'Fighting Echo Creatures',
-        category: 'Bestiary',
-        source: 'Elder Malik',
-        content: 'Strike fast and true. Echo creatures are vulnerable to consistent damage—they regenerate slowly but can overwhelm with numbers. The Beholder\'s gaze can be interrupted by breaking line of sight. Good luck, adventurer.'
+        title: "The Tremors",
+        category: "History",
+        text: "It started as a subtle vibration in the ground, barely noticeable. Over weeks, it grew into violent shakes that cracked foundations and toppled statues. The elders speak of the 'World Heart' beating in distress.",
+        source: 'Elder Malik'
     },
     'lore_origin': {
-        id: 'lore_origin',
-        title: 'The Rifts',
-        category: 'The Echo',
-        source: 'Elder Malik',
-        content: 'They emerge from rifts in reality—tears where the Echo bleeds through. These rifts appear near shard fragments. Destroy the source, and the creatures fade. Let the rifts grow, and they become permanent.'
+        title: "Origin of the Town",
+        category: "History",
+        text: "Our town, Hearthwell, was founded three centuries ago by refugees fleeing the 'Shadow Blight'. They chose this valley for its natural mana springs, which were believed to ward off darkness.",
+        source: 'Elder Malik'
     },
-    'lore_enemies': {
-        id: 'lore_enemies',
-        title: 'The Shadow Concord',
-        category: 'The Shadow Concord',
-        source: 'Elder Malik',
-        content: 'The Shadow Concord—cultists who believe the Aegis\'s destruction was divine will. They see the Echo as salvation. Their leader, a fallen Keeper called Thessaly the Lost, has already claimed two shards.'
-    },
-    'lore_sylara': {
-        id: 'lore_sylara',
-        title: 'Warden Sylara',
-        category: 'Characters',
-        source: 'Elder Malik',
-        content: 'Warden Sylara protects a sacred grove east of the village. She is a druid of the old ways, one of the last who remembers how to harmonize with the shards. Speak to her before descending into the Undermines.'
+    'lore_creatures': {
+        title: "Creatures of the Wild",
+        category: "Monsters",
+        text: "The local wildlife has become aggressive. Wolves with glowing red eyes, bears with stone-like hide... Corrupting energy is seeping into everything.",
+        source: 'Observation'
     }
 };
 
-// Lore categories with display colors
-const LORE_CATEGORIES = {
-    'The Echo': { color: '#9966ff', icon: '⚡' },
-    'Ancient Relics': { color: '#ffcc00', icon: '🔮' },
-    'Bestiary': { color: '#ff6666', icon: '👁️' },
-    'Characters': { color: '#66ccff', icon: '👤' },
-    'The Shadow Concord': { color: '#cc33ff', icon: '🌑' },
-    'Survival': { color: '#66ff66', icon: '🛡️' }
-};
-
-// ============================================
-// LORE CODEX UI
-// ============================================
-
-let codexPanel = null;
 let codexVisible = false;
+let codexPanel = null;
+let loreListContainer = null;
+let detailContainer = null;
+let updateEvent = null;
 
-/**
- * Get all unlocked lore entries from localStorage
- */
-function getCodexUnlockedLore() {
-    const unlocked = [];
-
-    console.log('📜 [Lore Debug] Scanning localStorage for lore entries...');
-    console.log('📜 [Lore Debug] Total localStorage keys:', localStorage.length);
-    console.log('📜 [Lore Debug] LORE_ENTRIES has:', Object.keys(LORE_ENTRIES).length, 'entries');
-    console.log('📜 [Lore Debug] LORE_ENTRIES keys:', Object.keys(LORE_ENTRIES));
-
-    // Scan all localStorage keys for lore_read_ entries
-    for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        console.log('📜 [Lore Debug] Checking key:', key);
-        if (key && key.startsWith('lore_read_')) {
-            try {
-                const readNodes = JSON.parse(localStorage.getItem(key) || '[]');
-                console.log('📜 [Lore Debug] Found lore key:', key, '-> nodes:', readNodes);
-                readNodes.forEach(nodeId => {
-                    console.log('📜 [Lore Debug] Checking nodeId:', nodeId, 'exists in LORE_ENTRIES:', !!LORE_ENTRIES[nodeId]);
-                    if (LORE_ENTRIES[nodeId] && !unlocked.find(e => e.id === nodeId)) {
-                        unlocked.push(LORE_ENTRIES[nodeId]);
-                        console.log('📜 [Lore Debug] Added to unlocked:', nodeId);
-                    }
-                });
-            } catch (e) {
-                console.warn('Error parsing lore key:', key, e);
-            }
-        }
-    }
-
-    console.log('📜 [Lore Debug] Total unlocked entries:', unlocked.length);
-
-    return unlocked;
-}
-
-/**
- * Get lore entries grouped by category
- */
-function getLoreByCategory() {
-    const unlocked = getCodexUnlockedLore();
-    const grouped = {};
-
-    unlocked.forEach(entry => {
-        if (!grouped[entry.category]) {
-            grouped[entry.category] = [];
-        }
-        grouped[entry.category].push(entry);
-    });
-
-    return grouped;
-}
-
-/**
- * Toggle the Lore Codex visibility
- */
-function toggleLoreCodex() {
-    if (codexVisible) {
-        closeLoreCodex();
-    } else {
-        openLoreCodex();
-    }
-}
-
-/**
- * Open the Lore Codex UI
- */
-function openLoreCodex() {
+function openLoreCodex(scene) {
     if (codexVisible) return;
+    console.log("📖 Opening Lore Codex...");
+    codexVisible = true;
 
-    const scene = game.scene.scenes[0];
-    const centerX = scene.cameras.main.width / 2;
-    const centerY = scene.cameras.main.height / 2;
-    const panelWidth = 700;
-    const panelHeight = 500;
+    // Dimensions
+    const width = 800;
+    const height = 600;
 
-    codexPanel = {
-        elements: []
+    // Initial Camera Pos
+    const cam = scene.cameras.main;
+    const x = cam.scrollX + (cam.width - width) / 2;
+    const y = cam.scrollY + (cam.height - height) / 2;
+
+    // Create Main Container (No ScrollFactor)
+    codexPanel = scene.add.container(x, y).setDepth(2000);
+
+    const bg = scene.add.rectangle(0, 0, width, height, 0x1a1a1a).setOrigin(0);
+    const border = scene.add.rectangle(0, 0, width, height, 0x1a1a1a).setStrokeStyle(4, 0x4a4a4a).setOrigin(0);
+    codexPanel.add([bg, border]);
+
+    // Header
+    const title = scene.add.text(width / 2, 40, "LORE CODEX", {
+        fontFamily: 'Arial', fontSize: '32px', color: '#ffd700', fontStyle: 'bold'
+    }).setOrigin(0.5);
+    codexPanel.add(title);
+
+    // Close Button
+    const closeBtn = scene.add.text(width - 40, 40, "X", { fontSize: '24px', color: '#ff0000' })
+        .setInteractive({ useHandCursor: true })
+        .on('pointerdown', () => closeLoreCodex(scene));
+    codexPanel.add(closeBtn);
+
+    // Layout
+    const listX = 40;
+    const listY = 100;
+    const listW = 300;
+    const listH = 460;
+
+    const detailX = 360;
+    const detailY = 100;
+    const detailW = 400;
+    const detailH = 460;
+
+    // Backgrounds
+    const listBg = scene.add.rectangle(listX, listY, listW, listH, 0x000000, 0.5).setOrigin(0);
+    const detailBg = scene.add.rectangle(detailX, detailY, detailW, detailH, 0x000000, 0.5).setOrigin(0);
+    codexPanel.add([listBg, detailBg]);
+
+    // Content Containers
+    loreListContainer = scene.add.container(listX, listY);
+    detailContainer = scene.add.container(detailX, detailY);
+
+    // Masks (Detached from panel to avoid offset issues)
+    const listMaskData = scene.make.graphics();
+    listMaskData.fillRect(0, 0, listW, listH);
+    const listMask = listMaskData.createGeometryMask();
+
+    const detailMaskData = scene.make.graphics();
+    detailMaskData.fillRect(0, 0, detailW, detailH);
+    const detailMask = detailMaskData.createGeometryMask();
+
+    loreListContainer.setMask(listMask);
+    detailContainer.setMask(detailMask);
+
+    codexPanel.add([loreListContainer, detailContainer]);
+
+    // Store Offsets/Refs for Update
+    codexPanel.dataVals = {
+        offsetX: (cam.width - width) / 2,
+        offsetY: (cam.height - height) / 2,
+        listX: listX,
+        listY: listY,
+        detailX: detailX,
+        detailY: detailY,
+        listW: listW,
+        listH: listH,
+        listMaskData: listMaskData,
+        detailMaskData: detailMaskData,
+        scrollbar: null
     };
 
-    // Background overlay
-    const overlay = scene.add.rectangle(centerX, centerY, scene.cameras.main.width, scene.cameras.main.height, 0x000000, 0.7)
-        .setScrollFactor(0).setDepth(500).setInteractive();
-    codexPanel.elements.push(overlay);
+    // Populate
+    populateLoreList(scene, listW);
 
-    // Main panel
-    const bg = scene.add.rectangle(centerX, centerY, panelWidth, panelHeight, 0x1a1a1a, 0.95)
-        .setScrollFactor(0).setDepth(501).setStrokeStyle(3, 0xffffff);
-    codexPanel.elements.push(bg);
+    // Initial Prompt
+    const prompt = scene.add.text(detailW / 2, detailH / 2, "Select an entry to read", { color: '#888' }).setOrigin(0.5);
+    detailContainer.add(prompt);
 
-    // Title
-    const title = scene.add.text(centerX, centerY - panelHeight / 2 + 30, '📜 LORE CODEX', {
-        fontSize: '28px',
-        fill: '#ffffff',
-        fontStyle: 'bold'
-    }).setScrollFactor(0).setDepth(502).setOrigin(0.5, 0.5);
-    codexPanel.elements.push(title);
+    // Start Update Loop
+    updateEvent = () => updateCodexPosition(scene);
+    scene.events.on('update', updateEvent);
+    updateCodexPosition(scene); // First tick
+}
 
-    // Close instruction
-    const closeText = scene.add.text(centerX, centerY + panelHeight / 2 - 25, 'Press L or ESC to close', {
-        fontSize: '14px',
-        fill: '#888888'
-    }).setScrollFactor(0).setDepth(502).setOrigin(0.5, 0.5);
-    codexPanel.elements.push(closeText);
+function updateCodexPosition(scene) {
+    if (!codexPanel || !codexPanel.active) return;
 
-    // Get lore entries
-    const loreByCategory = getLoreByCategory();
-    const categories = Object.keys(loreByCategory);
-    const totalUnlocked = getCodexUnlockedLore().length;
-    const totalEntries = Object.keys(LORE_ENTRIES).length;
+    const cam = scene.cameras.main;
+    const d = codexPanel.dataVals;
 
-    // Progress counter
-    const progressText = scene.add.text(centerX, centerY - panelHeight / 2 + 60,
-        `Entries Discovered: ${totalUnlocked}/${totalEntries}`, {
-        fontSize: '16px',
-        fill: '#aaaaaa'
-    }).setScrollFactor(0).setDepth(502).setOrigin(0.5, 0.5);
-    codexPanel.elements.push(progressText);
+    const panelX = cam.scrollX + d.offsetX;
+    const panelY = cam.scrollY + d.offsetY;
 
-    // Lore list area with scrolling
-    const listStartY = centerY - panelHeight / 2 + 100;
-    const listPadding = 30;
-    const listHeight = panelHeight - 160; // Height of visible scroll area
-    const listTop = listStartY;
-    const listBottom = listStartY + listHeight;
+    // Move Panel
+    codexPanel.setPosition(panelX, panelY);
 
-    // Create scrollable content container
-    codexPanel.scrollableItems = [];
-    codexPanel.scrollOffset = 0;
-    let currentY = 0; // Relative Y position within scroll content
-
-    if (categories.length === 0) {
-        // No lore unlocked yet
-        const noLoreText = scene.add.text(centerX, centerY,
-            'No lore discovered yet.\n\nTalk to NPCs and explore dialog options\nto unlock lore entries!', {
-            fontSize: '18px',
-            fill: '#888888',
-            align: 'center'
-        }).setScrollFactor(0).setDepth(502).setOrigin(0.5, 0.5);
-        codexPanel.elements.push(noLoreText);
-    } else {
-        // Show categories and entries as scrollable items
-        categories.forEach(category => {
-            const catInfo = LORE_CATEGORIES[category] || { color: '#ffffff', icon: '📄' };
-
-            // Category header
-            const catHeader = scene.add.text(centerX - panelWidth / 2 + listPadding, listStartY + currentY,
-                `${catInfo.icon} ${category}`, {
-                fontSize: '18px',
-                fill: catInfo.color,
-                fontStyle: 'bold'
-            }).setScrollFactor(0).setDepth(502).setOrigin(0, 0);
-            codexPanel.elements.push(catHeader);
-            codexPanel.scrollableItems.push({ element: catHeader, baseY: currentY });
-            currentY += 30;
-
-            // Entries in this category
-            loreByCategory[category].forEach(entry => {
-                const entryText = scene.add.text(centerX - panelWidth / 2 + listPadding + 25, listStartY + currentY,
-                    `• ${entry.title}`, {
-                    fontSize: '15px',
-                    fill: '#cccccc'
-                }).setScrollFactor(0).setDepth(502).setOrigin(0, 0);
-
-                // Make entry clickable
-                entryText.setInteractive({ useHandCursor: true });
-                entryText.on('pointerover', () => entryText.setFill('#ffffff'));
-                entryText.on('pointerout', () => entryText.setFill('#cccccc'));
-                entryText.on('pointerdown', () => showLoreDetail(entry));
-
-                codexPanel.elements.push(entryText);
-                codexPanel.scrollableItems.push({ element: entryText, baseY: currentY });
-                currentY += 25;
-            });
-
-            currentY += 10; // Space between categories
-        });
+    // Move Masks (Absolute World Coords)
+    if (d.listMaskData) {
+        d.listMaskData.x = panelX + d.listX;
+        d.listMaskData.y = panelY + d.listY;
+    }
+    if (d.detailMaskData) {
+        d.detailMaskData.x = panelX + d.detailX;
+        d.detailMaskData.y = panelY + d.detailY;
     }
 
-    // Store scroll boundaries
-    codexPanel.contentHeight = currentY;
-    codexPanel.listHeight = listHeight;
-    codexPanel.listStartY = listStartY;
-    codexPanel.listTop = listTop;
-    codexPanel.listBottom = listBottom;
+    // Move Scrollbar (Absolute World Coords)
+    // We assume scrollbar parts are in the Scene, not the Container
+    if (d.scrollbar) {
+        const sb = d.scrollbar;
+        // The scrollbar was created at an initial X,Y.
+        // We need to keep it relative to the panel.
+        // ScrollbarUtils usually creates track/thumb at absolute X,Y.
 
-    // Create scrollbar using universal utility (only if content overflows)
-    const maxScroll = Math.max(0, codexPanel.contentHeight - codexPanel.listHeight);
-    if (maxScroll > 0 && typeof setupScrollbar === 'function') {
-        const scrollbarX = centerX + panelWidth / 2 - 20;
+        // Let's create proper offsets if we haven't
+        if (!sb.offsetX) {
+            sb.offsetX = sb.track.x - (panelX - cam.scrollX); // relative to screen
+            sb.offsetY = sb.track.y - (panelY - cam.scrollY);
+        }
 
-        codexPanel.scrollbar = setupScrollbar({
-            scene: scene,
-            x: scrollbarX,
-            y: listStartY,
-            width: 12,
-            height: listHeight,
-            depth: 503,
-            minScroll: 0,
-            initialScroll: 0,
-            visibleHeight: listHeight,
-            wheelHitArea: bg,
-            onScroll: (scrollPosition) => {
-                codexPanel.scrollOffset = scrollPosition;
-                // Update positions of scrollable items
-                codexPanel.scrollableItems.forEach(item => {
-                    const newY = codexPanel.listStartY + item.baseY - scrollPosition;
-                    item.element.setY(newY);
-                    // Hide items outside visible area
-                    const visible = newY >= codexPanel.listTop - 20 && newY <= codexPanel.listBottom + 20;
-                    item.element.setVisible(visible);
-                });
+        // Update Scrollbar Track position
+        // Actually, easiest is just: maskX + offset
+        // The scrollbar starts at maskX + width + 10
+
+        const sbX = panelX + d.listX + d.listW + 10;
+        const sbY = panelY + d.listY + (d.listH / 2); // ScrollbarUtils centers track
+
+        if (sb.track) {
+            sb.track.x = sbX;
+            sb.track.y = sbY;
+        }
+
+        // Thumb follows track but has its own Y offset based on scrolling
+        if (sb.thumb) {
+            sb.thumb.x = sbX;
+            // Thumb Y is managed by the scrollbar logic itself usually
+            // But if the whole world moves, thumb.y must move too.
+            // ScrollbarUtils updates thumb.y during drag/scroll.
+            // We need to apply the DELTA of camera movement to thumb.y
+
+            // Or easier: rebuild scrollbar? No, performance.
+            // Let's rely on the fact that if we move the TRACK, maybe we should move thumb too.
+            // But ScrollbarUtils stores state.
+
+            // CRITICAL: ScrollbarUtils as written is static.
+            // We need to shift the thumb by the same delta as the camera move.
+            // panelX changes.
+
+            // Let's calculate delta for this frame? Hard without prev state.
+            // Let's force thumb to maintain relative position to track.
+
+            const relativeThumbY = sb.thumb.y - (sb.track.y - (sb.viewportHeight / 2));
+            // Wait, this is getting complex.
+            // If ScrollbarUtils uses setScrollFactor(0), it handles this auto.
+            // But we turned off scroll factor.
+
+            // SIMPLER FIX:
+            // Just update the scrollbar's internal mask/container refs? No.
+
+            // Let's just destroy and recreate scrollbar if camera moves? excessive.
+
+            // OK, let's just shift thumb by the difference in panelY from last frame?
+            if (d.lastPanelY !== undefined) {
+                const dy = panelY - d.lastPanelY;
+                sb.thumb.y += dy;
+            }
+        }
+    }
+
+    d.lastPanelX = panelX;
+    d.lastPanelY = panelY;
+}
+
+function closeLoreCodex(scene) {
+    if (!codexVisible) return;
+    codexVisible = false;
+
+    if (updateEvent) {
+        scene.events.off('update', updateEvent);
+        updateEvent = null;
+    }
+
+    if (codexPanel) {
+        const d = codexPanel.dataVals;
+        if (d) {
+            if (d.scrollbar) d.scrollbar.destroy();
+            if (d.listMaskData) d.listMaskData.destroy();
+            if (d.detailMaskData) d.detailMaskData.destroy();
+        }
+
+        codexPanel.destroy();
+        codexPanel = null;
+    }
+}
+
+function populateLoreList(scene, width) {
+    if (!loreListContainer) return;
+    loreListContainer.removeAll(true);
+
+    let unlockedIds = new Set();
+    if (scene.loreManager && scene.loreManager.unlockedLore) {
+        unlockedIds = scene.loreManager.unlockedLore;
+    } else {
+        const saved = localStorage.getItem('rpg_lore_unlocked');
+        if (saved) JSON.parse(saved).forEach(id => unlockedIds.add(id));
+        Object.keys(localStorage).forEach(key => {
+            if (key.startsWith('lore_read_')) {
+                const ids = JSON.parse(localStorage.getItem(key));
+                if (Array.isArray(ids)) ids.forEach(id => unlockedIds.add(id));
             }
         });
-
-        // Set max scroll for proper thumb sizing
-        codexPanel.scrollbar.updateMaxScroll(maxScroll, currentY);
     }
 
+    const startY = 10;
+    let currentY = startY;
+    const entries = [];
+    unlockedIds.forEach(id => {
+        if (LORE_ENTRIES[id]) entries.push({ id, ...LORE_ENTRIES[id] });
+    });
+    entries.sort((a, b) => {
+        if (a.category !== b.category) return a.category.localeCompare(b.category);
+        return a.title.localeCompare(b.title);
+    });
 
-    // ESC key handler using keyboard event listener
-    codexPanel.escHandler = (event) => {
-        if (event.keyCode === 27 && codexVisible) { // 27 = ESC
-            event.preventDefault();
-            event.stopPropagation();
-            closeLoreCodex();
+    let currentCategory = null;
+    entries.forEach(entry => {
+        if (entry.category !== currentCategory) {
+            currentCategory = entry.category;
+            const catText = scene.add.text(10, currentY, currentCategory.toUpperCase(), {
+                fontSize: '14px', color: '#888888', fontStyle: 'bold'
+            });
+            loreListContainer.add(catText);
+            currentY += 25;
         }
-    };
-    document.addEventListener('keydown', codexPanel.escHandler, true);
-
-    codexVisible = true;
-}
-
-/**
- * Close the Lore Codex UI
- */
-function closeLoreCodex() {
-    if (!codexPanel) return;
-
-    const scene = game.scene.scenes[0];
-
-    codexPanel.elements.forEach(el => el.destroy());
-
-    // Remove ESC handler
-    if (codexPanel.escHandler) {
-        document.removeEventListener('keydown', codexPanel.escHandler, true);
-    }
-    // Destroy scrollbar (handles its own cleanup)
-    if (codexPanel.scrollbar) {
-        codexPanel.scrollbar.destroy();
-    }
-    if (codexPanel.detailElements) {
-        codexPanel.detailElements.forEach(el => el.destroy());
-    }
-
-    codexPanel = null;
-    codexVisible = false;
-}
-
-/**
- * Show detailed view of a single lore entry
- */
-function showLoreDetail(entry) {
-    const scene = game.scene.scenes[0];
-    const centerX = scene.cameras.main.width / 2;
-    const centerY = scene.cameras.main.height / 2;
-    const panelWidth = 600;
-    const panelHeight = 400;
-
-    // Clear previous detail if any
-    if (codexPanel.detailElements) {
-        codexPanel.detailElements.forEach(el => el.destroy());
-    }
-    codexPanel.detailElements = [];
-
-    // Detail background
-    const detailBg = scene.add.rectangle(centerX, centerY, panelWidth, panelHeight, 0x252525, 0.98)
-        .setScrollFactor(0).setDepth(510).setStrokeStyle(2, 0xffffff);
-    codexPanel.detailElements.push(detailBg);
-
-    const catInfo = LORE_CATEGORIES[entry.category] || { color: '#ffffff', icon: '📄' };
-
-    // Entry title
-    const titleText = scene.add.text(centerX, centerY - panelHeight / 2 + 40, entry.title, {
-        fontSize: '24px',
-        fill: catInfo.color,
-        fontStyle: 'bold'
-    }).setScrollFactor(0).setDepth(511).setOrigin(0.5, 0.5);
-    codexPanel.detailElements.push(titleText);
-
-    // Category and source
-    const metaText = scene.add.text(centerX, centerY - panelHeight / 2 + 70,
-        `${catInfo.icon} ${entry.category} • Learned from ${entry.source}`, {
-        fontSize: '14px',
-        fill: '#888888'
-    }).setScrollFactor(0).setDepth(511).setOrigin(0.5, 0.5);
-    codexPanel.detailElements.push(metaText);
-
-    // Content
-    const contentText = scene.add.text(centerX, centerY - 20, entry.content, {
-        fontSize: '16px',
-        fill: '#dddddd',
-        wordWrap: { width: panelWidth - 60 },
-        align: 'center',
-        lineSpacing: 6
-    }).setScrollFactor(0).setDepth(511).setOrigin(0.5, 0.5);
-    codexPanel.detailElements.push(contentText);
-
-    // Back button
-    const backBtn = scene.add.text(centerX, centerY + panelHeight / 2 - 40, '← Back to Codex', {
-        fontSize: '16px',
-        fill: '#aaaaaa'
-    }).setScrollFactor(0).setDepth(511).setOrigin(0.5, 0.5);
-    backBtn.setInteractive({ useHandCursor: true });
-    backBtn.on('pointerover', () => backBtn.setFill('#ffffff'));
-    backBtn.on('pointerout', () => backBtn.setFill('#aaaaaa'));
-    backBtn.on('pointerdown', () => {
-        codexPanel.detailElements.forEach(el => el.destroy());
-        codexPanel.detailElements = [];
+        const btn = scene.add.container(10, currentY);
+        const bg = scene.add.rectangle(0, 0, width - 30, 30, 0x333333).setOrigin(0).setInteractive({ useHandCursor: true });
+        const text = scene.add.text(10, 7, entry.title, { fontSize: '16px', color: '#ffffff' });
+        bg.on('pointerover', () => bg.setFillStyle(0x444444));
+        bg.on('pointerout', () => bg.setFillStyle(0x333333));
+        bg.on('pointerdown', () => showLoreDetail(scene, entry));
+        btn.add([bg, text]);
+        loreListContainer.add(btn);
+        currentY += 35;
     });
-    codexPanel.detailElements.push(backBtn);
+
+    // Scrollbar Setup
+    const contentHeight = currentY;
+    const viewHeight = 460;
+    const d = codexPanel.dataVals;
+
+    if (window.setupScrollbar && contentHeight > viewHeight) {
+        if (d.scrollbar) d.scrollbar.destroy();
+
+        const cam = scene.cameras.main;
+        // Initial Scrollbar Position (matches current Panel position)
+        const panelX = cam.scrollX + d.offsetX;
+        const panelY = cam.scrollY + d.offsetY;
+
+        d.scrollbar = window.setupScrollbar(
+            scene,
+            loreListContainer,
+            d.listW,
+            d.listH,
+            contentHeight,
+            panelX + d.listX,
+            panelY + d.listY
+        );
+    }
 }
 
-/**
- * Setup the codex keybind
- */
+function showLoreDetail(scene, entry) {
+    if (!detailContainer) return;
+    detailContainer.removeAll(true);
+    const width = 400;
+    const title = scene.add.text(20, 20, entry.title, {
+        fontSize: '24px', color: '#ffd700', fontStyle: 'bold', wordWrap: { width: width - 40 }
+    });
+    const category = scene.add.text(20, title.y + title.height + 10, `${entry.category} • ${entry.source || 'Unknown'}`, {
+        fontSize: '14px', color: '#888888'
+    });
+    const text = scene.add.text(20, category.y + category.height + 20, entry.text, {
+        fontSize: '18px', color: '#e0e0e0', wordWrap: { width: width - 40 }, lineHeight: 28
+    });
+    detailContainer.add([title, category, text]);
+}
+
 function setupLoreCodexKeys(scene) {
-    scene.input.keyboard.on('keydown-L', () => {
-        // Don't open if dialog is active
-        if (typeof dialogVisible !== 'undefined' && dialogVisible) return;
-        if (typeof shopVisible !== 'undefined' && shopVisible) return;
-        toggleLoreCodex();
-    });
+    if (!scene || !scene.input) return;
+    if (window.loreKeyHandler) scene.input.keyboard.off('keydown-L', window.loreKeyHandler);
+    window.loreKeyHandler = () => {
+        if (codexVisible) closeLoreCodex(scene);
+        else openLoreCodex(scene);
+    };
+    scene.input.keyboard.on('keydown-L', window.loreKeyHandler);
+    console.log('📖 Lore Codex keys initialized');
 }
 
-// Export for global access
-window.toggleLoreCodex = toggleLoreCodex;
-window.openLoreCodex = openLoreCodex;
-window.closeLoreCodex = closeLoreCodex;
 window.setupLoreCodexKeys = setupLoreCodexKeys;
 window.LORE_ENTRIES = LORE_ENTRIES;
-
-// Auto-initialize when game is ready
-let loreCodexInitialized = false;
-const loreCodexInitInterval = setInterval(() => {
-    if (typeof game !== 'undefined' && game.scene && game.scene.scenes[0] && game.scene.scenes[0].input) {
-        if (!loreCodexInitialized) {
-            setupLoreCodexKeys(game.scene.scenes[0]);
-            loreCodexInitialized = true;
-            console.log('📜 Lore Codex L key initialized');
-            clearInterval(loreCodexInitInterval);
-        }
-    }
-}, 500);
-
-console.log('📜 LoreCodex.js loaded');

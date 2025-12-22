@@ -294,19 +294,7 @@ function preload() {
 
     // Load Method 2 monster data
     this.load.json('monsterData', 'monsters.json');
-
-    // Load dialog/lore system data
     this.load.json('milestoneData', 'milestones.json');
-    this.load.json('loreData', 'lore.json');
-    this.load.json('dialogData', 'dialogs.json');
-
-    // Load NPC portraits for dialog system
-    this.load.image('portrait_elder_malik', 'assets/images/ElderMalik-Portrait.jpg');
-    this.load.image('portrait_merchant_lysa', 'assets/images/MerchantLysa-Portrait.jpg');
-    this.load.image('portrait_mage_elara', 'assets/images/MageElara-Portrait.jpg');
-    this.load.image('portrait_captain_thorne', 'assets/images/CaptainThorne-Portrait.jpg');
-    this.load.image('portrait_captain_kael', 'assets/images/CaptainKael-Portrait.jpg');
-    this.load.image('portrait_blacksmith_brond', 'assets/images/BlacksmithBrond-Portrait.jpg');
 
 
     // Add load event listeners for debugging - MUST be before load calls
@@ -3714,6 +3702,23 @@ function create() {
     questManager = new QuestManager(this);
     questManager.init();
 
+    // Initialize Lore & Milestones
+    this.loreManager = new LoreManager(this);
+    this.loreManager.init();
+
+    this.dialogManager = new DialogManager(this);
+    this.dialogManager.init();
+
+    this.milestoneManager = new MilestoneManager(this);
+    if (this.cache.json.exists('milestoneData')) {
+        this.milestoneManager.init(this.cache.json.get('milestoneData'));
+    }
+
+    // Initialize Codex UI Keys
+    if (window.setupLoreCodexKeys) {
+        window.setupLoreCodexKeys(this);
+    }
+
     // Initialize Unified Quest Engine (V2)
     if (this.cache.json.exists('questDataV2')) {
         const v2Data = this.cache.json.get('questDataV2');
@@ -3734,14 +3739,24 @@ function create() {
             }
             updatePlayerStats();
 
-            // Show UI Notification
-            showQuestCompletedModal({
-                title: quest.title,
-                rewards: quest.rewards
-            });
-
-            // Refresh UI
+            // Always update the tracker HUD to remove the completed quest
+            updateQuestTrackerHUD();
+            // Refresh Log UI
             if (questVisible) updateQuestLogItems();
+
+            // Show UI Notification (Modal)
+            // If in combat, defer or just show chat notification
+            if (typeof isInCombat === 'function' && isInCombat()) {
+                console.log('⚔️ specific combat check - deferring modal');
+                addChatMessage(`QUEST COMPLETED: ${quest.title}!`, 0x00ff00, '🏆');
+                pendingCompletedQuest = quest; // Queue for later
+            } else {
+                showQuestCompletedModal({
+                    title: quest.title,
+                    rewards: quest.rewards,
+                    description: quest.description
+                });
+            }
         });
 
         // Handle Objective Progress HUD - WoW-style persistent tracker
@@ -4184,10 +4199,54 @@ function create() {
  * Update loop (like pygame game loop)
  */
 function update(time, delta) {
-    // Update uqe quest engine (V2)
-    if (typeof uqe !== 'undefined') {
-        uqe.update();
+    // Update Unified Quest Engine
+    if (window.uqe) {
+        window.uqe.update();
     }
+
+    // Check for pending quest completion (delayed by combat)
+    if (pendingCompletedQuest) {
+        // If undefined, assume not in combat to be safe, otherwise check
+        const inCombin = (typeof isInCombat === 'function') ? isInCombat() : false;
+
+        if (!inCombin && !questCompletedModal) {
+            console.log('⚔️ Combat over - showing deferred quest completion modal');
+            const quest = pendingCompletedQuest;
+            pendingCompletedQuest = null;
+
+            showQuestCompletedModal({
+                title: quest.title,
+                rewards: quest.rewards,
+                description: quest.description
+            });
+        }
+    }
+
+    // --- Survival Timer ---
+    // Initialize accumulator if needed
+    if (this.survivalAccumulator === undefined) {
+        this.survivalAccumulator = 0;
+    }
+
+    // Add delta time (ms)
+    this.survivalAccumulator += delta;
+
+    // Check for 1-second intervals
+    if (this.survivalAccumulator >= 1000) {
+        const seconds = Math.floor(this.survivalAccumulator / 1000);
+        this.survivalAccumulator -= (seconds * 1000);
+
+        // Emit event to UQE for quests (Quest 006: Survivor)
+        if (window.uqe && window.uqe.eventBus) {
+            window.uqe.eventBus.emit('time_survived', { seconds: seconds });
+        }
+
+        // Check milestones directly (since MilestoneManager triggers manually)
+        if (window.milestoneManager) {
+            window.milestoneManager.checkTriggers('survive_time', { seconds: seconds });
+        }
+    }
+    // ----------------------
 
     const speed = 200; // pixels per second
 
@@ -5044,17 +5103,8 @@ function update(time, delta) {
     scene.lastPlayerTileX = currentTileX;
     scene.lastPlayerTileY = currentTileY;
 
-    // Track survival time - emit UQE event every second
-    playerStats.questStats.survivalTime += delta;
-    if (!scene.lastSurvivalEmit) scene.lastSurvivalEmit = 0;
-    scene.lastSurvivalEmit += delta;
-    if (scene.lastSurvivalEmit >= 1000) {
-        const seconds = Math.floor(scene.lastSurvivalEmit / 1000);
-        scene.lastSurvivalEmit = scene.lastSurvivalEmit % 1000;
-        if (typeof uqe !== 'undefined') {
-            uqe.eventBus.emit(UQE_EVENTS.TIME_SURVIVED, { seconds: seconds });
-        }
-    }
+    // Track survival time - handled in main update loop above (line ~4227)
+    // Removed duplicate emission to prevent double counting
 
     // Check quest progress
     checkQuestProgress();
@@ -5309,6 +5359,34 @@ function handleMonsterDeath(monster) {
     monster.isDead = true;
 
     const scene = game.scene.scenes[0];
+
+    // --- Stats & Events ---
+    // Update kill stats
+    if (!playerStats.questStats.monstersKilled) playerStats.questStats.monstersKilled = 0;
+    playerStats.questStats.monstersKilled++;
+
+    // Emit UQE event (for Quests)
+    if (window.uqe && window.uqe.eventBus) {
+        window.uqe.eventBus.emit('monster_killed', {
+            id: monster.monsterId,
+            type: monster.monsterType
+        });
+    }
+
+    // Emit Milestone event
+    if (window.milestoneManager) {
+        window.milestoneManager.checkTriggers('stat_change', {
+            stat: 'monsters_killed',
+            value: playerStats.questStats.monstersKilled
+        });
+
+        if (monster.isBoss) {
+            window.milestoneManager.checkTriggers('boss_kill', {
+                bossId: monster.monsterId
+            });
+        }
+    }
+    // ----------------------
 
     // Check if this was a boss in a dungeon
     if (monster.isBoss && currentMap === 'dungeon') {
@@ -11517,100 +11595,9 @@ const dialogDatabase = {
                 ]
             },
             'about_place': {
-                text: 'Hearthwell has stood for generations, a beacon of peace in these lands. But lately... the ground shakes, and strange creatures emerge from below.',
+                text: 'This is a peaceful village, though we have been troubled by monsters lately. The brave adventurers who help us are always welcome.',
                 choices: [
-                    { text: 'What are these tremors?', next: 'lore_tremors' },
-                    { text: 'What creatures have appeared?', next: 'lore_creatures' },
-                    { text: 'Is there a way to stop this?', next: 'lore_solution' },
-                    { text: 'Thank you for the information', next: 'end' }
-                ]
-            },
-            'lore_tremors': {
-                text: 'The tremors began three moons ago. At first, we thought it mere earthquakes, but then came the Echo—a resonance that warps reality itself. Our scholars believe something ancient stirs beneath the earth, something connected to a relic called the Shattered Aegis.',
-                choices: [
-                    { text: 'What is the Shattered Aegis?', next: 'lore_aegis' },
-                    { text: 'Tell me about the Echo', next: 'lore_echo' },
-                    { text: 'I understand. Thank you.', next: 'end' }
-                ]
-            },
-            'lore_aegis': {
-                text: 'Long ago, a divine shield called the Aegis protected our world from chaos. When it shattered, its fragments—the Shards of Resonance—scattered across the land. Each shard pulses with ancient power. Some say gathering them could restore the Aegis... or unleash something far worse.',
-                choices: [
-                    { text: 'Where can I find these shards?', next: 'lore_shards' },
-                    { text: 'What happens if they fall into wrong hands?', next: 'lore_danger' },
-                    { text: 'I will seek them out.', next: 'end' }
-                ]
-            },
-            'lore_echo': {
-                text: 'The Echo is a corruption that seeps from the broken Aegis. It twists creatures into monstrous forms—the Echo Mites and Echo Rats you see in our mines are proof. Those exposed too long become lost to its influence, hearing whispers that drive them mad.',
-                choices: [
-                    { text: 'How do I protect myself?', next: 'lore_protection' },
-                    { text: 'Are the miners safe?', next: 'lore_miners' },
-                    { text: 'I will be careful.', next: 'end' }
-                ]
-            },
-            'lore_creatures': {
-                text: 'We have seen Echo Mites—small crystalline insects that drain life force. Echo Rats, larger and more aggressive, lurk in the shadows. And rumors speak of an Echo Beholder in the deepest mines—a creature of pure corruption with a gaze that paralyzes.',
-                choices: [
-                    { text: 'How do I defeat them?', next: 'lore_combat' },
-                    { text: 'Where do they come from?', next: 'lore_origin' },
-                    { text: 'I will face them bravely.', next: 'end' }
-                ]
-            },
-            'lore_solution': {
-                text: 'The Resonance Keepers of old sought to reunite the shards. One such Keeper, Warden Sylara, resides near the forest\\s edge. Seek her wisdom—she may know how to end this corruption. But beware, for others seek the shards for darker purposes.',
-                choices: [
-                    { text: 'Who are these others?', next: 'lore_enemies' },
-                    { text: 'Where can I find Sylara?', next: 'lore_sylara' },
-                    { text: 'I will seek her out.', next: 'end' }
-                ]
-            },
-            'lore_shards': {
-                text: 'The first shard, the Shard of Resonance, lies within the Undermines—our old mine system now overrun with Echo corruption. Clear the creatures and you may find it at the heart of the infestation.',
-                choices: [
-                    { text: 'I will venture into the Undermines.', next: 'end' }
-                ]
-            },
-            'lore_danger': {
-                text: 'In the wrong hands, the shards could tear reality asunder. Some cultists already worship the Echo as a god. They seek to gather the shards and complete what they call \"The Unmaking.\" We cannot let this happen.',
-                choices: [
-                    { text: 'I will stop them.', next: 'end' }
-                ]
-            },
-            'lore_protection': {
-                text: 'Keep moving—the Echo feeds on stillness. Resonance Crystals can shield you briefly, and our blacksmith can forge protective gear from corrupted materials, turning their power against them.',
-                choices: [
-                    { text: 'I will speak to the blacksmith.', next: 'end' }
-                ]
-            },
-            'lore_miners': {
-                text: 'Sadly, many were lost before we sealed the deeper tunnels. Some may yet live, driven mad by the Echo\\s whispers. If you find them, there may yet be hope for their salvation.',
-                choices: [
-                    { text: 'I will look for survivors.', next: 'end' }
-                ]
-            },
-            'lore_combat': {
-                text: 'Strike fast and true. Echo creatures are vulnerable to consistent damage—they regenerate slowly but can overwhelm with numbers. The Beholder\\s gaze can be interrupted by breaking line of sight. Good luck, adventurer.',
-                choices: [
-                    { text: 'Thank you for the advice.', next: 'end' }
-                ]
-            },
-            'lore_origin': {
-                text: 'They emerge from rifts in reality—tears where the Echo bleeds through. These rifts appear near shard fragments. Destroy the source, and the creatures fade. Let the rifts grow, and they become permanent.',
-                choices: [
-                    { text: 'I will seal them.', next: 'end' }
-                ]
-            },
-            'lore_enemies': {
-                text: 'The Shadow Concord—cultists who believe the Aegis\\s destruction was divine will. They see the Echo as salvation. Their leader, a fallen Keeper called Thessaly the Lost, has already claimed two shards.',
-                choices: [
-                    { text: 'I will stop Thessaly.', next: 'end' }
-                ]
-            },
-            'lore_sylara': {
-                text: 'Warden Sylara protects a sacred grove east of the village. She is a druid of the old ways, one of the last who remembers how to harmonize with the shards. Speak to her before descending into the Undermines.',
-                choices: [
-                    { text: 'I will find her.', next: 'end' }
+                    { text: 'Thank you', next: 'end' }
                 ]
             },
             'end': {
@@ -11821,32 +11808,17 @@ function startDialog(npc) {
 
 /**
  * Show a specific dialog node
- * @param {string} nodeId - The node to navigate to
- * @param {boolean} isBack - True if this is a back navigation (don't add to history)
  */
-let dialogHistory = []; // Stack of visited node IDs for Back navigation
-
-function showDialogNode(nodeId, isBack = false) {
+function showDialogNode(nodeId) {
     if (!currentDialog || !currentDialog.nodes[nodeId]) {
         closeDialog();
         return;
     }
 
-    // Track history for back navigation (don't add if going back or at start)
-    if (!isBack && currentDialogNode && currentDialogNode !== nodeId) {
-        dialogHistory.push(currentDialogNode);
-    }
-
-    // Reset history when starting fresh
-    if (nodeId === 'start') {
-        dialogHistory = [];
-    }
-
     currentDialogNode = nodeId;
     const node = currentDialog.nodes[nodeId];
 
-    // Pass history status to UI
-    updateDialogUI(node, dialogHistory.length > 0);
+    updateDialogUI(node);
 
     // If no choices, auto-close after a moment
     if (node.choices.length === 0) {
@@ -11857,157 +11829,34 @@ function showDialogNode(nodeId, isBack = false) {
 }
 
 /**
- * Go back to the previous dialog node
- */
-function goBackInDialog() {
-    if (dialogHistory.length > 0) {
-        const previousNode = dialogHistory.pop();
-        showDialogNode(previousNode, true);
-    }
-}
-
-/**
  * Create dialog UI panel
  */
 function createDialogUI(npc) {
     const scene = game.scene.scenes[0];
 
     const panelWidth = 700;
-    const initialHeight = 500; // Starting height, will be resized dynamically
+    const panelHeight = 620;
     const centerX = scene.cameras.main.width / 2;
-    const panelTopY = 20; // Fixed top position
-    const panelLeftX = centerX - panelWidth / 2;
-    const padding = 15;
-
-    // Portrait settings - landscape format spanning dialog width
-    const portraitWidth = panelWidth - (padding * 2);
-    const portraitHeight = 150; // Height for landscape portrait
-    const portraitX = panelLeftX + padding;
-    const portraitY = panelTopY + padding;
-
-    // Content starts below portrait
-    const contentTopY = portraitY + portraitHeight + 15;
-
-    // Get portrait key from NPC data or fallback to name-based lookup
-    const portraitKey = npc.portraitKey || getPortraitKey(npc.name);
+    const centerY = scene.cameras.main.height / 2 + 50;
 
     dialogPanel = {
-        bg: scene.add.rectangle(centerX, panelTopY, panelWidth, initialHeight, 0x1a1a1a, 0.95)
-            .setScrollFactor(0).setDepth(400).setStrokeStyle(3, 0xffffff)
-            .setOrigin(0.5, 0), // Origin at top-center
-        portrait: null,
-        portraitBorder: null,
-        npcNameText: scene.add.text(panelLeftX + padding, contentTopY,
+        bg: scene.add.rectangle(centerX, centerY, panelWidth, panelHeight, 0x1a1a1a, 0.95)
+            .setScrollFactor(0).setDepth(400).setStrokeStyle(3, 0xffffff),
+        npcNameText: scene.add.text(centerX - panelWidth / 2 + 20, centerY - panelHeight / 2 + 20,
             `${npc.name}${npc.title ? ' - ' + npc.title : ''}`, {
             fontSize: '24px',
             fill: '#ffffff',
             fontStyle: 'bold'
         }).setScrollFactor(0).setDepth(401).setOrigin(0, 0),
         dialogText: null,
-        choiceButtons: [],
-        // Store layout constants for updateDialogUI
-        panelWidth: panelWidth,
-        panelTopY: panelTopY,
-        panelLeftX: panelLeftX,
-        centerX: centerX,
-        contentTopY: contentTopY,
-        padding: padding
+        choiceButtons: []
     };
-
-    // Add landscape portrait if available
-    if (portraitKey && scene.textures.exists(portraitKey)) {
-        const texture = scene.textures.get(portraitKey);
-        const frame = texture.getSourceImage();
-        const aspectRatio = frame.width / frame.height;
-
-        // Scale to fit width while maintaining aspect ratio
-        const scaledWidth = portraitWidth;
-        const scaledHeight = portraitWidth / aspectRatio;
-
-        dialogPanel.portrait = scene.add.image(portraitX, portraitY, portraitKey)
-            .setScrollFactor(0).setDepth(401).setOrigin(0, 0)
-            .setDisplaySize(scaledWidth, scaledHeight);
-
-        // Update contentTopY based on actual portrait height
-        const actualPortraitHeight = scaledHeight;
-        const newContentTopY = portraitY + actualPortraitHeight + 15;
-        dialogPanel.contentTopY = newContentTopY;
-        dialogPanel.npcNameText.setY(newContentTopY);
-
-        // Add border around portrait
-        dialogPanel.portraitBorder = scene.add.rectangle(
-            portraitX + scaledWidth / 2,
-            portraitY + scaledHeight / 2,
-            scaledWidth + 4, scaledHeight + 4
-        ).setScrollFactor(0).setDepth(400).setStrokeStyle(2, 0xffffff).setFillStyle(0x000000, 0);
-    }
-}
-
-/**
- * Get portrait texture key for an NPC name
- */
-function getPortraitKey(npcName) {
-    const portraitMap = {
-        'Elder Malik': 'portrait_elder_malik',
-        'Merchant Lysa': 'portrait_merchant_lysa',
-        'Mage Elara': 'portrait_mage_elara',
-        'Guard Thorne': 'portrait_captain_thorne',
-        'Captain Thorne': 'portrait_captain_thorne',
-        'Captain Kael': 'portrait_captain_kael',
-        'Blacksmith Brond': 'portrait_blacksmith_brond'
-    };
-    return portraitMap[npcName] || null;
-}
-
-// ============================================
-// LORE READ TRACKING
-// ============================================
-
-/**
- * Check if a lore dialog node has been read
- * @param {string} npcId - NPC identifier
- * @param {string} nodeId - Dialog node ID
- * @returns {boolean} - True if node has been read
- */
-function isLoreNodeRead(npcId, nodeId) {
-    const key = `lore_read_${npcId}`;
-    const readNodes = JSON.parse(localStorage.getItem(key) || '[]');
-    return readNodes.includes(nodeId);
-}
-
-/**
- * Mark a lore dialog node as read
- * @param {string} npcId - NPC identifier  
- * @param {string} nodeId - Dialog node ID
- */
-function markLoreNodeRead(npcId, nodeId) {
-    console.log('📜 [Lore Track] markLoreNodeRead called with npcId:', npcId, 'nodeId:', nodeId);
-    const key = `lore_read_${npcId}`;
-    const readNodes = JSON.parse(localStorage.getItem(key) || '[]');
-    if (!readNodes.includes(nodeId)) {
-        readNodes.push(nodeId);
-        localStorage.setItem(key, JSON.stringify(readNodes));
-        console.log('📜 [Lore Track] Saved to localStorage:', key, '->', readNodes);
-    } else {
-        console.log('📜 [Lore Track] Already read:', nodeId);
-    }
-}
-
-/**
- * Check if a dialog choice leads to a lore node (starts with 'lore_')
- * @param {string} nextNode - The 'next' target of the choice
- * @returns {boolean} - True if it's a lore choice
- */
-function isLoreChoice(nextNode) {
-    return nextNode && nextNode.startsWith('lore_');
 }
 
 /**
  * Update dialog UI with current node
- * @param {Object} node - The dialog node to display
- * @param {boolean} hasHistory - True if there's navigation history (show Back button)
  */
-function updateDialogUI(node, hasHistory = false) {
+function updateDialogUI(node) {
     const scene = game.scene.scenes[0];
     if (!dialogPanel) return;
 
@@ -12021,31 +11870,25 @@ function updateDialogUI(node, hasHistory = false) {
     });
     dialogPanel.choiceButtons = [];
 
-    // Use stored layout constants
-    const panelWidth = dialogPanel.panelWidth;
-    const panelTopY = dialogPanel.panelTopY;
-    const panelLeftX = dialogPanel.panelLeftX;
-    const centerX = dialogPanel.centerX;
-    const contentTopY = dialogPanel.contentTopY;
-    const padding = dialogPanel.padding || 15;
+    const centerX = dialogPanel.bg.x;
+    const centerY = dialogPanel.bg.y;
+    const panelWidth = 700;
+    const panelHeight = 620; // Increased to fit longer text like tutorials
 
-    // Dialog text - positioned below NPC name
-    const npcNameBottom = dialogPanel.npcNameText.y + dialogPanel.npcNameText.height;
-    const textY = npcNameBottom + 10;
+    // Dialog text
     dialogPanel.dialogText = scene.add.text(
-        panelLeftX + padding,
-        textY,
+        centerX - panelWidth / 2 + 20,
+        centerY - panelHeight / 2 + 70,
         node.text,
         {
             fontSize: '18px',
             fill: '#ffffff',
-            wordWrap: { width: panelWidth - (padding * 2) }
+            wordWrap: { width: panelWidth - 40 }
         }
     ).setScrollFactor(0).setDepth(401).setOrigin(0, 0);
 
-    // Choice buttons - position below dialog text with proper spacing
-    const textBounds = dialogPanel.dialogText.getBounds();
-    const startY = textBounds.bottom + 30; // 30px padding after text
+    // Choice buttons
+    const startY = centerY + 80; // Pushed down to fit longer text
     const buttonHeight = 40;
     const buttonSpacing = 10;
 
@@ -12079,20 +11922,9 @@ function updateDialogUI(node, hasHistory = false) {
             .setStrokeStyle(2, 0x666666)
             .setInteractive({ useHandCursor: true });
 
-        // Button text - add checkmark for read lore nodes
+        // Button text
         const isQuest = choice.isQuest;
-        const isLore = isLoreChoice(choice.next);
-        const npcId = currentDialog ? currentDialog.npcName : 'unknown';
-        const isRead = isLore && isLoreNodeRead(npcId, choice.next);
-
-        let displayText = choice.text;
-        if (isQuest) {
-            displayText = `(!) ${choice.text}`;
-        } else if (isLore && isRead) {
-            displayText = `✓ ${choice.text}`;
-        } else if (isLore) {
-            displayText = `○ ${choice.text}`;
-        }
+        const displayText = isQuest ? `(!) ${choice.text}` : choice.text;
 
         const buttonText = scene.add.text(
             centerX,
@@ -12104,11 +11936,9 @@ function updateDialogUI(node, hasHistory = false) {
             }
         ).setScrollFactor(0).setDepth(402).setOrigin(0.5, 0.5);
 
-        // Apply colors based on type
+        // Apply yellow color to the marker if it's a quest
         if (isQuest) {
-            buttonText.setFill('#ffff00'); // Yellow for quests
-        } else if (isRead) {
-            buttonText.setFill('#88ff88'); // Green for read lore
+            buttonText.setFill('#ffff00');
         }
 
         // Button hover effects
@@ -12192,10 +12022,6 @@ function updateDialogUI(node, hasHistory = false) {
                     closeDialog();
                 }
             } else if (choice.next) {
-                // Mark lore node as read when navigating to it
-                if (isLoreChoice(choice.next)) {
-                    markLoreNodeRead(npcId, choice.next);
-                }
                 showDialogNode(choice.next);
             } else {
                 closeDialog();
@@ -12208,71 +12034,6 @@ function updateDialogUI(node, hasHistory = false) {
             choice: choice
         });
     });
-
-    // Add "Back" button if there's navigation history
-    if (hasHistory) {
-        const backButtonY = startY + visibleChoiceCount * (buttonHeight + buttonSpacing);
-        visibleChoiceCount++;
-        const buttonWidth = panelWidth - 40;
-
-        const backBg = scene.add.rectangle(
-            centerX,
-            backButtonY,
-            buttonWidth,
-            buttonHeight,
-            0x2a2a2a,
-            0.9
-        ).setScrollFactor(0).setDepth(401)
-            .setStrokeStyle(2, 0x555555)
-            .setInteractive({ useHandCursor: true });
-
-        const backText = scene.add.text(
-            centerX,
-            backButtonY,
-            '← Back',
-            {
-                fontSize: '16px',
-                fill: '#aaaaaa'
-            }
-        ).setScrollFactor(0).setDepth(402).setOrigin(0.5, 0.5);
-
-        // Hover effects
-        backBg.on('pointerover', () => {
-            backBg.setFillStyle(0x3a3a3a);
-            backText.setFill('#ffffff');
-        });
-        backBg.on('pointerout', () => {
-            backBg.setFillStyle(0x2a2a2a);
-            backText.setFill('#aaaaaa');
-        });
-
-        // Click handler - go back in history
-        backBg.on('pointerdown', () => {
-            goBackInDialog();
-        });
-
-        dialogPanel.choiceButtons.push({
-            bg: backBg,
-            text: backText,
-            isBack: true
-        });
-    }
-
-    // Dynamically resize panel height to fit content (panel is top-aligned)
-    const bottomPadding = 30;
-    let panelBottom;
-
-    if (visibleChoiceCount > 0) {
-        const lastButtonY = startY + (visibleChoiceCount - 1) * (buttonHeight + buttonSpacing);
-        panelBottom = lastButtonY + buttonHeight / 2 + bottomPadding;
-    } else {
-        // No buttons - just use text bottom
-        panelBottom = textBounds.bottom + bottomPadding;
-    }
-
-    const actualHeight = panelBottom - panelTopY;
-    dialogPanel.bg.setSize(panelWidth, actualHeight);
-    // No need to reposition - origin is top-center so it expands downward
 }
 
 /**
@@ -12281,8 +12042,6 @@ function updateDialogUI(node, hasHistory = false) {
 function closeDialog() {
     if (dialogPanel) {
         if (dialogPanel.bg) dialogPanel.bg.destroy();
-        if (dialogPanel.portrait) dialogPanel.portrait.destroy();
-        if (dialogPanel.portraitBorder) dialogPanel.portraitBorder.destroy();
         if (dialogPanel.npcNameText) dialogPanel.npcNameText.destroy();
         if (dialogPanel.dialogText) dialogPanel.dialogText.destroy();
 
@@ -15746,234 +15505,3 @@ function showQuestUpdateHUD(message, isComplete) {
     // Just trigger an update
     updateQuestTrackerHUD();
 }
-
-// ============================================
-// DIALOG & LORE SYSTEM INTEGRATION
-// ============================================
-
-// Global manager instances
-let milestoneManager = null;
-let loreManager = null;
-let dialogManager = null;
-
-/**
- * Initialize the Dialog & Lore System
- * Call this from your game's create() function after other systems are ready
- * @param {Phaser.Scene} scene - The current Phaser scene
- */
-function initializeDialogLoreSystem(scene) {
-    console.log('🎭 Initializing Dialog & Lore System...');
-
-    // Create managers
-    milestoneManager = new MilestoneManager(scene);
-    loreManager = new LoreManager(scene);
-    dialogManager = new DialogManager(scene);
-
-    // Attach to scene for access by managers
-    scene.milestoneManager = milestoneManager;
-    scene.loreManager = loreManager;
-    scene.dialogManager = dialogManager;
-
-    // Initialize from cached data
-    milestoneManager.init();
-    loreManager.init();
-    dialogManager.init();
-
-    // Set up event listeners for milestone triggers
-    setupMilestoneListeners(scene);
-
-    // Set up F key for NPC interaction
-    setupNPCInteractionKey(scene);
-
-    // Trigger game start milestone
-    milestoneManager.onGameStart();
-
-    console.log('✅ Dialog & Lore System initialized');
-    console.log('💡 Press F near an NPC to talk');
-
-    return { milestoneManager, loreManager, dialogManager };
-}
-
-/**
- * Set up event listeners for milestone triggers
- */
-function setupMilestoneListeners(scene) {
-    // Listen for quest completion events (from existing quest system)
-    scene.events.on('quest_completed', (questId) => {
-        if (milestoneManager) {
-            milestoneManager.onQuestComplete(questId);
-        }
-    });
-
-    // Listen for UQE quest completion
-    scene.events.on('uqe_quest_completed', (quest) => {
-        if (milestoneManager && quest && quest.id) {
-            milestoneManager.onQuestComplete(quest.id);
-        }
-    });
-
-    // Listen for level up
-    scene.events.on('player_level_up', (level) => {
-        if (milestoneManager) {
-            milestoneManager.onLevelUp(level);
-        }
-    });
-
-    // Listen for dialog quest acceptance
-    scene.events.on('dialog_accept_quest', (questId) => {
-        console.log('📜 Quest accepted via dialog:', questId);
-        // TODO: Integrate with quest activation system
-    });
-
-    // Listen for milestone quest unlocks
-    scene.events.on('milestone_quest_unlock', (questIds) => {
-        console.log('🔓 Milestone unlocking quests:', questIds);
-        // TODO: Integrate with quest activation system
-    });
-}
-
-/**
- * Talk to an NPC - shows appropriate dialog based on game state
- * @param {string} npcId - The NPC's ID from npc.json
- * @returns {boolean} - True if dialog was started
- */
-function talkToNPC(npcId) {
-    if (!dialogManager) {
-        console.warn('DialogManager not initialized. Call initializeDialogLoreSystem first.');
-        return false;
-    }
-
-    return dialogManager.startDialog(npcId);
-}
-
-/**
- * Check if dialog system is active (blocks other input)
- */
-function isDialogActive() {
-    return dialogManager ? dialogManager.isActive() : false;
-}
-
-/**
- * Get lore stats for UI display
- */
-function getLoreStats() {
-    return loreManager ? loreManager.getStats() : { total: 0, unlocked: 0, percentage: 0 };
-}
-
-/**
- * Get unlocked lore for Codex UI
- */
-function getUnlockedLore() {
-    return loreManager ? loreManager.getUnlockedLore() : [];
-}
-
-/**
- * Get lore categories for Codex UI
- */
-function getLoreCategories() {
-    return loreManager ? loreManager.getCategoryCounts() : {};
-}
-
-// ============================================
-// NPC INTERACTION KEY SETUP
-// ============================================
-
-// Track the F key for NPC interaction
-let npcInteractKey = null;
-
-/**
- * Set up F key for NPC interaction
- * @param {Phaser.Scene} scene - The current Phaser scene
- */
-function setupNPCInteractionKey(scene) {
-    // Create F key input
-    npcInteractKey = scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.F);
-
-    // Add key press handler
-    npcInteractKey.on('down', () => {
-        // Don't process if dialog is already active
-        if (isDialogActive()) return;
-
-        // Don't process if player doesn't exist
-        if (!player) return;
-
-        // Check for nearby NPC
-        const nearbyNPC = getNearbyNPC(player.x, player.y, 80);
-
-        if (nearbyNPC && nearbyNPC.data) {
-            console.log('🗣️ Starting dialog with:', nearbyNPC.data.name);
-            talkToNPC(nearbyNPC.data.id);
-        } else {
-            // Optional: show "no one nearby" message
-            console.log('No NPC nearby to talk to');
-        }
-    });
-
-    console.log('⌨️ F key registered for NPC interaction');
-
-    // Set up Lore Codex keybinds (L key)
-    if (typeof setupLoreCodexKeys === 'function') {
-        setupLoreCodexKeys(scene);
-        console.log('📜 L key registered for Lore Codex');
-    }
-}
-
-// ============================================
-// NPC INTERACTION HELPER
-// ============================================
-
-/**
- * Check if player is near an NPC and can interact
- * Call this from your update() loop or NPC click handler
- * @param {number} playerX - Player X position
- * @param {number} playerY - Player Y position
- * @param {number} interactRadius - Distance for interaction (default 50px)
- * @returns {object|null} - Nearest NPC within radius, or null
- */
-function getNearbyNPC(playerX, playerY, interactRadius = 50) {
-    let nearestNPC = null;
-    let nearestDist = interactRadius;
-
-    for (const npc of npcs) {
-        if (!npc || !npc.sprite) continue;
-
-        const dist = Phaser.Math.Distance.Between(
-            playerX, playerY,
-            npc.sprite.x, npc.sprite.y
-        );
-
-        if (dist < nearestDist) {
-            nearestDist = dist;
-            nearestNPC = npc;
-        }
-    }
-
-    return nearestNPC;
-}
-
-/**
- * Handle 'F' key for NPC interaction
- * Add this to your key handlers in update()
- */
-function handleNPCInteraction(scene) {
-    if (!player || isDialogActive()) return;
-
-    const nearbyNPC = getNearbyNPC(player.x, player.y, 60);
-
-    if (nearbyNPC && nearbyNPC.data) {
-        console.log('Interacting with NPC:', nearbyNPC.data.name);
-        talkToNPC(nearbyNPC.data.id);
-    }
-}
-
-// Export functions to global scope
-window.initializeDialogLoreSystem = initializeDialogLoreSystem;
-window.talkToNPC = talkToNPC;
-window.isDialogActive = isDialogActive;
-window.getLoreStats = getLoreStats;
-window.getUnlockedLore = getUnlockedLore;
-window.getLoreCategories = getLoreCategories;
-window.getNearbyNPC = getNearbyNPC;
-window.handleNPCInteraction = handleNPCInteraction;
-
-console.log('🎭 Dialog & Lore System functions loaded. Call initializeDialogLoreSystem(scene) to activate.');

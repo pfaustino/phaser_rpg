@@ -11,6 +11,13 @@ class UqeEventBus {
     on(event, callback) {
         if (!this.listeners[event]) this.listeners[event] = [];
         this.listeners[event].push(callback);
+        // Return unsubscribe function
+        return () => {
+            const index = this.listeners[event].indexOf(callback);
+            if (index > -1) {
+                this.listeners[event].splice(index, 1);
+            }
+        };
     }
 
     emit(event, data) {
@@ -19,7 +26,8 @@ class UqeEventBus {
             console.log(`📡 [UQE EventBus] ${event}`, data);
         }
         if (this.listeners[event]) {
-            this.listeners[event].forEach(callback => callback(data));
+            // Clone array to prevent issues if listeners remove themselves during emission
+            [...this.listeners[event]].forEach(callback => callback(data));
         }
     }
 }
@@ -47,6 +55,20 @@ class UqeObjective {
         this.completed = false;
         this.progress = 0;
         this.target = data.target || 1;
+        this.cleanupFns = [];
+    }
+
+    // Helper to subscribe and track cleanup
+    subscribe(event, callback) {
+        if (this.eventBus) {
+            const unsubscribe = this.eventBus.on(event, callback);
+            this.cleanupFns.push(unsubscribe);
+        }
+    }
+
+    dispose() {
+        this.cleanupFns.forEach(fn => fn());
+        this.cleanupFns = [];
     }
 
     updateProgress(amount) {
@@ -94,7 +116,7 @@ class KillObjective extends UqeObjective {
     constructor(data, eventBus) {
         super(data, eventBus);
         this.monsterId = data.monsterId;
-        eventBus.on(UQE_EVENTS.MONSTER_KILLED, (data) => {
+        this.subscribe(UQE_EVENTS.MONSTER_KILLED, (data) => {
             // Support 'any' wildcard (match all monsters)
             if (this.monsterId === 'any') {
                 this.updateProgress(1);
@@ -120,7 +142,7 @@ class TalkObjective extends UqeObjective {
     constructor(data, eventBus) {
         super(data, eventBus);
         this.npcId = data.npcId;
-        eventBus.on(UQE_EVENTS.NPC_TALK, (data) => {
+        this.subscribe(UQE_EVENTS.NPC_TALK, (data) => {
             console.log(`🗣️ [UQE] TalkObjective checking: '${this.npcId}' vs '${data.id}'`);
             if (data.id === this.npcId) this.updateProgress(1);
         });
@@ -131,7 +153,7 @@ class CollectObjective extends UqeObjective {
     constructor(data, eventBus) {
         super(data, eventBus);
         this.itemId = data.itemId;
-        eventBus.on(UQE_EVENTS.ITEM_PICKUP, (data) => {
+        this.subscribe(UQE_EVENTS.ITEM_PICKUP, (data) => {
             // Match specific ID, type, or wildcard 'any'
             if (this.itemId === 'any' || data.id === this.itemId || data.type === this.itemId) {
                 this.updateProgress(data.amount || 1);
@@ -143,7 +165,7 @@ class CollectObjective extends UqeObjective {
 class ExploreObjective extends UqeObjective {
     constructor(data, eventBus) {
         super(data, eventBus);
-        eventBus.on(UQE_EVENTS.TILE_TRAVELED, (data) => {
+        this.subscribe(UQE_EVENTS.TILE_TRAVELED, (data) => {
             this.updateProgress(data.amount || 1);
         });
     }
@@ -152,7 +174,7 @@ class ExploreObjective extends UqeObjective {
 class SurviveObjective extends UqeObjective {
     constructor(data, eventBus) {
         super(data, eventBus);
-        eventBus.on(UQE_EVENTS.TIME_SURVIVED, (data) => {
+        this.subscribe(UQE_EVENTS.TIME_SURVIVED, (data) => {
             this.updateProgress(data.seconds || 1);
         });
     }
@@ -161,7 +183,8 @@ class SurviveObjective extends UqeObjective {
 class LevelObjective extends UqeObjective {
     constructor(data, eventBus) {
         super(data, eventBus);
-        eventBus.on(UQE_EVENTS.LEVEL_UP, (data) => {
+        this.progress = 1; // Default starting level
+        this.subscribe(UQE_EVENTS.LEVEL_UP, (data) => {
             // Set progress to current level
             if (data.level >= this.target) {
                 this.progress = this.target;
@@ -177,7 +200,7 @@ class LevelObjective extends UqeObjective {
 class GoldObjective extends UqeObjective {
     constructor(data, eventBus) {
         super(data, eventBus);
-        eventBus.on(UQE_EVENTS.GOLD_EARNED, (data) => {
+        this.subscribe(UQE_EVENTS.GOLD_EARNED, (data) => {
             this.updateProgress(data.amount || 0);
         });
     }
@@ -191,6 +214,11 @@ class Quest {
         this.objectives = this.createObjectives(data.objectives, eventBus);
         this.completed = false;
         this.rewards = data.rewards || {};
+        this.requires = data.requires;
+    }
+
+    dispose() {
+        this.objectives.forEach(obj => obj.dispose());
     }
 
     createObjectives(objData, eventBus) {
@@ -251,19 +279,6 @@ class UqeEngine {
     init(definitions) {
         this.allDefinitions = definitions;
         console.log("🚀 [UQE Engine] Initialized with", Object.keys(definitions).length, "definitions");
-
-        // Auto-start any quests marked with autoStart: true
-        Object.values(definitions).forEach(questDef => {
-            if (questDef.autoStart) {
-                console.log(`🎯 [UQE Engine] Auto-starting quest: ${questDef.title}`);
-                this.acceptQuest(questDef.id);
-            }
-        });
-
-        // Update the quest tracker HUD if available
-        if (typeof updateQuestTrackerHUD === 'function') {
-            updateQuestTrackerHUD();
-        }
     }
 
     acceptQuest(questId) {
@@ -289,6 +304,28 @@ class UqeEngine {
         }
     }
 
+    // Auto-accept quests if requirements are met
+    checkNewQuests() {
+        const completedIds = this.completedQuests.map(q => q.id);
+
+        Object.keys(this.allDefinitions).forEach(questId => {
+            const def = this.allDefinitions[questId];
+
+            // Skip if already active or completed
+            if (this.activeQuests.some(q => q.id === questId)) return;
+            if (this.completedQuests.some(q => q.id === questId)) return;
+
+            // Skip main quests (they usually require dialog)
+            if (questId.startsWith('main_')) return;
+
+            // Check requirements
+            if (def.requires && completedIds.includes(def.requires)) {
+                console.log(`🔗 [UQE Engine] Auto-chaining quest: ${questId} (Requires: ${def.requires})`);
+                this.acceptQuest(questId);
+            }
+        });
+    }
+
     getSaveData() {
         return {
             active: this.activeQuests.map(q => q.getSaveData()),
@@ -299,11 +336,14 @@ class UqeEngine {
     loadSaveData(saveData) {
         if (!saveData) return;
 
+        // Cleanup existing listeners before overwriting
+        this.activeQuests.forEach(q => q.dispose()); // PREVENT ZOMBIE LISTENERS
+        this.activeQuests = [];
+
         // Handle both older format (plain array) and new format (object)
         const activeData = saveData.active || (Array.isArray(saveData) ? saveData : []);
         const completedData = saveData.completed || [];
 
-        this.activeQuests = [];
         activeData.forEach(qSave => {
             const def = this.allDefinitions[qSave.id];
             if (def) {
@@ -328,14 +368,25 @@ class UqeEngine {
 
     update() {
         // Iterate backwards to safely remove
+        let questCompleted = false;
         for (let i = this.activeQuests.length - 1; i >= 0; i--) {
             const quest = this.activeQuests[i];
             if (quest.checkCompletion()) {
                 console.log(`🏁 [UQE Engine] Quest Completed: ${quest.title}`);
+
+                // Unsubscribe listeners for completed quest to stop tracking
+                quest.dispose();
+
                 this.activeQuests.splice(i, 1);
                 this.completedQuests.push(quest);
                 this.eventBus.emit(UQE_EVENTS.QUEST_COMPLETED, quest);
+                questCompleted = true;
             }
+        }
+
+        // If a quest was completed, check for new unlocks
+        if (questCompleted) {
+            this.checkNewQuests();
         }
     }
 }

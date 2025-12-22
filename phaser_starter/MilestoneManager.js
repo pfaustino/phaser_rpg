@@ -1,126 +1,179 @@
 /**
- * MilestoneManager - Monitors game events and triggers lore/quest/dialog unlocks
- * 
- * This manager listens for game events (quest completion, boss kills, etc.)
- * and checks if any milestones should be unlocked, then triggers the appropriate
- * unlocks in LoreManager, QuestManager, and DialogManager.
+ * MilestoneManager.js
+ * Manages game milestones, tracking progress and unlocking content.
+ * Decoupled from main game logic to allow data-driven progression.
  */
 class MilestoneManager {
     constructor(scene) {
         this.scene = scene;
-        this.data = null;
-        this.achievedMilestones = new Set();
+        this.milestones = [];
+        this.completedMilestones = new Set();
+        // Check interval for passive stats
+        this.checkInterval = null;
     }
 
     /**
-     * Initialize data from Phaser cache and load saved progress
+     * Initialize the manager with milestone data
+     * @param {Object} data - Loaded JSON data containing milestones
      */
-    init() {
-        this.data = this.scene.cache.json.get('milestoneData');
-        if (!this.data) {
-            console.error('MilestoneManager: Failed to load milestoneData from cache');
+    init(data) {
+        if (!data || !data.milestones) {
+            console.error('MilestoneManager: No milestone data provided');
             return;
         }
 
-        // Load previously achieved milestones from localStorage
-        this.loadProgress();
+        this.milestones = [...data.milestones];
+        if (data.sideQuestMilestones) {
+            this.milestones.push(...data.sideQuestMilestones);
+        }
 
-        console.log('MilestoneManager initialized with', this.data.milestones?.length || 0, 'milestones');
+        this.loadProgress();
+        this.setupEventListeners();
+
+        console.log(`🏆 MilestoneManager initialized with ${this.milestones.length} milestones`);
+
+        // Check game_start triggers immediately
+        this.checkTriggers('game_start', {});
     }
 
     /**
-     * Load achieved milestones from localStorage
+     * Load completed milestones from localStorage
      */
     loadProgress() {
         try {
-            const saved = localStorage.getItem('rpg_milestones');
+            const saved = localStorage.getItem('completed_milestones');
             if (saved) {
                 const parsed = JSON.parse(saved);
-                this.achievedMilestones = new Set(parsed);
+                parsed.forEach(id => this.completedMilestones.add(id));
+                console.log(`🏆 Loaded ${this.completedMilestones.size} completed milestones`);
             }
         } catch (e) {
-            console.warn('MilestoneManager: Failed to load saved milestones', e);
+            console.warn('MilestoneManager: Failed to load progress', e);
         }
     }
 
     /**
-     * Save achieved milestones to localStorage
+     * Save progress to localStorage
      */
     saveProgress() {
         try {
-            localStorage.setItem('rpg_milestones', JSON.stringify([...this.achievedMilestones]));
+            const array = Array.from(this.completedMilestones);
+            localStorage.setItem('completed_milestones', JSON.stringify(array));
         } catch (e) {
-            console.warn('MilestoneManager: Failed to save milestones', e);
+            console.warn('MilestoneManager: Failed to save progress', e);
         }
     }
 
     /**
-     * Check for milestones triggered by a specific event
-     * @param {string} eventType - Type of event (quest_complete, boss_kill, etc.)
-     * @param {object} eventData - Data about the event (questId, bossId, etc.)
-     * @returns {array} - Array of milestones that were triggered
+     * Setup global event listeners to catch game events
      */
-    checkMilestones(eventType, eventData = {}) {
-        if (!this.data) return [];
+    setupEventListeners() {
+        // Listen for standard game events
+        // Note: These events must be emitted by the game actions
+        if (!this.scene.events) return;
 
-        const triggered = [];
-        const allMilestones = [
-            ...(this.data.milestones || []),
-            ...(this.data.sideQuestMilestones || [])
-        ];
+        this.scene.events.on('quest_complete', (data) => this.checkTriggers('quest_complete', data));
+        this.scene.events.on('boss_kill', (data) => this.checkTriggers('boss_kill', data));
+        this.scene.events.on('location_enter', (data) => this.checkTriggers('location_enter', data));
+        this.scene.events.on('npc_talk', (data) => this.checkTriggers('npc_talk', data));
+        this.scene.events.on('stat_change', (data) => this.checkTriggers('stat_change', data));
 
-        for (const milestone of allMilestones) {
-            // Skip already achieved milestones
-            if (this.achievedMilestones.has(milestone.id)) continue;
+        // Periodic check for passive stats (like kill counts)
+        if (this.checkInterval) clearInterval(this.checkInterval);
+        this.checkInterval = setInterval(() => {
+            this.checkPassiveTriggers();
+        }, 2000);
+    }
 
-            // Check if this milestone matches the event
-            if (this.matchesTrigger(milestone.trigger, eventType, eventData)) {
-                triggered.push(milestone);
-                this.unlockMilestone(milestone);
+    /**
+     * Clean up listeners
+     */
+    destroy() {
+        if (this.checkInterval) clearInterval(this.checkInterval);
+        // We rely on scene shutdown to clear event listeners usually, 
+        // but could manually remove them here if needed.
+    }
+
+    /**
+     * Evaluate triggers for a specific event type
+     * @param {string} type - Event type (e.g., 'quest_complete')
+     * @param {Object} data - Event context data
+     */
+    checkTriggers(type, data) {
+        this.milestones.forEach(milestone => {
+            if (this.completedMilestones.has(milestone.id)) return;
+
+            if (milestone.trigger.type === type) {
+                if (this.evaluateCondition(milestone.trigger, data)) {
+                    this.completeMilestone(milestone);
+                }
             }
-        }
-
-        return triggered;
+        });
     }
 
     /**
-     * Check if a milestone trigger matches the current event
+     * Check passive triggers (like kill counts) that might not fire explicit events
      */
-    matchesTrigger(trigger, eventType, eventData) {
-        if (!trigger || trigger.type !== eventType) return false;
+    checkPassiveTriggers() {
+        // Get current stats from global state
+        const stats = window.playerStats || {};
 
-        const condition = trigger.condition || {};
+        this.milestones.forEach(milestone => {
+            if (this.completedMilestones.has(milestone.id)) return;
 
-        switch (eventType) {
+            const trigger = milestone.trigger;
+
+            // Check stat thresholds
+            if (trigger.type === 'stat_reach' || trigger.type === 'kill_count' || trigger.type === 'explore_count' || trigger.type === 'survive_time') {
+                if (this.evaluateCondition(trigger, stats)) {
+                    this.completeMilestone(milestone);
+                }
+            }
+        });
+    }
+
+    /**
+     * Check if a specific condition is met
+     */
+    evaluateCondition(trigger, context) {
+        // Support both nested 'condition' object and flat trigger properties
+        const condition = trigger.condition || trigger;
+
+        switch (trigger.type) {
             case 'game_start':
                 return true;
 
             case 'quest_complete':
-                return condition.questId === eventData.questId;
-
-            case 'quest_accept':
-                return condition.questId === eventData.questId;
+                return context.questId === (condition.questId || condition.target);
 
             case 'boss_kill':
-                return condition.bossId === eventData.bossId;
-
-            case 'item_acquire':
-                return condition.itemId === eventData.itemId;
+                return context.bossId === (condition.bossId || condition.target);
 
             case 'location_enter':
-                return condition.locationId === eventData.locationId;
+                return context.location === (condition.location || condition.target);
 
-            case 'level_reach':
-                return eventData.level >= condition.level;
+            case 'npc_talk':
+                return context.npcId === (condition.npcId || condition.target);
 
             case 'kill_count':
-                return eventData.count >= condition.count;
+                const currentKills = (window.playerStats && window.playerStats.monstersKilled) || 0;
+                return currentKills >= (condition.count || condition.target || 1);
 
             case 'explore_count':
-                return eventData.tiles >= condition.tiles;
+                const tiles = (window.playerStats && window.playerStats.questStats && window.playerStats.questStats.tilesTraveled) || 0;
+                return tiles >= (condition.tiles || condition.target || 1);
 
             case 'survive_time':
-                return eventData.seconds >= condition.seconds;
+                // Survival time is in ms in playerStats, but targets are usually in seconds
+                const timeMs = (window.playerStats && window.playerStats.questStats && window.playerStats.questStats.survivalTime) || 0;
+                const timeSeconds = Math.floor(timeMs / 1000);
+                return timeSeconds >= (condition.seconds || condition.target || 0);
+
+            case 'stat_reach':
+            case 'stat_change':
+                const statName = condition.stat;
+                const statVal = (window.playerStats && window.playerStats[statName]) || 0;
+                return statVal >= (condition.value || condition.target || 0);
 
             default:
                 return false;
@@ -128,124 +181,56 @@ class MilestoneManager {
     }
 
     /**
-     * Unlock a milestone and trigger all associated unlocks
+     * Mark milestone as complete and issue rewards
      */
-    unlockMilestone(milestone) {
-        console.log('Milestone achieved:', milestone.name);
-
-        // Mark as achieved
-        this.achievedMilestones.add(milestone.id);
+    completeMilestone(milestone) {
+        console.log(`🏆 Milestone Completed: ${milestone.name}`);
+        this.completedMilestones.add(milestone.id);
         this.saveProgress();
 
-        // Unlock lore entries
-        if (milestone.unlocks.lore && this.scene.loreManager) {
-            for (const loreId of milestone.unlocks.lore) {
-                this.scene.loreManager.unlockLore(loreId);
-            }
+        // 1. Show notification
+        const msg = milestone.unlocks.notification || `Milestone: ${milestone.name}`;
+        if (window.showDamageNumber && this.scene && this.scene.cameras && this.scene.cameras.main) {
+            const x = this.scene.cameras.main.midPoint.x;
+            const y = this.scene.cameras.main.midPoint.y - 150;
+            window.showDamageNumber(x, y, msg, 0xFFD700);
+        } else {
+            console.log(`[Toast] ${msg}`);
         }
 
-        // Unlock/activate quests
-        if (milestone.unlocks.quests && milestone.unlocks.quests.length > 0) {
-            // Note: Quest activation handled through game's quest system
-            console.log('Milestone unlocks quests:', milestone.unlocks.quests);
-
-            // Emit event for quest system to pick up
-            if (this.scene.events) {
-                this.scene.events.emit('milestone_quest_unlock', milestone.unlocks.quests);
-            }
+        // 2. Unlock Lore
+        if (milestone.unlocks.lore) {
+            milestone.unlocks.lore.forEach(loreId => {
+                if (this.scene.loreManager) {
+                    this.scene.loreManager.unlockLore(loreId, 'milestone');
+                }
+            });
         }
 
-        // Enable dialogs
-        if (milestone.unlocks.dialogs && this.scene.dialogManager) {
-            for (const dialogId of milestone.unlocks.dialogs) {
-                this.scene.dialogManager.enableDialog(dialogId);
-            }
+        // 3. Unlock Quests
+        if (milestone.unlocks.quests) {
+            milestone.unlocks.quests.forEach(questId => {
+                if (window.questManager) {
+                    // If using QuestManager (Legacy/Refactored)
+                    // window.questManager.acceptQuest(questId);
+                }
+                // Also trigger UQE if needed
+                if (window.uqe) {
+                    // window.uqe.acceptQuest(questId) -- logic might differ
+                }
+            });
         }
 
-        // Emit milestone achieved event
-        if (this.scene.events) {
-            this.scene.events.emit('milestone_achieved', milestone);
+        // 4. Unlock Dialogs
+        if (milestone.unlocks.dialogs) {
+            milestone.unlocks.dialogs.forEach(dialogId => {
+                if (this.scene.dialogManager) {
+                    this.scene.dialogManager.enableDialog(dialogId);
+                }
+            });
         }
-    }
-
-    /**
-     * Check if a milestone has been achieved
-     */
-    isAchieved(milestoneId) {
-        return this.achievedMilestones.has(milestoneId);
-    }
-
-    /**
-     * Get all achieved milestones
-     */
-    getAchievedMilestones() {
-        return [...this.achievedMilestones];
-    }
-
-    /**
-     * Reset all milestone progress (for new game)
-     */
-    resetProgress() {
-        this.achievedMilestones.clear();
-        this.saveProgress();
-    }
-
-    /**
-     * Trigger game start milestone check
-     */
-    onGameStart() {
-        this.checkMilestones('game_start', {});
-    }
-
-    /**
-     * Convenience method for quest completion
-     */
-    onQuestComplete(questId) {
-        return this.checkMilestones('quest_complete', { questId });
-    }
-
-    /**
-     * Convenience method for quest acceptance
-     */
-    onQuestAccept(questId) {
-        return this.checkMilestones('quest_accept', { questId });
-    }
-
-    /**
-     * Convenience method for boss kill
-     */
-    onBossKill(bossId) {
-        return this.checkMilestones('boss_kill', { bossId });
-    }
-
-    /**
-     * Convenience method for level up
-     */
-    onLevelUp(level) {
-        return this.checkMilestones('level_reach', { level });
-    }
-
-    /**
-     * Convenience method for kill count tracking
-     */
-    onKillCountUpdate(count) {
-        return this.checkMilestones('kill_count', { count });
-    }
-
-    /**
-     * Convenience method for exploration tracking
-     */
-    onExploreCountUpdate(tiles) {
-        return this.checkMilestones('explore_count', { tiles });
-    }
-
-    /**
-     * Convenience method for survival time tracking
-     */
-    onSurviveTimeUpdate(seconds) {
-        return this.checkMilestones('survive_time', { seconds });
     }
 }
 
-// Export for global use
+// Export to global scope
 window.MilestoneManager = MilestoneManager;

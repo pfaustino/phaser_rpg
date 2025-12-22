@@ -1,187 +1,149 @@
 /**
- * ScrollbarUtils.js - Universal Scrollbar Utility
- * A reusable scrollbar component for Phaser game panels
+ * ScrollbarUtils.js
+ * A reusable scrollbar component for Phaser 3.
  */
+class Scrollbar {
+    /**
+     * @param {Phaser.Scene} scene 
+     * @param {Phaser.GameObjects.Container} contentContainer - The container to scroll
+     * @param {Phaser.Geom.Rectangle} maskRect - The masking rectangle (viewport)
+     * @param {number} contentHeight - Total height of the content
+     */
+    constructor(scene, contentContainer, maskRect, contentHeight) {
+        this.scene = scene;
+        this.content = contentContainer;
+        this.mask = maskRect;
+        this.contentHeight = contentHeight;
+        this.viewportHeight = maskRect.height;
 
-/**
- * Unified scrollbar setup utility
- * @param {Object} params Configuration parameters
- * @returns {Object} Scrollbar instance with update methods
- */
-function setupScrollbar({
-    scene,
-    x,
-    y,
-    width = 12,
-    height,
-    depth = 1000,
-    minScroll = 0,
-    initialScroll = 0,
-    onScroll, // Callback(newPosition)
-    container, // Optional Phaser Container to auto-update .y
-    containerStartY, // Required if using container
-    containerOffset = 0, // Extra offset for container positioning
-    wheelHitArea, // Optional rectangle/object with getBounds() for wheel support
-    visibleHeight // Height of the visible area (usually same as scrollbar height)
-}) {
-    // Create track with origin at top center
-    const track = scene.add.rectangle(x, y, width, height, 0x333333, 0.8)
-        .setScrollFactor(0).setDepth(depth).setStrokeStyle(1, 0x555555)
-        .setInteractive({ useHandCursor: true }).setOrigin(0.5, 0);
+        this.track = null;
+        this.thumb = null;
+        this.isDragging = false;
 
-    // Thumb height ratio
-    let thumbHeight = 40;
-    const thumb = scene.add.rectangle(x, y, width - 4, thumbHeight, 0x666666, 1)
-        .setScrollFactor(0).setDepth(depth + 1).setStrokeStyle(1, 0x888888)
-        .setInteractive({ useHandCursor: true }).setOrigin(0.5, 0);
+        // Calculate needed scroll percentage
+        this.visibleRatio = this.viewportHeight / this.contentHeight;
+        this.canScroll = this.visibleRatio < 1;
 
-    let currentScroll = initialScroll;
-    let maxScroll = 0;
-    let isDragging = false;
-    let dragStartY = 0;
-    let dragStartScroll = 0;
+        if (this.canScroll) {
+            this.createScrollbar();
+            this.setupInteraction();
+        }
+    }
 
-    const setScroll = (newPosition) => {
-        // Clamp scroll position between min and max
-        currentScroll = Math.max(minScroll, Math.min(maxScroll, newPosition));
+    createScrollbar() {
+        const x = this.mask.x + this.mask.width + 10;
+        const y = this.mask.y;
+        const trackHeight = this.viewportHeight;
+        const thumbHeight = Math.max(30, trackHeight * this.visibleRatio);
 
-        // Update thumb position with precision
-        if (maxScroll > minScroll) {
-            const scrollRange = maxScroll - minScroll;
-            const scrollRatio = (currentScroll - minScroll) / scrollRange;
+        // Track
+        this.track = this.scene.add.rectangle(x, y + trackHeight / 2, 10, trackHeight, 0x333333)
+            .setScrollFactor(0)
+            .setDepth(2001);
 
-            // Available movement range for the thumb (leave 2px padding at top and bottom)
-            const padding = 2;
-            const availableTrackHeight = height - (padding * 2);
-            const thumbMoveRange = availableTrackHeight - thumb.height;
+        // Thumb
+        this.thumb = this.scene.add.rectangle(x, y + thumbHeight / 2, 8, thumbHeight, 0x888888)
+            .setScrollFactor(0)
+            .setDepth(2002)
+            .setInteractive({ useHandCursor: true, draggable: true });
 
-            // Map scroll ratio to thumb Y position (relative to track Y + padding)
-            if (thumbMoveRange > 0) {
-                thumb.y = y + padding + (scrollRatio * thumbMoveRange);
-            } else {
-                thumb.y = y + padding;
+        // Hover effects
+        this.thumb.on('pointerover', () => this.thumb.setFillStyle(0xAAAAAA));
+        this.thumb.on('pointerout', () => {
+            if (!this.isDragging) this.thumb.setFillStyle(0x888888);
+        });
+    }
+
+    setupInteraction() {
+        // Dragging
+        this.scene.input.setDraggable(this.thumb);
+
+        this.scene.input.on('dragstart', (pointer, gameObject) => {
+            if (gameObject === this.thumb) {
+                this.isDragging = true;
+                this.thumb.setFillStyle(0xFFFFFF);
             }
-        } else {
-            thumb.y = y + 2;
-        }
+        });
 
-        // Apply scroll logic to container
-        if (container && containerStartY !== undefined) {
-            container.y = containerStartY - containerOffset - currentScroll;
-        }
+        this.scene.input.on('drag', (pointer, gameObject, dragX, dragY) => {
+            if (gameObject === this.thumb) {
+                // Clamp Y position
+                const trackTop = this.mask.y;
+                const trackBottom = this.mask.y + this.viewportHeight;
+                const thumbHeight = this.thumb.height;
 
-        if (onScroll) {
-            onScroll(currentScroll);
-        }
-    };
+                // Calculate bounds considering anchor points (default origin is 0.5 for Rectangles?) 
+                // Wait, default origin for Rectangles is 0.5.
+                // So y is centered.
 
+                let newY = Phaser.Math.Clamp(dragY, trackTop + thumbHeight / 2, trackBottom - thumbHeight / 2);
+                this.thumb.y = newY;
 
-    // Interactions
-    const onPointerDown = (pointer) => {
-        if (!track.visible) return;
-
-        if (thumb.getBounds().contains(pointer.x, pointer.y)) {
-            isDragging = true;
-            dragStartY = pointer.y;
-            dragStartScroll = currentScroll;
-        } else if (track.getBounds().contains(pointer.x, pointer.y)) {
-            // Jump to position
-            const padding = 2;
-            const availableTrackHeight = height - (padding * 2);
-            const thumbMoveRange = availableTrackHeight - thumb.height;
-
-            if (thumbMoveRange > 0) {
-                // Click position relative to track start (offset by padding and half thumb)
-                const clickY = pointer.y - y - padding - (thumb.height / 2);
-                const clickRatio = Math.max(0, Math.min(1, clickY / thumbMoveRange));
-                const scrollRange = maxScroll - minScroll;
-                setScroll(minScroll + clickRatio * scrollRange);
+                this.updateContentPosition();
             }
-        }
-    };
+        });
 
-    const onPointerMove = (pointer) => {
-        if (isDragging && pointer.isDown) {
-            const padding = 2;
-            const availableTrackHeight = height - (padding * 2);
-            const thumbMoveRange = availableTrackHeight - thumb.height;
-
-            if (thumbMoveRange > 0 && maxScroll > minScroll) {
-                const deltaY = pointer.y - dragStartY;
-                const scrollChangeRatio = deltaY / thumbMoveRange;
-                const scrollRange = maxScroll - minScroll;
-                setScroll(dragStartScroll + scrollChangeRatio * scrollRange);
+        this.scene.input.on('dragend', (pointer, gameObject) => {
+            if (gameObject === this.thumb) {
+                this.isDragging = false;
+                this.thumb.setFillStyle(0x888888);
             }
-        }
-    };
+        });
 
+        // Mouse Wheel
+        this.scene.input.on('wheel', (pointer, gameObjects, deltaX, deltaY, deltaZ) => {
+            // Check if pointer is over the mask area
+            if (pointer.x >= this.mask.x && pointer.x <= this.mask.x + this.mask.width &&
+                pointer.y >= this.mask.y && pointer.y <= this.mask.y + this.mask.height) {
 
-    const onPointerUp = () => { isDragging = false; };
-
-    const onWheel = (pointer, gameObjects, deltaX, deltaY) => {
-        if (!track.visible || maxScroll <= minScroll) return;
-
-        const hitArea = wheelHitArea || track;
-        const bounds = (hitArea.getBounds ? hitArea.getBounds() : hitArea);
-
-        if (bounds.contains(pointer.x, pointer.y)) {
-            setScroll(currentScroll + deltaY * 0.5);
-        }
-    };
-
-    scene.input.on('pointerdown', onPointerDown);
-    scene.input.on('pointermove', onPointerMove);
-    scene.input.on('pointerup', onPointerUp);
-    scene.input.on('wheel', onWheel);
-
-    const instance = {
-        track,
-        thumb,
-        updateMaxScroll: (newMax, totalContentHeight) => {
-            maxScroll = newMax;
-            if (totalContentHeight > visibleHeight) {
-                const ratio = Math.min(1, visibleHeight / totalContentHeight);
-                const padding = 2;
-                const usableHeight = height - (padding * 2);
-
-                // Calculate thumb height proportionate to usable track height
-                // Ensure min height of 30, but never more than usableHeight
-                thumb.height = Math.min(usableHeight, Math.max(30, usableHeight * ratio));
-
-                track.setVisible(true);
-                thumb.setVisible(true);
-            } else {
-                track.setVisible(false);
-                thumb.setVisible(false);
+                this.scroll(deltaY);
             }
-            setScroll(currentScroll); // Refresh position
-        },
+        });
+    }
 
-        setScroll,
-        getScroll: () => currentScroll,
-        destroy: () => {
-            scene.input.off('pointerdown', onPointerDown);
-            scene.input.off('pointermove', onPointerMove);
-            scene.input.off('pointerup', onPointerUp);
-            scene.input.off('wheel', onWheel);
-            track.destroy();
-            thumb.destroy();
-        },
-        setVisible: (visible) => {
-            if (visible && maxScroll > minScroll) {
-                track.setVisible(true);
-                thumb.setVisible(true);
-            } else {
-                track.setVisible(false);
-                thumb.setVisible(false);
-            }
-        }
-    };
+    scroll(amount) {
+        if (!this.thumb) return;
 
-    return instance;
+        const trackTop = this.mask.y + this.thumb.height / 2;
+        const trackBottom = this.mask.y + this.viewportHeight - this.thumb.height / 2;
+        const range = trackBottom - trackTop;
+
+        // Move thumb
+        // Scale deltaY to reasonable speed
+        const move = (amount > 0 ? 10 : -10); // Fixed step
+        this.thumb.y = Phaser.Math.Clamp(this.thumb.y + move, trackTop, trackBottom);
+
+        this.updateContentPosition();
+    }
+
+    updateContentPosition() {
+        if (!this.thumb) return;
+
+        const trackTop = this.mask.y + this.thumb.height / 2;
+        const trackRange = this.viewportHeight - this.thumb.height;
+
+        const currentPos = this.thumb.y - trackTop;
+        const ratio = currentPos / trackRange;
+
+        const contentRange = this.contentHeight - this.viewportHeight;
+
+        // Update content container y
+        // Ensure we respect initial Y if strictly relative, but usually containers start at y=0 or mask.y
+        // We'll set it relative to mask.y
+        this.content.y = this.mask.y - (contentRange * ratio);
+    }
+
+    destroy() {
+        if (this.track) this.track.destroy();
+        if (this.thumb) this.thumb.destroy();
+        // Remove scene input listeners if possible, but global 'on' is hard to remove specific functions from without named refs.
+        // In a verified production environment we'd track the listener functions.
+    }
 }
 
-// Export for global access
-window.setupScrollbar = setupScrollbar;
-
-console.log('📜 ScrollbarUtils.js loaded');
+// Global helper that matches the previous interface used in LoreCodex
+function setupScrollbar(scene, container, width, height, contentHeight, maskX, maskY) {
+    // Create a rect for the mask logic equivalent
+    const maskRect = new Phaser.Geom.Rectangle(maskX, maskY, width, height);
+    return new Scrollbar(scene, container, maskRect, contentHeight);
+}

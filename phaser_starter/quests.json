@@ -36,7 +36,7 @@
   "starterQuests": [
     {
       "id": "quest_001",
-      "title": "First Steps",
+      "title": "(old) First Steps",
       "description": "Kill 5 monsters to prove your worth.",
       "type": "kill",
       "target": 5,
@@ -50,7 +50,7 @@
     },
     {
       "id": "quest_002",
-      "title": "Treasure Hunter",
+      "title": "(old) Treasure Hunter",
       "description": "Collect 3 items from defeated monsters.",
       "type": "collect",
       "target": 3,
@@ -64,7 +64,7 @@
   "availableQuests": [
     {
       "id": "quest_004",
-      "title": "Gold Rush",
+      "title": "(old) Gold Rush",
       "description": "Earn 100 gold from monster drops.",
       "type": "gold",
       "target": 100,
@@ -76,7 +76,7 @@
     },
     {
       "id": "quest_005",
-      "title": "Explorer",
+      "title": "(old) Explorer",
       "description": "Travel 500 tiles across the map.",
       "type": "explore",
       "target": 500,
@@ -87,7 +87,7 @@
     },
     {
       "id": "quest_006",
-      "title": "Survivor",
+      "title": "(old) Survivor",
       "description": "Survive for 2 minutes without dying.",
       "type": "survive",
       "target": 120,
@@ -98,7 +98,7 @@
     },
     {
       "id": "quest_007",
-      "title": "Monster Hunter III",
+      "title": "(old) Monster Hunter III",
       "description": "Defeat 20 monsters to earn the title of Hunter.",
       "type": "kill",
       "target": 20,
@@ -109,7 +109,7 @@
     },
     {
       "id": "quest_008",
-      "title": "Item Collector",
+      "title": "(old) Item Collector",
       "description": "Gather 10 items from your adventures.",
       "type": "collect",
       "target": 10,
@@ -120,7 +120,7 @@
     },
     {
       "id": "quest_009",
-      "title": "Level Up",
+      "title": "(old) Level Up",
       "description": "Reach level 3 and grow stronger.",
       "type": "level",
       "target": 3,
@@ -131,7 +131,7 @@
     },
     {
       "id": "quest_010",
-      "title": "Wealth Accumulator",
+      "title": "(old) Wealth Accumulator",
       "description": "Amass 250 gold through your efforts.",
       "type": "gold",
       "target": 250,
@@ -142,7 +142,7 @@
     },
     {
       "id": "quest_011",
-      "title": "Wanderer",
+      "title": "(old) Wanderer",
       "description": "Explore 1000 tiles of the world.",
       "type": "explore",
       "target": 1000,
@@ -153,7 +153,7 @@
     },
     {
       "id": "quest_012",
-      "title": "Endurance Test",
+      "title": "(old) Endurance Test",
       "description": "Survive for 5 minutes in the dangerous world.",
       "type": "survive",
       "target": 300,
@@ -164,7 +164,7 @@
     },
     {
       "id": "quest_013",
-      "title": "Exterminator",
+      "title": "(old) Exterminator",
       "description": "Eliminate 25 monsters from the land.",
       "type": "kill",
       "target": 25,
@@ -175,7 +175,7 @@
     },
     {
       "id": "quest_014",
-      "title": "Hoarder",
+      "title": "(old) Hoarder",
       "description": "Collect 20 items for your inventory.",
       "type": "collect",
       "target": 20,
@@ -186,7 +186,7 @@
     },
     {
       "id": "quest_015",
-      "title": "Power Seeker",
+      "title": "(old) Power Seeker",
       "description": "Achieve level 5 through experience.",
       "type": "level",
       "target": 5,
@@ -197,7 +197,7 @@
     },
     {
       "id": "quest_016",
-      "title": "Rich Beyond Measure",
+      "title": "(old) Rich Beyond Measure",
       "description": "Accumulate 500 gold pieces.",
       "type": "gold",
       "target": 500,
@@ -208,7 +208,7 @@
     },
     {
       "id": "quest_017",
-      "title": "World Traveler",
+      "title": "(old) World Traveler",
       "description": "Journey across 2000 tiles of terrain.",
       "type": "explore",
       "target": 2000,
@@ -219,7 +219,7 @@
     },
     {
       "id": "quest_018",
-      "title": "Unstoppable",
+      "title": "(old) Unstoppable",
       "description": "Survive for 10 minutes without falling.",
       "type": "survive",
       "target": 600,
@@ -230,7 +230,7 @@
     },
     {
       "id": "quest_019",
-      "title": "Massacre",
+      "title": "(old) Massacre",
       "description": "Slay 50 monsters in your path.",
       "type": "kill",
       "target": 50,
@@ -241,7 +241,7 @@
     },
     {
       "id": "quest_020",
-      "title": "Master Collector",
+      "title": "(old) Master Collector",
       "description": "Gather 30 items for your collection.",
       "type": "collect",
       "target": 30,
@@ -256,7 +256,7 @@
       {
         "step": 2,
         "id": "quest_003",
-        "title": "Rising Power",
+        "title": "(old) Rising Power",
         "description": "Reach level 2 to unlock new abilities.",
         "type": "level",
         "target": 2,
@@ -270,7 +270,7 @@
       {
         "step": 3,
         "id": "quest_chain_001",
-        "title": "Advanced Training",
+        "title": "(old) Advanced Training",
         "description": "Kill 15 monsters to advance your skills.",
         "type": "kill",
         "target": 15,
@@ -284,7 +284,7 @@
       {
         "step": 4,
         "id": "quest_chain_002",
-        "title": "Master Warrior",
+        "title": "(old) Master Warrior",
         "description": "Reach level 5 and become a true warrior.",
         "type": "level",
         "target": 5,
@@ -300,7 +300,7 @@
   "mainQuests": [
     {
       "id": "main_01_001",
-      "title": "Tremors in the Earth",
+      "title": "(old) Tremors in the Earth",
       "description": "The ground shakes beneath our feet. Speak with the Town Elder to understand these strange quakes.",
       "type": "story",
       "target": 1,
@@ -314,7 +314,7 @@
     },
     {
       "id": "main_01_002",
-      "title": "Echoes from Below",
+      "title": "(old) Echoes from Below",
       "description": "Corruption is seeping from the Watchtower basement. Clear out the Echo Mites gathered there.",
       "type": "kill",
       "target": 3,
@@ -328,7 +328,7 @@
     },
     {
       "id": "main_01_003",
-      "title": "Crystalline Seepage",
+      "title": "(old) Crystalline Seepage",
       "description": "Gather shards of the crystalline corruption for the town's blacksmith to study.",
       "type": "collect",
       "target": 5,
@@ -342,7 +342,7 @@
     },
     {
       "id": "main_01_004",
-      "title": "The Elder's Request",
+      "title": "(old) The Elder's Request",
       "description": "Deliver the gathered shards to the Blacksmith so he can determine their frequency.",
       "type": "story",
       "target": 1,
@@ -356,7 +356,7 @@
     },
     {
       "id": "main_01_005",
-      "title": "Resonant Frequencies",
+      "title": "(old) Resonant Frequencies",
       "description": "The blacksmith is sounding the shards. Stay nearby and defend the shop from drawn Echo creatures.",
       "type": "survive",
       "target": 60,
@@ -370,7 +370,7 @@
     },
     {
       "id": "main_01_006",
-      "title": "A Warrior's Path",
+      "title": "(old) A Warrior's Path",
       "description": "Your actions have drawn attention. Prove your combat readiness to the Captain of the Guard.",
       "type": "story",
       "target": 1,
@@ -384,7 +384,7 @@
     },
     {
       "id": "main_01_007",
-      "title": "Mana Leak",
+      "title": "(old) Mana Leak",
       "description": "The instability is disrupting the town's wards. Help the local Mage stabilize 3 mana fluxes.",
       "type": "kill",
       "target": 3,
@@ -398,7 +398,7 @@
     },
     {
       "id": "main_01_008",
-      "title": "The Subterranean Breach",
+      "title": "(old) The Subterranean Breach",
       "description": "The tremors are originating from deep within the old Watchtower. Find the entrance to the first subterranean floor.",
       "type": "story",
       "target": 1,
@@ -412,7 +412,7 @@
     },
     {
       "id": "main_01_009",
-      "title": "Infested Veins",
+      "title": "(old) Infested Veins",
       "description": "The mines are crawling with rats corrupted by the Echo. Clear out 15 of them to secure the area.",
       "type": "kill",
       "target": 15,
@@ -426,7 +426,7 @@
     },
     {
       "id": "main_01_010",
-      "title": "Forgotten Miners",
+      "title": "(old) Forgotten Miners",
       "description": "Search the deep tunnels for any miners who might have been trapped during the first tremor.",
       "type": "explore",
       "target": 1000,
@@ -440,7 +440,7 @@
     },
     {
       "id": "main_01_011",
-      "title": "Solidified Corruption",
+      "title": "(old) Solidified Corruption",
       "description": "The corruption is forming hard crystalline structures. Mine 10 Echo Crystals from the lower depths.",
       "type": "collect",
       "target": 10,
@@ -454,7 +454,7 @@
     },
     {
       "id": "main_01_012",
-      "title": "The First Fragment",
+      "title": "(old) The First Fragment",
       "description": "A massive creature has nested near the breach. Defeat the Echo Beholder to reach the first fragment of the Aegis.",
       "type": "kill",
       "target": 1,
@@ -468,7 +468,7 @@
     },
     {
       "id": "main_01_013",
-      "title": "Claiming the Shard",
+      "title": "(old) Claiming the Shard",
       "description": "The Beholder is slain. Recover the Shard of Resonance from its nest.",
       "type": "story",
       "target": 1,
@@ -482,7 +482,7 @@
     },
     {
       "id": "main_01_014",
-      "title": "Elder's Wisdom",
+      "title": "(old) Elder's Wisdom",
       "description": "Return to the surface and present the Shard of Resonance to Elder Malik.",
       "type": "story",
       "target": 1,
@@ -496,7 +496,7 @@
     },
     {
       "id": "main_01_015",
-      "title": "Strengthening the Aegis",
+      "title": "(old) Strengthening the Aegis",
       "description": "Take the shard to the Ancient Obelisk at the town center and restore its power.",
       "type": "story",
       "target": 1,
@@ -510,7 +510,7 @@
     },
     {
       "id": "main_01_016",
-      "title": "Unexpected Feedback",
+      "title": "(old) Unexpected Feedback",
       "description": "The restoration triggered a massive release of energy! Survive the intense Obelisk backlash.",
       "type": "survive",
       "target": 120,
@@ -524,7 +524,7 @@
     },
     {
       "id": "main_01_017",
-      "title": "The Echo's Warning",
+      "title": "(old) The Echo's Warning",
       "description": "Constructs have emerged from the light. Defeat 20 Backlash constructs to stabilize the ritual.",
       "type": "kill",
       "target": 20,
@@ -538,7 +538,7 @@
     },
     {
       "id": "main_01_018",
-      "title": "Deep Scan",
+      "title": "(old) Deep Scan",
       "description": "The Aegis needs data on the world's status. Travel across the wilderness to calibrate the sensors.",
       "type": "explore",
       "target": 2000,
@@ -552,7 +552,7 @@
     },
     {
       "id": "main_01_019",
-      "title": "Resonance Established",
+      "title": "(old) Resonance Established",
       "description": "Your connection with the Aegis is growing. Reach Level 5 to finalize your attunement.",
       "type": "level",
       "target": 5,
@@ -566,7 +566,7 @@
     },
     {
       "id": "main_01_020",
-      "title": "Chapter Final",
+      "title": "(old) Chapter Final",
       "description": "Chapter 1 is complete. Prepare yourself for the journey to the next corrupted region.",
       "type": "story",
       "target": 1,

@@ -289,6 +289,22 @@ class UqeEngine {
         console.log("🚀 [UQE Engine] Initialized with", Object.keys(definitions).length, "definitions");
     }
 
+    /**
+     * Initialize starter quests for new games
+     * @param {string[]} questIds - Array of quest IDs to auto-accept as starters
+     */
+    initializeStarterQuests(questIds) {
+        console.log(`🎮 [UQE Engine] Initializing starter quests:`, questIds);
+        questIds.forEach(questId => {
+            // Skip if already active or completed
+            if (this.activeQuests.some(q => q.id === questId)) return;
+            if (this.completedQuests.some(q => q.id === questId)) return;
+
+            this.acceptQuest(questId);
+        });
+        console.log(`✅ [UQE Engine] Starter quests initialized. Active: ${this.activeQuests.length}`);
+    }
+
     acceptQuest(questId) {
         console.log(`📝 [UQE Engine] acceptQuest called with: ${questId}`);
         if (this.activeQuests.some(q => q.id === questId)) {

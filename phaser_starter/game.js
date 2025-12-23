@@ -3786,6 +3786,26 @@ function create() {
                 showPreview();
             }
         });
+
+        // Initialize starter quests for new games (if no UQE quests active yet)
+        // This runs after save data might have been loaded
+        setTimeout(() => {
+            if (uqe.activeQuests.length === 0 && uqe.completedQuests.length === 0) {
+                console.log('🎮 [UQE Bridge] New game detected - initializing starter quests');
+                uqe.initializeStarterQuests([
+                    'quest_001', // First Steps (kill)
+                    'quest_002', // Treasure Hunter (collect)
+                    'quest_003', // Rising Power (level)
+                    'quest_004', // Gold Rush (gold)
+                    'quest_005', // Explorer (explore)
+                    'quest_006', // Survivor (survive)
+                    'quest_007'  // Monster Hunter (kill)
+                ]);
+                updateQuestTrackerHUD();
+            } else {
+                console.log(`✅ [UQE Bridge] Existing save - ${uqe.activeQuests.length} active, ${uqe.completedQuests.length} completed`);
+            }
+        }, 100);
     }
 
     // Parse dungeon tileset metadata and create texture frames

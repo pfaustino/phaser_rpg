@@ -103,6 +103,111 @@
                 "gold": 60
             }
         },
+        "main_01_006": {
+            "id": "main_01_006",
+            "title": "The Path Chosen",
+            "description": "Speak with Trainer Garen to choose your path and receive your initial training.",
+            "giver": "Elder Malik",
+            "step": 6,
+            "requires": "main_01_005",
+            "objectives": [
+                {
+                    "id": "choose_class_obj",
+                    "type": "class_selection",
+                    "npcId": "Trainer Garen",
+                    "label": "Choose your Class",
+                    "target": 1
+                }
+            ],
+            "rewards": {
+                "xp": 100,
+                "gold": 0
+            }
+        },
+        "main_01_007": {
+            "id": "main_01_007",
+            "title": "Mana Instability",
+            "description": "Strange fluxes of mana are appearing. Stabilize them before they attract more creatures.",
+            "giver": "Trainer Garen",
+            "step": 7,
+            "requires": "main_01_006",
+            "objectives": [
+                {
+                    "id": "collect_flux",
+                    "type": "collect",
+                    "itemId": "stabilized_flux",
+                    "label": "Stabilize Mana Fluxes",
+                    "target": 3
+                }
+            ],
+            "rewards": {
+                "xp": 150,
+                "gold": 50
+            }
+        },
+        "main_01_008": {
+            "id": "main_01_008",
+            "title": "Into the Depths",
+            "description": "Enter the dungeon to investigate the source of the quakes.",
+            "giver": "Trainer Garen",
+            "step": 8,
+            "requires": "main_01_007",
+            "objectives": [
+                {
+                    "id": "enter_dungeon",
+                    "type": "collect",
+                    "itemId": "dungeon_entry_token",
+                    "label": "Enter the Dungeon",
+                    "target": 1
+                }
+            ],
+            "rewards": {
+                "xp": 100,
+                "gold": 0
+            }
+        },
+        "main_01_009": {
+            "id": "main_01_009",
+            "title": "Infested Veins",
+            "description": "The upper mines are infested with Echo Rats. Clear them out.",
+            "giver": "Guard Thorne",
+            "step": 9,
+            "requires": "main_01_008",
+            "objectives": [
+                {
+                    "id": "kill_rats",
+                    "type": "kill",
+                    "monsterId": "echo_rat",
+                    "label": "Kill Echo Rats",
+                    "target": 10
+                }
+            ],
+            "rewards": {
+                "xp": 200,
+                "gold": 100
+            }
+        },
+        "main_01_010": {
+            "id": "main_01_010",
+            "title": "The Forgotten",
+            "description": "The miners who were trapped have... returned. Lay them to rest.",
+            "giver": "Guard Thorne",
+            "step": 10,
+            "requires": "main_01_009",
+            "objectives": [
+                {
+                    "id": "kill_skeletons",
+                    "type": "kill",
+                    "monsterId": "skeleton_miner",
+                    "label": "Defeat Skeleton Miners",
+                    "target": 5
+                }
+            ],
+            "rewards": {
+                "xp": 250,
+                "gold": 100
+            }
+        },
         "quest_002": {
             "id": "quest_002",
             "title": "Treasure Hunter",

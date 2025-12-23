@@ -95,42 +95,57 @@ Quest chains allow for sequential storytelling and progression. Completing one q
 
 The quest system is data-driven, defined in `quests.json`. This allows for easy modification and AI integration.
 
-### JSON Schema
+### JSON Schema (UQE v2)
+
+The UQE uses a flat dictionary where each key is a unique Quest ID. Dependencies are handled via the `requires` property.
 
 ```json
 {
-  "questTypes": {
-    "kill": { "label": "Kill Monsters", "desc": "..." }
-  },
-  "starterQuests": [
-    {
-      "id": "quest_001",
-      "title": "First Steps",
-      "description": "Kill 5 monsters...",
-      "type": "kill",
-      "target": 5,
-      "rewards": { "xp": 50, "gold": 25 },
-      "chainId": "beginner_chain",
-      "chainStep": 1
+  "quests": {
+    "main_01_001": {
+      "id": "main_01_001",
+      "title": "Tremors in the Earth",
+      "description": "...",
+      "giver": "Elder Malik",
+      "objectives": [
+        { "type": "talk", "npcId": "Elder Malik", "label": "Speak with Elder Malik", "target": 1 }
+      ],
+      "rewards": { "xp": 50, "gold": 20 }
+    },
+    "main_01_002": {
+      "id": "main_01_002",
+      "title": "Echoes from Below",
+      "requires": "main_01_001", 
+      "objectives": [...]
     }
-  ],
-  "availableQuests": [...],
-  "questChains": {
-    "beginner_chain": [
-      { "step": 2, "id": "quest_003", ... }
-    ]
   }
 }
 ```
 
-### How Chain Triggers Work
+### How Chain Triggers Work (UQE)
 
-The system uses the `chainId` and `chainStep` properties to track progression:
+The system uses an event-driven dependency check (`checkNewQuests`):
 
-1.  **Completion**: When `completeQuest(quest)` is called, the game checks if the quest has a `chainId`.
-2.  **Lookup**: It updates the `playerStats.questChains[chainId]` step to the current `chainStep`.
-3.  **Automatic Unlock**: The `QuestManager` is then queried for the next quest in that chain (where `step == currentStep + 1`).
-4.  **Activation**: If found, the next quest is automatically moved from the JSON data pool into the player's `active` quest list.
+1.  **Completion**: When a quest is completed, `uqe.update()` detects it and fires `QUEST_COMPLETED`.
+2.  **Unlock Check**: The engine scans all defined quests.
+3.  **Dependency Met**: If a quest's `requires` ID matches a completed quest ID, it is flagged as **Available**.
+4.  **Notification**: An event (`QUEST_AVAILABLE`) is emitted, prompting the UI to show a "New Quest" notification or unlocking the specific NPC dialog.
+
+*Note: Quests starting with `main_` are often excluded from automatic menu popups as they require specific story interaction (like talking to an NPC).*
+
+### Dialog Queue System
+
+To prevent UI overlaps (e.g., Quest Completed appearing over Quest Available), the game uses a **Dialog Queue System**.
+
+1.  **Queue Logic**: `dialogQueue` stores pending UI events ('QUEST_COMPLETED', 'QUEST_AVAILABLE').
+2.  **Processing**: The `processDialogQueue()` function runs in the game loop.
+3.  **Blocking**: The queue waits if:
+    *   Combat is active.
+    *   Another dialog is open.
+    *   A quest completion modal is open (`questCompletedModal`).
+    *   A quest preview modal is open (`questPreviewModal`).
+    *   A transient popup is active (`questPopup`).
+4.  **Events**: The UQE event bus emits events which are caught by listeners in `create()` and pushed to the queue via `queueDialog()`.
 
 ---
 

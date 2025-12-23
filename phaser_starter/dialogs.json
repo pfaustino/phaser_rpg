@@ -280,5 +280,84 @@
                 "choices": []
             }
         }
+    },
+    "trainer_garen": {
+        "npcName": "Trainer Garen",
+        "npcTitle": "Class Trainer",
+        "nodes": {
+            "start": {
+                "text": "Greetings, recruit. The village needs defenders now more than ever. Are you ready to commit to a discipline?",
+                "choices": [
+                    {
+                        "text": "I am ready to choose my path.",
+                        "next": "choose_path"
+                    },
+                    {
+                        "text": "What are my options?",
+                        "next": "about_classes"
+                    },
+                    {
+                        "text": "Not yet.",
+                        "next": "end"
+                    }
+                ]
+            },
+            "about_classes": {
+                "text": "The Warrior stands as a bulwark against the darkness. The Rogue strikes fast and true. The Mage harnesses the volatile energies of the world. Each has a vital role.",
+                "choices": [
+                    {
+                        "text": "I'm ready to choose",
+                        "next": "choose_path"
+                    },
+                    {
+                        "text": "I need to think",
+                        "next": "end"
+                    }
+                ]
+            },
+            "choose_path": {
+                "text": "Excellent. Which path calls to you?\n\n🛡️ WARRIOR: High Health, Defense. Uses Swords & Heavy Armor.\n🗡️ ROGUE: High Speed, Crit. Uses Daggers & Light Armor.\n🔮 MAGE: High Mana, Spell Power. Uses Staves & Robes.",
+                "choices": [
+                    {
+                        "text": "I choose the way of the Warrior",
+                        "action": "choose_class",
+                        "className": "Warrior",
+                        "next": "end_warrior"
+                    },
+                    {
+                        "text": "I will walk the shadows as a Rogue",
+                        "action": "choose_class",
+                        "className": "Rogue",
+                        "next": "end_rogue"
+                    },
+                    {
+                        "text": "I seek the power of a Mage",
+                        "action": "choose_class",
+                        "className": "Mage",
+                        "next": "end_mage"
+                    },
+                    {
+                        "text": "I need more time to decide",
+                        "next": "start"
+                    }
+                ]
+            },
+            "end_warrior": {
+                "text": "Strength and honor! Here is your equipment. Go forth and defend Hearthwell!",
+                "choices": []
+            },
+            "end_rogue": {
+                "text": "Swift and silent. Take these tools and strike at the heart of the corruption.",
+                "choices": []
+            },
+            "end_mage": {
+                "text": "Wisdom and power. Use these artifacts to stabilize the chaos.",
+                "choices": []
+            },
+            "end": {
+                "text": "Return when you are ready.",
+                "choices": []
+            }
+        }
     }
 }

@@ -248,6 +248,15 @@ let grassDebugVisible = false;
 let grassDebugPanel = null;
 let grassDebugKey; // CTRL+M key combination
 
+// Mana Flux System
+let manaFluxes = []; // Array of mana flux objects
+
+
+// Dialog Queue System
+let dialogQueue = [];
+let isDialogQueueProcessing = false;
+let questPopup = null; // Track popup reference
+
 // Abilities system
 let abilityBar = null;
 let abilityButtons = [];
@@ -256,6 +265,9 @@ let abilityButtons = [];
 let soundsEnabled = true;
 let soundEffects = {};
 let audioUnlocked = false; // Track if audio context has been unlocked
+
+// Global NPC Registry (Name -> Data)
+let npcRegistry = {};
 
 // Item quality colors
 const QUALITY_COLORS = {
@@ -283,6 +295,7 @@ function preload() {
     // Load Method 2 monster data
     this.load.json('monsterData', 'monsters.json');
     this.load.json('milestoneData', 'milestones.json');
+    this.load.json('npcData', 'npc.json');
 
 
     // Add load event listeners for debugging - MUST be before load calls
@@ -354,6 +367,10 @@ function preload() {
     });
     this.load.spritesheet('npc_elder_malik', 'assets/animations/ElderMalik.png', {
         frameWidth: 64,
+        frameHeight: 64
+    });
+    this.load.spritesheet('npc_garen', 'assets/animations/TrainerGaren.png', {
+        frameWidth: 64, // Assuming standard 64x64 like others
         frameHeight: 64
     });
 
@@ -1257,6 +1274,23 @@ function preload() {
 
     console.log('📢 Attempting to load sound files from assets/audio/');
 
+    // Sound Effects
+    this.load.audio('attack', 'assets/audio/attack_swing.wav');
+    this.load.audio('fireball', 'assets/audio/fireball_cast.wav');
+    this.load.audio('heal', 'assets/audio/heal_cast.wav'); // Used for potions too
+    this.load.audio('hit_monster', 'assets/audio/hit_monster.mp3');
+    this.load.audio('hit_player', 'assets/audio/hit_player.mp3');
+    this.load.audio('item_pickup', 'assets/audio/item_pickup.wav');
+    this.load.audio('level_up', 'assets/audio/level-up.mp3'); // or level_up.wav
+    this.load.audio('monster_die', 'assets/audio/monster_die.mp3');
+    this.load.audio('new_quest', 'assets/audio/new-quest.mp3');
+    this.load.audio('quest_complete', 'assets/audio/quest-completed.mp3');
+    this.load.audio('gold_pickup', 'assets/audio/gold-pickup.mp3');
+
+    // Verify loading
+    this.load.on('filecomplete-audio-attack', () => console.log('✅ Loaded attack sound'));
+    this.load.on('filecomplete-audio-level_up', () => console.log('✅ Loaded level_up sound'));
+
     console.log('✅ Assets loaded: player (yellow), procedural monsters, grass (green), wall (gray), dirt (brown), stone (light gray)');
     console.log('✅ Item sprites created: weapon (blue), armor (green), consumable (red), gold (yellow)');
     console.log('✅ NPC sprite created: npc (cyan)');
@@ -1406,6 +1440,12 @@ function generateProceduralMonsters() {
             g.fillCircle(center - radius * 0.3, center - radius * 0.2, radius * 0.08);
             g.fillCircle(center + radius * 0.3, center - radius * 0.2, radius * 0.08);
         }
+
+        // New Echo Rat Sprite
+        this.load.spritesheet('monster_echo_rat', 'assets/animations/EchoRat.png', {
+            frameWidth: 32,
+            frameHeight: 32
+        });
 
         if (def.features.includes('ears')) {
             // Pointed ears
@@ -2064,6 +2104,139 @@ function createTownMap() {
     }
 
     console.log('✅ Town map created with', buildings.length, 'buildings');
+
+    // Create Mana Fluxes for Quest 7
+    createManaFluxes();
+}
+
+/**
+ * Create Mana Fluxes for the "Mana Instability" quest
+ */
+function createManaFluxes() {
+    const scene = game.scene.scenes[0];
+    manaFluxes = [];
+
+    // Only create if quest 7 is active (main_01_007)
+    // Or just create them always for flavor, but make them interactable only if quest is active
+    // For simplicity, we create them always but interaction depends on quest
+
+    // 3 locations in town
+    const locations = [
+        { x: 10, y: 15 }, // Near top-left
+        { x: 30, y: 10 }, // Near top-right
+        { x: 20, y: 30 }  // Near bottom center
+    ];
+
+    locations.forEach((loc, index) => {
+        const x = loc.x * 32;
+        const y = loc.y * 32;
+
+        // Visual: Purple glow/particle
+        // Use a simple circle if no particle texture, or 'flare' if avail
+        // We'll use a tinted rock or existing sprite if possible, or just a circle
+
+        // Using a particle emitter would be nice, but simple sprite is safer for now
+        // We'll use a small circle graphic
+        const flux = scene.add.circle(x, y, 10, 0xAA00FF, 0.7);
+        flux.setDepth(5);
+
+        // Add a pulsing tween
+        scene.tweens.add({
+            targets: flux,
+            scale: 1.5,
+            alpha: 0.4,
+            duration: 1000,
+            yoyo: true,
+            repeat: -1
+        });
+
+        // Add an inner core
+        const core = scene.add.circle(x, y, 5, 0xFFFFFF, 0.9);
+        core.setDepth(6);
+
+        manaFluxes.push({
+            id: `flux_${index}`,
+            x: x,
+            y: y,
+            sprite: flux,
+            core: core,
+            active: true
+        });
+    });
+
+    console.log('✨ Created 3 Mana Fluxes');
+}
+
+/**
+ * Check for interaction with Mana Fluxes
+ */
+function checkManaFluxInteraction() {
+    // Only allow if quest "Mana Instability" (main_01_007) is active
+    // We check via UQE or legacy
+    let questActive = false;
+    if (window.uqe) {
+        // Check if quest is in active list
+        // uqe.activeQuests is usually a map or array
+        // We can use the global helper or check uqe state
+        if (window.uqe.isQuestActive) {
+            questActive = window.uqe.isQuestActive('main_01_007');
+        } else if (window.isQuestActive) {
+            questActive = window.isQuestActive('main_01_007');
+        }
+    }
+
+    if (!questActive) return false;
+
+    const scene = game.scene.scenes[0];
+    const interactionRadius = 60;
+
+    for (const flux of manaFluxes) {
+        if (!flux.active) continue;
+
+        const distance = Phaser.Math.Distance.Between(player.x, player.y, flux.x, flux.y);
+
+        if (distance < interactionRadius) {
+            // Stabilize it!
+            flux.active = false;
+
+            // Visual feedback
+            flux.sprite.setFillStyle(0x00FFFF); // Turn blue (stabilized)
+            flux.core.setFillStyle(0x0088FF);
+
+            // Pulse burst
+            const burst = scene.add.circle(flux.x, flux.y, 5, 0x00FFFF, 1);
+            scene.tweens.add({
+                targets: burst,
+                scale: 5,
+                alpha: 0,
+                duration: 500,
+                onComplete: () => burst.destroy()
+            });
+
+            // Message
+            showDamageNumber(player.x, player.y - 40, "Flux Stabilized!", 0x00FFFF);
+            addChatMessage("You stabilized the Mana Flux!", 0x00FFFF, "✨");
+            // playSound('level_up'); // Optional
+
+            // UQE Event
+            if (window.uqe && window.uqe.eventBus) {
+                // Emit event that matches the quest objective
+                // Objective looked for 'stabilized_flux' item pickup or similar
+
+                // We'll emit 'item_pickup' with 'stabilized_flux'
+                window.uqe.eventBus.emit('item_pickup', { id: 'stabilized_flux', amount: 1 });
+
+                // Also emit a specific custom event just in case
+                window.uqe.eventBus.emit('mana_flux_stabilized', { id: flux.id });
+
+                console.log('⚡ Emitted item_pickup: stabilized_flux');
+            }
+
+            return true; // Handled interaction
+        }
+    }
+
+    return false;
 }
 
 /**
@@ -2441,6 +2614,12 @@ function transitionToMap(targetMap, level = 1) {
     scene.cameras.main.startFollow(player);
 
     console.log('✅ Transitioned to', targetMap);
+
+    // UQE Bridge: Emit map entered event (for Quest 8)
+    if (window.uqe && window.uqe.eventBus) {
+        window.uqe.eventBus.emit('map_entered', { map: targetMap, level: level });
+        console.log(`⚡ Emitted map_entered: ${targetMap} (Level ${level})`);
+    }
 }
 
 /**
@@ -2536,6 +2715,61 @@ function generateDungeon(level, width, height, seed = null) {
 
     console.log(`  ✅ Dungeon generated: ${dungeon.rooms.length} rooms, ${dungeon.corridors.length} corridors`);
     return dungeon;
+}
+
+/**
+ * Spawn monsters in the dungeon
+ */
+function spawnDungeonMonsters() {
+    console.log('💀 spawning dungeon monsters...');
+    const scene = game.scene.scenes[0];
+    if (!currentDungeon || !currentDungeon.rooms) {
+        console.error('❌ Cannot spawn monsters: No dungeon generated');
+        return;
+    }
+
+    // Clear existing monsters
+    clearAppearingText(); // Helper to clear lingering text
+
+    // Monster types for Dungeon Level 1
+    // Matches Quest 9 (Echo Rats) and Quest 10 (Skeleton Miners)
+    const dungeonMonsters = [
+        { name: 'Skeleton Miner', textureKey: 'monster_skeleton', hp: 40, attack: 12, speed: 45, xp: 25, type: 'Skeleton Miner' },
+        { name: 'Echo Rat', textureKey: 'monster_echo_rat', hp: 20, attack: 8, speed: 85, xp: 15, type: 'Echo Rat' },
+        { name: 'Cave Spider', textureKey: 'monster_spider', hp: 30, attack: 10, speed: 70, xp: 20, type: 'Cave Spider' }
+    ];
+
+    let spawnCount = 0;
+
+    // Spawn 1-3 monsters per room (skipping the first room/entrance)
+    currentDungeon.rooms.forEach((room, index) => {
+        // Skip the specific entrance room to give player a safe start
+        // Finding room closest to entrance
+        const entranceX = currentDungeon.entrance.x;
+        const entranceY = currentDungeon.entrance.y;
+        const distToEntrance = Phaser.Math.Distance.Between(room.centerX, room.centerY, entranceX, entranceY);
+
+        // If this is the room containing the entrance (distance is 0 or very small), skip it
+        if (distToEntrance < 5) {
+            console.log('  Testing safe zone: Skipping monster spawn in entrance room');
+            return;
+        }
+
+        const count = Phaser.Math.Between(1, 3);
+        for (let i = 0; i < count; i++) {
+            // Random position within room (padded by 1 tile)
+            const x = (Phaser.Math.Between(room.x + 1, room.x + room.width - 2)) * scene.tileSize;
+            const y = (Phaser.Math.Between(room.y + 1, room.y + room.height - 2)) * scene.tileSize;
+
+            const monsterTemplate = dungeonMonsters[Phaser.Math.Between(0, dungeonMonsters.length - 1)];
+
+            // Spawn the monster
+            spawnMonster.call(scene, x, y, monsterTemplate);
+            spawnCount++;
+        }
+    });
+
+    console.log(`✅ Spawned ${spawnCount} monsters in the dungeon`);
 }
 
 /**
@@ -3702,6 +3936,17 @@ function create() {
     // Load persistent settings (independent of save game)
     loadSettings();
 
+    // Initialize Global NPC Registry
+    if (this.cache.json.exists('npcData')) {
+        const npcList = this.cache.json.get('npcData');
+        npcList.forEach(npc => {
+            npcRegistry[npc.name] = npc;
+        });
+        console.log(`✅ NPC Registry initialized with ${Object.keys(npcRegistry).length} NPCs`);
+    } else {
+        console.warn('⚠️ npcData not found in cache - NPC portraits may be missing');
+    }
+
     // Initialize Quest Manager
     questManager = new QuestManager(this);
     questManager.init();
@@ -3751,19 +3996,10 @@ function create() {
             // Refresh Log UI
             if (questVisible) updateQuestLogItems();
 
-            // Show UI Notification (Modal)
-            // If in combat, defer or just show chat notification
-            if (typeof isInCombat === 'function' && isInCombat()) {
-                console.log('⚔️ specific combat check - deferring modal');
-                addChatMessage(`QUEST COMPLETED: ${quest.title}!`, 0x00ff00, '🏆');
-                pendingCompletedQuest = quest; // Queue for later
-            } else {
-                showQuestCompletedModal({
-                    title: quest.title,
-                    rewards: quest.rewards,
-                    description: quest.description
-                });
-            }
+            // Show UI Notification (via Queue)
+            // Deferred logic is now handled by the queue system automatically
+            console.log('✅ Queueing quest completion dialog');
+            queueDialog('QUEST_COMPLETED', quest);
         });
 
         // Handle Objective Progress HUD - WoW-style persistent tracker
@@ -3777,32 +4013,8 @@ function create() {
             const def = data.definition;
             addChatMessage(`New Quest Available: ${def.title}`, 0x00ffff, '📜');
 
-            // Function to show the preview modal
-            const showPreview = () => {
-                if (typeof showQuestPreviewModal === 'function') {
-                    showQuestPreviewModal(data.questId,
-                        // On Accept
-                        () => {
-                            uqe.acceptPendingQuest(data.questId);
-                            showDamageNumber(player.x, player.y - 40, "Quest Accepted!", 0x00ff00);
-                            playSound('item_pickup');
-                            updateQuestTrackerHUD();
-                        },
-                        // On Decline - just close, quest stays pending
-                        () => {
-                            console.log(`📋 Quest ${data.questId} declined - remains available`);
-                        }
-                    );
-                }
-            };
-
-            // If a quest completed modal is open, defer showing the preview
-            if (questCompletedModal) {
-                console.log('⏳ Quest completed modal open - deferring new quest preview');
-                setTimeout(showPreview, 500);
-            } else {
-                showPreview();
-            }
+            // Queue the popup/preview
+            queueDialog('QUEST_AVAILABLE', def);
         });
 
         // Initialize starter quests for new games (if no UQE quests active yet)
@@ -4293,7 +4505,7 @@ function update(time, delta) {
             const quest = pendingCompletedQuest;
             pendingCompletedQuest = null;
 
-            showQuestCompletedModal({
+            showQuestCompletedPopupEnhanced({
                 title: quest.title,
                 rewards: quest.rewards,
                 description: quest.description
@@ -4357,6 +4569,9 @@ function update(time, delta) {
 
     // Update attack speed indicator
     updateAttackSpeedIndicator();
+
+    // Process dialog queue
+    processDialogQueue();
 
     // Player movement (like your movement system)
     // Don't allow movement when shop/inventory/dialog/settings/building is open
@@ -5075,6 +5290,12 @@ function update(time, delta) {
         } else {
             // Check for transition markers first
             let nearMarker = false;
+
+            // Check Mana Flux interactions first (closest priority)
+            if (checkManaFluxInteraction()) {
+                nearMarker = true; // Prevent other interactions
+            }
+
             for (const marker of transitionMarkers) {
                 if (!marker || !marker.x || !marker.y) continue;
                 const distance = Phaser.Math.Distance.Between(player.x, player.y, marker.x, marker.y);
@@ -5547,7 +5768,7 @@ if (!currentlyInCombat && (pendingCompletedQuest || pendingNewQuest)) {
     if (pendingCompletedQuest) {
         const questToShow = pendingCompletedQuest;
         pendingCompletedQuest = null;
-        showQuestCompletedModal(questToShow);
+        showQuestCompletedPopupEnhanced(questToShow);
     } else if (pendingNewQuest) {
         // Only show new quest if no completed quest was pending
         const questToShow = pendingNewQuest;
@@ -6824,6 +7045,21 @@ function updateAttackSpeedIndicator() {
 /**
  * Update UI bars
  */
+/**
+ * Calculate total XP needed to reach the NEXT level
+ * Curve: 100 * Level + 25 * Level^2 (Proposal B - Quadratic)
+ * Example:
+ * Lvl 1->2: 125 XP (Total 125)
+ * Lvl 2->3: 300 XP (Total 300)
+ * Lvl 3->4: 525 XP (Total 525)
+ */
+function getXPNeededForLevel(level) {
+    return 100 * level + 25 * Math.pow(level, 2);
+}
+
+/**
+ * Update UI bars
+ */
 function updateUI() {
     const stats = playerStats;
     const maxBarWidth = 200 - 4; // Consistent max width for all bars
@@ -6841,14 +7077,19 @@ function updateUI() {
     const staminaPercent = Math.max(0, Math.min(1, stats.stamina / stats.maxStamina));
     staminaBar.width = maxBarWidth * staminaPercent;
 
-    // Update XP bar (simplified - 100 XP per level for now)
-    const xpForNextLevel = playerStats.level * 100;
-    const currentLevelXP = stats.xp % xpForNextLevel;
-    const xpPercent = Math.max(0, Math.min(1, currentLevelXP / xpForNextLevel));
+    // Update XP bar (Quadratic Curve)
+    const nextLevelXP = getXPNeededForLevel(stats.level);
+    const prevLevelXP = stats.level > 1 ? getXPNeededForLevel(stats.level - 1) : 0;
+
+    // Calculate progress within current level
+    const xpInCurrentLevel = Math.max(0, stats.xp - prevLevelXP);
+    const xpRequiredForCurrentLevel = nextLevelXP - prevLevelXP;
+
+    const xpPercent = Math.max(0, Math.min(1, xpInCurrentLevel / xpRequiredForCurrentLevel));
     xpBar.width = maxBarWidth * xpPercent;
 
     // Update stats text
-    statsText.setText(`Level ${stats.level} | HP: ${Math.ceil(stats.hp)}/${stats.maxHp} | XP: ${stats.xp}`);
+    statsText.setText(`Level ${stats.level} | HP: ${Math.ceil(stats.hp)}/${stats.maxHp} | XP: ${Math.floor(xpInCurrentLevel)}/${xpRequiredForCurrentLevel}`);
 
     // Update gold text
     if (goldText) {
@@ -6868,20 +7109,30 @@ function updateUI() {
  */
 function checkLevelUp() {
     const stats = playerStats;
-    const xpNeeded = stats.level * 100;
+    // Check loop to handle multiple level ups at once (e.g. big boss XP)
+    let leveledUp = false;
 
-    if (stats.xp >= xpNeeded) {
-        stats.level++;
-        stats.maxHp += 20;
-        stats.hp = stats.maxHp; // Full heal on level up
-        stats.maxMana += 10;
-        stats.mana = stats.maxMana;
-        stats.attack += 2;
-        stats.defense += 1;
+    while (true) {
+        const xpNeeded = getXPNeededForLevel(stats.level);
 
+        if (stats.xp >= xpNeeded) {
+            stats.level++;
+            stats.maxHp += 20;
+            stats.hp = stats.maxHp; // Full heal on level up
+            stats.maxMana += 10;
+            stats.mana = stats.maxMana;
+            stats.attack += 2;
+            stats.defense += 1;
+            leveledUp = true;
+            console.log(`Level up! Now level ${stats.level}`);
+        } else {
+            break;
+        }
+    }
+
+    if (leveledUp) {
         showDamageNumber(player.x, player.y - 40, 'LEVEL UP!', 0x00ffff);
         addChatMessage(`Level Up! Now Level ${stats.level}`, 0x00ffff, '⭐');
-        console.log(`Level up! Now level ${stats.level}`);
 
         // UQE: Emit level up event
         if (typeof uqe !== 'undefined') {
@@ -9523,20 +9774,23 @@ function acceptMainQuest(questId) {
             const isCompleted = playerStats.quests.completed.includes(questId);
 
             if (!isActive && !isCompleted) {
-                console.log(`✅ acceptMainQuest: Adding ${questId} to main list`);
-                console.log(`   Current main quests before:`, playerStats.quests.main.map(q => q.id));
-                quest.startValue = questManager.getStatValue(quest.type, playerStats);
-                playerStats.quests.main.push(quest);
-                console.log(`   Current main quests after:`, playerStats.quests.main.map(q => q.id));
-                console.log(`Main quest accepted: ${quest.title}`);
-                showNewQuestModal(quest);
+                // Show preview modal FIRST
+                showQuestPreviewModalEnhanced(questId,
+                    // On Accept
+                    () => {
+                        console.log(`✅ acceptMainQuest: Adding ${questId} to main list`);
+                        quest.startValue = questManager.getStatValue(quest.type, playerStats);
+                        playerStats.quests.main.push(quest);
+                        console.log(`Main quest accepted: ${quest.title}`);
 
-                // Refresh log if visible
-                if (questVisible) {
-                    refreshQuestLog();
-                }
-
-                // UI will refresh indicators in the next update loop
+                        showDamageNumber(player.x, player.y - 60, "Quest Accepted!", 0x00ff00);
+                        playSound('item_pickup');
+                        updateQuestTrackerHUD();
+                        if (questVisible) refreshQuestLog();
+                    },
+                    // On Decline
+                    () => { }
+                );
                 return true;
             }
         }
@@ -9554,18 +9808,25 @@ function acceptSideQuest(questId) {
         if (questIdx !== -1) {
             const quest = playerStats.quests.available[questIdx];
 
-            // Move from available to active
-            playerStats.quests.available.splice(questIdx, 1);
-            quest.startValue = questManager.getStatValue(quest.type, playerStats);
-            playerStats.quests.active.push(quest);
+            // Show preview modal FIRST
+            showQuestPreviewModalEnhanced(questId,
+                // On Accept
+                () => {
+                    // Move from available to active
+                    playerStats.quests.available.splice(questIdx, 1);
+                    quest.startValue = questManager.getStatValue(quest.type, playerStats);
+                    playerStats.quests.active.push(quest);
 
-            console.log(`Side quest accepted: ${quest.title}`);
-            showNewQuestModal(quest);
+                    console.log(`Side quest accepted: ${quest.title}`);
+                    showDamageNumber(player.x, player.y - 60, "Quest Accepted!", 0x00ff00);
+                    playSound('item_pickup');
+                    updateQuestTrackerHUD();
 
-            // Refresh log if visible
-            if (questVisible) {
-                refreshQuestLog();
-            }
+                    if (questVisible) refreshQuestLog();
+                },
+                // On Decline
+                () => { }
+            );
             return true;
         }
     }
@@ -9637,7 +9898,7 @@ function completeQuest(quest, index) {
     if (isInCombat()) {
         pendingCompletedQuest = quest;
     } else {
-        showQuestCompletedModal(quest);
+        showQuestCompletedPopupEnhanced(quest);
     }
 
     // Refresh quest log if visible
@@ -10910,12 +11171,15 @@ function showQuestPreviewModal(questId, onAccept, onDecline) {
     };
     escKey.on('down', escHandler);
 
+    // Assign to global variable for management
     questPreviewModal = {
         overlay, modalBg, header, questTitle, questDesc,
         objLabel, objectiveTexts, rewardsLabel, rewardTexts,
         acceptBtn, acceptBtnText, declineBtn, declineBtnText,
         escKey, escHandler
     };
+
+    return questPreviewModal;
 }
 
 /**
@@ -11058,6 +11322,15 @@ function initializeNPCs() {
             targetY: 20 * tileSize,
             dialogId: 'generic_npc',
             questGiver: true
+        },
+        {
+            id: 'npc_007',
+            name: 'Trainer Garen',
+            title: 'Class Trainer',
+            targetX: (centerX - 4) * tileSize, // Near the left side of town square
+            targetY: (centerY + 4) * tileSize,
+            dialogId: 'trainer_garen',
+            questGiver: true
         }
     ];
 
@@ -11089,10 +11362,7 @@ function initializeNPCs() {
         } else if (data.name === 'Guard Thorne') {
             spriteKey = 'npc_captain_thorne';
             portraitKey = 'portrait_captain_thorne';
-        } else if (data.name === 'Guard Kael') {
-            spriteKey = 'npc_captain_kael';
-            portraitKey = 'portrait_captain_kael';
-        } else if (data.name === 'Captain Kael') {
+        } else if (data.name === 'Guard Kael' || data.name === 'Captain Kael') {
             spriteKey = 'npc_captain_kael';
             portraitKey = 'portrait_captain_kael';
         } else if (data.name === 'Mage Elara') {
@@ -11101,6 +11371,9 @@ function initializeNPCs() {
         } else if (data.name === 'Blacksmith Brond') {
             spriteKey = 'npc_blacksmith_brond';
             portraitKey = 'portrait_blacksmith_brond';
+        } else if (data.name === 'Trainer Garen') {
+            spriteKey = 'npc_garen';
+            // portraitKey = 'portrait_garen';
         }
 
         // Check if spritesheet exists, fallback to default 'npc' if not
@@ -11116,7 +11389,6 @@ function initializeNPCs() {
         // If using a spritesheet, set to first frame (idle frame)
         if (spriteKey !== 'npc' && scene.textures.exists(spriteKey)) {
             npc.setFrame(0); // Use first frame as idle
-            // NPCs at full size (64px)
         }
 
         // Store NPC data
@@ -11133,6 +11405,13 @@ function initializeNPCs() {
         npc.portraitKey = portraitKey; // Store portrait key for dialog
 
         npcs.push(npc);
+
+        // Add portrait data if available - would need to modify createNPC to accept it or set it after
+        if (portraitKey) {
+            const npc = npcs[npcs.length - 1]; // The one just created
+            if (npc) npc.portrait = portraitKey;
+        }
+
     });
 
     console.log('✅ NPCs initialized:', npcs.length, 'NPCs');
@@ -11579,12 +11858,47 @@ function updateNPCIndicators() {
             }
 
             if (!hasQuestAvailable) {
-                iconText = '💬'; // No available quests, just chat
-                iconColor = '#ffffff';
+                // Check if this NPC is a target for an ACTIVE quest objective (e.g. "Talk to X")
+                let hasActiveObjective = false;
+                if (typeof uqe !== 'undefined' && uqe.activeQuests) {
+                    hasActiveObjective = uqe.activeQuests.some(q => {
+                        // Check incomplete objectives
+                        // Quest object might have 'objectives' array of UqeObjective instances
+                        // We check their definition data or properties
+                        return q.objectives.some(obj => {
+                            // Check if objective is incomplete and targets this NPC
+                            // Matches 'npcId' field in objective definition
+                            return !obj.completed && obj.npcId === npcName;
+                        });
+                    });
+                }
+
+                if (hasActiveObjective) {
+                    iconText = '?';
+                    iconColor = '#ffffff'; // White ? for interaction
+                } else {
+                    iconText = '💬'; // No available quests, just chat
+                    iconColor = '#ffffff';
+                }
             }
         } else {
-            iconText = '💬'; // Regular NPC info
-            iconColor = '#ffffff';
+            // Check non-quest-givers too (e.g. just targets)
+            let hasActiveObjective = false;
+            if (typeof uqe !== 'undefined' && uqe.activeQuests) {
+                hasActiveObjective = uqe.activeQuests.some(q => {
+                    return q.objectives.some(obj => {
+                        return !obj.completed && obj.npcId === npc.name;
+                    });
+                });
+            }
+
+            if (hasActiveObjective) {
+                iconText = '?';
+                iconColor = '#ffffff';
+            } else {
+                iconText = '💬'; // Regular NPC info
+                iconColor = '#ffffff';
+            }
         }
 
         const shouldShow = inRange || iconText === '!';
@@ -12105,7 +12419,11 @@ function updateDialogUI(node) {
 
     // Calculate dynamic panel height
     const headerHeight = portraitHeight + 50; // Portrait + NPC name area
-    const textHeight = Math.max(60, Math.min(150, node.text.length * 0.6)); // Estimated text height
+    // Improve text height estimation: count lines (approx 24px per line) and length
+    const lineCount = (node.text.match(/\n/g) || []).length + 1;
+    const estHeightByLines = lineCount * 24;
+    const estHeightByLength = node.text.length * 0.6;
+    const textHeight = Math.max(80, Math.min(600, Math.max(estHeightByLines, estHeightByLength))); // Increased max from 150 to 600
     const choicesHeight = visibleChoices * (buttonHeight + buttonSpacing) + 20;
     const dynamicPanelHeight = headerHeight + textHeight + choicesHeight + 20;
 
@@ -12257,6 +12575,21 @@ function updateDialogUI(node) {
 
             if (action === 'open_shop') {
                 openShop(currentShopNPC);
+            } else if (action === 'choose_class') {
+                chooseClass(choice.className);
+                if (choice.next) showDialogNode(choice.next);
+                if (choice.next) showDialogNode(choice.next);
+                else closeDialog();
+            } else if (action === 'quest_complete' || action === 'quest_turnin') {
+                // Handle quest completion via dialog
+                console.log('✅ Action was quest completion - closing dialog to unblock queue');
+
+                // Complete the quest via UQE
+                if (window.uqe && choice.questId) {
+                    window.uqe.completeQuest(choice.questId);
+                }
+
+                closeDialog();
             } else if (action === 'quest_advance' || action === 'quest_accept' || action === 'quest_accept_side' || action === 'quest_accept_v2') {
                 // UNIFIED UQE BRIDGE REDIRECT with PREVIEW MODAL
                 const questEngine = window.uqe;
@@ -12270,7 +12603,7 @@ function updateDialogUI(node) {
                     closeDialog();
 
                     // Show quest preview modal
-                    showQuestPreviewModal(questId,
+                    showQuestPreviewModalEnhanced(questId,
                         // On Accept - accept quest then reopen dialog
                         () => {
                             questEngine.acceptQuest(questId);
@@ -12378,6 +12711,88 @@ const shopInventory = [
     { type: 'boots', name: 'Steel Boots', quality: 'Uncommon', defense: 3, speed: 10, price: 50 },
     { type: 'consumable', name: 'Health Potion', quality: 'Common', healAmount: 50, price: 20 }
 ];
+
+/**
+ * Choose player class and set initial stats/equipment
+ */
+function chooseClass(className) {
+    console.log(`⚔️ Class Chosen: ${className}`);
+    playerStats.class = className;
+
+    // Reset equipment
+    playerStats.equipment = {
+        weapon: null, armor: null, helmet: null, ring: null, amulet: null, boots: null, gloves: null, belt: null
+    };
+
+    // Set stats and basic gear based on class
+    if (className === 'Warrior') {
+        playerStats.maxHp = 150;
+        playerStats.hp = 150;
+        playerStats.maxMana = 30;
+        playerStats.mana = 30;
+        playerStats.baseAttack = 15;
+        playerStats.baseDefense = 10;
+
+        // Starting Gear
+        playerStats.equipment.weapon = { name: 'Rusty Sword', quality: 'Common', attackPower: 5, type: 'weapon' };
+        playerStats.equipment.armor = { name: 'Worn Chainmail', quality: 'Common', defense: 4, type: 'armor' };
+
+    } else if (className === 'Rogue') {
+        playerStats.maxHp = 100;
+        playerStats.hp = 100;
+        playerStats.maxMana = 50;
+        playerStats.mana = 50;
+        playerStats.baseAttack = 12;
+        playerStats.baseDefense = 5;
+        playerStats.speedBonus = 20; // Faster
+
+        // Starting Gear
+        playerStats.equipment.weapon = { name: 'Dagger', quality: 'Common', attackPower: 4, type: 'weapon' };
+        playerStats.equipment.boots = { name: 'Leather Boots', quality: 'Common', defense: 1, speed: 5, type: 'boots' };
+
+    } else if (className === 'Mage') {
+        playerStats.maxHp = 80;
+        playerStats.hp = 80;
+        playerStats.maxMana = 100;
+        playerStats.mana = 100;
+        playerStats.baseAttack = 8;
+        playerStats.baseDefense = 3;
+
+        // Starting Gear
+        playerStats.equipment.weapon = { name: 'Wooden Staff', quality: 'Common', attackPower: 3, stats: { maxMana: 20 }, type: 'weapon' };
+        playerStats.equipment.amulet = { name: 'Apprentice Amulet', quality: 'Common', stats: { manaRegen: 1 }, type: 'amulet' };
+    }
+
+    // Recalculate derived stats
+    updatePlayerStats();
+
+    // Show notification
+    addChatMessage(`You have chosen the path of the ${className}!`, 0xffff00, '🌟');
+    showDamageNumber(player.x, player.y - 50, "Class Selected!", 0xffff00);
+
+    // Complete the quest "The Path Chosen" (main_01_006)
+    // Complete the quest "The Path Chosen" (main_01_006)
+    if (window.uqe) {
+        // Try to find the quest in active list (it's an array)
+        if (window.uqe.activeQuests && Array.isArray(window.uqe.activeQuests)) {
+            const quest = window.uqe.activeQuests.find(q => q.id === 'main_01_006');
+            if (quest) {
+                // If the quest object has a complete method (it should)
+                if (typeof quest.complete === 'function') {
+                    quest.complete();
+                } else {
+                    // Fallback: force event emission if quest object is just state data
+                    window.uqe.eventBus.emit('quest_completed', quest);
+                }
+            } else {
+                console.warn('⚠️ Quest main_01_006 not found in active quests');
+            }
+        }
+    }
+
+    // Close the dialog UI
+    closeDialog();
+}
 
 /**
  * Open shop UI
@@ -13990,6 +14405,283 @@ function createAbilityBar() {
     });
 
     console.log(`✅ Ability bar created with ${abilityBar.buttons.length} abilities`);
+}
+
+// ============================================
+// DIALOG QUEUE SYSTEM
+// ============================================
+
+/**
+ * Queue a dialog to be shown later
+ */
+function queueDialog(type, data) {
+    console.log(`📥 Queueing dialog: ${type}`, data);
+    dialogQueue.push({ type, data });
+}
+
+/**
+ * Process the dialog queue
+ */
+function processDialogQueue() {
+    // Check if we can show a dialog
+    if (isDialogQueueProcessing) return;
+    if (dialogQueue.length === 0) return;
+
+    // Check blocking conditions
+    const inCombat = typeof isInCombat === 'function' ? isInCombat() : false;
+    if (inCombat) return;
+
+    if (dialogVisible) return;
+    if (questCompletedModal) return;
+    if (newQuestModal) return;
+    if (questPreviewModal) return; // Wait for preview to close
+    if (questPopup) return; // Wait for existing popup to clear
+
+    // Safety check for cutscenes or other blocks?
+
+    // Process next item
+    const item = dialogQueue[0]; // Peek
+
+    // Start processing
+    isDialogQueueProcessing = true;
+
+    console.log(`📤 Processing dialog queue item: ${item.type}`);
+
+    try {
+        if (item.type === 'QUEST_COMPLETED') {
+            showQuestCompletedPopupEnhanced(item.data);
+            // Remove from queue ONLY after showing? 
+            // Actually showQuestCompletedPopup creates a modal that blocks via questCompletedModal check
+            // So we can remove it from queue now, and the next check will be blocked by the modal
+            dialogQueue.shift();
+            isDialogQueueProcessing = false;
+        } else if (item.type === 'QUEST_AVAILABLE') {
+            const questDef = item.data;
+            if (typeof showQuestPreviewModal === 'function') {
+                // Show the interactive modal
+                showQuestPreviewModal(questDef.id,
+                    // On Accept
+                    () => {
+                        if (window.uqe && window.uqe.acceptPendingQuest) {
+                            window.uqe.acceptPendingQuest(questDef.id);
+                        }
+                        showDamageNumber(player.x, player.y - 40, "Quest Accepted!", 0x00ff00);
+                        playSound('item_pickup');
+                        if (typeof updateQuestTrackerHUD === 'function') updateQuestTrackerHUD();
+                        // Modal close handles unblocking
+                    },
+                    // On Decline
+                    () => {
+                        console.log(`📋 Quest ${questDef.id} declined`);
+                        // Modal close handles unblocking
+                    }
+                );
+            } else {
+                // Fallback if modal function missing
+                showNewQuestPopup(item.data);
+            }
+
+            // Remove from queue - the modal itself blocks the queue loop via questPreviewModal check
+            dialogQueue.shift();
+            isDialogQueueProcessing = false;
+        } else {
+            // Unknown type
+            console.warn(`Unknown dialog queue type: ${item.type}`);
+            dialogQueue.shift();
+            isDialogQueueProcessing = false;
+        }
+    } catch (e) {
+        console.error("Error processing dialog queue:", e);
+        dialogQueue.shift(); // Remove faulty item
+        isDialogQueueProcessing = false;
+    }
+}
+
+/**
+ * Show Quest Completed Popup (Restored & Fixed)
+ */
+function showQuestCompletedPopup(quest) {
+    if (!quest) return;
+
+    const scene = game.scene.scenes[0];
+    const centerX = scene.cameras.main.width / 2;
+    const centerY = scene.cameras.main.height / 2;
+
+    playSound('quest_complete');
+
+    // Create unique elements for explicit depth control (No Container)
+    // Depths: Overlay (1999), BG (2000), Text (2001), Button (2002)
+
+    // Optional: Dark overlay behind the popup to dim the game
+    const overlay = scene.add.rectangle(0, 0, scene.cameras.main.width, scene.cameras.main.height, 0x000000, 0.4)
+        .setScrollFactor(0)
+        .setDepth(1999)
+        .setOrigin(0, 0)
+        .setInteractive(); // Block clicks behind
+
+    // Background
+    const bg = scene.add.rectangle(centerX, centerY, 400, 200, 0x000000, 0.9)
+        .setScrollFactor(0)
+        .setDepth(2000)
+        .setStrokeStyle(4, 0xffff00);
+
+    // Title
+    const title = scene.add.text(centerX, centerY - 60, "QUEST COMPLETED!", {
+        fontSize: '28px',
+        fill: '#ffd700',
+        fontStyle: 'bold'
+    }).setScrollFactor(0).setDepth(2001).setOrigin(0.5);
+
+    // Quest Name
+    const nameText = scene.add.text(centerX, centerY - 10, quest.title, {
+        fontSize: '22px',
+        fill: '#ffffff'
+    }).setScrollFactor(0).setDepth(2001).setOrigin(0.5);
+
+    // Rewards text
+    let rewardTextStr = "";
+    if (quest.rewards) {
+        if (quest.rewards.xp) rewardTextStr += `${quest.rewards.xp} XP  `;
+        if (quest.rewards.gold) rewardTextStr += `${quest.rewards.gold} Gold`;
+    }
+
+    const rewardText = scene.add.text(centerX, centerY + 30, rewardTextStr, {
+        fontSize: '18px',
+        fill: '#00ff00'
+    }).setScrollFactor(0).setDepth(2001).setOrigin(0.5);
+
+    // Close button
+    const closeBtnBg = scene.add.rectangle(centerX, centerY + 70, 120, 40, 0x333333)
+        .setScrollFactor(0)
+        .setDepth(2002)
+        .setStrokeStyle(2, 0x888888)
+        .setInteractive({ useHandCursor: true });
+
+    const closeBtnText = scene.add.text(centerX, centerY + 70, "Continue", {
+        fontSize: '18px',
+        fill: '#ffffff'
+    }).setScrollFactor(0).setDepth(2003).setOrigin(0.5);
+
+    // Close Handler
+    const handleClose = () => {
+        console.log('✅ Quest Completed Popup: Close button clicked');
+
+        // Destroy all elements
+        if (questCompletedModal) {
+            questCompletedModal.destroy();
+        }
+
+        // Check queue again after a short delay
+        setTimeout(() => {
+            console.log('Checking queue after close...');
+            processDialogQueue();
+        }, 100);
+    };
+
+    closeBtnBg.on('pointerdown', handleClose);
+    closeBtnText.setInteractive({ useHandCursor: true }).on('pointerdown', handleClose);
+
+    // Hover effects
+    closeBtnBg.on('pointerover', () => closeBtnBg.setFillStyle(0x555555));
+    closeBtnBg.on('pointerout', () => closeBtnBg.setFillStyle(0x333333));
+
+    // Store as global blocker with destroy method
+    questCompletedModal = {
+        destroy: () => {
+            if (overlay) overlay.destroy();
+            if (bg) bg.destroy();
+            if (title) title.destroy();
+            if (nameText) nameText.destroy();
+            if (rewardText) rewardText.destroy();
+            if (closeBtnBg) closeBtnBg.destroy();
+            if (closeBtnText) closeBtnText.destroy();
+            questCompletedModal = null;
+        }
+    };
+
+    // Pulse animation (Manual tween on main elements)
+    scene.tweens.add({
+        targets: [bg, title, nameText, rewardText, closeBtnBg, closeBtnText],
+        scale: { from: 0.8, to: 1 },
+        alpha: { from: 0, to: 1 },
+        duration: 300,
+        ease: 'Back.out'
+    });
+}
+
+/**
+ * Show New Quest Available Popup (Restored)
+ */
+function showNewQuestPopup(quest) {
+    if (!quest) return;
+
+    const scene = game.scene.scenes[0];
+    const centerX = scene.cameras.main.width / 2;
+    const centerY = scene.cameras.main.height / 3; // Higher up
+
+    playSound('new_quest');
+
+    // Create container
+    const popup = scene.add.container(centerX, centerY).setScrollFactor(0).setDepth(500);
+    questPopup = popup; // Set global blocker reference
+
+    // Background
+    const bg = scene.add.rectangle(0, 0, 350, 80, 0x000000, 0.8)
+        .setStrokeStyle(2, 0x00ffff);
+    popup.add(bg);
+
+    // Icon
+    const icon = scene.add.text(-140, 0, "!", {
+        fontSize: '40px',
+        fill: '#ffff00',
+        fontStyle: 'bold'
+    }).setOrigin(0.5);
+    popup.add(icon);
+
+    // Text
+    const title = scene.add.text(-110, -15, "New Quest Available:", {
+        fontSize: '14px',
+        fill: '#aaaaaa'
+    }).setOrigin(0, 0.5);
+
+    const name = scene.add.text(-110, 10, quest.title, {
+        fontSize: '18px',
+        fill: '#ffffff',
+        fontStyle: 'bold'
+    }).setOrigin(0, 0.5);
+
+    popup.add([title, name]);
+
+    // Slide in animation
+    popup.y -= 100;
+    popup.alpha = 0;
+
+    scene.tweens.add({
+        targets: popup,
+        y: centerY,
+        alpha: 1,
+        duration: 500,
+        ease: 'Power2',
+        onComplete: () => {
+            // Auto hide after delay
+            scene.time.delayedCall(4000, () => {
+                if (popup && popup.active) {
+                    scene.tweens.add({
+                        targets: popup,
+                        alpha: 0,
+                        y: centerY - 50,
+                        duration: 500,
+                        onComplete: () => {
+                            popup.destroy();
+                            if (questPopup === popup) questPopup = null; // Unblock queue
+                        }
+                    });
+                } else {
+                    if (questPopup === popup) questPopup = null; // Unblock even if destroyed elsewhere
+                }
+            });
+        }
+    });
 }
 
 /**
@@ -15800,4 +16492,498 @@ function showQuestUpdateHUD(message, isComplete) {
     // This is now handled by the persistent tracker
     // Just trigger an update
     updateQuestTrackerHUD();
+}
+
+/**
+ * Enhanced Quest Completed Popup with Portrait and Details
+ */
+function showQuestCompletedPopupEnhanced(quest) {
+    if (!quest) return;
+
+    const scene = game.scene.scenes[0];
+    const centerX = scene.cameras.main.width / 2;
+    const centerY = scene.cameras.main.height / 2;
+
+    playSound('quest_complete');
+
+    // Create unique elements for explicit depth control (No Container)
+    // Depths: Overlay (1999), BG (2000), Text (2001), Button (2002)
+
+    // Optional: Dark overlay behind the popup to dim the game
+    const overlay = scene.add.rectangle(0, 0, scene.cameras.main.width, scene.cameras.main.height, 0x000000, 0.5)
+        .setScrollFactor(0)
+        .setDepth(1999)
+        .setOrigin(0, 0)
+        .setInteractive(); // Block clicks behind
+
+    // Expanded Layout Dimensions
+    const modalWidth = 600;
+    const modalHeight = 400;
+
+    // Background
+    const bg = scene.add.rectangle(centerX, centerY, modalWidth, modalHeight, 0x000000, 0.95)
+        .setScrollFactor(0)
+        .setDepth(2000)
+        .setStrokeStyle(4, 0xffff00);
+
+    // Track all elements for easy destruction
+    const elements = [overlay, bg];
+
+    // --- Portrait Section (Left) ---
+    // Lookup NPC using registry to get portrait key
+    // We try to find the NPC by name in the loaded registry
+    let npc = null;
+    let giverName = quest.giver;
+
+    // Fallback: If runtime object doesn't have giver, check static definition
+    if (!giverName && window.uqe && window.uqe.allDefinitions[quest.id]) {
+        giverName = window.uqe.allDefinitions[quest.id].giver;
+    }
+
+    if (typeof npcRegistry !== 'undefined' && giverName) {
+        npc = npcRegistry[giverName];
+    }
+
+    let portrait = null;
+    let contentStartX = centerX; // Default to center if no portrait
+
+    if (npc && npc.portraitKey && scene.textures.exists(npc.portraitKey)) {
+        contentStartX = centerX + 80; // Shift text right
+
+        // Portrait background/frame
+        const portraitBg = scene.add.rectangle(centerX - 180, centerY, 180, 240, 0x222222)
+            .setScrollFactor(0).setDepth(2001).setStrokeStyle(2, 0x666666);
+        elements.push(portraitBg);
+
+        // Portrait Image
+        portrait = scene.add.image(centerX - 180, centerY, npc.portraitKey)
+            .setScrollFactor(0).setDepth(2002);
+
+        // Scale portrait to fit 
+        const maxPortraitWidth = 170;
+        const maxPortraitHeight = 230;
+
+        // Simple scale fit
+        if (portrait.width > maxPortraitWidth || portrait.height > maxPortraitHeight) {
+            const scaleX = maxPortraitWidth / portrait.width;
+            const scaleY = maxPortraitHeight / portrait.height;
+            const scale = Math.max(scaleX, scaleY); // Cover strategy
+            portrait.setScale(scale);
+        }
+
+        // MASKING FIX
+        const maskShape = scene.make.graphics();
+        maskShape.fillStyle(0xffffff);
+        maskShape.setScrollFactor(0);
+        maskShape.fillRect(centerX - 180 - maxPortraitWidth / 2, centerY - maxPortraitHeight / 2, maxPortraitWidth, maxPortraitHeight);
+
+        const mask = maskShape.createGeometryMask();
+        portrait.setMask(mask);
+        elements.push(maskShape);
+
+        elements.push(portrait);
+
+        // NPC Name under portrait
+        const npcName = scene.add.text(centerX - 180, centerY + 130, npc.name, {
+            fontSize: '16px',
+            fill: '#aaaaaa',
+            fontStyle: 'italic'
+        }).setScrollFactor(0).setDepth(2002).setOrigin(0.5);
+        elements.push(npcName);
+    }
+
+    // --- Text Content (Right) ---
+
+    // Header "QUEST COMPLETED!"
+    const title = scene.add.text(centerX, centerY - 160, "QUEST COMPLETED!", {
+        fontSize: '32px',
+        fill: '#ffd700',
+        fontStyle: 'bold',
+        shadow: { offsetX: 2, offsetY: 2, color: '#000', blur: 4, stroke: true, fill: true }
+    }).setScrollFactor(0).setDepth(2003).setOrigin(0.5);
+    elements.push(title);
+
+    // Quest Title
+    const questTitle = scene.add.text(contentStartX, centerY - 110, quest.title, {
+        fontSize: '26px',
+        fill: '#ffffff',
+        fontStyle: 'bold',
+        wordWrap: { width: 350 }
+    }).setScrollFactor(0).setDepth(2001).setOrigin(0.5, 0); // Top-center alignment
+    elements.push(questTitle);
+
+    // Quest Description
+    const descText = scene.add.text(contentStartX, centerY - 70, quest.description || "You have completed this quest.", {
+        fontSize: '16px',
+        fill: '#cccccc',
+        wordWrap: { width: 340 },
+        align: 'center'
+    }).setScrollFactor(0).setDepth(2001).setOrigin(0.5, 0);
+    elements.push(descText);
+
+    // Objectives List
+    let objY = centerY;
+    if (quest.objectives && quest.objectives.length > 0) {
+        quest.objectives.forEach(obj => {
+            const objText = scene.add.text(contentStartX, objY, `✓ ${obj.label || 'Objective Complete'}`, {
+                fontSize: '15px',
+                fill: '#88ff88'
+            }).setScrollFactor(0).setDepth(2001).setOrigin(0.5, 0);
+            elements.push(objText);
+            objY += 22;
+        });
+    }
+
+    // Rewards text
+    let rewardTextStr = "Rewards: ";
+    if (quest.rewards) {
+        if (quest.rewards.xp) rewardTextStr += `${quest.rewards.xp} XP  `;
+        if (quest.rewards.gold) rewardTextStr += `${quest.rewards.gold} Gold`;
+    }
+
+    const rewardText = scene.add.text(centerX, centerY + 130, rewardTextStr, {
+        fontSize: '22px',
+        fill: '#00ff00',
+        fontStyle: 'bold'
+    }).setScrollFactor(0).setDepth(2001).setOrigin(0.5);
+    elements.push(rewardText);
+
+    // Close button
+    const closeBtnBg = scene.add.rectangle(centerX, centerY + 175, 160, 40, 0x333333)
+        .setScrollFactor(0)
+        .setDepth(2002)
+        .setStrokeStyle(2, 0x888888)
+        .setInteractive({ useHandCursor: true });
+    elements.push(closeBtnBg);
+
+    const closeBtnText = scene.add.text(centerX, centerY + 175, "Continue", {
+        fontSize: '20px',
+        fill: '#ffffff'
+    }).setScrollFactor(0).setDepth(2003).setOrigin(0.5);
+    elements.push(closeBtnText);
+
+    // Close Handler
+    const handleClose = () => {
+        console.log('✅ Quest Completed Popup: Close button clicked');
+
+        // Destroy all elements
+        if (questCompletedModal && questCompletedModal.destroy) {
+            questCompletedModal.destroy();
+        }
+
+        // Check for pending new quest (from chain)
+        if (typeof pendingNewQuest !== 'undefined' && pendingNewQuest) {
+            const quest = pendingNewQuest;
+            pendingNewQuest = null;
+            console.log(`🔗 Showing pending chain quest: ${quest.title}`);
+
+            // Show enhanced preview
+            showQuestPreviewModalEnhanced(quest.id,
+                () => {
+                    // Quest is already in active list (from completeQuest), just confirm
+                    showDamageNumber(player.x, player.y - 40, "Quest Accepted!", 0x00ff00);
+                    updateQuestTrackerHUD();
+                },
+                () => {
+                    // If declined, remove from active list
+                    const qIdx = playerStats.quests.active.findIndex(q => q.id === quest.id);
+                    if (qIdx > -1) {
+                        playerStats.quests.active.splice(qIdx, 1);
+                        playerStats.quests.available.push(quest);
+                        console.log(`Quest declined and moved to available: ${quest.title}`);
+                    }
+                }
+            );
+        } else {
+            // Check queue again
+            setTimeout(() => {
+                if (typeof processDialogQueue === 'function') {
+                    processDialogQueue();
+                }
+            }, 100);
+        }
+    };
+
+    closeBtnBg.on('pointerdown', handleClose);
+    closeBtnText.setInteractive({ useHandCursor: true }).on('pointerdown', handleClose);
+
+    // Hover effects
+    closeBtnBg.on('pointerover', () => closeBtnBg.setFillStyle(0x555555));
+    closeBtnBg.on('pointerout', () => closeBtnBg.setFillStyle(0x333333));
+
+    // Store global reference
+    questCompletedModal = {
+        destroy: () => {
+            elements.forEach(el => {
+                if (el && el.destroy) el.destroy();
+            });
+            questCompletedModal = null;
+        }
+    };
+
+    // Pulse animation
+    scene.tweens.add({
+        targets: elements,
+        scale: { from: 0.8, to: 1 },
+        alpha: { from: 0, to: 1 },
+        duration: 300,
+        ease: 'Back.out'
+    });
+}
+
+/**
+ * Enhanced Quest Preview Modal with Portrait and Details
+ */
+function showQuestPreviewModalEnhanced(questId, onAccept, onDecline) {
+    const scene = game.scene.scenes[0];
+
+    // Get quest definition from UQE
+    const questDef = uqe.allDefinitions[questId];
+    if (!questDef) {
+        console.error(`Quest ${questId} not found in UQE definitions`);
+        if (onDecline) onDecline();
+        return;
+    }
+
+    // Hide any existing preview modal
+    if (questPreviewModal) {
+        if (typeof hideQuestPreviewModal === 'function') {
+            hideQuestPreviewModal();
+        } else {
+            // Fallback destroy
+            if (questPreviewModal && questPreviewModal.destroy) questPreviewModal.destroy();
+            questPreviewModal = null;
+        }
+    }
+
+    const centerX = scene.cameras.main.width / 2;
+    const centerY = scene.cameras.main.height / 2;
+
+    // Adjusted dimensions for vertical layout
+    const modalWidth = 600;
+    const portraitHeight = 150;
+    const padding = 20;
+    const contentHeight = 350; // Text area
+    const modalHeight = portraitHeight + contentHeight; // Total height ~500
+
+    // Background overlay
+    const overlay = scene.add.rectangle(centerX, centerY, scene.cameras.main.width, scene.cameras.main.height, 0x000000, 0.70)
+        .setScrollFactor(0).setDepth(2100).setInteractive();
+
+    // Modal background
+    const modalBg = scene.add.rectangle(centerX, centerY, modalWidth, modalHeight, 0x111111, 0.98)
+        .setScrollFactor(0).setDepth(2101).setStrokeStyle(3, 0xffd700);
+
+    const elements = [overlay, modalBg];
+
+    // Top Y coordinate of the modal
+    const modalTopY = centerY - modalHeight / 2;
+    let currentY = modalTopY + padding;
+
+    // --- Portrait Section (Top) ---
+    // Lookup NPC using registry
+    let npc = null;
+    if (typeof npcRegistry !== 'undefined' && questDef.giver) {
+        npc = npcRegistry[questDef.giver];
+    }
+
+    // Check if portrait exists
+    if (npc && npc.portraitKey && scene.textures.exists(npc.portraitKey)) {
+        // Portrait dimensions
+        const targetWidth = modalWidth - 20; // 580
+        const centerPortraitY = modalTopY + portraitHeight / 2 + 10;
+
+        // Add container/background for portrait area
+        const portraitBg = scene.add.rectangle(centerX, centerPortraitY, targetWidth, portraitHeight, 0x222222)
+            .setScrollFactor(0).setDepth(2102);
+
+        // Portrait Image
+        const portrait = scene.add.image(centerX, centerPortraitY, npc.portraitKey)
+            .setScrollFactor(0).setDepth(2102);
+
+        // Scaling logic: "Cover" strategy
+        // We want to fill width (580) always.
+        const scaleX = targetWidth / portrait.width;
+        portrait.setScale(scaleX);
+
+        // Center the image vertically in the box
+        portrait.setPosition(centerX, centerPortraitY);
+
+        // MASKING
+        const maskShape = scene.make.graphics();
+        maskShape.fillStyle(0xffffff);
+        // Fix: Mask must also be fixed to camera to match the image
+        maskShape.setScrollFactor(0);
+
+        // Draw mask at world coordinates (which map to screen because ScrollFactor is 0)
+        maskShape.fillRect(centerX - targetWidth / 2, centerPortraitY - portraitHeight / 2, targetWidth, portraitHeight);
+
+        const mask = maskShape.createGeometryMask();
+        portrait.setMask(mask);
+
+        // Ensure mask graphics is destroyed when closing
+        elements.push(maskShape);
+
+        // Add a frame around portrait (on top of image)
+        const portraitFrame = scene.add.rectangle(centerX, centerPortraitY, targetWidth, portraitHeight, 0x000000, 0)
+            .setScrollFactor(0).setDepth(2104).setStrokeStyle(2, 0x444444);
+
+        elements.push(portraitBg, portrait, portraitFrame);
+
+        // NPC Name Overlay on portrait (bottom left of the portrait box)
+        const nameY = centerPortraitY + portraitHeight / 2 - 15;
+        const nameBg = scene.add.rectangle(centerX, nameY, targetWidth, 30, 0x000000, 0.7)
+            .setScrollFactor(0).setDepth(2103);
+
+        const npcName = scene.add.text(centerX, nameY, npc.name, {
+            fontSize: '18px',
+            fill: '#ffd700',
+            fontStyle: 'bold'
+        }).setScrollFactor(0).setDepth(2104).setOrigin(0.5);
+
+        elements.push(nameBg, npcName);
+
+        currentY += portraitHeight + 30;
+    } else {
+        // No portrait, just add a spacer
+        currentY += 40;
+    }
+
+    // --- Text Content (Below Portrait) ---
+
+    // Header "QUEST OFFER"
+    const header = scene.add.text(centerX, currentY, 'QUEST OFFER', {
+        fontSize: '24px',
+        fill: '#ffffff',
+        fontStyle: 'bold'
+    }).setScrollFactor(0).setDepth(2103).setOrigin(0.5, 0);
+    elements.push(header);
+    currentY += 35;
+
+    // Quest title
+    const questTitle = scene.add.text(centerX, currentY, questDef.title, {
+        fontSize: '22px',
+        fill: '#ffff00', // Yellow title
+        fontStyle: 'bold',
+        wordWrap: { width: modalWidth - 40 },
+        align: 'center'
+    }).setScrollFactor(0).setDepth(2103).setOrigin(0.5, 0);
+    elements.push(questTitle);
+    currentY += questTitle.height + 15;
+
+    // Quest description
+    const questDesc = scene.add.text(centerX, currentY, questDef.description || "No description available.", {
+        fontSize: '15px',
+        fill: '#cccccc',
+        wordWrap: { width: modalWidth - 60 },
+        align: 'center'
+    }).setScrollFactor(0).setDepth(2103).setOrigin(0.5, 0);
+    elements.push(questDesc);
+    currentY += Math.max(60, questDesc.height + 20); // Minimum height spacing
+
+    // Objectives section
+    const objLabel = scene.add.text(centerX - (modalWidth / 2) + 40, currentY, 'Objectives:', {
+        fontSize: '16px',
+        fill: '#ffffff',
+        fontStyle: 'bold'
+    }).setScrollFactor(0).setDepth(2103).setOrigin(0, 0);
+    elements.push(objLabel);
+    currentY += 25;
+
+    if (questDef.objectives) {
+        questDef.objectives.forEach(obj => {
+            const objText = scene.add.text(centerX - (modalWidth / 2) + 50, currentY, `⏳ ${obj.label}: 0/${obj.target}`, {
+                fontSize: '14px',
+                fill: '#aaaaaa'
+            }).setScrollFactor(0).setDepth(2103).setOrigin(0, 0);
+            elements.push(objText);
+            currentY += 20;
+        });
+    }
+
+    // Rewards section
+    currentY += 10;
+    const rewardsLabel = scene.add.text(centerX - (modalWidth / 2) + 40, currentY, 'Rewards:', {
+        fontSize: '16px',
+        fill: '#ffd700', // Gold color
+        fontStyle: 'bold'
+    }).setScrollFactor(0).setDepth(2103).setOrigin(0, 0);
+    elements.push(rewardsLabel);
+    currentY += 25;
+
+    if (questDef.rewards) {
+        let rewardStr = "";
+        if (questDef.rewards.xp) rewardStr += `+${questDef.rewards.xp} XP  `;
+        if (questDef.rewards.gold) rewardStr += `+${questDef.rewards.gold} Gold`;
+
+        const rewardText = scene.add.text(centerX - (modalWidth / 2) + 50, currentY, rewardStr, {
+            fontSize: '15px',
+            fill: '#00ff00'
+        }).setScrollFactor(0).setDepth(2103).setOrigin(0, 0);
+        elements.push(rewardText);
+    }
+
+    // Buttons (Bottom)
+    const btnY = centerY + modalHeight / 2 - 40;
+
+    // Accept button
+    const acceptBtn = scene.add.rectangle(centerX - 80, btnY, 140, 40, 0x00aa00, 1)
+        .setScrollFactor(0).setDepth(2103).setStrokeStyle(2, 0x00ff00).setInteractive({ useHandCursor: true });
+
+    const acceptBtnText = scene.add.text(centerX - 80, btnY, 'Accept', {
+        fontSize: '16px', fill: '#ffffff', fontStyle: 'bold'
+    }).setScrollFactor(0).setDepth(2104).setOrigin(0.5);
+
+    elements.push(acceptBtn, acceptBtnText);
+
+    // Decline button
+    const declineBtn = scene.add.rectangle(centerX + 80, btnY, 140, 40, 0x666666, 1)
+        .setScrollFactor(0).setDepth(2103).setStrokeStyle(2, 0xaaaaaa).setInteractive({ useHandCursor: true });
+
+    const declineBtnText = scene.add.text(centerX + 80, btnY, 'Decline', {
+        fontSize: '16px', fill: '#ffffff', fontStyle: 'bold'
+    }).setScrollFactor(0).setDepth(2104).setOrigin(0.5);
+
+    elements.push(declineBtn, declineBtnText);
+
+    // Handlers
+    const acceptHandler = () => {
+        elements.forEach(e => e.destroy());
+        questPreviewModal = null;
+        if (onAccept) onAccept();
+    };
+
+    const declineHandler = () => {
+        elements.forEach(e => e.destroy());
+        questPreviewModal = null;
+        if (onDecline) onDecline();
+    };
+
+    // Events
+    acceptBtn.on('pointerover', () => acceptBtn.setFillStyle(0x00cc00));
+    acceptBtn.on('pointerout', () => acceptBtn.setFillStyle(0x00aa00));
+    acceptBtn.on('pointerdown', acceptHandler);
+
+    declineBtn.on('pointerover', () => declineBtn.setFillStyle(0x888888));
+    declineBtn.on('pointerout', () => declineBtn.setFillStyle(0x666666));
+    declineBtn.on('pointerdown', declineHandler);
+
+    // Store global reference for destroy
+    questPreviewModal = {
+        destroy: () => {
+            elements.forEach(e => {
+                if (e && e.destroy) e.destroy();
+            });
+            questPreviewModal = null;
+        }
+    };
+
+    // Animation
+    scene.tweens.add({
+        targets: elements,
+        scale: { from: 0.95, to: 1 },
+        alpha: { from: 0, to: 1 },
+        duration: 200,
+        ease: 'Back.out'
+    });
 }

@@ -11135,8 +11135,34 @@ function createSettingsUI() {
     };
 
     // Music toggle setting
-    const settingY = centerY - panelHeight / 2 + 80;
+    let settingY = centerY - panelHeight / 2 + 80;
     const settingSpacing = 60;
+
+    // === NEW GAME BUTTON (at top) ===
+    const newGameBtn = scene.add.rectangle(centerX, settingY, 200, 45, 0xaa0000, 1)
+        .setScrollFactor(0).setDepth(301).setStrokeStyle(2, 0xff4444)
+        .setInteractive({ useHandCursor: true });
+
+    const newGameText = scene.add.text(centerX, settingY, '🔄 New Game', {
+        fontSize: '18px',
+        fill: '#ffffff',
+        fontStyle: 'bold'
+    }).setScrollFactor(0).setDepth(302).setOrigin(0.5);
+
+    newGameBtn.on('pointerover', () => newGameBtn.setFillStyle(0xcc0000));
+    newGameBtn.on('pointerout', () => newGameBtn.setFillStyle(0xaa0000));
+    newGameBtn.on('pointerdown', () => {
+        // Confirm before clearing
+        if (confirm('Start a new game? All progress will be lost!')) {
+            localStorage.removeItem('rpg_savegame');
+            localStorage.removeItem('pfaustino_rpg_settings');
+            console.log('🗑️ Save data cleared - reloading...');
+            location.reload();
+        }
+    });
+
+    settingsPanel.elements.push(newGameBtn, newGameText);
+    settingY += settingSpacing;
 
     // Music label
     const musicLabel = scene.add.text(centerX - 100, settingY, 'Music:', {

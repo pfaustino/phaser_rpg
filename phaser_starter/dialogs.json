@@ -38,6 +38,10 @@
                         "loreId": "lore_ch1_hearthwell"
                     },
                     {
+                        "text": "← Back",
+                        "next": "start"
+                    },
+                    {
                         "text": "Thank you, Elder",
                         "next": "end"
                     }
@@ -59,6 +63,10 @@
                         "loreId": "lore_ch1_echo_corruption"
                     },
                     {
+                        "text": "← Back",
+                        "next": "start"
+                    },
+                    {
                         "text": "Thank you",
                         "next": "end"
                     }
@@ -74,6 +82,10 @@
                         "loreId": "lore_ch1_aegis_history"
                     },
                     {
+                        "text": "← Back",
+                        "next": "start"
+                    },
+                    {
                         "text": "I understand",
                         "next": "end"
                     }
@@ -85,6 +97,10 @@
                     {
                         "text": "How can I help?",
                         "next": "how_to_help"
+                    },
+                    {
+                        "text": "← Back",
+                        "next": "start"
                     },
                     {
                         "text": "Thank you for the knowledge",
@@ -100,6 +116,10 @@
                         "next": "how_to_help"
                     },
                     {
+                        "text": "← Back",
+                        "next": "start"
+                    },
+                    {
                         "text": "I'll be careful",
                         "next": "end"
                     }
@@ -113,6 +133,10 @@
                         "next": "how_to_help"
                     },
                     {
+                        "text": "← Back",
+                        "next": "start"
+                    },
+                    {
                         "text": "This is a lot to take in",
                         "next": "end"
                     }
@@ -123,6 +147,10 @@
                 "action": "unlock_lore",
                 "loreId": "lore_ch1_undermines",
                 "choices": [
+                    {
+                        "text": "← Back",
+                        "next": "start"
+                    },
                     {
                         "text": "I'll do what I can",
                         "next": "end"
@@ -166,7 +194,7 @@
                         "isQuest": true,
                         "action": "quest_accept_side",
                         "questId": "quest_002",
-                        "next": "end",
+                        "next": "start",
                         "condition": "quest_available:quest_002"
                     },
                     {
@@ -174,7 +202,7 @@
                         "isQuest": true,
                         "action": "quest_accept_side",
                         "questId": "quest_004",
-                        "next": "end",
+                        "next": "start",
                         "condition": "quest_available:quest_004"
                     },
                     {

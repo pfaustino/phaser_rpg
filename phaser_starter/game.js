@@ -3791,15 +3791,9 @@ function create() {
         // This runs after save data might have been loaded
         setTimeout(() => {
             if (uqe.activeQuests.length === 0 && uqe.completedQuests.length === 0) {
-                console.log('🎮 [UQE Bridge] New game detected - initializing starter quests');
+                console.log('🎮 [UQE Bridge] New game detected - initializing starter quest');
                 uqe.initializeStarterQuests([
-                    'quest_001', // First Steps (kill)
-                    'quest_002', // Treasure Hunter (collect)
-                    'quest_003', // Rising Power (level)
-                    'quest_004', // Gold Rush (gold)
-                    'quest_005', // Explorer (explore)
-                    'quest_006', // Survivor (survive)
-                    'quest_007'  // Monster Hunter (kill)
+                    'main_01_001' // Tremors in the Earth (talk to Elder Malik) - starts main story
                 ]);
                 updateQuestTrackerHUD();
             } else {
@@ -11156,7 +11150,19 @@ function createSettingsUI() {
         if (confirm('Start a new game? All progress will be lost!')) {
             localStorage.removeItem('rpg_savegame');
             localStorage.removeItem('pfaustino_rpg_settings');
-            console.log('🗑️ Save data cleared - reloading...');
+            localStorage.removeItem('rpg_unlocked_lore');
+
+            // Clear legacy lore keys (lore_read_* format)
+            const keysToRemove = [];
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                if (key && key.startsWith('lore_read_')) {
+                    keysToRemove.push(key);
+                }
+            }
+            keysToRemove.forEach(key => localStorage.removeItem(key));
+
+            console.log('🗑️ Save data and lore cleared - reloading...');
             location.reload();
         }
     });
@@ -12019,15 +12025,15 @@ function updateDialogUI(node) {
                 if (questId && typeof questEngine !== 'undefined' && questEngine.allDefinitions[questId]) {
                     console.log(`🔗 [UQE Bridge] Showing preview for quest: ${questId}`);
 
-                    // Store current NPC for reopening dialog on decline
-                    const currentNPC = dialogPanel ? dialogPanel.npc : null;
+                    // Store current NPC for reopening dialog after accept/decline
+                    const currentNPC = currentShopNPC;
 
                     // Close dialog first
                     closeDialog();
 
                     // Show quest preview modal
                     showQuestPreviewModal(questId,
-                        // On Accept
+                        // On Accept - accept quest then reopen dialog
                         () => {
                             questEngine.acceptQuest(questId);
 
@@ -12041,11 +12047,18 @@ function updateDialogUI(node) {
 
                             // Update the quest tracker HUD to show the new quest
                             updateQuestTrackerHUD();
+
+                            // Reopen dialog with NPC so player can continue talking
+                            console.log('📋 [Dialog] Accept callback - reopening dialog with:', currentNPC?.name);
+                            if (currentNPC) {
+                                setTimeout(() => startDialog(currentNPC), 50);
+                            }
                         },
                         // On Decline - reopen dialog with NPC
                         () => {
+                            console.log('📋 [Dialog] Decline callback - reopening dialog with:', currentNPC?.name);
                             if (currentNPC) {
-                                startDialog(currentNPC);
+                                setTimeout(() => startDialog(currentNPC), 50);
                             }
                         }
                     );

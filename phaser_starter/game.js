@@ -381,6 +381,7 @@ function preload() {
     this.load.image('portrait_captain_kael', 'assets/images/CaptainKael-Portrait.jpg');
     this.load.image('portrait_mage_elara', 'assets/images/MageElara-Portrait.jpg');
     this.load.image('portrait_blacksmith_brond', 'assets/images/BlacksmithBrond-Portrait.jpg');
+    this.load.image('portrait_trainer_garen', 'assets/images/TrainerGaren-Portrait.png');
 
     // Try loading other images (will fail silently if files don't exist - that's OK!)
     // Load grass as a spritesheet for variety (96x96 frames)
@@ -11373,7 +11374,7 @@ function initializeNPCs() {
             portraitKey = 'portrait_blacksmith_brond';
         } else if (data.name === 'Trainer Garen') {
             spriteKey = 'npc_garen';
-            // portraitKey = 'portrait_garen';
+            portraitKey = 'portrait_trainer_garen';
         }
 
         // Check if spritesheet exists, fallback to default 'npc' if not

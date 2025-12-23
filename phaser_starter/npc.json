@@ -71,5 +71,17 @@
         "questGiver": true,
         "spriteKey": "npc_blacksmith_brond",
         "portraitKey": "portrait_blacksmith_brond"
+    },
+    {
+        "id": "npc_007",
+        "name": "Trainer Garen",
+        "title": "Class Trainer",
+        "spawnType": "absolute",
+        "targetX": 15,
+        "targetY": 8,
+        "dialogId": "trainer_garen",
+        "questGiver": true,
+        "spriteKey": "npc_garen",
+        "portraitKey": "portrait_trainer_garen"
     }
 ]

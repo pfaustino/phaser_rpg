@@ -4247,6 +4247,30 @@ function create() {
         }
     });
 
+    // Game Title
+    this.add.text(this.scale.width / 2, 10, 'RPG ADVENTURE: SHATTERED AEGIS', {
+        fontFamily: 'Cinzel, "Times New Roman", serif',
+        fontSize: '24px',
+        color: '#ffcc00',
+        stroke: '#000000',
+        strokeThickness: 4,
+        shadow: { offsetX: 2, offsetY: 2, color: '#000000', blur: 2, stroke: true, fill: true }
+    })
+        .setOrigin(0.5, 0)
+        .setScrollFactor(0)
+        .setDepth(30000);
+
+    // Version Number
+    this.add.text(this.scale.width - 10, 10, 'v0.9.120', {
+        fontFamily: 'Arial',
+        fontSize: '16px',
+        color: '#ffffff',
+        align: 'right'
+    })
+        .setOrigin(1, 0)
+        .setScrollFactor(0)
+        .setDepth(30000);
+
     console.log('Game created');
 }
 
@@ -11325,7 +11349,43 @@ function createSettingsUI() {
         toggleBg.setStrokeStyle(2, 0xffffff);
     });
 
-    settingsPanel.elements.push(musicLabel, toggleBg, toggleText);
+    // About Button
+    settingY += settingSpacing;
+    const aboutBtn = scene.add.rectangle(centerX, settingY, 200, 45, 0x444444, 1)
+        .setScrollFactor(0).setDepth(301).setStrokeStyle(2, 0xffffff)
+        .setInteractive({ useHandCursor: true });
+
+    const aboutText = scene.add.text(centerX, settingY, 'About', {
+        fontSize: '18px',
+        fill: '#ffffff',
+        fontStyle: 'bold'
+    }).setScrollFactor(0).setDepth(302).setOrigin(0.5);
+
+    aboutBtn.on('pointerover', () => aboutBtn.setFillStyle(0x666666));
+    aboutBtn.on('pointerout', () => aboutBtn.setFillStyle(0x444444));
+    aboutBtn.on('pointerdown', () => {
+        createAboutWindow();
+    });
+
+    // Discord Button
+    settingY += settingSpacing;
+    const discordBtn = scene.add.rectangle(centerX, settingY, 200, 45, 0x5865F2, 1) // Discord Blurple
+        .setScrollFactor(0).setDepth(301).setStrokeStyle(2, 0xffffff)
+        .setInteractive({ useHandCursor: true });
+
+    const discordText = scene.add.text(centerX, settingY, 'Discord', {
+        fontSize: '18px',
+        fill: '#ffffff',
+        fontStyle: 'bold'
+    }).setScrollFactor(0).setDepth(302).setOrigin(0.5);
+
+    discordBtn.on('pointerover', () => discordBtn.setFillStyle(0x7983F5));
+    discordBtn.on('pointerout', () => discordBtn.setFillStyle(0x5865F2));
+    discordBtn.on('pointerdown', () => {
+        window.open('https://discord.gg/p67Wp6hzqG', '_blank');
+    });
+
+    settingsPanel.elements.push(musicLabel, toggleBg, toggleText, aboutBtn, aboutText, discordBtn, discordText);
 }
 
 /**
@@ -11381,6 +11441,77 @@ function loadSettings() {
     } catch (e) {
         console.error('❌ Error loading settings:', e);
     }
+}
+
+/**
+ * Create About window
+ */
+function createAboutWindow() {
+    const scene = game.scene.scenes[0];
+    const centerX = scene.cameras.main.width / 2;
+    const centerY = scene.cameras.main.height / 2;
+    const panelWidth = 500;
+    const panelHeight = 400;
+
+    // Create background (ensure it's above settings) // Depth settings: Settings=300+, About=400+
+    const bg = scene.add.rectangle(centerX, centerY, panelWidth, panelHeight, 0x1a1a1a, 0.98)
+        .setScrollFactor(0).setDepth(400).setStrokeStyle(3, 0xffffff)
+        .setInteractive(); // Block input behind
+
+    const title = scene.add.text(centerX, centerY - panelHeight / 2 + 30, 'About', {
+        fontSize: '28px',
+        fill: '#ffffff',
+        fontStyle: 'bold'
+    }).setScrollFactor(0).setDepth(401).setOrigin(0.5);
+
+    // About Text
+    const aboutTextContent = "This game is a passion project built in countless late nights, and your support helps keep it alive and growing.\n\nIf you enjoy playing and want to see more updates, new features, and ongoing improvements, please consider donating to support the development.";
+
+    const aboutText = scene.add.text(centerX, centerY - 40, aboutTextContent, {
+        fontSize: '18px',
+        fill: '#cccccc',
+        align: 'center',
+        wordWrap: { width: panelWidth - 60 }
+    }).setScrollFactor(0).setDepth(401).setOrigin(0.5);
+
+    // Donate Button
+    const btnY = centerY + 100;
+    const donateBtn = scene.add.rectangle(centerX, btnY, 200, 50, 0x00aa00, 1)
+        .setScrollFactor(0).setDepth(401).setStrokeStyle(2, 0x00ff00)
+        .setInteractive({ useHandCursor: true });
+
+    const donateText = scene.add.text(centerX, btnY, 'Donate Now', {
+        fontSize: '20px',
+        fill: '#ffffff',
+        fontStyle: 'bold'
+    }).setScrollFactor(0).setDepth(402).setOrigin(0.5);
+
+    donateBtn.on('pointerover', () => donateBtn.setFillStyle(0x00cc00));
+    donateBtn.on('pointerout', () => donateBtn.setFillStyle(0x00aa00));
+    donateBtn.on('pointerdown', () => {
+        window.open('https://www.paypal.com/ncp/payment/WJEPNLAWSXUV4', '_blank');
+    });
+
+    // Close Button
+    const closeBtnY = centerY + panelHeight / 2 - 40;
+    const closeBtnText = scene.add.text(centerX, closeBtnY, 'Close', {
+        fontSize: '16px',
+        fill: '#aaaaaa',
+        fontStyle: 'bold'
+    }).setScrollFactor(0).setDepth(401).setOrigin(0.5)
+        .setInteractive({ useHandCursor: true });
+
+    closeBtnText.on('pointerover', () => closeBtnText.setColor('#ffffff'));
+    closeBtnText.on('pointerout', () => closeBtnText.setColor('#aaaaaa'));
+
+    // Group elements for cleanup
+    const elements = [bg, title, aboutText, donateBtn, donateText, closeBtnText];
+
+    const closeAbout = () => {
+        elements.forEach(el => el.destroy());
+    };
+
+    closeBtnText.on('pointerdown', closeAbout);
 }
 
 /**

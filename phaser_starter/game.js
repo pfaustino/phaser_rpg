@@ -62,7 +62,8 @@ let dungeonTilesets = {
 
 // Monster spawn settings
 const MAX_MONSTERS = 24;
-const MONSTER_AGGRO_RADIUS = 200; // Pixels - monsters won't spawn within this distance of player
+const MONSTER_AGGRO_RADIUS = 200; // Pixels - monsters start chasing within this distance
+const MONSTER_DEAGGRO_RADIUS = 400; // Pixels - monsters stop chasing beyond this distance
 const MONSTER_RESPAWN_THRESHOLD = MAX_MONSTERS / 2; // Respawn when below 12
 
 // Player stats
@@ -218,6 +219,7 @@ let pendingNewQuest = null; // Store new quest to show after completed modal clo
 let pendingCompletedQuest = null; // Store completed quest to show after combat ends
 let questManager = null; // Manager for data-driven quests
 let monsterRenderer = null; // Renderer for data-driven monsters
+let pathfinder = null; // A* Pathfinding system
 
 // Dialog UI
 let dialogVisible = false;
@@ -2946,6 +2948,14 @@ function createDungeonMap(level) {
     // Set world bounds
     const playerSize = 32;
     const worldWidth = currentDungeon.width * tileSize;
+
+    // Initialize A* Pathfinding
+    if (!pathfinder) {
+        pathfinder = new AStarPathfinding(tileSize);
+    }
+    if (currentDungeon && currentDungeon.mapData) {
+        pathfinder.initializeGrid(currentDungeon.mapData);
+    }
     const worldHeight = currentDungeon.height * tileSize;
     scene.physics.world.setBounds(
         playerSize / 2,
@@ -5308,55 +5318,54 @@ function update(time, delta) {
         }
 
         // Move towards player if close (use monster's speed stat)
-        if (distance < 200 && distance > 32) {
+        // Aggro hysteresis: engage at 200px, disengage at 400px
+        const shouldAggro = distance < MONSTER_AGGRO_RADIUS;
+        const shouldDeaggro = distance > MONSTER_DEAGGRO_RADIUS;
+
+        // Set or clear aggro state
+        if (shouldAggro) {
+            monster.isAggro = true;
+        } else if (shouldDeaggro) {
+            monster.isAggro = false;
+        }
+
+        if (monster.isAggro && distance > 32) {
             const monsterSpeed = monster.speed || 50;
-            this.physics.moveToObject(monster, player, monsterSpeed);
 
-            // Check dungeon wall collisions for monsters
-            if (currentMap === 'dungeon' && dungeonWalls.length > 0) {
-                const monsterSize = 12; // Slightly smaller than player for easier pathfinding
-                const deltaTime = delta / 1000;
+            // Use A* Pathfinding in dungeon
+            if (currentMap === 'dungeon' && pathfinder) {
+                // Update path every 500ms or if no path
+                if (!monster.lastPathTime || time - monster.lastPathTime > 500 || !monster.currentPath) {
+                    monster.currentPath = pathfinder.findPath(monster.x, monster.y, player.x, player.y);
+                    monster.lastPathTime = time;
 
-                // Check if monster's intended position would collide with a wall
-                const intendedX = monster.x + monster.body.velocity.x * deltaTime;
-                const intendedY = monster.y + monster.body.velocity.y * deltaTime;
-
-                let wouldCollideX = false;
-                let wouldCollideY = false;
-
-                // Test X movement
-                if (monster.body.velocity.x !== 0) {
-                    for (const wall of dungeonWalls) {
-                        if (intendedX + monsterSize > wall.x &&
-                            intendedX - monsterSize < wall.x + wall.width &&
-                            monster.y + monsterSize > wall.y &&
-                            monster.y - monsterSize < wall.y + wall.height) {
-                            wouldCollideX = true;
-                            break;
-                        }
+                    // Remove first point if it's too close (we are at it)
+                    if (monster.currentPath && monster.currentPath.length > 0) {
+                        const firstPoint = monster.currentPath[0];
+                        const distToFirst = Phaser.Math.Distance.Between(monster.x, monster.y, firstPoint.x, firstPoint.y);
+                        if (distToFirst < 16) monster.currentPath.shift();
                     }
                 }
 
-                // Test Y movement
-                if (monster.body.velocity.y !== 0) {
-                    for (const wall of dungeonWalls) {
-                        if (monster.x + monsterSize > wall.x &&
-                            monster.x - monsterSize < wall.x + wall.width &&
-                            intendedY + monsterSize > wall.y &&
-                            intendedY - monsterSize < wall.y + wall.height) {
-                            wouldCollideY = true;
-                            break;
-                        }
-                    }
-                }
+                // Follow the path
+                if (monster.currentPath && monster.currentPath.length > 0) {
+                    const nextPoint = monster.currentPath[0];
+                    const distToPoint = Phaser.Math.Distance.Between(monster.x, monster.y, nextPoint.x, nextPoint.y);
 
-                // Stop movement on axis that would collide
-                if (wouldCollideX) {
-                    monster.body.setVelocityX(0);
+                    if (distToPoint < 5) {
+                        monster.currentPath.shift(); // Reached waypoint
+                        // If path empty after shift, we arrived (or are close enough to direct chase)
+                    } else {
+                        this.physics.moveTo(monster, nextPoint.x, nextPoint.y, monsterSpeed);
+                    }
+                } else {
+                    // No path found or path finished (close to player), attempt direct movement
+                    // (Fallback in case A* fails or we are in same tile)
+                    this.physics.moveToObject(monster, player, monsterSpeed);
                 }
-                if (wouldCollideY) {
-                    monster.body.setVelocityY(0);
-                }
+            } else {
+                // Wilderness or no pathfinder: Direct movement
+                this.physics.moveToObject(monster, player, monsterSpeed);
             }
         } else {
             monster.body.setVelocity(0);

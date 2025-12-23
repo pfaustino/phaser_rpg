@@ -355,6 +355,14 @@ function preload() {
         frameHeight: 64
     });
 
+    // Load NPC portrait images (landscape, full-width above dialog)
+    this.load.image('portrait_elder_malik', 'assets/images/ElderMalik-Portrait.jpg');
+    this.load.image('portrait_merchant_lysa', 'assets/images/MerchantLysa-Portrait.jpg');
+    this.load.image('portrait_captain_thorne', 'assets/images/CaptainThorne-Portrait.jpg');
+    this.load.image('portrait_captain_kael', 'assets/images/CaptainKael-Portrait.jpg');
+    this.load.image('portrait_mage_elara', 'assets/images/MageElara-Portrait.jpg');
+    this.load.image('portrait_blacksmith_brond', 'assets/images/BlacksmithBrond-Portrait.jpg');
+
     // Try loading other images (will fail silently if files don't exist - that's OK!)
     // Load grass as a spritesheet for variety (96x96 frames)
     // Try relative path first (works better with local server)
@@ -11029,20 +11037,28 @@ function initializeNPCs() {
     positionedNPCs.forEach(data => {
         // Determine which spritesheet to use based on NPC name
         let spriteKey = 'npc'; // Default fallback
+        let portraitKey = null; // Portrait for dialog
         if (data.name === 'Elder Malik') {
             spriteKey = 'npc_elder_malik';
+            portraitKey = 'portrait_elder_malik';
         } else if (data.name === 'Merchant Lysa') {
             spriteKey = 'npc_lysa';
+            portraitKey = 'portrait_merchant_lysa';
         } else if (data.name === 'Guard Thorne') {
             spriteKey = 'npc_captain_thorne';
+            portraitKey = 'portrait_captain_thorne';
         } else if (data.name === 'Guard Kael') {
             spriteKey = 'npc_captain_kael';
+            portraitKey = 'portrait_captain_kael';
         } else if (data.name === 'Captain Kael') {
             spriteKey = 'npc_captain_kael';
+            portraitKey = 'portrait_captain_kael';
         } else if (data.name === 'Mage Elara') {
             spriteKey = 'npc_mage_elara';
+            portraitKey = 'portrait_mage_elara';
         } else if (data.name === 'Blacksmith Brond') {
             spriteKey = 'npc_blacksmith_brond';
+            portraitKey = 'portrait_blacksmith_brond';
         }
 
         // Check if spritesheet exists, fallback to default 'npc' if not
@@ -11072,6 +11088,7 @@ function initializeNPCs() {
         npc.interactionIndicator = null;
         npc.showIndicator = false;
         npc.spriteKey = spriteKey; // Store sprite key for reference
+        npc.portraitKey = portraitKey; // Store portrait key for dialog
 
         npcs.push(npc);
     });
@@ -11852,21 +11869,48 @@ function createDialogUI(npc) {
     const scene = game.scene.scenes[0];
 
     const panelWidth = 700;
-    const panelHeight = 620;
+    const portraitHeight = 150; // Height for landscape portrait
+    // Height will be recalculated dynamically in updateDialogUI
+    const initialPanelHeight = 350;
     const centerX = scene.cameras.main.width / 2;
-    const centerY = scene.cameras.main.height / 2 + 50;
+    const centerY = scene.cameras.main.height / 2 + 80;
+
+    // Create landscape portrait using NPC's portraitKey if available
+    let portraitImage = null;
+    if (npc.portraitKey && scene.textures.exists(npc.portraitKey)) {
+        portraitImage = scene.add.image(
+            centerX,
+            centerY - initialPanelHeight / 2 + portraitHeight / 2 + 10,
+            npc.portraitKey
+        ).setScrollFactor(0).setDepth(402);
+
+        // Scale to fit panel width while maintaining aspect ratio
+        const originalWidth = portraitImage.width;
+        const originalHeight = portraitImage.height;
+        const scaleFactor = (panelWidth - 20) / originalWidth;
+        portraitImage.setScale(scaleFactor);
+        // Limit height if too tall
+        if (portraitImage.displayHeight > portraitHeight) {
+            portraitImage.setDisplaySize(panelWidth - 20, portraitHeight);
+        }
+    }
 
     dialogPanel = {
-        bg: scene.add.rectangle(centerX, centerY, panelWidth, panelHeight, 0x1a1a1a, 0.95)
+        bg: scene.add.rectangle(centerX, centerY, panelWidth, initialPanelHeight, 0x1a1a1a, 0.95)
             .setScrollFactor(0).setDepth(400).setStrokeStyle(3, 0xffffff),
-        npcNameText: scene.add.text(centerX - panelWidth / 2 + 20, centerY - panelHeight / 2 + 20,
+        portraitImage: portraitImage,
+        portraitHeight: portraitImage ? portraitHeight : 0,
+        npcNameText: scene.add.text(
+            centerX - panelWidth / 2 + 20,
+            centerY - initialPanelHeight / 2 + (portraitImage ? portraitHeight + 15 : 15),
             `${npc.name}${npc.title ? ' - ' + npc.title : ''}`, {
-            fontSize: '24px',
-            fill: '#ffffff',
+            fontSize: '22px',
+            fill: '#ffd700',
             fontStyle: 'bold'
         }).setScrollFactor(0).setDepth(401).setOrigin(0, 0),
         dialogText: null,
-        choiceButtons: []
+        choiceButtons: [],
+        npc: npc // Store NPC reference
     };
 }
 
@@ -11887,27 +11931,72 @@ function updateDialogUI(node) {
     });
     dialogPanel.choiceButtons = [];
 
-    const centerX = dialogPanel.bg.x;
-    const centerY = dialogPanel.bg.y;
     const panelWidth = 700;
-    const panelHeight = 620; // Increased to fit longer text like tutorials
+    const buttonHeight = 40;
+    const buttonSpacing = 10;
+    const portraitHeight = dialogPanel.portraitHeight || 0;
 
-    // Dialog text
-    dialogPanel.dialogText = scene.add.text(
+    // Count visible choices first
+    let visibleChoices = 0;
+    node.choices.forEach(choice => {
+        if (!choice.condition) {
+            visibleChoices++;
+        } else {
+            try {
+                let result;
+                if (typeof choice.condition === 'function') {
+                    result = choice.condition(playerStats);
+                } else {
+                    result = evaluateDialogCondition(choice.condition, playerStats);
+                }
+                if (result) visibleChoices++;
+            } catch (err) { /* skip */ }
+        }
+    });
+
+    // Calculate dynamic panel height
+    const headerHeight = portraitHeight + 50; // Portrait + NPC name area
+    const textHeight = Math.max(60, Math.min(150, node.text.length * 0.6)); // Estimated text height
+    const choicesHeight = visibleChoices * (buttonHeight + buttonSpacing) + 20;
+    const dynamicPanelHeight = headerHeight + textHeight + choicesHeight + 20;
+
+    // Update panel size and position
+    const centerX = scene.cameras.main.width / 2;
+    const centerY = scene.cameras.main.height / 2 + 50;
+
+    dialogPanel.bg.setPosition(centerX, centerY);
+    dialogPanel.bg.setSize(panelWidth, dynamicPanelHeight);
+
+    // Reposition portrait at top (full width, centered)
+    if (dialogPanel.portraitImage) {
+        dialogPanel.portraitImage.setPosition(
+            centerX,
+            centerY - dynamicPanelHeight / 2 + portraitHeight / 2 + 10
+        );
+    }
+
+    // Reposition NPC name below portrait
+    dialogPanel.npcNameText.setPosition(
         centerX - panelWidth / 2 + 20,
-        centerY - panelHeight / 2 + 70,
+        centerY - dynamicPanelHeight / 2 + portraitHeight + 15
+    );
+
+    // Dialog text (positioned after NPC name)
+    const textX = centerX - panelWidth / 2 + 20;
+    const textY = centerY - dynamicPanelHeight / 2 + portraitHeight + 45;
+    dialogPanel.dialogText = scene.add.text(
+        textX,
+        textY,
         node.text,
         {
-            fontSize: '18px',
+            fontSize: '16px',
             fill: '#ffffff',
             wordWrap: { width: panelWidth - 40 }
         }
     ).setScrollFactor(0).setDepth(401).setOrigin(0, 0);
 
-    // Choice buttons
-    const startY = centerY + 80; // Pushed down to fit longer text
-    const buttonHeight = 40;
-    const buttonSpacing = 10;
+    // Choice buttons - start after the text area
+    const startY = centerY - dynamicPanelHeight / 2 + headerHeight + textHeight;
 
     let visibleChoiceCount = 0;
     node.choices.forEach((choice) => {
@@ -12102,6 +12191,7 @@ function closeDialog() {
         if (dialogPanel.bg) dialogPanel.bg.destroy();
         if (dialogPanel.npcNameText) dialogPanel.npcNameText.destroy();
         if (dialogPanel.dialogText) dialogPanel.dialogText.destroy();
+        if (dialogPanel.portraitImage) dialogPanel.portraitImage.destroy();
 
         dialogPanel.choiceButtons.forEach(btn => {
             if (btn.bg) btn.bg.destroy();

@@ -290,11 +290,14 @@
                 "choices": [
                     {
                         "text": "I am ready to choose my path.",
-                        "next": "choose_path"
+                        "next": "choose_path",
+                        "isQuest": true,
+                        "condition": "quest_active:main_01_006"
                     },
                     {
                         "text": "What are my options?",
-                        "next": "about_classes"
+                        "next": "about_classes",
+                        "condition": "quest_active:main_01_006"
                     },
                     {
                         "text": "Not yet.",

@@ -38,6 +38,7 @@ const UQE_EVENTS = {
     NPC_TALK: 'npc_talk',
     STAT_CHANGE: 'stat_change',
     QUEST_COMPLETED: 'quest_completed',
+    QUEST_AVAILABLE: 'quest_available',
     OBJECTIVE_UPDATED: 'objective_updated',
     // New event types for additional objectives
     TILE_TRAVELED: 'tile_traveled',
@@ -120,6 +121,12 @@ class KillObjective extends UqeObjective {
             // Support 'any' wildcard (match all monsters)
             if (this.monsterId === 'any') {
                 this.updateProgress(1);
+                return;
+            }
+
+            // Guard against undefined data
+            if (!data || !data.id || !data.type) {
+                console.warn('[UQE] KillObjective received incomplete data:', data);
                 return;
             }
 
@@ -272,7 +279,8 @@ class UqeEngine {
     constructor() {
         this.eventBus = new UqeEventBus();
         this.activeQuests = [];
-        this.completedQuests = []; // New registry
+        this.completedQuests = []; // Completed registry
+        this.pendingQuests = []; // Available but not yet accepted
         this.allDefinitions = {};
     }
 
@@ -304,32 +312,52 @@ class UqeEngine {
         }
     }
 
-    // Auto-accept quests if requirements are met
+    // Check for newly available quests (adds to pending, not auto-accept)
     checkNewQuests() {
         const completedIds = this.completedQuests.map(q => q.id);
 
         Object.keys(this.allDefinitions).forEach(questId => {
             const def = this.allDefinitions[questId];
 
-            // Skip if already active or completed
+            // Skip if already active, completed, or pending
             if (this.activeQuests.some(q => q.id === questId)) return;
             if (this.completedQuests.some(q => q.id === questId)) return;
+            if (this.pendingQuests.includes(questId)) return;
 
-            // Skip main quests (they usually require dialog)
+            // Skip main quests (they require NPC dialog)
             if (questId.startsWith('main_')) return;
 
-            // Check requirements
+            // Check requirements - add to pending, don't auto-accept
             if (def.requires && completedIds.includes(def.requires)) {
-                console.log(`🔗 [UQE Engine] Auto-chaining quest: ${questId} (Requires: ${def.requires})`);
-                this.acceptQuest(questId);
+                console.log(`🔔 [UQE Engine] Quest available: ${questId} (Requires: ${def.requires})`);
+                this.pendingQuests.push(questId);
+                this.eventBus.emit(UQE_EVENTS.QUEST_AVAILABLE, { questId, definition: def });
             }
         });
+    }
+
+    // Get list of pending quests with their definitions
+    getPendingQuests() {
+        return this.pendingQuests.map(id => ({
+            id,
+            definition: this.allDefinitions[id]
+        }));
+    }
+
+    // Accept a pending quest (removes from pending, adds to active)
+    acceptPendingQuest(questId) {
+        const index = this.pendingQuests.indexOf(questId);
+        if (index > -1) {
+            this.pendingQuests.splice(index, 1);
+        }
+        this.acceptQuest(questId);
     }
 
     getSaveData() {
         return {
             active: this.activeQuests.map(q => q.getSaveData()),
-            completed: this.completedQuests.map(q => q.getSaveData())
+            completed: this.completedQuests.map(q => q.getSaveData()),
+            pending: this.pendingQuests
         };
     }
 
@@ -363,7 +391,10 @@ class UqeEngine {
             }
         });
 
-        console.log(`💡 [UQE Engine] Rehydrated ${this.activeQuests.length} active, ${this.completedQuests.length} completed`);
+        // Restore pending quests
+        this.pendingQuests = saveData.pending || [];
+
+        console.log(`💡 [UQE Engine] Rehydrated ${this.activeQuests.length} active, ${this.completedQuests.length} completed, ${this.pendingQuests.length} pending`);
     }
 
     update() {

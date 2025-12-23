@@ -139,13 +139,6 @@ function isQuestActive(id) {
         uqeActive = window.uqe.activeQuests.some(q => q.id === id);
     }
 
-    // EXTREME LOUD LOGGING for specific quests
-    if (id.startsWith('main_01_') || id === 'v2_demo_quest') {
-        const uqeActiveIds = window.uqe ? window.uqe.activeQuests.map(q => q.id) : [];
-        console.log(`[UQE] isQuestActive('${id}') CHECK: legacy=${legacyActive}, uqe=${uqeActive}`);
-        console.log(`[UQE] Current UQE Active IDs: [${uqeActiveIds.join(', ')}]`);
-    }
-
     return legacyActive || uqeActive;
 }
 
@@ -159,13 +152,6 @@ function isQuestCompleted(id) {
     let uqeCompleted = false;
     if (window.uqe) {
         uqeCompleted = window.uqe.completedQuests.some(q => q.id === id);
-    }
-
-    // EXTREME LOUD LOGGING for specific quests
-    if (id.startsWith('main_01_') || id === 'v2_demo_quest') {
-        const uqeCompletedIds = window.uqe ? window.uqe.completedQuests.map(q => q.id) : [];
-        console.log(`[UQE] isQuestCompleted('${id}') CHECK: legacy=${legacyCompleted}, uqe=${uqeCompleted}`);
-        console.log(`[UQE] Current UQE Completed IDs: [${uqeCompletedIds.join(', ')}]`);
     }
 
     return legacyCompleted || uqeCompleted;
@@ -3766,6 +3752,40 @@ function create() {
         uqe.eventBus.on(UQE_EVENTS.OBJECTIVE_UPDATED, (data) => {
             handleObjectiveUpdate(data);
         });
+
+        // Handle Quest Available - show notification for chain quests
+        uqe.eventBus.on(UQE_EVENTS.QUEST_AVAILABLE, (data) => {
+            console.log(`🔔 [UQE Bridge] New quest available: ${data.questId}`);
+            const def = data.definition;
+            addChatMessage(`New Quest Available: ${def.title}`, 0x00ffff, '📜');
+
+            // Function to show the preview modal
+            const showPreview = () => {
+                if (typeof showQuestPreviewModal === 'function') {
+                    showQuestPreviewModal(data.questId,
+                        // On Accept
+                        () => {
+                            uqe.acceptPendingQuest(data.questId);
+                            showDamageNumber(player.x, player.y - 40, "Quest Accepted!", 0x00ff00);
+                            playSound('item_pickup');
+                            updateQuestTrackerHUD();
+                        },
+                        // On Decline - just close, quest stays pending
+                        () => {
+                            console.log(`📋 Quest ${data.questId} declined - remains available`);
+                        }
+                    );
+                }
+            };
+
+            // If a quest completed modal is open, defer showing the preview
+            if (questCompletedModal) {
+                console.log('⏳ Quest completed modal open - deferring new quest preview');
+                setTimeout(showPreview, 500);
+            } else {
+                showPreview();
+            }
+        });
     }
 
     // Parse dungeon tileset metadata and create texture frames
@@ -5371,8 +5391,8 @@ function handleMonsterDeath(monster) {
     // Emit UQE event (for Quests)
     if (window.uqe && window.uqe.eventBus) {
         window.uqe.eventBus.emit('monster_killed', {
-            id: monster.monsterId,
-            type: monster.monsterType
+            id: monster.monsterId || monster.id || 'unknown',
+            type: monster.monsterType || monster.type || 'unknown'
         });
     }
 
@@ -7484,12 +7504,20 @@ function dropItemsFromMonster(x, y) {
         uqe.activeQuests.forEach(quest => {
             quest.objectives.forEach(obj => {
                 if (obj.type === 'collect' && !obj.completed) {
+                    // Skip 'any' type - those count all items, no special drops needed
+                    if (obj.itemId === 'any') return;
+
                     // 30% chance to drop quest-specific item
                     if (Math.random() < 0.3) {
+                        // Create proper item name from itemId (e.g. "crystal_shard" -> "Crystal Shard")
+                        const itemName = obj.itemId
+                            .replace(/_/g, ' ')
+                            .replace(/\b\w/g, c => c.toUpperCase());
+
                         droppedItem = {
                             id: obj.itemId,
                             type: 'quest_item',
-                            name: obj.label.replace('Gather ', '').replace('Collect ', ''),
+                            name: itemName,
                             quality: 'Uncommon',
                             amount: 1
                         };
@@ -7564,6 +7592,11 @@ function pickupItem(item, index) {
         playerStats.questStats.goldEarned += item.amount;
         showDamageNumber(item.sprite.x, item.sprite.y, `+${item.amount} Gold`, 0xffd700);
         updatePlayerStats(); // Update gold display
+
+        // UQE Bridge Event - for Gold Rush quest tracking
+        if (typeof uqe !== 'undefined') {
+            uqe.eventBus.emit(UQE_EVENTS.GOLD_EARNED, { amount: item.amount });
+        }
     } else {
         // Add item to inventory
         console.log(`📦 Adding item to inventory: ${item.name} (type: ${item.type})`);
@@ -11970,22 +12003,10 @@ function updateDialogUI(node) {
                             }
                         }
                     );
-                } else if (action === 'quest_advance') {
-                    advanceQuest(questId);
-                    if (choice.next) {
-                        showDialogNode(choice.next);
-                    } else {
-                        closeDialog();
-                    }
-                } else if (action === 'quest_accept') {
-                    acceptMainQuest(questId);
-                    if (choice.next) {
-                        showDialogNode(choice.next);
-                    } else {
-                        closeDialog();
-                    }
-                } else if (action === 'quest_accept_side') {
-                    acceptSideQuest(questId);
+                } else {
+                    // Quest not found in UQE - should not happen with proper setup
+                    console.warn(`⚠️ Quest ${questId} not found in UQE definitions! All quests should be in quests_v2.json.`);
+                    addChatMessage(`Quest not found: ${questId}`, 0xff0000, '⚠️');
                     if (choice.next) {
                         showDialogNode(choice.next);
                     } else {

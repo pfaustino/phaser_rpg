@@ -210,32 +210,11 @@
                 "text": "Halt! I am Captain Thorne, head of the village guard. State your business.",
                 "choices": [
                     {
-                        "text": "I want to help with the monsters",
-                        "next": "hunting",
-                        "isQuest": true,
-                        "condition": "quest_available:quest_007"
-                    },
-                    {
                         "text": "Tell me about the monsters",
                         "next": "help"
                     },
                     {
                         "text": "Just passing through",
-                        "next": "end"
-                    }
-                ]
-            },
-            "hunting": {
-                "text": "A volunteer? Excellent. My guards are spread thin. If you can eliminate some of the local pests, I'll make sure the village compensates you.",
-                "choices": [
-                    {
-                        "text": "I'll take the contract",
-                        "action": "quest_accept_side",
-                        "questId": "quest_007",
-                        "next": "end"
-                    },
-                    {
-                        "text": "Not right now",
                         "next": "end"
                     }
                 ]

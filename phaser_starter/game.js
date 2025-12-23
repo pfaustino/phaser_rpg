@@ -5070,6 +5070,15 @@ function update(time, delta) {
                             nearMarker = true; // Mark as handled to prevent other interactions
                             break;
                         }
+
+                        // Also require all monsters to be defeated
+                        const livingMonsters = monsters.filter(m => m.active && !m.isDead);
+                        if (livingMonsters.length > 0) {
+                            showDamageNumber(player.x, player.y - 40, `Defeat All Monsters! (${livingMonsters.length} Left)`, 0xff0000);
+                            console.log(`❌ Cannot go to level ${targetLevel} - ${livingMonsters.length} monsters remaining`);
+                            nearMarker = true;
+                            break;
+                        }
                     }
 
                     console.log(`🚪 Transitioning to ${marker.targetMap} level ${targetLevel}`);
@@ -14400,7 +14409,6 @@ function spawnMonster(x, y, type, hpOverride, attackOverride, xpOverride, isBoss
         monster.hpBar = scene.add.rectangle(0, 0, monsterHpBarWidth - 2, monsterHpBarHeight - 2, 0xff0000)
             .setDepth(7).setOrigin(0, 0.5).setScrollFactor(1);
 
-        monster.isBoss = false;
         monster.isDead = false;
 
         monsters.push(monster);

@@ -17192,3 +17192,244 @@ function updateDefenseQuestSpawner(time) {
         defenseSpawnerState.lastSpawnTime = time;
     }
 }
+
+// ========================================
+// DEBUG QUEST COMMANDS
+// ========================================
+// Usage: Open browser console and type debugQuest.help()
+
+const debugQuest = {
+    /**
+     * Show all debug commands
+     */
+    help: function () {
+        console.log(`
+🔧 QUEST DEBUG COMMANDS
+========================
+debugQuest.listActive()          - Show all active quests
+debugQuest.listCompleted()       - Show all completed quests  
+debugQuest.listAll()             - Show all quest definitions
+debugQuest.accept('quest_id')    - Accept a quest by ID
+debugQuest.complete('quest_id')  - Force complete a quest
+debugQuest.skip('quest_id')      - Skip to next quest in chain
+debugQuest.setProgress('quest_id', amount) - Set objective progress
+debugQuest.reset()               - Reset ALL quest progress
+debugQuest.goto('quest_id')      - Reset and skip to specific quest
+debugQuest.info('quest_id')      - Show detailed quest info
+        `);
+    },
+
+    /**
+     * List all active quests
+     */
+    listActive: function () {
+        if (!window.uqe) { console.error('UQE not loaded'); return; }
+        console.log('📋 ACTIVE QUESTS:');
+        window.uqe.activeQuests.forEach(q => {
+            const progress = q.objectives.map(o => `${o.progress}/${o.target}`).join(', ');
+            console.log(`  [${q.id}] ${q.title} - Progress: ${progress}`);
+        });
+        return window.uqe.activeQuests.length;
+    },
+
+    /**
+     * List all completed quests
+     */
+    listCompleted: function () {
+        if (!window.uqe) { console.error('UQE not loaded'); return; }
+        console.log('✅ COMPLETED QUESTS:');
+        window.uqe.completedQuests.forEach(q => {
+            console.log(`  [${q.id}] ${q.title}`);
+        });
+        return window.uqe.completedQuests.length;
+    },
+
+    /**
+     * List all quest definitions
+     */
+    listAll: function () {
+        if (!window.uqe) { console.error('UQE not loaded'); return; }
+        console.log('📚 ALL QUEST DEFINITIONS:');
+        Object.keys(window.uqe.allDefinitions).forEach(id => {
+            const def = window.uqe.allDefinitions[id];
+            const requires = def.requires ? ` (requires: ${def.requires})` : '';
+            console.log(`  [${id}] ${def.title}${requires}`);
+        });
+        return Object.keys(window.uqe.allDefinitions).length;
+    },
+
+    /**
+     * Accept a quest by ID
+     */
+    accept: function (questId) {
+        if (!window.uqe) { console.error('UQE not loaded'); return; }
+        if (!window.uqe.allDefinitions[questId]) {
+            console.error(`Quest '${questId}' not found`);
+            return false;
+        }
+        window.uqe.acceptQuest(questId);
+        console.log(`✅ Accepted quest: ${questId}`);
+        updateQuestTrackerHUD();
+        return true;
+    },
+
+    /**
+     * Force complete a quest
+     */
+    complete: function (questId) {
+        if (!window.uqe) { console.error('UQE not loaded'); return; }
+        const quest = window.uqe.activeQuests.find(q => q.id === questId);
+        if (!quest) {
+            console.error(`Quest '${questId}' not active`);
+            return false;
+        }
+        // Mark all objectives complete
+        quest.objectives.forEach(obj => {
+            obj.progress = obj.target;
+            obj.completed = true;
+        });
+        console.log(`✅ Completed quest: ${questId} (will process on next update)`);
+        return true;
+    },
+
+    /**
+     * Skip to next quest in chain
+     */
+    skip: function (questId) {
+        if (!questId) {
+            // Skip current active main quest
+            const mainQuest = window.uqe.activeQuests.find(q => q.id.startsWith('main_'));
+            if (mainQuest) {
+                questId = mainQuest.id;
+            } else {
+                console.error('No active main quest to skip');
+                return false;
+            }
+        }
+        return this.complete(questId);
+    },
+
+    /**
+     * Set objective progress for a quest
+     */
+    setProgress: function (questId, amount) {
+        if (!window.uqe) { console.error('UQE not loaded'); return; }
+        const quest = window.uqe.activeQuests.find(q => q.id === questId);
+        if (!quest) {
+            console.error(`Quest '${questId}' not active`);
+            return false;
+        }
+        quest.objectives.forEach(obj => {
+            obj.progress = Math.min(amount, obj.target);
+            if (obj.progress >= obj.target) {
+                obj.completed = true;
+            }
+        });
+        console.log(`📊 Set progress for ${questId}: ${amount}`);
+        updateQuestTrackerHUD();
+        return true;
+    },
+
+    /**
+     * Reset ALL quest progress (clears save data)
+     */
+    reset: function () {
+        if (!window.uqe) { console.error('UQE not loaded'); return; }
+        // Clear UQE state
+        window.uqe.activeQuests.forEach(q => q.dispose());
+        window.uqe.activeQuests = [];
+        window.uqe.completedQuests = [];
+        window.uqe.pendingQuests = [];
+        // Clear localStorage
+        localStorage.removeItem('rpg_quest_save');
+        console.log('🔄 Quest progress reset! Refresh the page to restart.');
+        return true;
+    },
+
+    /**
+     * Go to a specific quest (reset and skip to it)
+     */
+    goto: function (targetQuestId) {
+        if (!window.uqe) { console.error('UQE not loaded'); return; }
+        if (!window.uqe.allDefinitions[targetQuestId]) {
+            console.error(`Quest '${targetQuestId}' not found`);
+            return false;
+        }
+
+        // Find the chain of quests leading to target
+        const chain = [];
+        let currentId = targetQuestId;
+        while (currentId) {
+            const def = window.uqe.allDefinitions[currentId];
+            chain.unshift(currentId);
+            currentId = def.requires;
+        }
+
+        console.log(`🎯 Quest chain to ${targetQuestId}:`, chain);
+
+        // Reset and complete all prerequisites
+        this.reset();
+
+        // Accept and complete each prerequisite
+        chain.slice(0, -1).forEach(id => {
+            window.uqe.acceptQuest(id);
+            const quest = window.uqe.activeQuests.find(q => q.id === id);
+            if (quest) {
+                quest.objectives.forEach(obj => {
+                    obj.progress = obj.target;
+                    obj.completed = true;
+                });
+            }
+            // Force update to process completion
+            window.uqe.update();
+        });
+
+        // Accept the target quest
+        window.uqe.acceptQuest(targetQuestId);
+        updateQuestTrackerHUD();
+
+        console.log(`✅ Now at quest: ${targetQuestId}`);
+        return true;
+    },
+
+    /**
+     * Show detailed info about a quest
+     */
+    info: function (questId) {
+        if (!window.uqe) { console.error('UQE not loaded'); return; }
+        const def = window.uqe.allDefinitions[questId];
+        if (!def) {
+            console.error(`Quest '${questId}' not found`);
+            return null;
+        }
+        console.log(`
+📜 QUEST INFO: ${def.title}
+ID: ${questId}
+Giver: ${def.giver || 'Unknown'}
+Requires: ${def.requires || 'None'}
+Description: ${def.description}
+Objectives:`);
+        def.objectives.forEach(obj => {
+            console.log(`  - [${obj.type}] ${obj.label} (target: ${obj.target})`);
+        });
+        console.log(`Rewards: ${def.rewards.xp} XP, ${def.rewards.gold} Gold`);
+
+        // Check if active
+        const active = window.uqe.activeQuests.find(q => q.id === questId);
+        if (active) {
+            console.log('Status: ACTIVE');
+            active.objectives.forEach(obj => {
+                console.log(`  Progress: ${obj.progress}/${obj.target}`);
+            });
+        } else if (window.uqe.completedQuests.find(q => q.id === questId)) {
+            console.log('Status: COMPLETED');
+        } else {
+            console.log('Status: NOT STARTED');
+        }
+        return def;
+    }
+};
+
+// Attach to window for console access
+window.debugQuest = debugQuest;
+console.log('🔧 Quest debug commands loaded. Type debugQuest.help() for usage.');

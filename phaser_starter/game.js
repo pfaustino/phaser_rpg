@@ -4469,10 +4469,12 @@ function create() {
     // Add 'H' key for help/controls toggle
     this.helpKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.H);
 
-    // Add ability keys (1, 2, 3)
+    // Add ability keys (1, 2, 3) and potion keys (4, 5)
     this.abilityOneKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ONE);
     this.abilityTwoKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.TWO);
     this.abilityThreeKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.THREE);
+    this.potionFourKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.FOUR);
+    this.potionFiveKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.FIVE);
 
     // Add CTRL+A for assets window
     assetsKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A);
@@ -5314,6 +5316,14 @@ function update(time, delta) {
     }
     if (Phaser.Input.Keyboard.JustDown(scene.abilityThreeKey)) {
         castAbility('shield', time);
+    }
+
+    // Potion keys (4, 5)
+    if (scene.potionFourKey && Phaser.Input.Keyboard.JustDown(scene.potionFourKey)) {
+        usePotion('health');
+    }
+    if (scene.potionFiveKey && Phaser.Input.Keyboard.JustDown(scene.potionFiveKey)) {
+        usePotion('mana');
     }
 
     // Update ability cooldowns
@@ -7943,12 +7953,34 @@ function pickupItem(item, index) {
             uqe.eventBus.emit(UQE_EVENTS.GOLD_EARNED, { amount: item.amount });
         }
     } else {
-        // Add item to inventory
+        // Add item to inventory (with stacking for consumables)
         console.log(`📦 Adding item to inventory: ${item.name} (type: ${item.type})`);
         console.log(`   Before: ${playerStats.inventory.length} items`);
-        playerStats.inventory.push(item);
+
+        // Check if this is a stackable consumable
+        let stacked = false;
+        if (item.type === 'consumable' && item.name) {
+            // Find existing stack of same item
+            const existingStack = playerStats.inventory.find(i =>
+                i.type === 'consumable' && i.name === item.name
+            );
+            if (existingStack) {
+                existingStack.quantity = (existingStack.quantity || 1) + 1;
+                stacked = true;
+                console.log(`   Stacked with existing: now x${existingStack.quantity}`);
+            }
+        }
+
+        if (!stacked) {
+            // Set initial quantity for consumables
+            if (item.type === 'consumable') {
+                item.quantity = item.quantity || 1;
+            }
+            playerStats.inventory.push(item);
+        }
+
         console.log(`   After: ${playerStats.inventory.length} items`);
-        console.log(`   Inventory contents:`, playerStats.inventory.map(i => i.name));
+        console.log(`   Inventory contents:`, playerStats.inventory.map(i => `${i.name}${i.quantity ? ' x' + i.quantity : ''}`));
         playerStats.questStats.itemsCollected++;
         showDamageNumber(item.sprite.x, item.sprite.y, `Picked up ${item.name}`, 0x00ff00);
         playSound('item_pickup');
@@ -7956,6 +7988,9 @@ function pickupItem(item, index) {
 
         // Refresh inventory UI if open - this will update the display with the new item
         refreshInventory();
+
+        // Update potion slot quantities
+        updatePotionSlots();
 
         // UQE Bridge Event
         if (typeof uqe !== 'undefined') {
@@ -8178,8 +8213,9 @@ function updateInventoryItems() {
             .setScrollFactor(0)
             .setDepth(300.5); // Above inventory panel bg but below sprite
 
-        // Create item name text (small, below sprite)
-        const itemText = scene.add.text(x, y + slotSize / 2 + 5, item.name, {
+        // Create item name text (small, below sprite) - include quantity for stacked items
+        const displayName = (item.quantity && item.quantity > 1) ? `${item.name} x${item.quantity}` : item.name;
+        const itemText = scene.add.text(x, y + slotSize / 2 + 5, displayName, {
             fontSize: '10px',
             fill: '#ffffff',
             wordWrap: { width: slotSize }
@@ -9089,16 +9125,22 @@ function updateEquipmentSlots() {
     equipmentPanel.slots.boots = bootsSlot;
 
     // Show current stats with bonuses at bottom of left panel
-    const statsY = 680;
+    const statsY = 660;
     let attackBonus = 0;
     let defenseBonus = 0;
     let maxHpBonus = 0;
+    let speedBonus = 0;
+    let critBonus = 0;
+    let lifestealBonus = 0;
 
     Object.values(playerStats.equipment).forEach(item => {
         if (!item) return;
         if (item.attackPower) attackBonus += item.attackPower;
         if (item.defense) defenseBonus += item.defense;
         if (item.maxHp) maxHpBonus += item.maxHp;
+        if (item.speed) speedBonus += item.speed;
+        if (item.critChance) critBonus += item.critChance;
+        if (item.lifesteal) lifestealBonus += item.lifesteal;
     });
 
     let statsText = `Attack: ${playerStats.baseAttack}`;
@@ -9111,6 +9153,18 @@ function updateEquipmentSlots() {
 
     if (maxHpBonus > 0) {
         statsText += `\nMax HP: 100 + ${maxHpBonus} = ${playerStats.maxHp}`;
+    }
+
+    if (speedBonus > 0) {
+        statsText += `\nSpeed: +${speedBonus}`;
+    }
+
+    if (critBonus > 0) {
+        statsText += `\nCrit: +${(critBonus * 100).toFixed(1)}%`;
+    }
+
+    if (lifestealBonus > 0) {
+        statsText += `\nLifesteal: +${(lifestealBonus * 100).toFixed(1)}%`;
     }
 
     if (equipmentPanel.statsText) {
@@ -9279,8 +9333,9 @@ function updateEquipmentInventoryItems() {
         // Store border for cleanup
         item.borderRect = borderRect;
 
-        // Item name below sprite
-        const itemNameText = scene.add.text(x, y + itemSize / 2 + 5, item.name, {
+        // Item name below sprite (include quantity for stacked items)
+        const displayName = (item.quantity && item.quantity > 1) ? `${item.name} x${item.quantity}` : item.name;
+        const itemNameText = scene.add.text(x, y + itemSize / 2 + 5, displayName, {
             fontSize: '11px',
             fill: '#ffffff',
             wordWrap: { width: itemSize + 10 }
@@ -13210,14 +13265,35 @@ function buyItem(item, price) {
     // Hide any tooltips before refreshing
     hideTooltip(true);
 
-    // Create item copy for inventory
-    const purchasedItem = {
-        ...item,
-        id: `shop_${Date.now()}_${Math.random()}`
-    };
+    // Check if we can stack with existing consumable
+    let stacked = false;
+    if (item.type === 'consumable' && item.name) {
+        const existingStack = playerStats.inventory.find(i => 
+            i.type === 'consumable' && i.name === item.name
+        );
+        if (existingStack) {
+            existingStack.quantity = (existingStack.quantity || 1) + 1;
+            stacked = true;
+        }
+    }
+
+    if (!stacked) {
+        // Check inventory space
+        if (playerStats.inventory.length >= 30) {
+            showDamageNumber(player.x, player.y - 40, 'Inventory full!', 0xff0000);
+            return;
+        }
+        
+        // Create item copy for inventory
+        const purchasedItem = {
+            ...item,
+            id: `shop_${Date.now()}_${Math.random()}`,
+            quantity: item.type === 'consumable' ? 1 : undefined
+        };
+        playerStats.inventory.push(purchasedItem);
+    }
 
     playerStats.gold -= price;
-    playerStats.inventory.push(purchasedItem);
 
     // Update gold display
     if (shopPanel.goldText) {
@@ -13229,6 +13305,7 @@ function buyItem(item, price) {
     // Refresh shop UI
     updateShopItems();
     updateShopInventoryItems(); // Update right panel inventory
+    updatePotionSlots(); // Update potion slots if consumable
 
     // Refresh inventory if open (this will also hide tooltips)
     if (inventoryVisible) {
@@ -13292,7 +13369,8 @@ function updateShopInventoryItems() {
         const x = startX + col * (itemSize + spacing);
 
         // Create temporary text to measure height (we'll recreate it properly below)
-        const tempNameText = scene.add.text(0, 0, item.name, {
+        const displayName = (item.quantity && item.quantity > 1) ? `${item.name} x${item.quantity}` : item.name;
+        const tempNameText = scene.add.text(0, 0, displayName, {
             fontSize: '11px',
             fill: '#ffffff',
             wordWrap: { width: itemSize + 10 }
@@ -13381,8 +13459,9 @@ function updateShopInventoryItems() {
             .setScrollFactor(0)
             .setDepth(400.5);
 
-        // Item name below sprite
-        const itemNameText = scene.add.text(x, y + itemSize / 2 + 5, item.name, {
+        // Item name below sprite (include quantity for stacked items)
+        const shopDisplayName = (item.quantity && item.quantity > 1) ? `${item.name} x${item.quantity}` : item.name;
+        const itemNameText = scene.add.text(x, y + itemSize / 2 + 5, shopDisplayName, {
             fontSize: '11px',
             fill: '#ffffff',
             wordWrap: { width: itemSize + 10 }
@@ -13422,15 +13501,22 @@ function updateShopInventoryItems() {
         borderRect.on('pointerout', onSellHoverOut);
 
         const sellItem = () => {
-            // Remove item from inventory
+            // Find item in inventory
             const itemIndex = playerStats.inventory.indexOf(item);
             if (itemIndex > -1) {
-                playerStats.inventory.splice(itemIndex, 1);
+                // Handle stacked items - decrement quantity or remove if last one
+                if (item.quantity && item.quantity > 1) {
+                    item.quantity--;
+                } else {
+                    playerStats.inventory.splice(itemIndex, 1);
+                }
+                
                 playerStats.gold += sellPrice;
 
                 // Update displays
                 updateShopItems();
                 updateShopInventoryItems();
+                updatePotionSlots(); // Update potion slots if consumable
 
                 showDamageNumber(player.x, player.y - 40, `Sold ${item.name} for ${sellPrice} Gold!`, 0x00ff00);
                 addChatMessage(`Sold ${item.name} for ${sellPrice} Gold`, 0xffd700, '💰');
@@ -14061,15 +14147,41 @@ function createTavernUI() {
 
         const buyAction = () => {
             if (playerStats.gold >= item.price) {
-                if (playerStats.inventory.length < 30) { // Max inventory size
-                    playerStats.gold -= item.price;
-                    playerStats.inventory.push({ ...item, id: `consumable_${Date.now()}_${Math.random()}` });
-                    updatePlayerStats();
-                    showDamageNumber(player.x, player.y - 40, `Bought ${item.name}!`, 0x00ff00);
-                    addChatMessage(`Bought ${item.name}`, 0x00ff00, '🍺');
-                } else {
-                    showDamageNumber(player.x, player.y - 40, 'Inventory full!', 0xff0000);
+                // Check if we can stack with existing consumable
+                let stacked = false;
+                if (item.type === 'consumable' && item.name) {
+                    console.log(`🛒 Buying ${item.name}, looking for existing stack...`);
+                    console.log(`   Inventory consumables:`, playerStats.inventory
+                        .filter(i => i.type === 'consumable')
+                        .map(i => `${i.name} (qty:${i.quantity || 1})`));
+                    
+                    const existingStack = playerStats.inventory.find(i => 
+                        i.type === 'consumable' && i.name === item.name
+                    );
+                    if (existingStack) {
+                        console.log(`   Found stack: ${existingStack.name} (qty:${existingStack.quantity || 1})`);
+                        existingStack.quantity = (existingStack.quantity || 1) + 1;
+                        stacked = true;
+                        console.log(`   After increment: qty=${existingStack.quantity}`);
+                    } else {
+                        console.log(`   No existing stack found for "${item.name}"`);
+                    }
                 }
+
+                if (!stacked) {
+                    if (playerStats.inventory.length >= 30) { // Max inventory size
+                        showDamageNumber(player.x, player.y - 40, 'Inventory full!', 0xff0000);
+                        return;
+                    }
+                    const newItem = { ...item, id: `consumable_${Date.now()}_${Math.random()}`, quantity: 1 };
+                    playerStats.inventory.push(newItem);
+                }
+
+                playerStats.gold -= item.price;
+                updatePlayerStats();
+                updatePotionSlots(); // Update potion slot quantities
+                showDamageNumber(player.x, player.y - 40, `Bought ${item.name}!`, 0x00ff00);
+                addChatMessage(`Bought ${item.name}`, 0x00ff00, '🍺');
             } else {
                 showDamageNumber(player.x, player.y - 40, 'Not enough gold!', 0xff0000);
             }
@@ -14229,6 +14341,40 @@ function loadGame() {
         // Restore player stats
         Object.assign(playerStats, saveData.playerStats);
 
+        // Migrate: Consolidate consumables into stacks (for old saves with separate items)
+        if (playerStats.inventory && playerStats.inventory.length > 0) {
+            const consolidatedInventory = [];
+            const consumableStacks = {}; // Map name -> stacked item
+
+            console.log('📦 Migration: Starting consumable consolidation...');
+            console.log('   Original inventory:', playerStats.inventory.map(i => `${i.name} (qty:${i.quantity || 1})`));
+
+            playerStats.inventory.forEach(item => {
+                if (item.type === 'consumable' && item.name) {
+                    if (consumableStacks[item.name]) {
+                        // Add to existing stack
+                        const oldQty = consumableStacks[item.name].quantity || 1;
+                        const addQty = item.quantity || 1;
+                        consumableStacks[item.name].quantity = oldQty + addQty;
+                        console.log(`   Stacked: ${item.name} (${oldQty} + ${addQty} = ${consumableStacks[item.name].quantity})`);
+                    } else {
+                        // Create new stack
+                        item.quantity = item.quantity || 1;
+                        consumableStacks[item.name] = item;
+                        consolidatedInventory.push(item);
+                        console.log(`   New stack: ${item.name} (qty:${item.quantity})`);
+                    }
+                } else {
+                    // Non-consumable items stay as-is
+                    consolidatedInventory.push(item);
+                }
+            });
+
+            playerStats.inventory = consolidatedInventory;
+            console.log('   Final inventory:', playerStats.inventory.map(i => `${i.name} (qty:${i.quantity || 'N/A'})`));
+            console.log('📦 Migrated inventory: consolidated consumables into stacks');
+        }
+
         // Restore UQE Quests
         if (saveData.uqeQuests) {
             uqe.loadSaveData(saveData.uqeQuests);
@@ -14320,6 +14466,7 @@ function loadGame() {
         refreshInventory();
         refreshEquipment();
         refreshQuestLog();
+        updatePotionSlots(); // Update potion slot quantities from loaded inventory
 
         // Update weapon sprite to show equipped weapon
         updateWeaponSprite();
@@ -14458,7 +14605,211 @@ function createAbilityBar() {
         index++;
     });
 
-    console.log(`✅ Ability bar created with ${abilityBar.buttons.length} abilities`);
+    // Add Health Potion slot (key 4)
+    const potionStartX = startX + index * abilitySpacing + 20; // Small gap after abilities
+
+    // Health Potion slot
+    const healthPotionBg = scene.add.rectangle(potionStartX, abilityBarY, 60, 60, 0x442222, 0.9)
+        .setScrollFactor(0).setDepth(200).setStrokeStyle(2, 0xff4444);
+
+    const healthPotionIcon = scene.add.sprite(potionStartX, abilityBarY, 'item_consumable');
+    healthPotionIcon.setScrollFactor(0).setDepth(201).setScale(0.8);
+    healthPotionIcon.setTint(0xff4444);
+
+    const healthKeyText = scene.add.text(potionStartX - 20, abilityBarY - 20, '4', {
+        fontSize: '14px',
+        fill: '#ffffff',
+        fontStyle: 'bold',
+        backgroundColor: '#000000',
+        padding: { x: 3, y: 2 }
+    }).setScrollFactor(0).setDepth(202).setOrigin(0.5, 0.5);
+
+    const healthQuantityText = scene.add.text(potionStartX + 15, abilityBarY + 20, 'x0', {
+        fontSize: '12px',
+        fill: '#ffffff',
+        fontStyle: 'bold',
+        backgroundColor: '#000000',
+        padding: { x: 2, y: 1 }
+    }).setScrollFactor(0).setDepth(202).setOrigin(0.5, 0.5);
+
+    const healthLabelText = scene.add.text(potionStartX, abilityBarY + 35, 'HP', {
+        fontSize: '10px',
+        fill: '#ff4444'
+    }).setScrollFactor(0).setDepth(202).setOrigin(0.5, 0.5);
+
+    // Mana Potion slot (key 5)
+    const manaPotionX = potionStartX + abilitySpacing;
+
+    const manaPotionBg = scene.add.rectangle(manaPotionX, abilityBarY, 60, 60, 0x222244, 0.9)
+        .setScrollFactor(0).setDepth(200).setStrokeStyle(2, 0x4444ff);
+
+    const manaPotionIcon = scene.add.sprite(manaPotionX, abilityBarY, 'item_consumable');
+    manaPotionIcon.setScrollFactor(0).setDepth(201).setScale(0.8);
+    manaPotionIcon.setTint(0x4444ff);
+
+    const manaKeyText = scene.add.text(manaPotionX - 20, abilityBarY - 20, '5', {
+        fontSize: '14px',
+        fill: '#ffffff',
+        fontStyle: 'bold',
+        backgroundColor: '#000000',
+        padding: { x: 3, y: 2 }
+    }).setScrollFactor(0).setDepth(202).setOrigin(0.5, 0.5);
+
+    const manaQuantityText = scene.add.text(manaPotionX + 15, abilityBarY + 20, 'x0', {
+        fontSize: '12px',
+        fill: '#ffffff',
+        fontStyle: 'bold',
+        backgroundColor: '#000000',
+        padding: { x: 2, y: 1 }
+    }).setScrollFactor(0).setDepth(202).setOrigin(0.5, 0.5);
+
+    const manaLabelText = scene.add.text(manaPotionX, abilityBarY + 35, 'MP', {
+        fontSize: '10px',
+        fill: '#4444ff'
+    }).setScrollFactor(0).setDepth(202).setOrigin(0.5, 0.5);
+
+    // Store potion slots for updates
+    abilityBar.potionSlots = {
+        health: {
+            bg: healthPotionBg,
+            icon: healthPotionIcon,
+            keyText: healthKeyText,
+            quantityText: healthQuantityText,
+            labelText: healthLabelText
+        },
+        mana: {
+            bg: manaPotionBg,
+            icon: manaPotionIcon,
+            keyText: manaKeyText,
+            quantityText: manaQuantityText,
+            labelText: manaLabelText
+        }
+    };
+
+    // Initial update
+    updatePotionSlots();
+
+    console.log(`✅ Ability bar created with ${abilityBar.buttons.length} abilities + 2 potion slots`);
+}
+
+/**
+ * Update potion slot quantities from inventory
+ */
+function updatePotionSlots() {
+    if (!abilityBar || !abilityBar.potionSlots) return;
+
+    // Count health and mana potions in inventory (including stacked quantities)
+    let healthPotions = 0;
+    let manaPotions = 0;
+
+    playerStats.inventory.forEach(item => {
+        if (item.type === 'consumable') {
+            const qty = item.quantity || 1; // Default to 1 if no quantity property
+            if (item.name && item.name.toLowerCase().includes('health')) {
+                healthPotions += qty;
+            } else if (item.name && item.name.toLowerCase().includes('mana')) {
+                manaPotions += qty;
+            } else if (item.healAmount && !item.manaAmount) {
+                // Health potion if it heals HP but not mana
+                healthPotions += qty;
+            } else if (item.manaAmount) {
+                manaPotions += qty;
+            }
+        }
+    });
+    // Update quantity text
+    abilityBar.potionSlots.health.quantityText.setText(`x${healthPotions}`);
+    abilityBar.potionSlots.mana.quantityText.setText(`x${manaPotions}`);
+
+    // Dim slot if no potions
+    abilityBar.potionSlots.health.icon.setAlpha(healthPotions > 0 ? 1 : 0.3);
+    abilityBar.potionSlots.mana.icon.setAlpha(manaPotions > 0 ? 1 : 0.3);
+}
+
+/**
+ * Use a potion from inventory
+ * @param {string} potionType - 'health' or 'mana'
+ */
+function usePotion(potionType) {
+    // Find the first matching potion in inventory
+    let potionIndex = -1;
+
+    for (let i = 0; i < playerStats.inventory.length; i++) {
+        const item = playerStats.inventory[i];
+        if (item.type !== 'consumable') continue;
+
+        if (potionType === 'health') {
+            if ((item.name && item.name.toLowerCase().includes('health')) ||
+                (item.healAmount && !item.manaAmount)) {
+                potionIndex = i;
+                break;
+            }
+        } else if (potionType === 'mana') {
+            if ((item.name && item.name.toLowerCase().includes('mana')) ||
+                item.manaAmount) {
+                potionIndex = i;
+                break;
+            }
+        }
+    }
+
+    if (potionIndex === -1) {
+        addChatMessage(`No ${potionType} potions available!`, 0xff6666, '⚠️');
+        return;
+    }
+
+    const potion = playerStats.inventory[potionIndex];
+
+    // Apply effect
+    if (potionType === 'health') {
+        const healAmount = potion.healAmount || 50;
+        const oldHp = playerStats.hp;
+        playerStats.hp = Math.min(playerStats.maxHp, playerStats.hp + healAmount);
+        const actualHeal = playerStats.hp - oldHp;
+
+        if (actualHeal > 0) {
+            addChatMessage(`Used ${potion.name || 'Health Potion'}: +${actualHeal} HP`, 0x44ff44, '💊');
+            showDamageNumber(player.x, player.y - 20, `+${actualHeal}`, 0x44ff44, false);
+            playSound('heal_cast');
+        } else {
+            addChatMessage('HP already full!', 0xffff00, '💊');
+            return; // Don't consume potion if no effect
+        }
+    } else if (potionType === 'mana') {
+        const manaAmount = potion.manaAmount || 30;
+        const oldMana = playerStats.mana;
+        playerStats.mana = Math.min(playerStats.maxMana, playerStats.mana + manaAmount);
+        const actualMana = playerStats.mana - oldMana;
+
+        if (actualMana > 0) {
+            addChatMessage(`Used ${potion.name || 'Mana Potion'}: +${actualMana} MP`, 0x4444ff, '💊');
+            showDamageNumber(player.x, player.y - 20, `+${actualMana}`, 0x4444ff, false);
+            playSound('heal_cast');
+        } else {
+            addChatMessage('Mana already full!', 0xffff00, '💊');
+            return; // Don't consume potion if no effect
+        }
+    }
+
+    // Decrement potion quantity (or remove if last one)
+    if (potion.quantity && potion.quantity > 1) {
+        potion.quantity--;
+    } else {
+        playerStats.inventory.splice(potionIndex, 1);
+    }
+
+    // Update potion slot display
+    updatePotionSlots();
+
+    // Flash the slot to show it was used
+    if (abilityBar && abilityBar.potionSlots) {
+        const slot = potionType === 'health' ? abilityBar.potionSlots.health : abilityBar.potionSlots.mana;
+        slot.bg.setFillStyle(0xffffff, 0.8);
+        const scene = game.scene.scenes[0];
+        scene.time.delayedCall(100, () => {
+            slot.bg.setFillStyle(potionType === 'health' ? 0x442222 : 0x222244, 0.9);
+        });
+    }
 }
 
 // ============================================

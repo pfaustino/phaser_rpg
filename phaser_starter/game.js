@@ -45,6 +45,8 @@ let currentMap = 'town'; // 'town', 'wilderness', or 'dungeon'
 let transitionMarkers = []; // Array of transition marker objects
 let buildings = []; // Array of building objects for collision
 let dungeonWalls = []; // Array of dungeon wall objects for collision
+let questMarkers = new Map(); // Quest objective markers (key: targetId, value: {sprite, tween})
+let lastQuestMarkerUpdate = 0; // Throttle marker updates
 
 // Dungeon system
 let currentDungeon = null; // Current dungeon data structure
@@ -875,7 +877,7 @@ function preload() {
 
     this.load.image('dirt', 'assets/tiles/tile_floor_dirt.png');
     this.load.image('stone', 'assets/tiles/tile_floor_stone.png');
-    this.load.image('wall', 'assets/tiles/wall.png');
+    // wall.png removed - file doesn't exist
 
     // Load dungeon tilesets with alpha support
     // PNG images should automatically preserve transparency
@@ -885,18 +887,67 @@ function preload() {
     this.load.text('dungeon_floor_metadata', 'assets/tiles/dungeon/dungeon_floor_metadata.json');
     this.load.text('dungeon_wall_metadata', 'assets/tiles/dungeon/dungeon_wall_metadata.json');
 
-    // Generate fallback graphics (always created - used if images don't load)
+    // Generate fallback graphics AFTER preload completes
+    // This prevents "texture key already in use" errors
+    this.load.once('complete', () => {
+        console.log('📦 Preload complete - generating fallback textures if needed...');
 
-    // Create fallback player sprite (yellow circle with border) - only if animations don't load
-    this.add.graphics()
-        .fillStyle(0xffff00)
-        .fillCircle(16, 16, 14)
-        .lineStyle(2, 0x000000)
-        .strokeCircle(16, 16, 14)
-        .generateTexture('player', 32, 32);
+        // Create fallback player sprite (yellow circle with border) - only if not loaded
+        if (!this.textures.exists('player')) {
+            this.add.graphics()
+                .fillStyle(0xffff00)
+                .fillCircle(16, 16, 14)
+                .lineStyle(2, 0x000000)
+                .strokeCircle(16, 16, 14)
+                .generateTexture('player', 32, 32);
+            console.log('  ✅ Generated fallback player texture');
+        }
 
-    // Procedural monster generation - create different monster types with unique appearances
-    generateProceduralMonsters.call(this);
+        // Create wall tile (dark gray with border) - only if not loaded from file
+        if (!this.textures.exists('wall')) {
+            this.add.graphics()
+                .fillStyle(0x505050)
+                .fillRect(0, 0, 32, 32)
+                .lineStyle(2, 0x303030)
+                .strokeRect(0, 0, 32, 32)
+                .fillStyle(0x606060)
+                .fillRect(2, 2, 28, 2)
+                .fillRect(2, 2, 2, 28)
+                .generateTexture('wall', 32, 32);
+            console.log('  ✅ Generated fallback wall texture');
+        }
+
+        // Create dirt tile (brown) - only if not loaded from file  
+        if (!this.textures.exists('dirt')) {
+            this.add.graphics()
+                .fillStyle(0x8b4513)
+                .fillRect(0, 0, 32, 32)
+                .fillStyle(0x654321)
+                .fillRect(4, 4, 24, 24)
+                .fillStyle(0x9d5a2a)
+                .fillRect(8, 8, 16, 16)
+                .generateTexture('dirt', 32, 32);
+            console.log('  ✅ Generated fallback dirt texture');
+        }
+
+        // Create stone tile (light gray checkerboard pattern) - only if not loaded from file
+        if (!this.textures.exists('stone')) {
+            this.add.graphics()
+                .fillStyle(0x808080)
+                .fillRect(0, 0, 32, 32)
+                .fillStyle(0x909090)
+                .fillRect(0, 0, 16, 16)
+                .fillRect(16, 16, 16, 16)
+                .fillStyle(0x707070)
+                .fillRect(16, 0, 16, 16)
+                .fillRect(0, 16, 16, 16)
+                .generateTexture('stone', 32, 32);
+            console.log('  ✅ Generated fallback stone texture');
+        }
+
+        // Procedural monster generation - create different monster types with unique appearances
+        generateProceduralMonsters.call(this);
+    });
 
     // Create grass tile (green with pattern) - only if spritesheet failed to load
     // Wait longer for the texture to load, then check
@@ -969,38 +1020,7 @@ function preload() {
         }
     });
 
-    // Create wall tile (dark gray with border)
-    this.add.graphics()
-        .fillStyle(0x505050)
-        .fillRect(0, 0, 32, 32)
-        .lineStyle(2, 0x303030)
-        .strokeRect(0, 0, 32, 32)
-        .fillStyle(0x606060)
-        .fillRect(2, 2, 28, 2)
-        .fillRect(2, 2, 2, 28)
-        .generateTexture('wall', 32, 32);
-
-    // Create dirt tile (brown)
-    this.add.graphics()
-        .fillStyle(0x8b4513)
-        .fillRect(0, 0, 32, 32)
-        .fillStyle(0x654321)
-        .fillRect(4, 4, 24, 24)
-        .fillStyle(0x9d5a2a)
-        .fillRect(8, 8, 16, 16)
-        .generateTexture('dirt', 32, 32);
-
-    // Create stone tile (light gray checkerboard pattern)
-    this.add.graphics()
-        .fillStyle(0x808080)
-        .fillRect(0, 0, 32, 32)
-        .fillStyle(0x909090)
-        .fillRect(0, 0, 16, 16)
-        .fillRect(16, 16, 16, 16)
-        .fillStyle(0x707070)
-        .fillRect(16, 0, 16, 16)
-        .fillRect(0, 16, 16, 16)
-        .generateTexture('stone', 32, 32);
+    // Wall, dirt, stone fallbacks are now generated in the load.once('complete') callback above
 
     // Create fallback item sprites - wait for images to load first, then create fallbacks if needed
     // Check after a delay to allow custom images to load
@@ -1241,7 +1261,7 @@ function preload() {
 
     // Load sound files (optional - will work without them)
     // Note: Phaser will show warnings if files don't exist, but won't crash
-    this.load.audio('attack_swing', 'assets/audio/attack_swing.wav');
+    this.load.audio('attack_swing', 'assets/audio/sword-slice.mp3');
     this.load.audio('hit_monster', 'assets/audio/hit_monster.mp3');
     this.load.audio('hit_player', 'assets/audio/hit_player.mp3');
     this.load.audio('monster_die', 'assets/audio/monster_die.mp3');
@@ -1539,8 +1559,10 @@ function generateProceduralMonsters() {
             g.fillCircle(center, center, radius * 1.3);
         }
 
-        // Generate texture
-        g.generateTexture(def.key, size, size);
+        // Generate texture only if it doesn't already exist
+        if (!this.textures.exists(def.key)) {
+            g.generateTexture(def.key, size, size);
+        }
         g.destroy();
     });
 
@@ -3695,11 +3717,24 @@ function spawnDungeonMonsters() {
             const y = (room.y + Phaser.Math.Between(1, room.height - 1)) * scene.tileSize;
 
             // Spawn random monster type (scaled by level)
-            const dungeonMonsterTypes = [
-                { name: 'Goblin', textureKey: 'monster_goblin', hp: 30, attack: 5, speed: 50, xp: 10, isProcedural: false },
-                { name: 'Orc', textureKey: 'monster_orc', hp: 50, attack: 8, speed: 40, xp: 20, isProcedural: false },
-                { name: 'Skeleton', textureKey: 'monster_skeleton', hp: 25, attack: 6, speed: 60, xp: 15, isProcedural: false }
-            ];
+            // Early floors (1-2) spawn Echo creatures for main quest
+            let dungeonMonsterTypes = [];
+
+            if (dungeonLevel <= 2) {
+                // Floor 1-2: Echo creatures for main quest line
+                dungeonMonsterTypes = [
+                    { name: 'Echo Rat', textureKey: 'monster_echo_mite', hp: 20, attack: 4, speed: 70, xp: 8, isProcedural: false, monsterType: 'echo_rat' },
+                    { name: 'Echo Rat', textureKey: 'monster_echo_mite', hp: 20, attack: 4, speed: 70, xp: 8, isProcedural: false, monsterType: 'echo_rat' },
+                    { name: 'Echo Mite', textureKey: 'monster_echo_mite', hp: 15, attack: 3, speed: 60, xp: 5, isProcedural: false, monsterType: 'echo_mite' }
+                ];
+            } else {
+                // Deeper floors: Standard dungeon monsters
+                dungeonMonsterTypes = [
+                    { name: 'Goblin', textureKey: 'monster_goblin', hp: 30, attack: 5, speed: 50, xp: 10, isProcedural: false },
+                    { name: 'Orc', textureKey: 'monster_orc', hp: 50, attack: 8, speed: 40, xp: 20, isProcedural: false },
+                    { name: 'Skeleton', textureKey: 'monster_skeleton', hp: 25, attack: 6, speed: 60, xp: 15, isProcedural: false }
+                ];
+            }
 
             // Add procedural versions to the pool if available
             if (monsterRenderer && Object.keys(monsterRenderer.monsterBlueprints).length > 0) {
@@ -4009,6 +4044,14 @@ function create() {
         // Handle Objective Progress HUD - WoW-style persistent tracker
         uqe.eventBus.on(UQE_EVENTS.OBJECTIVE_UPDATED, (data) => {
             handleObjectiveUpdate(data);
+        });
+
+        // Handle Quest Accepted - update tracker HUD for auto-accepted quests
+        uqe.eventBus.on(UQE_EVENTS.QUEST_ACCEPTED, (quest) => {
+            console.log(`📋 [UQE Bridge] Quest Accepted: ${quest.title}`);
+            addChatMessage(`Quest Started: ${quest.title}`, 0x00ffff, '📜');
+            updateQuestTrackerHUD();
+            if (questVisible) updateQuestLogItems();
         });
 
         // Handle Quest Available - show notification for chain quests
@@ -4504,6 +4547,9 @@ function update(time, delta) {
 
     // Defense Quest Wave Spawner
     updateDefenseQuestSpawner(time);
+
+    // Quest Markers (bobbing arrows above objectives)
+    updateQuestMarkers(time);
 
     // Check for pending quest completion (delayed by combat)
     if (pendingCompletedQuest) {
@@ -5740,16 +5786,7 @@ function handleMonsterDeath(monster) {
     showDamageNumber(monster.x, monster.y, `+${xpGain} XP`, 0xffd700, false, 'xp');
     addChatMessage(`Gained ${xpGain} XP`, 0xffd700, '✨');
 
-    // Track quest progress - legacy
-    playerStats.questStats.monstersKilled++;
-
-    // UQE Bridge Event - FIX: Ensure this is called for ALL deaths
-    if (typeof uqe !== 'undefined') {
-        uqe.eventBus.emit(UQE_EVENTS.MONSTER_KILLED, {
-            id: monster.monsterId || monster.monsterType.toLowerCase(),
-            type: monster.monsterType.toLowerCase()
-        });
-    }
+    // Track quest progress - (legacy stat, UQE event already emitted above)
 
     // Add chat message for monster death
     const monsterName = monster.monsterType || 'Monster';
@@ -5824,6 +5861,9 @@ function playerAttack(time) {
     // Create weapon swing trail
     const facingDirection = player.facingDirection || 'south';
     createWeaponSwingTrail(player.x, player.y, facingDirection, weaponQuality);
+
+    // Play attack sound
+    playSound('attack_swing');
 
     // Animate weapon sprite during attack
     animateWeaponStrike(facingDirection, weaponType);
@@ -13583,6 +13623,33 @@ function openBuildingUI(building) {
             buildingPanelVisible = false;
             currentBuilding = null;
             break;
+        case 'watchtower':
+            // Watchtower dungeon entrance - check if player has the dungeon quest
+            if (isQuestActive('main_01_008')) {
+                // Emit dungeon entry token for quest tracking
+                if (window.uqe && window.uqe.eventBus) {
+                    window.uqe.eventBus.emit('item_pickup', {
+                        id: 'dungeon_entry_token',
+                        type: 'quest_item',
+                        amount: 1
+                    });
+                    // Force UQE update to process completion and trigger autoAccept quests
+                    window.uqe.update();
+                }
+                showDamageNumber(player.x, player.y - 40, 'Entering Watchtower Dungeon...', 0x00ffff);
+                buildingPanelVisible = false;
+                currentBuilding = null;
+                // Transition to dungeon after short delay (gives time for quest UI to update)
+                game.scene.scenes[0].time.delayedCall(800, () => {
+                    transitionToMap('dungeon');
+                });
+            } else {
+                showDamageNumber(player.x, player.y - 40, 'The Watchtower basement is sealed.', 0xffff00);
+                addChatMessage('You need a reason to enter the Watchtower basement.', 0xffff00, '🔒');
+                buildingPanelVisible = false;
+                currentBuilding = null;
+            }
+            break;
         default:
             console.log(`⚠️ Building type ${building.type} not implemented yet`);
             showDamageNumber(player.x, player.y - 40, `${building.type} not yet available`, 0xff0000);
@@ -14996,13 +15063,13 @@ function initializeSounds() {
     console.log('🔊 Initializing sound system...');
     soundFiles.forEach(soundName => {
         try {
-            const sound = scene.sound.get(soundName);
-            if (sound) {
-                soundEffects[soundName] = sound;
-                sound.setVolume(0.7); // Set volume (increased from 0.5)
+            // Check if audio is in cache (loaded successfully)
+            if (scene.cache.audio.exists(soundName)) {
+                // Create sound object for later use
+                soundEffects[soundName] = scene.sound.add(soundName, { volume: 0.7 });
                 console.log(`  ✅ Loaded: ${soundName}`);
             } else {
-                console.log(`  ⚠️ Not found: ${soundName}`);
+                console.log(`  ⚠️ Not in cache: ${soundName}`);
             }
         } catch (e) {
             console.log(`  ❌ Error loading ${soundName}:`, e.message);
@@ -15199,8 +15266,8 @@ function spawnMonster(x, y, type, hpOverride, attackOverride, xpOverride, isBoss
     if (monster) {
         // Shared properties for ALL monsters (Method 1 & 2)
         monster.name = type.name;
-        monster.monsterId = type.id;
-        monster.monsterType = type.name.toLowerCase();
+        monster.monsterId = type.id || type.monsterType || type.name.toLowerCase();
+        monster.monsterType = type.monsterType || type.name.toLowerCase();
         monster.hp = hpOverride !== undefined ? hpOverride : type.hp;
         monster.maxHp = monster.hp;
         monster.attack = attackOverride !== undefined ? attackOverride : type.attack;
@@ -17191,6 +17258,157 @@ function updateDefenseQuestSpawner(time) {
 
         defenseSpawnerState.lastSpawnTime = time;
     }
+}
+
+// ========================================
+// QUEST MARKER SYSTEM
+// ========================================
+
+/**
+ * Create a bobbing quest marker above a target
+ * @param {string} targetId - ID of the target (NPC name, location, etc.)
+ * @param {Phaser.GameObjects.Sprite|Object} target - The target object with x,y coordinates
+ * @param {string} type - 'talk', 'enter', 'turnin'
+ */
+function createQuestMarker(targetId, target, type = 'talk') {
+    const scene = game.scene.scenes[0];
+    if (!scene || !target) return;
+
+    // Don't create duplicate markers
+    if (questMarkers.has(targetId)) return;
+
+    // Create arrow marker using graphics
+    const markerGraphics = scene.add.graphics();
+
+    // Choose color based on type
+    let color = 0xffff00; // Yellow for talk
+    if (type === 'enter') color = 0x00aaff; // Blue for locations
+    if (type === 'turnin') color = 0x00ff00; // Green for turn-in
+
+    // Draw downward arrow
+    markerGraphics.fillStyle(color, 1);
+    markerGraphics.beginPath();
+    markerGraphics.moveTo(0, 0);      // Top point
+    markerGraphics.lineTo(-8, -15);   // Left
+    markerGraphics.lineTo(-3, -15);   // Inner left
+    markerGraphics.lineTo(-3, -25);   // Top left
+    markerGraphics.lineTo(3, -25);    // Top right
+    markerGraphics.lineTo(3, -15);    // Inner right
+    markerGraphics.lineTo(8, -15);    // Right
+    markerGraphics.closePath();
+    markerGraphics.fillPath();
+
+    // Add outline
+    markerGraphics.lineStyle(2, 0x000000, 1);
+    markerGraphics.strokePath();
+
+    // Position above target
+    const offsetY = -40; // Above the sprite
+    markerGraphics.setPosition(target.x, target.y + offsetY);
+    markerGraphics.setDepth(500); // Above everything
+    markerGraphics.setScrollFactor(1); // Move with camera
+
+    // Add bobbing animation
+    const tween = scene.tweens.add({
+        targets: markerGraphics,
+        y: target.y + offsetY - 10,
+        duration: 500,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut'
+    });
+
+    // Store marker data
+    questMarkers.set(targetId, {
+        sprite: markerGraphics,
+        tween: tween,
+        target: target,
+        type: type
+    });
+
+    console.log(`📍 Created quest marker for: ${targetId} (${type})`);
+}
+
+/**
+ * Remove a quest marker
+ * @param {string} targetId - ID of the target
+ */
+function removeQuestMarker(targetId) {
+    const marker = questMarkers.get(targetId);
+    if (marker) {
+        if (marker.tween) marker.tween.stop();
+        if (marker.sprite) marker.sprite.destroy();
+        questMarkers.delete(targetId);
+        console.log(`📍 Removed quest marker for: ${targetId}`);
+    }
+}
+
+/**
+ * Remove all quest markers
+ */
+function clearAllQuestMarkers() {
+    questMarkers.forEach((marker, id) => {
+        if (marker.tween) marker.tween.stop();
+        if (marker.sprite) marker.sprite.destroy();
+    });
+    questMarkers.clear();
+}
+
+/**
+ * Update quest markers - called from update loop (throttled)
+ */
+function updateQuestMarkers(time) {
+    // Throttle updates to every 500ms
+    if (time - lastQuestMarkerUpdate < 500) return;
+    lastQuestMarkerUpdate = time;
+
+    if (!window.uqe || !window.uqe.activeQuests) return;
+
+    // Build set of currently needed markers
+    const neededMarkers = new Map();
+
+    window.uqe.activeQuests.forEach(quest => {
+        quest.objectives.forEach(obj => {
+            // Skip completed objectives
+            if (obj.completed) return;
+
+            if (obj.type === 'talk' && obj.npcId) {
+                // Find the NPC
+                const npc = npcs.find(n => n.npcName === obj.npcId || n.name === obj.npcId);
+                if (npc) {
+                    neededMarkers.set(obj.npcId, { target: npc, type: 'talk' });
+                }
+            } else if (obj.type === 'collect' && obj.itemId === 'dungeon_entry_token') {
+                // Mark dungeon entrances (handled separately via transition markers)
+                transitionMarkers.forEach(tm => {
+                    if (tm.targetMap === 'dungeon' && tm.marker) {
+                        neededMarkers.set('dungeon_entrance', { target: tm.marker, type: 'enter' });
+                    }
+                });
+            }
+        });
+    });
+
+    // Remove markers that are no longer needed
+    questMarkers.forEach((marker, id) => {
+        if (!neededMarkers.has(id)) {
+            removeQuestMarker(id);
+        }
+    });
+
+    // Create markers that are needed but don't exist
+    neededMarkers.forEach((data, id) => {
+        if (!questMarkers.has(id)) {
+            createQuestMarker(id, data.target, data.type);
+        } else {
+            // Update position for moving targets (NPCs)
+            const marker = questMarkers.get(id);
+            if (marker && marker.sprite && data.target) {
+                marker.sprite.x = data.target.x;
+                // Y is handled by tween, but update base
+            }
+        }
+    });
 }
 
 // ========================================

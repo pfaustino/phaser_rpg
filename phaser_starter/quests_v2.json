@@ -148,7 +148,7 @@
         "main_01_008": {
             "id": "main_01_008",
             "title": "Into the Depths",
-            "description": "Enter the dungeon to investigate the source of the quakes.",
+            "description": "The mana disturbances trace back to the Watchtower basement. Enter the dungeon beneath the Watchtower in the wilderness to investigate the source of the quakes.",
             "giver": "Trainer Garen",
             "step": 8,
             "requires": "main_01_007",
@@ -157,7 +157,7 @@
                     "id": "enter_dungeon",
                     "type": "collect",
                     "itemId": "dungeon_entry_token",
-                    "label": "Enter the Dungeon",
+                    "label": "Enter the Watchtower Dungeon",
                     "target": 1
                 }
             ],
@@ -169,10 +169,11 @@
         "main_01_009": {
             "id": "main_01_009",
             "title": "Infested Veins",
-            "description": "The upper mines are infested with Echo Rats. Clear them out.",
+            "description": "The Watchtower basement is crawling with Echo Rats drawn to the corruption. Clear them out before descending further.",
             "giver": "Guard Thorne",
             "step": 9,
             "requires": "main_01_008",
+            "autoAccept": true,
             "objectives": [
                 {
                     "id": "kill_rats",

@@ -38,6 +38,7 @@ const UQE_EVENTS = {
     NPC_TALK: 'npc_talk',
     STAT_CHANGE: 'stat_change',
     QUEST_COMPLETED: 'quest_completed',
+    QUEST_ACCEPTED: 'quest_accepted',
     QUEST_AVAILABLE: 'quest_available',
     OBJECTIVE_UPDATED: 'objective_updated',
     // New event types for additional objectives
@@ -322,13 +323,15 @@ class UqeEngine {
             this.activeQuests.push(quest);
             console.log(`✅ [UQE Engine] Quest Accepted: ${quest.title} (ID: ${quest.id})`);
             console.log(`📊 [UQE Engine] Active quests now: ${this.activeQuests.length}`);
+            // Emit quest accepted event so UI can update
+            this.eventBus.emit(UQE_EVENTS.QUEST_ACCEPTED, quest);
         } else {
             console.error(`❌ [UQE Engine] QUEST DEFINITION NOT FOUND: ${questId}`);
             console.log(`📊 [UQE Engine] Available keys:`, Object.keys(this.allDefinitions));
         }
     }
 
-    // Check for newly available quests (adds to pending, not auto-accept)
+    // Check for newly available quests (adds to pending, or auto-accepts if flagged)
     checkNewQuests() {
         const completedIds = this.completedQuests.map(q => q.id);
 
@@ -340,14 +343,18 @@ class UqeEngine {
             if (this.completedQuests.some(q => q.id === questId)) return;
             if (this.pendingQuests.includes(questId)) return;
 
-            // Skip main quests (they require NPC dialog)
-            if (questId.startsWith('main_')) return;
-
-            // Check requirements - add to pending, don't auto-accept
+            // Check requirements
             if (def.requires && completedIds.includes(def.requires)) {
-                console.log(`🔔 [UQE Engine] Quest available: ${questId} (Requires: ${def.requires})`);
-                this.pendingQuests.push(questId);
-                this.eventBus.emit(UQE_EVENTS.QUEST_AVAILABLE, { questId, definition: def });
+                // If autoAccept is true, automatically accept the quest
+                if (def.autoAccept) {
+                    console.log(`✅ [UQE Engine] Auto-accepting quest: ${questId}`);
+                    this.acceptQuest(questId);
+                } else if (!questId.startsWith('main_')) {
+                    // Non-main quests go to pending (main quests require NPC dialog unless autoAccept)
+                    console.log(`🔔 [UQE Engine] Quest available: ${questId} (Requires: ${def.requires})`);
+                    this.pendingQuests.push(questId);
+                    this.eventBus.emit(UQE_EVENTS.QUEST_AVAILABLE, { questId, definition: def });
+                }
             }
         });
     }

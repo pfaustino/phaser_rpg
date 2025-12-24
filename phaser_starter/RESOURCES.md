@@ -42,6 +42,9 @@ MusicGPT can create sound effects, samples, loops, and soundscapes from prompts,
 ### PixelLab.ai
 [PixelLab.ai](https://www.pixellab.ai) is an AI-powered platform designed to assist indie game developers in creating pixel art assets efficiently. It offers features such as one-click animations, skeleton-based animation, text-based animation, rotation tools for 4 and 8 directional views, style-consistent generation, true inpainting for editing, and environment tools for scene and map generation. The platform operates on cloud GPUs, eliminating the need for high-performance local hardware, and is compatible with Windows, Mac, and Linux. PixelLab also provides an API that enables developers to generate characters, animations, and environments dynamically, supporting procedural generation and live asset creation. For RPG development, it's an excellent tool for quickly generating pixel art sprites, character animations, and game environments while maintaining visual consistency.
 
+### Pixabay
+[Pixabay](https://pixabay.com) is a free stock media platform offering royalty-free images, videos, music, and sound effects. All content is released under the Pixabay Content License, which allows free use for commercial and non-commercial purposes without attribution (though attribution is appreciated). For game development, it's a valuable resource for finding placeholder assets, background images, UI elements, and audio tracks. The platform has a large library of high-quality content that can be used during prototyping or as final assets in indie projects.
+
 
 
 

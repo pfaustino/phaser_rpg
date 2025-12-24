@@ -1270,6 +1270,14 @@ function preload() {
     this.load.audio('fireball_cast', 'assets/audio/fireball_cast.wav');
     this.load.audio('heal_cast', 'assets/audio/heal_cast.wav');
 
+    // Weapon-specific hit sounds
+    this.load.audio('sword_hit', 'assets/audio/sword-slice.mp3');
+    this.load.audio('axe_hit', 'assets/audio/axe-slash.mp3');
+    this.load.audio('mace_hit', 'assets/audio/mace-attack.mp3');
+    this.load.audio('dagger_hit', 'assets/audio/dagger-hit.mp3');
+    this.load.audio('staff_hit', 'assets/audio/staff-swing.mp3');
+    this.load.audio('bow_hit', 'assets/audio/bow-release.mp3');
+
     // Load background music for all areas
     this.load.audio('village_music', 'assets/audio/music/Village_Hearth_FULL_SONG_MusicGPT.mp3');
     this.load.audio('wilderness_music', 'assets/audio/music/Wilderness_of_Arcana_FULL_SONG_MusicGPT.mp3');
@@ -3984,6 +3992,15 @@ function create() {
         monsterRenderer.init(this.cache.json.get('monsterData'));
     }
 
+    // Load items data (weapon types, hit sounds, materials, etc.)
+    if (typeof loadItemsData === 'function') {
+        loadItemsData().then(() => {
+            console.log('✅ Items system initialized');
+        }).catch(err => {
+            console.warn('⚠️ Items data failed to load, using defaults');
+        });
+    }
+
     // Load persistent settings (independent of save game)
     loadSettings();
 
@@ -5889,8 +5906,9 @@ function playerAttack(time) {
     const facingDirection = player.facingDirection || 'south';
     createWeaponSwingTrail(player.x, player.y, facingDirection, weaponQuality);
 
-    // Play attack sound
-    playSound('attack_swing');
+    // Play weapon-specific attack swing sound
+    const swingSound = (typeof getWeaponHitSound === 'function') ? getWeaponHitSound(weaponType) : 'attack_swing';
+    playSound(swingSound);
 
     // Animate weapon sprite during attack
     animateWeaponStrike(facingDirection, weaponType);
@@ -5986,7 +6004,11 @@ function playerAttack(time) {
         const monsterName = closestMonster.monsterType || 'Monster';
         const chatMessage = isCritical ? `${damageText} on ${monsterName}` : `Hit ${monsterName} for ${damage} damage`;
         addChatMessage(chatMessage, isCritical ? 0xff0000 : 0xffff00, '⚔️');
-        playSound('hit_monster');
+
+        // Play weapon-specific hit sound (uses items.js getWeaponHitSound)
+        const hitSound = (typeof getWeaponHitSound === 'function') ? getWeaponHitSound(weaponType) : 'hit_monster';
+        console.log(`🔊 Weapon hit: type=${weaponType}, sound=${hitSound}`);
+        playSound(hitSound);
 
         // Enhanced visual feedback - flash monster with color
         if (closestMonster.setTint) {

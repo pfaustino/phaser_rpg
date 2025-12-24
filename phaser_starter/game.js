@@ -1545,6 +1545,9 @@ function generateProceduralMonsters() {
     });
 
     // Store monster definitions globally for use in creation
+    // Load gold pickup sound
+    this.load.audio('gold_pickup', 'assets/audio/gold-pickup.mp3');
+
     if (typeof window !== 'undefined') {
         window.monsterDefinitions = monsterDefs;
     }
@@ -4496,6 +4499,12 @@ function update(time, delta) {
         window.uqe.update();
     }
 
+    // Mana Instability Quest Update
+    updateManaFluxNodes();
+
+    // Defense Quest Wave Spawner
+    updateDefenseQuestSpawner(time);
+
     // Check for pending quest completion (delayed by combat)
     if (pendingCompletedQuest) {
         // If undefined, assume not in combat to be safe, otherwise check
@@ -5559,6 +5568,11 @@ function update(time, delta) {
 
     // Monster AI and combat
     monsters.forEach((monster, index) => {
+        // Skip if monster is invalid or destroyed
+        if (!monster || !monster.active || !monster.body) {
+            return;
+        }
+
         const distance = Phaser.Math.Distance.Between(
             player.x, player.y,
             monster.x, monster.y
@@ -7908,6 +7922,9 @@ function pickupItem(item, index) {
         playerStats.questStats.goldEarned += item.amount;
         showDamageNumber(item.sprite.x, item.sprite.y, `+${item.amount} Gold`, 0xffd700);
         updatePlayerStats(); // Update gold display
+
+        // Play sound
+        playSound('gold_pickup');
 
         // UQE Bridge Event - for Gold Rush quest tracking
         if (typeof uqe !== 'undefined') {
@@ -12772,23 +12789,18 @@ function chooseClass(className) {
     showDamageNumber(player.x, player.y - 50, "Class Selected!", 0xffff00);
 
     // Complete the quest "The Path Chosen" (main_01_006)
-    // Complete the quest "The Path Chosen" (main_01_006)
     if (window.uqe) {
-        // Try to find the quest in active list (it's an array)
-        if (window.uqe.activeQuests && Array.isArray(window.uqe.activeQuests)) {
-            const quest = window.uqe.activeQuests.find(q => q.id === 'main_01_006');
-            if (quest) {
-                // If the quest object has a complete method (it should)
-                if (typeof quest.complete === 'function') {
-                    quest.complete();
-                } else {
-                    // Fallback: force event emission if quest object is just state data
-                    window.uqe.eventBus.emit('quest_completed', quest);
-                }
-            } else {
-                console.warn('⚠️ Quest main_01_006 not found in active quests');
-            }
+        // Find the active quest and manually complete its objective
+        const quest = window.uqe.activeQuests.find(q => q.id === 'main_01_006');
+        if (quest && quest.objectives && quest.objectives.length > 0) {
+            // Mark the class_selection objective as complete
+            quest.objectives.forEach(obj => {
+                obj.progress = obj.target;
+                obj.completed = true;
+            });
+            console.log(`✅ Marked main_01_006 objectives complete for class: ${className}`);
         }
+        // The UQE update loop will detect completion and handle rewards
     }
 
     // Close the dialog UI
@@ -16987,4 +16999,196 @@ function showQuestPreviewModalEnhanced(questId, onAccept, onDecline) {
         duration: 200,
         ease: 'Back.out'
     });
+}
+
+/**
+ * Spawn a Mana Flux node
+ */
+function spawnManaFlux(x, y) {
+    if (!x || !y) {
+        // Random position near player if not specified
+        const radius = 300;
+        const angle = Math.random() * Math.PI * 2;
+        const dist = 100 + Math.random() * (radius - 100);
+        x = player.x + Math.cos(angle) * dist;
+        y = player.y + Math.sin(angle) * dist;
+
+        // Keep within world bounds (simple check)
+        if (x < 50) x = 50;
+        if (y < 50) y = 50;
+        if (x > 3150) x = 3150; // Approx world size
+        if (y > 3150) y = 3150;
+    }
+
+    // Create visual representation - Pulsing Blue Star
+    const star = game.scene.scenes[0].add.star(x, y, 5, 10, 20, 0x00ffff);
+    star.setDepth(5); // Below player but above ground
+
+    // Add physics
+    game.scene.scenes[0].physics.add.existing(star);
+    star.body.setImmovable(true);
+    star.body.setAllowGravity(false); // Top down game, probably no gravity, but safety first
+
+    // Add pulse animation
+    game.scene.scenes[0].tweens.add({
+        targets: star,
+        scale: { from: 1, to: 1.3 },
+        alpha: { from: 0.7, to: 1 },
+        duration: 800,
+        yoyo: true,
+        repeat: -1
+    });
+
+    const flux = {
+        sprite: star,
+        id: 'mana_flux_' + Date.now() + '_' + Math.random()
+    };
+
+    manaFluxes.push(flux);
+    return flux;
+}
+
+/**
+ * Update Mana Flux nodes (spawning and collection)
+ */
+function updateManaFluxNodes() {
+    // Only active if quest main_01_007 is active
+    if (typeof isQuestActive !== 'function' || !isQuestActive('main_01_007')) {
+        // Cleanup if they exist but quest is not active
+        if (manaFluxes.length > 0) {
+            manaFluxes.forEach(flux => {
+                if (flux.sprite) flux.sprite.destroy();
+            });
+            manaFluxes = [];
+        }
+        return;
+    }
+
+    // Maintain a count of flux nodes around the player
+    const MAX_FLUX_NODES = 5;
+    if (manaFluxes.length < MAX_FLUX_NODES) {
+        // 2% chance per frame to spawn one if below cap
+        if (Math.random() < 0.02) {
+            spawnManaFlux();
+        }
+    }
+
+    // Check collision with player
+    for (let i = manaFluxes.length - 1; i >= 0; i--) {
+        const flux = manaFluxes[i];
+
+        if (!flux.sprite.active) {
+            manaFluxes.splice(i, 1);
+            continue;
+        }
+
+        // Simple distance check for collection
+        const dist = Phaser.Math.Distance.Between(player.x, player.y, flux.sprite.x, flux.sprite.y);
+
+        if (dist < 40) { // Collection radius
+            // Collect!
+            manaFluxes.splice(i, 1);
+            flux.sprite.destroy();
+
+            // Visual feedback
+            showDamageNumber(player.x, player.y - 40, "+1 Stabilized Flux", 0x00ffff);
+            playSound('item_pickup');
+
+            // Send UQE Event
+            if (window.uqe) {
+                window.uqe.eventBus.emit('ITEM_PICKUP', {
+                    id: 'stabilized_flux',
+                    type: 'quest_item',
+                    amount: 1
+                });
+            }
+        }
+    }
+}
+
+// Defense Quest Wave Spawner State
+let defenseSpawnerState = {
+    active: false,
+    lastSpawnTime: 0,
+    spawnedMonsters: [],
+    waveInterval: 12000, // 12 seconds between waves
+    monstersPerWave: 4,
+    maxMonsters: 10
+};
+
+/**
+ * Update Defense Quest Spawner (for main_01_005 "Resonant Frequencies")
+ */
+function updateDefenseQuestSpawner(time) {
+    const questActive = isQuestActive('main_01_005');
+
+    // Cleanup when quest becomes inactive
+    if (!questActive && defenseSpawnerState.active) {
+        console.log('🛡️ Defense quest ended - cleaning up spawned monsters');
+        defenseSpawnerState.spawnedMonsters.forEach(m => {
+            if (m && m.active) {
+                if (m.hpBarBg) m.hpBarBg.destroy();
+                if (m.hpBar) m.hpBar.destroy();
+                m.destroy();
+            }
+        });
+        defenseSpawnerState.spawnedMonsters = [];
+        defenseSpawnerState.active = false;
+        return;
+    }
+
+    // Only run if quest is active
+    if (!questActive) return;
+
+    // Initialize if quest just became active
+    if (!defenseSpawnerState.active) {
+        console.log('🛡️ Defense quest started - initializing wave spawner');
+        defenseSpawnerState.active = true;
+        defenseSpawnerState.lastSpawnTime = time;
+        defenseSpawnerState.spawnedMonsters = [];
+    }
+
+    // Clean up dead monsters from our tracking
+    defenseSpawnerState.spawnedMonsters = defenseSpawnerState.spawnedMonsters.filter(m => m && m.active && !m.isDead);
+
+    // Check if it's time to spawn a new wave
+    const activeCount = defenseSpawnerState.spawnedMonsters.length;
+    const timeSinceLastSpawn = time - defenseSpawnerState.lastSpawnTime;
+
+    if (timeSinceLastSpawn >= defenseSpawnerState.waveInterval && activeCount < defenseSpawnerState.maxMonsters) {
+        // Spawn a wave!
+        const toSpawn = Math.min(
+            defenseSpawnerState.monstersPerWave,
+            defenseSpawnerState.maxMonsters - activeCount
+        );
+
+        console.log(`🛡️ Spawning defense wave: ${toSpawn} Echo Mites`);
+
+        // Echo Mite type for defense quest
+        const miteType = {
+            id: 'mite',
+            name: 'Echo Mite',
+            hp: 15,
+            attack: 3,
+            speed: 60,
+            xp: 8,
+            textureKey: 'monster_mite',
+            isProcedural: false
+        };
+
+        for (let i = 0; i < toSpawn; i++) {
+            // Spawn around the player at random angles
+            const angle = Math.random() * Math.PI * 2;
+            const dist = 150 + Math.random() * 100; // 150-250 pixels away
+            const spawnX = player.x + Math.cos(angle) * dist;
+            const spawnY = player.y + Math.sin(angle) * dist;
+
+            const monster = spawnMonster(spawnX, spawnY, miteType);
+            if (monster) {
+                defenseSpawnerState.spawnedMonsters.push(monster);
+            }
+        }
+
+        defenseSpawnerState.lastSpawnTime = time;
+    }
 }

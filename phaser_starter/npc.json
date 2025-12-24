@@ -67,7 +67,7 @@
         "spawnType": "absolute",
         "targetX": 6,
         "targetY": 20,
-        "dialogId": "generic_npc",
+        "dialogId": "blacksmith_brond",
         "questGiver": true,
         "spriteKey": "npc_blacksmith_brond",
         "portraitKey": "portrait_blacksmith_brond"

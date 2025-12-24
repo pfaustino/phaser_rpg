@@ -44,7 +44,7 @@
         "main_01_003": {
             "id": "main_01_003",
             "title": "Crystalline Seepage",
-            "description": "Gather shards of the crystalline corruption for the town's blacksmith to study.",
+            "description": "Gather shards of the crystalline corruption for the town's blacksmith to study. Defeat monsters to collect Crystal Shards that drop from their remains.",
             "giver": "Elder Malik",
             "step": 3,
             "requires": "main_01_002",
@@ -53,7 +53,7 @@
                     "id": "collect_shards",
                     "type": "collect",
                     "itemId": "crystal_shard",
-                    "label": "Gather Shards",
+                    "label": "Gather Shards from Monsters",
                     "target": 5
                 }
             ],
@@ -255,7 +255,7 @@
                     "id": "earn_gold",
                     "type": "gold",
                     "label": "Earn Gold",
-                    "target": 100
+                    "target": 25
                 }
             ],
             "rewards": {
@@ -291,7 +291,7 @@
                     "id": "survive_time",
                     "type": "survive",
                     "label": "Survive",
-                    "target": 120
+                    "target": 60
                 }
             ],
             "rewards": {
@@ -310,7 +310,7 @@
                     "type": "kill",
                     "monsterId": "any",
                     "label": "Defeat Monsters",
-                    "target": 20
+                    "target": 5
                 }
             ],
             "rewards": {
@@ -329,7 +329,7 @@
                     "type": "collect",
                     "itemId": "any",
                     "label": "Collect Items",
-                    "target": 10
+                    "target": 6
                 }
             ],
             "rewards": {
@@ -365,7 +365,7 @@
                     "id": "earn_gold",
                     "type": "gold",
                     "label": "Earn Gold",
-                    "target": 250
+                    "target": 50
                 }
             ],
             "rewards": {
@@ -401,7 +401,7 @@
                     "id": "survive_time",
                     "type": "survive",
                     "label": "Survive",
-                    "target": 300
+                    "target": 90
                 }
             ],
             "rewards": {
@@ -420,7 +420,7 @@
                     "type": "kill",
                     "monsterId": "any",
                     "label": "Defeat Monsters",
-                    "target": 25
+                    "target": 10
                 }
             ],
             "rewards": {
@@ -439,7 +439,7 @@
                     "type": "collect",
                     "itemId": "any",
                     "label": "Collect Items",
-                    "target": 20
+                    "target": 12
                 }
             ],
             "rewards": {
@@ -475,7 +475,7 @@
                     "id": "earn_gold",
                     "type": "gold",
                     "label": "Earn Gold",
-                    "target": 500
+                    "target": 100
                 }
             ],
             "rewards": {
@@ -511,7 +511,7 @@
                     "id": "survive_time",
                     "type": "survive",
                     "label": "Survive",
-                    "target": 600
+                    "target": 135
                 }
             ],
             "rewards": {
@@ -541,7 +541,8 @@
         "quest_020": {
             "id": "quest_020",
             "title": "Master Collector",
-            "description": "Gather 30 items for your collection.",
+            "description": "Gather 24 items for your collection.",
+            "giver": "Merchant Lysa",
             "requires": "quest_014",
             "objectives": [
                 {
@@ -549,12 +550,402 @@
                     "type": "collect",
                     "itemId": "any",
                     "label": "Collect Items",
-                    "target": 30
+                    "target": 24
                 }
             ],
             "rewards": {
                 "xp": 220,
                 "gold": 110
+            }
+        },
+        "quest_021": {
+            "id": "quest_021",
+            "title": "Slayer",
+            "description": "Defeat 40 monsters across the land.",
+            "giver": "Guard Thorne",
+            "requires": "quest_019",
+            "objectives": [
+                {
+                    "id": "kill_any",
+                    "type": "kill",
+                    "monsterId": "any",
+                    "label": "Defeat Monsters",
+                    "target": 40
+                }
+            ],
+            "rewards": {
+                "xp": 350,
+                "gold": 175
+            }
+        },
+        "quest_022": {
+            "id": "quest_022",
+            "title": "Fortune Seeker",
+            "description": "Amass 200 gold pieces.",
+            "giver": "Merchant Lysa",
+            "requires": "quest_016",
+            "objectives": [
+                {
+                    "id": "earn_gold",
+                    "type": "gold",
+                    "label": "Earn Gold",
+                    "target": 200
+                }
+            ],
+            "rewards": {
+                "xp": 250,
+                "gold": 125
+            }
+        },
+        "quest_023": {
+            "id": "quest_023",
+            "title": "Ironclad",
+            "description": "Survive for over 3 minutes in the wilderness.",
+            "giver": "Captain Kael",
+            "requires": "quest_018",
+            "objectives": [
+                {
+                    "id": "survive_time",
+                    "type": "survive",
+                    "label": "Survive",
+                    "target": 200
+                }
+            ],
+            "rewards": {
+                "xp": 350,
+                "gold": 175
+            }
+        },
+        "quest_024": {
+            "id": "quest_024",
+            "title": "Treasure Trove",
+            "description": "Gather 36 items from your adventures.",
+            "giver": "Merchant Lysa",
+            "requires": "quest_020",
+            "objectives": [
+                {
+                    "id": "collect_items",
+                    "type": "collect",
+                    "itemId": "any",
+                    "label": "Collect Items",
+                    "target": 36
+                }
+            ],
+            "rewards": {
+                "xp": 280,
+                "gold": 140
+            }
+        },
+        "quest_025": {
+            "id": "quest_025",
+            "title": "Destroyer",
+            "description": "Eliminate 60 monsters.",
+            "giver": "Guard Thorne",
+            "requires": "quest_021",
+            "objectives": [
+                {
+                    "id": "kill_any",
+                    "type": "kill",
+                    "monsterId": "any",
+                    "label": "Defeat Monsters",
+                    "target": 60
+                }
+            ],
+            "rewards": {
+                "xp": 400,
+                "gold": 200
+            }
+        },
+        "quest_026": {
+            "id": "quest_026",
+            "title": "Wealthy Adventurer",
+            "description": "Accumulate 400 gold.",
+            "giver": "Merchant Lysa",
+            "requires": "quest_022",
+            "objectives": [
+                {
+                    "id": "earn_gold",
+                    "type": "gold",
+                    "label": "Earn Gold",
+                    "target": 400
+                }
+            ],
+            "rewards": {
+                "xp": 300,
+                "gold": 150
+            }
+        },
+        "quest_027": {
+            "id": "quest_027",
+            "title": "Unyielding",
+            "description": "Survive for 5 minutes without falling.",
+            "giver": "Captain Kael",
+            "requires": "quest_023",
+            "objectives": [
+                {
+                    "id": "survive_time",
+                    "type": "survive",
+                    "label": "Survive",
+                    "target": 300
+                }
+            ],
+            "rewards": {
+                "xp": 400,
+                "gold": 200
+            }
+        },
+        "quest_028": {
+            "id": "quest_028",
+            "title": "Hoard Master",
+            "description": "Collect 54 items.",
+            "giver": "Merchant Lysa",
+            "requires": "quest_024",
+            "objectives": [
+                {
+                    "id": "collect_items",
+                    "type": "collect",
+                    "itemId": "any",
+                    "label": "Collect Items",
+                    "target": 54
+                }
+            ],
+            "rewards": {
+                "xp": 350,
+                "gold": 175
+            }
+        },
+        "quest_029": {
+            "id": "quest_029",
+            "title": "Annihilator",
+            "description": "Defeat 90 monsters.",
+            "giver": "Guard Thorne",
+            "requires": "quest_025",
+            "objectives": [
+                {
+                    "id": "kill_any",
+                    "type": "kill",
+                    "monsterId": "any",
+                    "label": "Defeat Monsters",
+                    "target": 90
+                }
+            ],
+            "rewards": {
+                "xp": 500,
+                "gold": 250
+            }
+        },
+        "quest_030": {
+            "id": "quest_030",
+            "title": "Merchant Prince",
+            "description": "Amass 600 gold pieces.",
+            "giver": "Merchant Lysa",
+            "requires": "quest_026",
+            "objectives": [
+                {
+                    "id": "earn_gold",
+                    "type": "gold",
+                    "label": "Earn Gold",
+                    "target": 600
+                }
+            ],
+            "rewards": {
+                "xp": 400,
+                "gold": 200
+            }
+        },
+        "quest_031": {
+            "id": "quest_031",
+            "title": "Immortal",
+            "description": "Survive for over 7 minutes.",
+            "giver": "Captain Kael",
+            "requires": "quest_027",
+            "objectives": [
+                {
+                    "id": "survive_time",
+                    "type": "survive",
+                    "label": "Survive",
+                    "target": 450
+                }
+            ],
+            "rewards": {
+                "xp": 500,
+                "gold": 250
+            }
+        },
+        "quest_032": {
+            "id": "quest_032",
+            "title": "Vault Keeper",
+            "description": "Gather 80 items.",
+            "giver": "Merchant Lysa",
+            "requires": "quest_028",
+            "objectives": [
+                {
+                    "id": "collect_items",
+                    "type": "collect",
+                    "itemId": "any",
+                    "label": "Collect Items",
+                    "target": 80
+                }
+            ],
+            "rewards": {
+                "xp": 450,
+                "gold": 225
+            }
+        },
+        "quest_033": {
+            "id": "quest_033",
+            "title": "Executioner",
+            "description": "Slay 135 monsters.",
+            "giver": "Guard Thorne",
+            "requires": "quest_029",
+            "objectives": [
+                {
+                    "id": "kill_any",
+                    "type": "kill",
+                    "monsterId": "any",
+                    "label": "Defeat Monsters",
+                    "target": 135
+                }
+            ],
+            "rewards": {
+                "xp": 600,
+                "gold": 300
+            }
+        },
+        "quest_034": {
+            "id": "quest_034",
+            "title": "Golden Dragon",
+            "description": "Accumulate 900 gold.",
+            "giver": "Merchant Lysa",
+            "requires": "quest_030",
+            "objectives": [
+                {
+                    "id": "earn_gold",
+                    "type": "gold",
+                    "label": "Earn Gold",
+                    "target": 900
+                }
+            ],
+            "rewards": {
+                "xp": 500,
+                "gold": 250
+            }
+        },
+        "quest_035": {
+            "id": "quest_035",
+            "title": "Eternal",
+            "description": "Survive for 11 minutes.",
+            "giver": "Captain Kael",
+            "requires": "quest_031",
+            "objectives": [
+                {
+                    "id": "survive_time",
+                    "type": "survive",
+                    "label": "Survive",
+                    "target": 675
+                }
+            ],
+            "rewards": {
+                "xp": 600,
+                "gold": 300
+            }
+        },
+        "quest_036": {
+            "id": "quest_036",
+            "title": "Legendary Collector",
+            "description": "Amass 120 items.",
+            "giver": "Merchant Lysa",
+            "requires": "quest_032",
+            "objectives": [
+                {
+                    "id": "collect_items",
+                    "type": "collect",
+                    "itemId": "any",
+                    "label": "Collect Items",
+                    "target": 120
+                }
+            ],
+            "rewards": {
+                "xp": 550,
+                "gold": 275
+            }
+        },
+        "quest_037": {
+            "id": "quest_037",
+            "title": "Legendary Hunter",
+            "description": "Vanquish 200 monsters.",
+            "giver": "Guard Thorne",
+            "requires": "quest_033",
+            "objectives": [
+                {
+                    "id": "kill_any",
+                    "type": "kill",
+                    "monsterId": "any",
+                    "label": "Defeat Monsters",
+                    "target": 200
+                }
+            ],
+            "rewards": {
+                "xp": 750,
+                "gold": 375
+            }
+        },
+        "quest_038": {
+            "id": "quest_038",
+            "title": "Midas Touch",
+            "description": "Amass 1350 gold pieces.",
+            "giver": "Merchant Lysa",
+            "requires": "quest_034",
+            "objectives": [
+                {
+                    "id": "earn_gold",
+                    "type": "gold",
+                    "label": "Earn Gold",
+                    "target": 1350
+                }
+            ],
+            "rewards": {
+                "xp": 650,
+                "gold": 325
+            }
+        },
+        "quest_039": {
+            "id": "quest_039",
+            "title": "Undying Legend",
+            "description": "Survive for 17 minutes.",
+            "giver": "Captain Kael",
+            "requires": "quest_035",
+            "objectives": [
+                {
+                    "id": "survive_time",
+                    "type": "survive",
+                    "label": "Survive",
+                    "target": 1015
+                }
+            ],
+            "rewards": {
+                "xp": 750,
+                "gold": 375
+            }
+        },
+        "quest_040": {
+            "id": "quest_040",
+            "title": "Hoarder Supreme",
+            "description": "Gather 180 items.",
+            "giver": "Merchant Lysa",
+            "requires": "quest_036",
+            "objectives": [
+                {
+                    "id": "collect_items",
+                    "type": "collect",
+                    "itemId": "any",
+                    "label": "Collect Items",
+                    "target": 180
+                }
+            ],
+            "rewards": {
+                "xp": 700,
+                "gold": 350
             }
         }
     }

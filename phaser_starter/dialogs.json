@@ -362,5 +362,58 @@
                 "choices": []
             }
         }
+    },
+    "blacksmith_brond": {
+        "npcName": "Blacksmith Brond",
+        "npcTitle": "Master Smith",
+        "nodes": {
+            "start": {
+                "text": "Hail, traveler. Need something forged? Or perhaps you come bearing those strange shards the Elder mentioned?",
+                "choices": [
+                    {
+                        "text": "I have the crystal shards from Elder Malik",
+                        "next": "receive_shards",
+                        "condition": "quest_active:main_01_004",
+                        "isQuest": true,
+                        "action": "complete_quest",
+                        "questId": "main_01_004"
+                    },
+                    {
+                        "text": "What can you tell me about your craft?",
+                        "next": "about_craft"
+                    },
+                    {
+                        "text": "Goodbye",
+                        "next": "end"
+                    }
+                ]
+            },
+            "receive_shards": {
+                "text": "Ah, these crystals... *examines them carefully* I can feel their resonance. Give me a moment to sound them properly. You should stay close—when I strike these, they tend to attract... unwanted attention.",
+                "choices": [
+                    {
+                        "text": "I'll be ready to defend",
+                        "next": "end"
+                    }
+                ]
+            },
+            "about_craft": {
+                "text": "I forge weapons and armor from the ores of Hearthwell's mines. But lately, the corruption has tainted even the metal. Some pieces I forge now carry strange properties—echoes of the darkness below.",
+                "choices": [
+                    {
+                        "text": "← Back",
+                        "next": "start"
+                    },
+                    {
+                        "text": "Goodbye",
+                        "next": "end"
+                    }
+                ]
+            },
+            "end": {
+                "text": "Forge well, traveler.",
+                "choices": []
+            }
+        }
     }
 }

@@ -137,7 +137,7 @@
                     "type": "collect",
                     "itemId": "stabilized_flux",
                     "label": "Stabilize Mana Fluxes",
-                    "target": 3
+                    "target": 15
                 }
             ],
             "rewards": {

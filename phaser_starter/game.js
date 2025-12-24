@@ -17096,7 +17096,7 @@ function updateManaFluxNodes() {
 
             // Send UQE Event
             if (window.uqe) {
-                window.uqe.eventBus.emit('ITEM_PICKUP', {
+                window.uqe.eventBus.emit('item_pickup', {
                     id: 'stabilized_flux',
                     type: 'quest_item',
                     amount: 1

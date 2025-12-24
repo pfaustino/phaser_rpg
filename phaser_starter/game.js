@@ -3723,16 +3723,16 @@ function spawnDungeonMonsters() {
             if (dungeonLevel <= 2) {
                 // Floor 1-2: Echo creatures for main quest line
                 dungeonMonsterTypes = [
-                    { name: 'Echo Rat', textureKey: 'monster_echo_mite', hp: 20, attack: 4, speed: 70, xp: 8, isProcedural: false, monsterType: 'echo_rat' },
-                    { name: 'Echo Rat', textureKey: 'monster_echo_mite', hp: 20, attack: 4, speed: 70, xp: 8, isProcedural: false, monsterType: 'echo_rat' },
-                    { name: 'Echo Mite', textureKey: 'monster_echo_mite', hp: 15, attack: 3, speed: 60, xp: 5, isProcedural: false, monsterType: 'echo_mite' }
+                    { name: 'Echo Rat', textureKey: 'monster_echo_mite', hp: 20, attack: 4, speed: 70, xp: 8, isProcedural: false, monsterType: 'echo_rat', spawnAmount: [3, 5] },
+                    { name: 'Echo Rat', textureKey: 'monster_echo_mite', hp: 20, attack: 4, speed: 70, xp: 8, isProcedural: false, monsterType: 'echo_rat', spawnAmount: [3, 5] },
+                    { name: 'Echo Mite', textureKey: 'monster_echo_mite', hp: 15, attack: 3, speed: 60, xp: 5, isProcedural: false, monsterType: 'echo_mite', spawnAmount: [2, 4] }
                 ];
             } else {
                 // Deeper floors: Standard dungeon monsters
                 dungeonMonsterTypes = [
-                    { name: 'Goblin', textureKey: 'monster_goblin', hp: 30, attack: 5, speed: 50, xp: 10, isProcedural: false },
-                    { name: 'Orc', textureKey: 'monster_orc', hp: 50, attack: 8, speed: 40, xp: 20, isProcedural: false },
-                    { name: 'Skeleton', textureKey: 'monster_skeleton', hp: 25, attack: 6, speed: 60, xp: 15, isProcedural: false }
+                    { name: 'Goblin', textureKey: 'monster_goblin', hp: 30, attack: 5, speed: 50, xp: 10, isProcedural: false, spawnAmount: [1, 3] },
+                    { name: 'Orc', textureKey: 'monster_orc', hp: 50, attack: 8, speed: 40, xp: 20, isProcedural: false, spawnAmount: [1, 2] },
+                    { name: 'Skeleton', textureKey: 'monster_skeleton', hp: 25, attack: 6, speed: 60, xp: 15, isProcedural: false, spawnAmount: [1, 2] }
                 ];
             }
 
@@ -3750,7 +3750,8 @@ function spawnDungeonMonsters() {
                             speed: bp.stats.speed,
                             xp: bp.stats.xp,
                             textureKey: bp.id,
-                            isProcedural: true
+                            isProcedural: true,
+                            spawnAmount: bp.stats.spawnAmount || [1, 1]
                         });
                     }
                 });
@@ -3761,7 +3762,18 @@ function spawnDungeonMonsters() {
             const scaledAttack = selectedType.attack + (dungeonLevel * 2);
             const scaledXp = (selectedType.xp || 10) + (dungeonLevel * 5);
 
-            spawnMonsterScaled(x, y, selectedType, scaledHp, scaledAttack, scaledXp);
+            // Determine pack size based on spawnAmount
+            const spawnAmount = selectedType.spawnAmount || [1, 1];
+            const packSize = Phaser.Math.Between(spawnAmount[0], spawnAmount[1]);
+
+            console.log(`🦇 Dungeon pack spawn: ${selectedType.name} x${packSize}`);
+
+            // Spawn the pack clustered around the spawn point
+            for (let p = 0; p < packSize; p++) {
+                const offsetX = p === 0 ? 0 : Phaser.Math.Between(-30, 30);
+                const offsetY = p === 0 ? 0 : Phaser.Math.Between(-30, 30);
+                spawnMonsterScaled(x + offsetX, y + offsetY, selectedType, scaledHp, scaledAttack, scaledXp);
+            }
         }
     });
 
@@ -5483,15 +5495,15 @@ function update(time, delta) {
 
         // Use data-driven monster types if available
         let monsterTypes = [
-            { name: 'Goblin', textureKey: 'monster_goblin', hp: 30, attack: 5, speed: 50, xp: 10, isProcedural: false },
-            { name: 'Orc', textureKey: 'monster_orc', hp: 50, attack: 8, speed: 40, xp: 20, isProcedural: false },
-            { name: 'Skeleton', textureKey: 'monster_skeleton', hp: 25, attack: 6, speed: 60, xp: 15, isProcedural: false },
-            { name: 'Spider', textureKey: 'monster_spider', hp: 20, attack: 4, speed: 70, xp: 8, isProcedural: false },
-            { name: 'Slime', textureKey: 'monster_slime', hp: 15, attack: 3, speed: 30, xp: 5, isProcedural: false },
-            { name: 'Wolf', textureKey: 'monster_wolf', hp: 40, attack: 7, speed: 65, xp: 18, isProcedural: false },
-            { name: 'Dragon', textureKey: 'monster_dragon', hp: 80, attack: 12, speed: 35, xp: 40, isProcedural: false },
-            { name: 'Echo_Mite', textureKey: 'monster_echo_mite', hp: 15, attack: 3, speed: 60, xp: 5, isProcedural: false },
-            { name: 'Ghost', textureKey: 'monster_ghost', hp: 35, attack: 6, speed: 55, xp: 12, isProcedural: false }
+            { name: 'Goblin', textureKey: 'monster_goblin', hp: 30, attack: 5, speed: 50, xp: 10, isProcedural: false, spawnAmount: [1, 3] },
+            { name: 'Orc', textureKey: 'monster_orc', hp: 50, attack: 8, speed: 40, xp: 20, isProcedural: false, spawnAmount: [1, 2] },
+            { name: 'Skeleton', textureKey: 'monster_skeleton', hp: 25, attack: 6, speed: 60, xp: 15, isProcedural: false, spawnAmount: [1, 2] },
+            { name: 'Spider', textureKey: 'monster_spider', hp: 20, attack: 4, speed: 70, xp: 8, isProcedural: false, spawnAmount: [3, 5] },
+            { name: 'Slime', textureKey: 'monster_slime', hp: 15, attack: 3, speed: 30, xp: 5, isProcedural: false, spawnAmount: [2, 4] },
+            { name: 'Wolf', textureKey: 'monster_wolf', hp: 40, attack: 7, speed: 65, xp: 18, isProcedural: false, spawnAmount: [2, 3] },
+            { name: 'Dragon', textureKey: 'monster_dragon', hp: 80, attack: 12, speed: 35, xp: 40, isProcedural: false, spawnAmount: [1, 1] },
+            { name: 'Echo_Mite', textureKey: 'monster_echo_mite', hp: 15, attack: 3, speed: 60, xp: 5, isProcedural: false, spawnAmount: [2, 4] },
+            { name: 'Ghost', textureKey: 'monster_ghost', hp: 35, attack: 6, speed: 55, xp: 12, isProcedural: false, spawnAmount: [1, 2] }
         ];
 
         if (monsterRenderer && Object.keys(monsterRenderer.monsterBlueprints).length > 0) {
@@ -5506,13 +5518,15 @@ function update(time, delta) {
                     speed: bp.stats.speed,
                     xp: bp.stats.xp,
                     textureKey: bp.id,
-                    isProcedural: true
+                    isProcedural: true,
+                    spawnAmount: bp.stats.spawnAmount || [1, 1]
                 });
             });
         }
 
-        // Spawn monsters away from player
-        for (let i = 0; i < monstersNeeded; i++) {
+        // Spawn monsters away from player (using pack spawning)
+        let spawned = 0;
+        while (spawned < monstersNeeded) {
             let spawnX, spawnY;
             let attempts = 0;
             const maxAttempts = 50;
@@ -5530,7 +5544,20 @@ function update(time, delta) {
             const typeIndex = Math.floor(Math.random() * monsterTypes.length);
             const type = monsterTypes[typeIndex];
 
-            spawnMonster.call(scene, spawnX, spawnY, type);
+            // Determine pack size based on spawnAmount
+            const spawnAmount = type.spawnAmount || [1, 1];
+            const packSize = Phaser.Math.Between(spawnAmount[0], spawnAmount[1]);
+
+            console.log(`🐺 Pack spawn: ${type.name} x${packSize} (range: ${spawnAmount[0]}-${spawnAmount[1]})`);
+
+            // Spawn the pack clustered around the spawn point
+            for (let p = 0; p < packSize && spawned < monstersNeeded; p++) {
+                // Offset each pack member slightly from the center
+                const offsetX = p === 0 ? 0 : Phaser.Math.Between(-40, 40);
+                const offsetY = p === 0 ? 0 : Phaser.Math.Between(-40, 40);
+                spawnMonster.call(scene, spawnX + offsetX, spawnY + offsetY, type);
+                spawned++;
+            }
         }
     }
 
@@ -15165,15 +15192,15 @@ function createAssetsWindow() {
 function spawnInitialMonsters(mapWidth, mapHeight) {
     // Use data-driven monster types if available from Method 2
     let monsterTypes = [
-        { name: 'Goblin', textureKey: 'monster_goblin', hp: 30, attack: 5, speed: 50, xp: 10, isProcedural: false },
-        { name: 'Orc', textureKey: 'monster_orc', hp: 50, attack: 8, speed: 40, xp: 20, isProcedural: false },
-        { name: 'Skeleton', textureKey: 'monster_skeleton', hp: 25, attack: 6, speed: 60, xp: 15, isProcedural: false },
-        { name: 'Spider', textureKey: 'monster_spider', hp: 20, attack: 4, speed: 70, xp: 8, isProcedural: false },
-        { name: 'Slime', textureKey: 'monster_slime', hp: 15, attack: 3, speed: 30, xp: 5, isProcedural: false },
-        { name: 'Wolf', textureKey: 'monster_wolf', hp: 40, attack: 7, speed: 65, xp: 18, isProcedural: false },
-        { name: 'Dragon', textureKey: 'monster_dragon', hp: 80, attack: 12, speed: 35, xp: 40, isProcedural: false },
-        { name: 'Ghost', textureKey: 'monster_ghost', hp: 35, attack: 6, speed: 55, xp: 12, isProcedural: false },
-        { name: 'Echo_Mite', textureKey: 'monster_echo_mite', hp: 15, attack: 3, speed: 60, xp: 5, isProcedural: false }
+        { name: 'Goblin', textureKey: 'monster_goblin', hp: 30, attack: 5, speed: 50, xp: 10, isProcedural: false, spawnAmount: [1, 3] },
+        { name: 'Orc', textureKey: 'monster_orc', hp: 50, attack: 8, speed: 40, xp: 20, isProcedural: false, spawnAmount: [1, 2] },
+        { name: 'Skeleton', textureKey: 'monster_skeleton', hp: 25, attack: 6, speed: 60, xp: 15, isProcedural: false, spawnAmount: [1, 2] },
+        { name: 'Spider', textureKey: 'monster_spider', hp: 20, attack: 4, speed: 70, xp: 8, isProcedural: false, spawnAmount: [3, 5] },
+        { name: 'Slime', textureKey: 'monster_slime', hp: 15, attack: 3, speed: 30, xp: 5, isProcedural: false, spawnAmount: [2, 4] },
+        { name: 'Wolf', textureKey: 'monster_wolf', hp: 40, attack: 7, speed: 65, xp: 18, isProcedural: false, spawnAmount: [2, 3] },
+        { name: 'Dragon', textureKey: 'monster_dragon', hp: 80, attack: 12, speed: 35, xp: 40, isProcedural: false, spawnAmount: [1, 1] },
+        { name: 'Ghost', textureKey: 'monster_ghost', hp: 35, attack: 6, speed: 55, xp: 12, isProcedural: false, spawnAmount: [1, 2] },
+        { name: 'Echo_Mite', textureKey: 'monster_echo_mite', hp: 15, attack: 3, speed: 60, xp: 5, isProcedural: false, spawnAmount: [2, 4] }
     ];
 
     if (monsterRenderer && Object.keys(monsterRenderer.monsterBlueprints).length > 0) {
@@ -15188,7 +15215,8 @@ function spawnInitialMonsters(mapWidth, mapHeight) {
                 speed: bp.stats.speed,
                 xp: bp.stats.xp,
                 textureKey: bp.id,
-                isProcedural: true
+                isProcedural: true,
+                spawnAmount: bp.stats.spawnAmount || [1, 1]
             });
         });
     }
@@ -15198,7 +15226,9 @@ function spawnInitialMonsters(mapWidth, mapHeight) {
     const playerSpawnY = 300;
     const minDistanceFromPlayer = MONSTER_AGGRO_RADIUS;
 
-    for (let i = 0; i < MAX_MONSTERS; i++) {
+    // Use pack spawning
+    let spawned = 0;
+    while (spawned < MAX_MONSTERS) {
         let spawnX, spawnY;
         let attempts = 0;
         const maxAttempts = 50;
@@ -15216,7 +15246,20 @@ function spawnInitialMonsters(mapWidth, mapHeight) {
         const typeIndex = Math.floor(Math.random() * monsterTypes.length);
         const type = monsterTypes[typeIndex];
 
-        spawnMonster.call(this, spawnX, spawnY, type);
+        // Determine pack size based on spawnAmount
+        const spawnAmount = type.spawnAmount || [1, 1];
+        const packSize = Phaser.Math.Between(spawnAmount[0], spawnAmount[1]);
+
+        console.log(`🐺 Pack spawn: ${type.name} x${packSize} (range: ${spawnAmount[0]}-${spawnAmount[1]})`);
+
+        // Spawn the pack clustered around the spawn point
+        for (let p = 0; p < packSize && spawned < MAX_MONSTERS; p++) {
+            // Offset each pack member slightly from the center
+            const offsetX = p === 0 ? 0 : Phaser.Math.Between(-40, 40);
+            const offsetY = p === 0 ? 0 : Phaser.Math.Between(-40, 40);
+            spawnMonster.call(this, spawnX + offsetX, spawnY + offsetY, type);
+            spawned++;
+        }
     }
 }
 

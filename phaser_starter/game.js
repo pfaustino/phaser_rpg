@@ -7247,92 +7247,9 @@ function checkLevelUp() {
 }
 
 // ============================================
-// ENHANCED ITEM SYSTEM - CONSTANTS
+// ENHANCED ITEM SYSTEM - DATA LOADED FROM items.json via items.js
+// See: getWeaponTypes(), getMaterials(), getPrefixes(), getSuffixes(), getItemSets(), getElementalTypes()
 // ============================================
-
-// Weapon types with different stat profiles
-const WEAPON_TYPES = {
-    'Sword': { baseAttack: 1.0, speed: 1.0, critChance: 0.05 },      // Balanced
-    'Axe': { baseAttack: 1.15, speed: 0.9, critChance: 0.08 },       // High damage, slower
-    'Mace': { baseAttack: 1.1, speed: 0.85, critChance: 0.06 },      // High damage, very slow
-    'Dagger': { baseAttack: 0.85, speed: 1.2, critChance: 0.12 },    // Fast, high crit
-    'Staff': { baseAttack: 0.9, speed: 1.1, critChance: 0.07 },     // Magic-focused
-    'Bow': { baseAttack: 0.95, speed: 1.15, critChance: 0.10 },     // Ranged, fast
-    'Crossbow': { baseAttack: 1.05, speed: 0.95, critChance: 0.09 }  // Ranged, powerful
-};
-
-// Material types that affect stats
-const MATERIALS = {
-    'Iron': { multiplier: 1.0, tier: 1 },
-    'Steel': { multiplier: 1.2, tier: 2 },
-    'Silver': { multiplier: 1.4, tier: 3 },
-    'Gold': { multiplier: 1.6, tier: 4 },
-    'Mithril': { multiplier: 1.8, tier: 5 },
-    'Dragonbone': { multiplier: 2.0, tier: 6 }
-};
-
-// Prefixes that modify stats
-const PREFIXES = {
-    'Sharp': { attackBonus: 0.15, quality: ['Common', 'Uncommon'] },
-    'Sturdy': { defenseBonus: 0.15, quality: ['Common', 'Uncommon'] },
-    'Balanced': { attackBonus: 0.1, defenseBonus: 0.1, quality: ['Common', 'Uncommon'] },
-    'Vicious': { attackBonus: 0.25, critBonus: 0.05, quality: ['Uncommon', 'Rare'] },
-    'Reinforced': { defenseBonus: 0.25, hpBonus: 0.1, quality: ['Uncommon', 'Rare'] },
-    'Precise': { critBonus: 0.1, attackBonus: 0.1, quality: ['Uncommon', 'Rare'] },
-    'Soulbound': { attackBonus: 0.2, defenseBonus: 0.2, lifesteal: 0.05, quality: ['Rare', 'Epic'] },
-    'Ethereal': { defenseBonus: 0.3, resistance: { magic: 0.1 }, quality: ['Rare', 'Epic'] },
-    'Celestial': { attackBonus: 0.3, critBonus: 0.15, quality: ['Epic', 'Legendary'] },
-    'Demonic': { attackBonus: 0.35, lifesteal: 0.1, quality: ['Epic', 'Legendary'] },
-    'Divine': { attackBonus: 0.25, defenseBonus: 0.25, hpBonus: 0.2, quality: ['Legendary'] }
-};
-
-// Suffixes that modify stats
-const SUFFIXES = {
-    'of Power': { attackBonus: 0.2, quality: ['Uncommon', 'Rare'] },
-    'of Protection': { defenseBonus: 0.2, quality: ['Uncommon', 'Rare'] },
-    'of Swiftness': { speedBonus: 0.15, critBonus: 0.05, quality: ['Uncommon', 'Rare'] },
-    'of Vitality': { hpBonus: 0.25, quality: ['Uncommon', 'Rare'] },
-    'of the Bear': { hpBonus: 0.3, defenseBonus: 0.15, quality: ['Rare', 'Epic'] },
-    'of the Wolf': { attackBonus: 0.2, speedBonus: 0.2, quality: ['Rare', 'Epic'] },
-    'of the Eagle': { critBonus: 0.15, attackBonus: 0.15, quality: ['Rare', 'Epic'] },
-    'of Life': { lifesteal: 0.08, hpBonus: 0.2, quality: ['Epic', 'Legendary'] },
-    'of Death': { attackBonus: 0.3, critBonus: 0.2, quality: ['Epic', 'Legendary'] },
-    'of Eternity': { attackBonus: 0.25, defenseBonus: 0.25, hpBonus: 0.25, quality: ['Legendary'] }
-};
-
-// Set items - matching pieces grant bonuses
-const ITEM_SETS = {
-    'Warrior': {
-        pieces: ['weapon', 'armor', 'helmet', 'boots', 'gloves'],
-        bonuses: {
-            2: { attackBonus: 0.1 },
-            3: { defenseBonus: 0.1 },
-            4: { hpBonus: 0.15 },
-            5: { attackBonus: 0.15, defenseBonus: 0.15, critBonus: 0.1 }
-        }
-    },
-    'Guardian': {
-        pieces: ['armor', 'helmet', 'boots', 'gloves', 'belt'],
-        bonuses: {
-            2: { defenseBonus: 0.15 },
-            3: { hpBonus: 0.2 },
-            4: { resistance: { physical: 0.1 } },
-            5: { defenseBonus: 0.25, hpBonus: 0.3, resistance: { physical: 0.15 } }
-        }
-    },
-    'Assassin': {
-        pieces: ['weapon', 'helmet', 'boots', 'gloves', 'ring'],
-        bonuses: {
-            2: { critBonus: 0.1 },
-            3: { speedBonus: 0.15 },
-            4: { attackBonus: 0.15 },
-            5: { critBonus: 0.2, attackBonus: 0.2, lifesteal: 0.1 }
-        }
-    }
-};
-
-// Elemental damage types
-const ELEMENTAL_TYPES = ['Fire', 'Ice', 'Lightning', 'Poison', 'Arcane'];
 
 // ============================================
 // ENHANCED ITEM SYSTEM - HELPER FUNCTIONS
@@ -7361,8 +7278,8 @@ function getWeaponTypeForQuality(quality) {
         'Common': ['Sword', 'Axe', 'Mace'],
         'Uncommon': ['Sword', 'Axe', 'Mace', 'Dagger'],
         'Rare': ['Sword', 'Axe', 'Mace', 'Dagger', 'Staff', 'Bow'],
-        'Epic': Object.keys(WEAPON_TYPES),
-        'Legendary': Object.keys(WEAPON_TYPES)
+        'Epic': Object.keys(getWeaponTypes()),
+        'Legendary': Object.keys(getWeaponTypes())
     };
     const available = qualityWeapons[quality] || qualityWeapons['Common'];
     return Phaser.Math.RND.pick(available);
@@ -7372,8 +7289,9 @@ function getWeaponTypeForQuality(quality) {
  * Get prefix based on quality
  */
 function getPrefixForQuality(quality) {
-    const available = Object.keys(PREFIXES).filter(p =>
-        PREFIXES[p].quality.includes(quality)
+    const prefixes = getPrefixes();
+    const available = Object.keys(prefixes).filter(p =>
+        prefixes[p].quality.includes(quality)
     );
     if (available.length === 0) return null;
     return Math.random() < 0.4 ? Phaser.Math.RND.pick(available) : null; // 40% chance
@@ -7383,8 +7301,9 @@ function getPrefixForQuality(quality) {
  * Get suffix based on quality
  */
 function getSuffixForQuality(quality) {
-    const available = Object.keys(SUFFIXES).filter(s =>
-        SUFFIXES[s].quality.includes(quality)
+    const suffixes = getSuffixes();
+    const available = Object.keys(suffixes).filter(s =>
+        suffixes[s].quality.includes(quality)
     );
     if (available.length === 0) return null;
     return Math.random() < 0.3 ? Phaser.Math.RND.pick(available) : null; // 30% chance
@@ -7415,7 +7334,7 @@ function generateSpecialProperties(item, quality) {
         // Elemental damage (weapons only, rare)
         if (item.type === 'weapon' && qLevel >= 3 && Math.random() < 0.2) {
             props.elementalDamage = {
-                type: Phaser.Math.RND.pick(ELEMENTAL_TYPES),
+                type: Phaser.Math.RND.pick(getElementalTypes()),
                 amount: qLevel * 2
             };
         }
@@ -7440,9 +7359,10 @@ function assignItemSet(item, quality) {
 
     // Only Epic and Legendary can be set items, and only 30% chance
     if ((quality === 'Epic' || quality === 'Legendary') && Math.random() < 0.3) {
-        const setNames = Object.keys(ITEM_SETS);
+        const itemSets = getItemSets();
+        const setNames = Object.keys(itemSets);
         const set = Phaser.Math.RND.pick(setNames);
-        if (ITEM_SETS[set].pieces.includes(item.type)) {
+        if (itemSets[set].pieces.includes(item.type)) {
             return set;
         }
     }
@@ -7481,15 +7401,17 @@ function calculateItemStats(baseItem, quality) {
     let critChance = baseItem.critChance || 0;
 
     // Apply material multiplier
-    if (baseItem.material && MATERIALS[baseItem.material]) {
-        const mult = MATERIALS[baseItem.material].multiplier;
+    const materials = getMaterials();
+    if (baseItem.material && materials[baseItem.material]) {
+        const mult = materials[baseItem.material].multiplier;
         attackPower = Math.floor(attackPower * mult);
         defense = Math.floor(defense * mult);
     }
 
     // Apply prefix bonuses
-    if (baseItem.prefix && PREFIXES[baseItem.prefix]) {
-        const prefix = PREFIXES[baseItem.prefix];
+    const prefixesData = getPrefixes();
+    if (baseItem.prefix && prefixesData[baseItem.prefix]) {
+        const prefix = prefixesData[baseItem.prefix];
         if (prefix.attackBonus) attackPower = Math.floor(attackPower * (1 + prefix.attackBonus));
         if (prefix.defenseBonus) defense = Math.floor(defense * (1 + prefix.defenseBonus));
         if (prefix.hpBonus) maxHp = Math.floor(maxHp * (1 + prefix.hpBonus));
@@ -7502,8 +7424,9 @@ function calculateItemStats(baseItem, quality) {
     }
 
     // Apply suffix bonuses
-    if (baseItem.suffix && SUFFIXES[baseItem.suffix]) {
-        const suffix = SUFFIXES[baseItem.suffix];
+    const suffixesData = getSuffixes();
+    if (baseItem.suffix && suffixesData[baseItem.suffix]) {
+        const suffix = suffixesData[baseItem.suffix];
         if (suffix.attackBonus) attackPower = Math.floor(attackPower * (1 + suffix.attackBonus));
         if (suffix.defenseBonus) defense = Math.floor(defense * (1 + suffix.defenseBonus));
         if (suffix.hpBonus) maxHp = Math.floor(maxHp * (1 + suffix.hpBonus));
@@ -7644,7 +7567,7 @@ function generateRandomItem() {
         // Get weapon type and material
         const weaponType = getWeaponTypeForQuality(quality);
         const material = getMaterialForQuality(quality);
-        const weaponData = WEAPON_TYPES[weaponType];
+        const weaponData = getWeaponTypes()[weaponType];
 
         // Base attack power based on quality
         const baseAttack = quality === 'Common' ? Phaser.Math.Between(5, 10) :
@@ -7787,7 +7710,7 @@ function generateRandomItemOfType(itemType, quality = 'Common') {
     switch (itemType) {
         case 'weapon':
             const weaponType = getWeaponTypeForQuality(quality);
-            const weaponData = WEAPON_TYPES[weaponType];
+            const weaponData = getWeaponTypes()[weaponType];
             const baseAttack = 5 + (qLevel * 5) + Phaser.Math.Between(0, 5);
             let attackPower = Math.floor(baseAttack * weaponData.baseAttack);
 
@@ -8378,10 +8301,11 @@ function showTooltip(item, x, y, context = 'inventory') {
     if (item.lifesteal) tooltipLines.push(`Lifesteal: +${(item.lifesteal * 100).toFixed(1)}%`);
 
     // 4. Set Info
-    if (item.set && ITEM_SETS && ITEM_SETS[item.set]) {
+    const itemSetsForTooltip = getItemSets();
+    if (item.set && itemSetsForTooltip && itemSetsForTooltip[item.set]) {
         tooltipLines.push('');
         tooltipLines.push(`Set: ${item.set}`);
-        const setInfo = ITEM_SETS[item.set];
+        const setInfo = itemSetsForTooltip[item.set];
         if (setInfo && setInfo.pieces) {
             tooltipLines.push(`Pieces: ${setInfo.pieces.join(', ')}`);
         }
@@ -8907,8 +8831,9 @@ function updatePlayerStats() {
     });
 
     // Apply set bonuses
+    const itemSetsForBonus = getItemSets();
     Object.keys(setPieces).forEach(setName => {
-        const setInfo = ITEM_SETS[setName];
+        const setInfo = itemSetsForBonus[setName];
         if (!setInfo) return;
 
         const equippedPieces = setPieces[setName];

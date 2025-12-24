@@ -130,3 +130,82 @@ function getQualityColor(quality) {
 function isItemsDataLoaded() {
     return itemsDataLoaded;
 }
+
+// ============================================
+// GETTERS - Expose item data for game.js
+// ============================================
+
+/**
+ * Get all weapon types
+ * @returns {object} Weapon types object
+ */
+function getWeaponTypes() {
+    return _weaponTypes;
+}
+
+/**
+ * Get all materials
+ * @returns {object} Materials object
+ */
+function getMaterials() {
+    return _materials;
+}
+
+/**
+ * Get all prefixes
+ * @returns {object} Prefixes object
+ */
+function getPrefixes() {
+    return _prefixes;
+}
+
+/**
+ * Get all suffixes
+ * @returns {object} Suffixes object
+ */
+function getSuffixes() {
+    return _suffixes;
+}
+
+/**
+ * Get all item sets
+ * @returns {object} Item sets object
+ */
+function getItemSets() {
+    return _itemSets;
+}
+
+/**
+ * Get elemental types
+ * @returns {array} Elemental types array
+ */
+function getElementalTypes() {
+    return _elementalTypes;
+}
+
+/**
+ * Get a specific prefix data
+ * @param {string} prefixName - Prefix name
+ * @returns {object|null} Prefix data or null
+ */
+function getPrefix(prefixName) {
+    return _prefixes[prefixName] || null;
+}
+
+/**
+ * Get a specific suffix data
+ * @param {string} suffixName - Suffix name
+ * @returns {object|null} Suffix data or null
+ */
+function getSuffix(suffixName) {
+    return _suffixes[suffixName] || null;
+}
+
+/**
+ * Get a specific item set data
+ * @param {string} setName - Set name
+ * @returns {object|null} Item set data or null
+ */
+function getItemSet(setName) {
+    return _itemSets[setName] || null;
+}

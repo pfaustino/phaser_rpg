@@ -652,12 +652,12 @@ function onControllerB() {
     } else if (typeof dialogVisible !== 'undefined' && dialogVisible) {
         if (typeof closeDialog === 'function') closeDialog();
     } else {
-        // No menu open - Use Ability 3
-        console.log('[Ability Debug] No menu open, attempting Ability 3');
+        // No menu open - Use Ability 4 (Shield)
+        console.log('[Ability Debug] No menu open, attempting Ability 4 (Shield)');
         if (typeof useAbility === 'function') {
-            useAbility(3);
+            useAbility(4);
         } else if (typeof window.useAbility === 'function') {
-            window.useAbility(3);
+            window.useAbility(4);
         } else {
             console.warn('[Ability Debug] useAbility not found');
         }

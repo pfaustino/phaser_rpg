@@ -1613,6 +1613,9 @@ function createTownMap() {
     buildings = [];
     transitionMarkers = [];
 
+    // Ensure mana regen is running (safe to call multiple times)
+    startManaRegen();
+
     // Create base grass tiles using spritesheet for variety
     let grassFrameCount = 1;
     let useFrames = false;
@@ -4506,8 +4509,9 @@ function create() {
     this.input.keyboard.on('keydown-ONE', () => { if (window.useAbility) window.useAbility(1); });
     this.input.keyboard.on('keydown-TWO', () => { if (window.useAbility) window.useAbility(2); });
     this.input.keyboard.on('keydown-THREE', () => { if (window.useAbility) window.useAbility(3); });
-    this.input.keyboard.on('keydown-FOUR', () => { if (window.usePotion) window.usePotion('health'); });
-    this.input.keyboard.on('keydown-FIVE', () => { if (window.usePotion) window.usePotion('mana'); });
+    this.input.keyboard.on('keydown-FOUR', () => { if (window.useAbility) window.useAbility(4); });
+    this.input.keyboard.on('keydown-FIVE', () => { if (window.usePotion) window.usePotion('health'); });
+    this.input.keyboard.on('keydown-SIX', () => { if (window.usePotion) window.usePotion('mana'); });
 
     // Add CTRL+A for assets window
     assetsKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A);
@@ -7261,46 +7265,60 @@ function getXPNeededForLevel(level) {
  * Update UI bars
  */
 function updateUI() {
-    const stats = playerStats;
-    const maxBarWidth = 200 - 4; // Consistent max width for all bars
-    const scene = game.scene.scenes[0];
+    try {
+        const stats = playerStats;
+        const maxBarWidth = 200 - 4; // Consistent max width for all bars
+        const scene = game.scene.scenes[0];
 
-    // Update HP bar
-    const hpPercent = Math.max(0, Math.min(1, stats.hp / stats.maxHp));
-    hpBar.width = maxBarWidth * hpPercent;
+        // Update HP bar
+        const hpPercent = Math.max(0, Math.min(1, stats.hp / stats.maxHp));
+        hpBar.width = maxBarWidth * hpPercent;
 
-    // Update Mana bar
-    const manaPercent = Math.max(0, Math.min(1, stats.mana / stats.maxMana));
-    manaBar.width = maxBarWidth * manaPercent;
+        // Update Mana bar
+        const manaPercent = Math.max(0, Math.min(1, stats.mana / stats.maxMana));
+        manaBar.width = maxBarWidth * manaPercent;
 
-    // Update Stamina bar
-    const staminaPercent = Math.max(0, Math.min(1, stats.stamina / stats.maxStamina));
-    staminaBar.width = maxBarWidth * staminaPercent;
+        // Debugging UI: Check for weird values
+        if (Math.random() < 0.01) {
+            // Only log occasionally
+            if (isNaN(manaPercent) || manaPercent < 0) {
+                console.error(`[UI Error] Invalid mana percent: ${manaPercent}, Mana: ${stats.mana}, Max: ${stats.maxMana}`);
+            } else {
+                // console.log(`[UI Debug] Mana: ${stats.mana}/${stats.maxMana} (${(manaPercent * 100).toFixed(1)}%), Width: ${manaBar.width}`);
+            }
+        }
 
-    // Update XP bar (Quadratic Curve)
-    const nextLevelXP = getXPNeededForLevel(stats.level);
-    const prevLevelXP = stats.level > 1 ? getXPNeededForLevel(stats.level - 1) : 0;
+        // Update Stamina bar
+        const staminaPercent = Math.max(0, Math.min(1, stats.stamina / stats.maxStamina));
+        staminaBar.width = maxBarWidth * staminaPercent;
 
-    // Calculate progress within current level
-    const xpInCurrentLevel = Math.max(0, stats.xp - prevLevelXP);
-    const xpRequiredForCurrentLevel = nextLevelXP - prevLevelXP;
+        // Update XP bar (Quadratic Curve)
+        const nextLevelXP = getXPNeededForLevel(stats.level);
+        const prevLevelXP = stats.level > 1 ? getXPNeededForLevel(stats.level - 1) : 0;
 
-    const xpPercent = Math.max(0, Math.min(1, xpInCurrentLevel / xpRequiredForCurrentLevel));
-    xpBar.width = maxBarWidth * xpPercent;
+        // Calculate progress within current level
+        const xpInCurrentLevel = Math.max(0, stats.xp - prevLevelXP);
+        const xpRequiredForCurrentLevel = nextLevelXP - prevLevelXP;
 
-    // Update stats text
-    statsText.setText(`Level ${stats.level} | HP: ${Math.ceil(stats.hp)}/${stats.maxHp} | XP: ${Math.floor(xpInCurrentLevel)}/${xpRequiredForCurrentLevel}`);
+        const xpPercent = Math.max(0, Math.min(1, xpInCurrentLevel / xpRequiredForCurrentLevel));
+        xpBar.width = maxBarWidth * xpPercent;
 
-    // Update gold text
-    if (goldText) {
-        goldText.setText(`Gold: ${stats.gold}`);
-    }
+        // Update stats text
+        statsText.setText(`Level ${stats.level} | HP: ${Math.ceil(stats.hp)}/${stats.maxHp} | XP: ${Math.floor(xpInCurrentLevel)}/${xpRequiredForCurrentLevel}`);
 
-    // Update debug text (player position)
-    if (player && scene.debugText) {
-        const tileX = Math.floor(player.x / scene.tileSize);
-        const tileY = Math.floor(player.y / scene.tileSize);
-        scene.debugText.setText(`X: ${Math.floor(player.x)} Y: ${Math.floor(player.y)} | Tile: (${tileX}, ${tileY})`);
+        // Update gold text
+        if (goldText) {
+            goldText.setText(`Gold: ${stats.gold}`);
+        }
+
+        // Update debug text (player position)
+        if (player && scene.debugText) {
+            const tileX = Math.floor(player.x / scene.tileSize);
+            const tileY = Math.floor(player.y / scene.tileSize);
+            scene.debugText.setText(`X: ${Math.floor(player.x)} Y: ${Math.floor(player.y)} | Tile: (${tileX}, ${tileY})`);
+        }
+    } catch (e) {
+        console.error("Error in updateUI:", e);
     }
 }
 
@@ -7333,6 +7351,7 @@ function checkLevelUp() {
     if (leveledUp) {
         showDamageNumber(player.x, player.y - 40, 'LEVEL UP!', 0x00ffff);
         addChatMessage(`Level Up! Now Level ${stats.level}`, 0x00ffff, '⭐');
+        addChatMessage('HP & Mana Restored!', 0x00ff00, '💚');
 
         // UQE: Emit level up event
         if (typeof uqe !== 'undefined') {
@@ -14613,6 +14632,9 @@ function loadGame() {
         // Update player stats (recalculate attack/defense from equipment)
         updatePlayerStats();
 
+        // Start passive regeneration
+        startManaRegen();
+
         // Refresh UIs
         refreshInventory();
         refreshEquipment();
@@ -14640,6 +14662,46 @@ function checkAutoLoad() {
     // loadGame();
 }
 
+
+// ============================================
+// REGENERATION SYSTEM
+// ============================================
+
+let regenTimerEvent = null;
+
+/**
+ * Starts the passive regeneration loop
+ * Rate: 1 MP per 2 seconds
+ */
+function startManaRegen() {
+    console.log('✨ Starting Mana Regeneration System');
+    // Safety check for game/scene
+    if (!game || !game.scene || !game.scene.scenes || !game.scene.scenes[0]) {
+        console.warn('⚠️ Cannot start mana regen: Scene not ready');
+        return;
+    }
+
+    const scene = game.scene.scenes[0];
+
+    // Clear existing timer if any
+    if (regenTimerEvent) {
+        regenTimerEvent.remove();
+    }
+
+    regenTimerEvent = scene.time.addEvent({
+        delay: 2000, // 2 seconds
+        loop: true,
+        callback: () => {
+            if (typeof playerStats !== 'undefined' && playerStats.mana < playerStats.maxMana) {
+                playerStats.mana = Math.min(playerStats.maxMana, playerStats.mana + 1);
+                if (typeof updateAbilityBar === 'function') {
+                    updateAbilityBar(); // Update UI
+                }
+            }
+        }
+    });
+}
+
 // ============================================
 // ABILITIES & SPELLS SYSTEM
 // ============================================
@@ -14648,15 +14710,14 @@ function checkAutoLoad() {
  * Ability definitions
  */
 const ABILITY_DEFINITIONS = {
-    ice_nova: {
-        name: 'Ice Nova',
+    heal: {
+        name: 'Heal',
         manaCost: 20,
         cooldown: 3000, // 3 seconds
-        damage: 15,
-        range: 150,
-        icon: 'fireball_effect', // Reusing effect sprite
-        color: 0x00ffff,
-        description: 'Freezes enemies and deals damage'
+        healAmount: 30,
+        icon: 'heal_effect',
+        color: 0x00ff00,
+        description: 'Restores 30 HP'
     },
     fireball: {
         name: 'Fireball',
@@ -14666,17 +14727,26 @@ const ABILITY_DEFINITIONS = {
         range: 150,
         icon: 'fireball_effect',
         color: 0xff4400,
-        description: 'Deals 25 damage to nearby enemies'
+        description: 'Deals damage in a line'
+    },
+    ice_nova: {
+        name: 'Ice Nova',
+        manaCost: 20,
+        cooldown: 3000, // 3 seconds
+        damage: 15,
+        range: 150,
+        icon: 'fireball_effect', // Reusing effect sprite by color tinting
+        color: 0x00ffff,
+        description: 'Freezes enemies and deals damage'
     },
     shield: {
         name: 'Shield',
-        manaCost: 10,
+        manaCost: 30,
         cooldown: 5000, // 5 seconds
-        duration: 3000, // 3 seconds
-        defenseBonus: 10,
+        duration: 3000,
         icon: 'shield_effect',
-        color: 0x0088ff,
-        description: 'Increases defense by 10 for 3 seconds'
+        color: 0xffd700,
+        description: 'Reduces damage taken'
     }
 };
 
@@ -14768,7 +14838,7 @@ function createAbilityBar() {
     healthPotionIcon.setScrollFactor(0).setDepth(201).setScale(0.8);
     healthPotionIcon.setTint(0xff4444);
 
-    const healthKeyText = scene.add.text(potionStartX - 20, abilityBarY - 20, '4', {
+    const healthKeyText = scene.add.text(potionStartX - 20, abilityBarY - 20, '5', {
         fontSize: '14px',
         fill: '#ffffff',
         fontStyle: 'bold',
@@ -14799,7 +14869,7 @@ function createAbilityBar() {
     manaPotionIcon.setScrollFactor(0).setDepth(201).setScale(0.8);
     manaPotionIcon.setTint(0x4444ff);
 
-    const manaKeyText = scene.add.text(manaPotionX - 20, abilityBarY - 20, '5', {
+    const manaKeyText = scene.add.text(manaPotionX - 20, abilityBarY - 20, '6', {
         fontSize: '14px',
         fill: '#ffffff',
         fontStyle: 'bold',
@@ -14936,7 +15006,7 @@ function usePotion(potionType) {
         if (actualMana > 0) {
             addChatMessage(`Used ${potion.name || 'Mana Potion'}: +${actualMana} MP`, 0x4444ff, '💊');
             showDamageNumber(player.x, player.y - 20, `+${actualMana}`, 0x4444ff, false);
-            playSound('heal_cast');
+            playSound('heal');
         } else {
             addChatMessage('Mana already full!', 0xffff00, '💊');
             return; // Don't consume potion if no effect
@@ -14965,30 +15035,73 @@ function usePotion(potionType) {
     }
 }
 
+function castHeal() {
+    // Define scene first
+    const scene = game.scene.scenes[0];
+
+    // Play sound
+    playSound('heal_cast');
+
+    // Effect: Heal player
+    const healAmount = ABILITY_DEFINITIONS.heal.healAmount;
+    const oldHp = playerStats.hp;
+    playerStats.hp = Math.min(playerStats.maxHp, playerStats.hp + healAmount);
+    const actualHeal = playerStats.hp - oldHp;
+
+    showDamageNumber(player.x, player.y - 30, `+${actualHeal}`, 0x00ff00, false);
+
+    // Visual effect
+    const particles = scene.add.particles(player.x, player.y, 'heal_effect', {
+        speed: { min: 50, max: 100 },
+        scale: { start: 0.5, end: 0 },
+        alpha: { start: 1, end: 0 },
+        lifespan: 800,
+        quantity: 10,
+        blendMode: 'ADD'
+    });
+
+    scene.time.delayedCall(800, () => {
+        particles.destroy();
+    });
+}
+
+/**
+ * Update Ability/Mana Bar UI
+ */
 /**
  * Update Ability/Mana Bar UI
  */
 function updateAbilityBar() {
-    if (manaBar) {
-        manaBar.scaleX = Math.max(0, playerStats.mana / playerStats.maxMana);
-    }
+    // Use the central updateUI function to avoid conflicting updates
+    // (updateUI sets width, whereas this used to set scaleX, causing double-scaling)
+    updateUI();
 }
 
 /**
  * Use an ability
  * @param {number} abilityIndex - 1, 2, or 3
  */
-function useAbility(abilityIndex) {
+window.useAbility = function (abilityIndex) {
+    console.log(`[Ability Debug] useAbility called with index: ${abilityIndex}`);
     // Implement ability logic here based on index
-    // 1: Fireball
-    // 2: Ice Nova
-    // 3: Shield
+    // 1: Heal
+    // 2: Fireball
+    // 3: Ice Nova
+    // 4: Shield
 
     // Check if ability is unlocked or available (simplified for now)
-    const abilityName = abilityIndex === 1 ? 'fireball' : (abilityIndex === 2 ? 'ice_nova' : 'shield');
+    const abilityName = abilityIndex === 1 ? 'heal' :
+        (abilityIndex === 2 ? 'fireball' :
+            (abilityIndex === 3 ? 'ice_nova' : 'shield'));
 
-    // Basic mana check (example values)
-    const manaCost = abilityIndex === 1 ? 10 : (abilityIndex === 2 ? 20 : 30);
+    // Get definition directly
+    const abilityDef = ABILITY_DEFINITIONS[abilityName];
+    if (!abilityDef) {
+        console.error(`[Ability Debug] Definition not found for ${abilityName} (index ${abilityIndex})`);
+        return;
+    }
+
+    const manaCost = abilityDef.manaCost;
 
     if (playerStats.mana < manaCost) {
         addChatMessage(`Not enough mana! Need ${manaCost}`, 0xff6666);
@@ -15001,13 +15114,12 @@ function useAbility(abilityIndex) {
     */
 
     if (abilityIndex === 1) {
-        // Fireball logic
-        castFireball();
+        castHeal();
     } else if (abilityIndex === 2) {
-        // Ice Nova logic
-        castIceNova();
+        castFireball();
     } else if (abilityIndex === 3) {
-        // Shield logic
+        castIceNova();
+    } else if (abilityIndex === 4) {
         castShield();
     }
 
@@ -15024,10 +15136,19 @@ function useAbility(abilityIndex) {
  * @param {number} abilityIndex - 1, 2, or 3
  */
 function triggerAbilityCooldown(abilityIndex) {
-    if (!abilityBar || !abilityBar.buttons || !abilityBar.buttons[abilityIndex - 1]) return;
+    if (!abilityBar) { console.warn('[Cooldown Debug] abilityBar missing'); return; }
+    if (!abilityBar.buttons) { console.warn('[Cooldown Debug] abilityBar.buttons missing'); return; }
 
     const button = abilityBar.buttons[abilityIndex - 1];
-    const abilityName = abilityIndex === 1 ? 'fireball' : (abilityIndex === 2 ? 'ice_nova' : 'shield');
+    if (!button) {
+        console.warn(`[Cooldown Debug] Button for index ${abilityIndex} (array index ${abilityIndex - 1}) missing. Total buttons: ${abilityBar.buttons.length}`);
+        return;
+    }
+
+    console.log(`[Cooldown Debug] Triggering cooldown for ability ${abilityIndex}`);
+    const abilityName = abilityIndex === 1 ? 'heal' :
+        (abilityIndex === 2 ? 'fireball' :
+            (abilityIndex === 3 ? 'ice_nova' : 'shield'));
     const cooldownDuration = ABILITY_DEFINITIONS[abilityName].cooldown;
 
     // Show overlay
@@ -15086,8 +15207,6 @@ function triggerAbilityCooldown(abilityIndex) {
 
 function castFireball() {
     const scene = game.scene.scenes[0];
-    // Fix: Use correct direction strings (west, east, north, south) matches game logic
-    const angle = player.facingDirection === 'west' ? Math.PI : (player.facingDirection === 'east' ? 0 : (player.facingDirection === 'north' ? -Math.PI / 2 : Math.PI / 2));
 
     // Play sound
     playSound('fireball_cast');
@@ -15097,36 +15216,25 @@ function castFireball() {
         player.play('attack');
     }
 
-    // FIREBALL LOGIC: Linear projectile / "Beam" impact
-    // For simplicity, we'll scan monsters in a line in front of the player
-    const range = 200;
-    const width = 60;
+    // FIREBALL LOGIC: Player-Centered Radial Explosion (PBAOE)
+    const radius = 200; // Large area
     let hitCount = 0;
+
+    // Visual Effects
+    createFireballExplosion(player.x, player.y);
+
+    // Initial Burst Damage Calculation
+    // Nerfed from 2.5x to 1.5x to account for DOT
+    const baseDamage = playerStats.attack * 1.5;
 
     monsters.forEach(monster => {
         if (!monster || !monster.active || monster.hp <= 0) return;
 
-        // Calculate relative position rotated by player direction
-        const dx = monster.x - player.x;
-        const dy = monster.y - player.y;
+        const dist = Phaser.Math.Distance.Between(player.x, player.y, monster.x, monster.y);
 
-        // Simple directional check
-        let inZone = false;
-        // Fix: Update checks to use 'east', 'west', 'south', 'north'
-        if (player.facingDirection === 'east') {
-            inZone = dx > 0 && dx < range && Math.abs(dy) < width;
-        } else if (player.facingDirection === 'west') {
-            inZone = dx < 0 && Math.abs(dx) < range && Math.abs(dy) < width;
-        } else if (player.facingDirection === 'south') {
-            inZone = dy > 0 && dy < range && Math.abs(dx) < width;
-        } else if (player.facingDirection === 'north') {
-            inZone = dy < 0 && Math.abs(dy) < range && Math.abs(dx) < width;
-        }
-
-        if (inZone) {
+        if (dist <= radius) {
             // HIT!
             hitCount++;
-            const baseDamage = playerStats.attack * 2.5; // High damage
             const damage = Math.floor(baseDamage * Phaser.Math.FloatBetween(0.9, 1.1));
 
             monster.hp -= damage;
@@ -15139,10 +15247,163 @@ function castFireball() {
         }
     });
 
+    // SCORCHED EARTH MECHANIC (DOT)
+    // Pass the baseDamage so ticks are proportional to player power
+    createScorchedEarth(player.x, player.y, baseDamage);
+
     if (hitCount > 0) {
-        addChatMessage(`Fireball hit ${hitCount} enemies!`, 0xff4400);
+        addChatMessage(`Fireball burst hit ${hitCount} enemies!`, 0xff4400);
     } else {
-        addChatMessage("Fireball fizzled...", 0x888888);
+        addChatMessage("Fireball burst hit nothing.", 0x888888);
+    }
+}
+
+/**
+ * Creates a lingering damage zone that burns enemies over time
+ * @param {number} x - Center X
+ * @param {number} y - Center Y
+ * @param {number} initialDamage - The damage of the initial hit (used to calc ticks)
+ */
+function createScorchedEarth(x, y, initialDamage) {
+    const scene = game.scene.scenes[0];
+
+    // DOT Configuration
+    const duration = 3000;      // 3 seconds
+    const tickInterval = 500;   // 0.5 seconds
+    const radius = 150;         // Slightly smaller than impact radius
+    let currentPercentage = 0.10; // Start at 10%
+
+    /* 
+       Note: We don't need a visual object for the zone itself because 
+       'createFireballExplosion' already spawned lingering smoke particles 
+       at this location. We just need the logic.
+    */
+
+    // Create a timer event for the ticks
+    const dotTimer = scene.time.addEvent({
+        delay: tickInterval,
+        repeat: (duration / tickInterval) - 1, // Run X times
+        callback: () => {
+            // Calculate Damage for this tick
+            let tickDamage = Math.floor(initialDamage * currentPercentage);
+            if (tickDamage < 1) tickDamage = 1; // Minimum 1 damage
+
+            let hitSomething = false;
+
+            // Scan for enemies in the zone
+            monsters.forEach(monster => {
+                if (!monster || !monster.active || monster.hp <= 0) return;
+
+                const dist = Phaser.Math.Distance.Between(x, y, monster.x, monster.y);
+
+                if (dist <= radius) {
+                    hitSomething = true;
+                    monster.hp -= tickDamage;
+
+                    // Show small orange damage number
+                    // Use 'false' for critical to make it look normal-sized/small
+                    showDamageNumber(monster.x, monster.y - 30, `-${tickDamage}`, 0xff6600, false);
+
+                    if (monster.hp <= 0) {
+                        handleMonsterDeath(monster);
+                    }
+                }
+            });
+
+            // Visual 'Pulse' if active (flicker embers)
+            if (scene.textures.exists('death_particle')) {
+                const pulse = scene.add.particles(x, y, 'death_particle', {
+                    speed: 50,
+                    lifespan: 400,
+                    scale: { start: 0.5, end: 0 },
+                    quantity: 3,
+                    emitZone: { type: 'random', source: new Phaser.Geom.Circle(0, 0, radius) },
+                    blendMode: 'ADD',
+                    tint: 0xff4400
+                });
+                // Auto-destroy emitter after one burst
+                scene.time.delayedCall(450, () => pulse.destroy());
+            }
+
+            // Decay the percentage for next tick
+            currentPercentage -= 0.01;
+            if (currentPercentage < 0.01) currentPercentage = 0.01;
+        }
+    });
+}
+/**
+ * Create visual explosion effects for Fireball
+ */
+function createFireballExplosion(x, y) {
+    const scene = game.scene.scenes[0];
+
+    // 1. Screen Shake (Heavy)
+    scene.cameras.main.shake(150, 0.015);
+
+    // 2. Expanding Ring Shockwave
+    const ring = scene.add.circle(x, y, 10, 0xff4400, 0); // Start invisible
+    ring.setStrokeStyle(4, 0xffaa00);
+    ring.setDepth(player.depth + 1);
+
+    scene.tweens.add({
+        targets: ring,
+        radius: 200,
+        alpha: { start: 1, end: 0 },
+        strokeWidth: { start: 10, end: 0 },
+        duration: 400,
+        ease: 'Cubic.out',
+        onComplete: () => ring.destroy()
+    });
+
+    // 3. Inner Flash
+    const flash = scene.add.circle(x, y, 50, 0xffffaa, 1);
+    flash.setDepth(player.depth + 2);
+    scene.tweens.add({
+        targets: flash,
+        scale: 3,
+        alpha: 0,
+        duration: 200,
+        onComplete: () => flash.destroy()
+    });
+
+    // 4. Particle Burst
+    if (scene.textures.exists('impact_particle')) {
+        const emitter = scene.add.particles(x, y, 'impact_particle', {
+            speed: { min: 100, max: 300 },
+            angle: { min: 0, max: 360 },
+            lifespan: { min: 300, max: 600 },
+            scale: { start: 1.5, end: 0 },
+            alpha: { start: 1, end: 0 },
+            quantity: 30,
+            blendMode: 'ADD',
+            tint: [0xff4400, 0xffaa00, 0xffff00]
+        });
+        emitter.setDepth(player.depth + 1);
+
+        // Stop emitting after a burst
+        scene.time.delayedCall(100, () => emitter.stop());
+        scene.time.delayedCall(1000, () => emitter.destroy());
+    }
+
+    // 5. Lingering Burn Effect (Ground Smoke)
+    if (scene.textures.exists('death_particle')) {
+        const burnEmitter = scene.add.particles(x, y, 'death_particle', {
+            speed: 20,
+            lifespan: 2000,
+            scale: { start: 1, end: 2 },
+            alpha: { start: 0.5, end: 0 },
+            quantity: 4,
+            frequency: 100,
+            emitZone: { type: 'random', source: new Phaser.Geom.Circle(0, 0, 150) },
+            blendMode: 'MULTIPLY', // Darken/Smoke effect
+            tint: 0x444444
+        });
+        burnEmitter.setDepth(player.depth - 1); // On ground
+
+        scene.time.delayedCall(2000, () => {
+            burnEmitter.stop();
+            scene.time.delayedCall(2500, () => burnEmitter.destroy());
+        });
     }
 }
 
@@ -15209,47 +15470,52 @@ function castIceNova() {
 }
 
 function castShield() {
-    // START_SOUND_FIX: Use 'heal_cast' as placeholder since 'shield_cast' is missing
-    playSound('heal_cast');
-    // END_SOUND_FIX
+    try {
+        // Use 'heal' sound as placeholder (shield_cast not loaded)
+        playSound('heal');
 
-    // SHIELD LOGIC: Temporary Health / Defense Buff
-    // For simplicity, let's heal slightly and add a visual shield
+        // SHIELD LOGIC: Temporary Health / Defense Buff
+        const healAmount = 20;
+        playerStats.hp = Math.min(playerStats.maxHp, playerStats.hp + healAmount);
 
-    const healAmount = 20;
-    playerStats.hp = Math.min(playerStats.maxHp, playerStats.hp + healAmount);
-    showDamageNumber(player.x, player.y - 30, `+${healAmount} Shield`, 0xffff00);
+        if (player && player.active) {
+            showDamageNumber(player.x, player.y - 30, `+${healAmount} Shield`, 0xffff00);
 
-    // Add visual indicator (yellow circle)
-    const scene = game.scene.scenes[0];
-    const shieldSprite = scene.add.circle(player.x, player.y, 30, 0xffff00, 0.3);
-    shieldSprite.setDepth(player.depth + 1);
+            // Add visual indicator (yellow circle)
+            const scene = game.scene.scenes[0];
+            const shieldSprite = scene.add.circle(player.x, player.y, 30, 0xffff00, 0.3);
+            shieldSprite.setDepth(player.depth + 1);
 
-    // Follow player for 5 seconds
-    const duration = 5000;
-    const startTime = scene.time.now;
+            // Follow player for 5 seconds
+            const duration = 5000;
+            const startTime = scene.time.now;
 
-    const updateShield = () => {
-        if (!player || !player.active) {
-            shieldSprite.destroy();
-            return;
+            const updateShield = () => {
+                if (!player || !player.active || !shieldSprite.active) {
+                    if (shieldSprite && shieldSprite.active) shieldSprite.destroy();
+                    scene.events.off('update', updateShield);
+                    return;
+                }
+
+                const elapsed = scene.time.now - startTime;
+                if (elapsed > duration) {
+                    shieldSprite.destroy();
+                    scene.events.off('update', updateShield);
+                    addChatMessage("Divine Shield faded.", 0xffff00);
+                    return;
+                }
+
+                shieldSprite.x = player.x;
+                shieldSprite.y = player.y;
+                shieldSprite.setAlpha(0.3 + Math.sin(elapsed / 200) * 0.1);
+            };
+
+            scene.events.on('update', updateShield);
+            addChatMessage("Divine Shield activated!", 0xffff00);
         }
-
-        const elapsed = scene.time.now - startTime;
-        if (elapsed > duration) {
-            shieldSprite.destroy();
-            scene.events.off('update', updateShield);
-            addChatMessage("Divine Shield faded.", 0xffff00);
-            return;
-        }
-
-        shieldSprite.x = player.x;
-        shieldSprite.y = player.y;
-        shieldSprite.setAlpha(0.3 + Math.sin(elapsed / 200) * 0.1);
-    };
-
-    scene.events.on('update', updateShield);
-    addChatMessage("Divine Shield activated!", 0xffff00);
+    } catch (error) {
+        console.error("Error in castShield:", error);
+    }
 }
 
 // Expose ability functions globally for controller

@@ -19,6 +19,9 @@ const config = {
             debug: false
         }
     },
+    input: {
+        gamepad: true
+    },
     scene: {
         preload: preload,
         create: create,
@@ -37,6 +40,18 @@ console.log('🎮 PHASER GAME INSTANCE CREATED');
 let player;
 let cursors;
 let map;
+// Global State Variables
+let defenseSpawnerState = {
+    active: false,
+    lastSpawnTime: 0,
+    spawnedMonsters: [],
+    waveInterval: 12000, // 12 seconds between waves
+    monstersPerWave: 4,
+    maxMonsters: 10
+};
+let questTrackerEntries = [];
+let lastPlayerX = 0;
+let lastPlayerY = 0;
 let monsters = [];
 let items = []; // Items on the ground
 let npcs = []; // NPCs in the world
@@ -184,24 +199,24 @@ let chatMessages = [];
 const MAX_CHAT_MESSAGES = 50;
 
 // Inventory UI
-let inventoryVisible = false;
+var inventoryVisible = false;
 let inventoryKey;
-let inventoryPanel = null;
+var inventoryPanel = null;
 let inventoryItems = []; // Array of item display objects
 // Tooltip state
 let currentTooltip = null;
 let tooltipHideTimer = null;
 
 // Equipment UI
-let equipmentVisible = false;
+var equipmentVisible = false;
 let equipmentKey;
-let equipmentPanel = null;
+var equipmentPanel = null;
 
 
 // Settings UI
-let settingsVisible = false;
+var settingsVisible = false;
 let settingsKey;
-let settingsPanel = null;
+var settingsPanel = null;
 let musicEnabled = true; // Default to enabled
 
 // Background music
@@ -213,31 +228,31 @@ let dungeonMusic = null;
 let questVisible = false;
 let questKey;
 let questPanel = null;
-let questCompletedModal = null;
-let newQuestModal = null;
+var questCompletedModal = null;
+var newQuestModal = null;
 let selectedQuestIndex = 0;
 let questLogTab = 'current'; // 'current' or 'completed'
-let pendingNewQuest = null; // Store new quest to show after completed modal closes
+var pendingNewQuest = null; // Store new quest to show after completed modal closes
 let pendingCompletedQuest = null; // Store completed quest to show after combat ends
 let questManager = null; // Manager for data-driven quests
 let monsterRenderer = null; // Renderer for data-driven monsters
 let pathfinder = null; // A* Pathfinding system
 
 // Dialog UI
-let dialogVisible = false;
-let dialogPanel = null;
+var dialogVisible = false;
+var dialogPanel = null;
 let currentDialog = null;
 let currentDialogNode = null;
 let interactKey; // 'F' key for interaction
 
 // Shop UI
-let shopVisible = false;
-let shopPanel = null;
+var shopVisible = false;
+var shopPanel = null;
 let currentShopNPC = null;
 
 // Building UI
-let buildingPanelVisible = false;
-let buildingPanel = null;
+var buildingPanelVisible = false;
+var buildingPanel = null;
 let currentBuilding = null;
 
 // Assets window UI
@@ -525,6 +540,7 @@ function preload() {
     this.load.image('item_belt', 'assets/images/pixellab-medieval-belt---just-the-belt-1765494612990.png');
     this.load.image('item_ring', 'assets/images/pixellab-golden-ring-1765494525925.png');
     this.load.image('item_consumable', 'assets/images/pixellab-red-simple-health-potion-1765494342318.png');
+    this.load.image('mana_potion', 'assets/images/mana-potion.png');
 
     // Load player and monster base images
     this.load.image('player', 'assets/player.png');
@@ -1306,6 +1322,7 @@ function preload() {
     // Sound Effects
     this.load.audio('attack', 'assets/audio/attack_swing.wav');
     this.load.audio('fireball', 'assets/audio/fireball_cast.wav');
+    this.load.audio('ice_nova_sound', 'assets/audio/ice-nova.mp3');
     this.load.audio('heal', 'assets/audio/heal_cast.wav'); // Used for potions too
     this.load.audio('hit_monster', 'assets/audio/hit_monster.mp3');
     this.load.audio('hit_player', 'assets/audio/hit_player.mp3');
@@ -4001,6 +4018,15 @@ function create() {
         });
     }
 
+    // Initialize controller/gamepad support
+    if (typeof loadControllerConfig === 'function') {
+        loadControllerConfig().then(() => {
+            if (typeof initController === 'function') {
+                initController(this);
+            }
+        });
+    }
+
     // Load persistent settings (independent of save game)
     loadSettings();
 
@@ -4476,6 +4502,13 @@ function create() {
     this.potionFourKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.FOUR);
     this.potionFiveKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.FIVE);
 
+    // Ensure keyboard triggers cast abilities/potions (Restoring functionality)
+    this.input.keyboard.on('keydown-ONE', () => { if (window.useAbility) window.useAbility(1); });
+    this.input.keyboard.on('keydown-TWO', () => { if (window.useAbility) window.useAbility(2); });
+    this.input.keyboard.on('keydown-THREE', () => { if (window.useAbility) window.useAbility(3); });
+    this.input.keyboard.on('keydown-FOUR', () => { if (window.usePotion) window.usePotion('health'); });
+    this.input.keyboard.on('keydown-FIVE', () => { if (window.usePotion) window.usePotion('mana'); });
+
     // Add CTRL+A for assets window
     assetsKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A);
     this.ctrlKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.CTRL);
@@ -4565,12 +4598,124 @@ function create() {
 }
 
 /**
+ * Handle World Interaction (F Key / Controller A)
+ * Returns true if an interaction occurred (blocking other actions)
+ */
+function triggerWorldInteraction() {
+    // Check for transition markers first
+    let nearMarker = false;
+
+    // Check Mana Flux interactions first (closest priority)
+    if (typeof checkManaFluxInteraction === 'function' && checkManaFluxInteraction()) {
+        return true; // Handled
+    }
+
+    // Check transition markers
+    for (const marker of transitionMarkers) {
+        if (!marker || !marker.x || !marker.y) continue;
+        const distance = Phaser.Math.Distance.Between(player.x, player.y, marker.x, marker.y);
+        if (distance <= marker.radius) {
+            const targetLevel = marker.dungeonLevel || 1;
+
+            // Check if trying to go to next level - require previous level boss to be defeated
+            if (marker.targetMap === 'dungeon' && targetLevel > 1) {
+                const previousLevel = targetLevel - 1;
+                const previousLevelKey = `level_${previousLevel}`;
+                const previousLevelCompleted = dungeonCompletions[previousLevelKey] || false;
+
+                if (!previousLevelCompleted) {
+                    showDamageNumber(player.x, player.y - 40, `Defeat Level ${previousLevel} Boss First!`, 0xff0000);
+                    console.log(`❌ Cannot go to level ${targetLevel} - level ${previousLevel} boss not defeated`);
+                    return true;
+                }
+
+                // Also require all monsters to be defeated
+                const livingMonsters = monsters.filter(m => m.active && !m.isDead);
+                if (livingMonsters.length > 0) {
+                    showDamageNumber(player.x, player.y - 40, `Defeat All Monsters! (${livingMonsters.length} Left)`, 0xff0000);
+                    console.log(`❌ Cannot go to level ${targetLevel} - ${livingMonsters.length} monsters remaining`);
+                    return true;
+                }
+            }
+
+            console.log(`🚪 Transitioning to ${marker.targetMap} level ${targetLevel}`);
+            try {
+                transitionToMap(marker.targetMap, targetLevel);
+            } catch (e) {
+                console.error('❌ Error during transition:', e);
+            }
+            return true;
+        }
+    }
+
+    // If not near a marker, check building or NPC interaction
+
+    // If building UI is open, close it (handled by caller usually, but good check)
+    if (typeof buildingPanelVisible !== 'undefined' && buildingPanelVisible) {
+        if (typeof closeBuildingUI === 'function') closeBuildingUI();
+        return true;
+    }
+
+    // Check buildings first (in town), then NPCs
+    if (typeof currentMap !== 'undefined' && currentMap === 'town') {
+        if (typeof checkBuildingInteraction === 'function') {
+            checkBuildingInteraction();
+            // If building UI opened, return true
+            if (typeof buildingPanelVisible !== 'undefined' && buildingPanelVisible) return true;
+        }
+    }
+
+    if (typeof checkNPCInteraction === 'function') {
+        const dialogOpened = checkNPCInteraction();
+        if (dialogOpened) return true;
+    }
+
+    return false;
+}
+window.triggerWorldInteraction = triggerWorldInteraction;
+
+/**
+ * Handle Item Pickup (Spacebar / Controller A)
+ * Returns true if an item was picked up
+ */
+function triggerItemPickup() {
+    let itemPickedUp = false;
+
+    // Check for nearby items first
+    items.forEach((item, index) => {
+        if (!item.sprite || !item.sprite.active) return;
+
+        // Skip if already picked up this frame
+        if (itemPickedUp) return;
+
+        const distance = Phaser.Math.Distance.Between(
+            player.x, player.y,
+            item.sprite.x, item.sprite.y
+        );
+
+        // Pick up item if player is close (within 30 pixels)
+        if (distance < 30) {
+            pickupItem(item, index);
+            itemPickedUp = true;
+        }
+    });
+
+    return itemPickedUp;
+}
+window.triggerItemPickup = triggerItemPickup;
+
+/**
  * Update loop (like pygame game loop)
  */
 function update(time, delta) {
     // Update Unified Quest Engine
     if (window.uqe) {
         window.uqe.update();
+    }
+
+    // Handle gamepad/controller input
+    if (typeof handleGamepadInput === 'function') {
+        handleGamepadInput();
     }
 
     // Mana Instability Quest Update
@@ -4662,16 +4807,26 @@ function update(time, delta) {
 
     // Player movement (like your movement system)
     // Don't allow movement when shop/inventory/dialog/settings/building is open
-    player.setVelocity(0);
+
+    // Check if controller is providing input (don't reset if controller is active)
+    const controllerActive = typeof isControllerConnected === 'function' && isControllerConnected();
+    const hasControllerMovement = controllerActive && (Math.abs(player.body.velocity.x) > 0 || Math.abs(player.body.velocity.y) > 0);
+
+    // Only reset velocity if no controller movement
+    if (!hasControllerMovement) {
+        player.setVelocity(0);
+    }
 
     if (shopVisible || inventoryVisible || dialogVisible || settingsVisible || buildingPanelVisible) {
         // Don't process movement when UI is open, but continue with other updates
-        // (monsters, UI updates, etc. still need to run)
+        // Reset velocity when in UI (even if controller was moving)
+        player.setVelocity(0);
     } else {
         // Normal movement processing
         let moving = false;
         let newDirection = player.facingDirection; // Default to current direction
 
+        // Only handle keyboard movement if no controller movement
         if (cursors.left.isDown || this.wasd.A.isDown) {
             player.setVelocityX(-speed);
             newDirection = 'west';
@@ -4690,6 +4845,21 @@ function update(time, delta) {
             player.setVelocityY(speed);
             newDirection = 'south';
             moving = true;
+        }
+
+        // Check if controller is providing movement
+        if (controllerActive && !moving) {
+            const velX = player.body.velocity.x;
+            const velY = player.body.velocity.y;
+            if (velX !== 0 || velY !== 0) {
+                moving = true;
+                // Determine direction from controller velocity
+                if (Math.abs(velX) > Math.abs(velY)) {
+                    newDirection = velX < 0 ? 'west' : 'east';
+                } else if (velY !== 0) {
+                    newDirection = velY < 0 ? 'north' : 'south';
+                }
+            }
         }
 
         // Normalize diagonal movement
@@ -5278,28 +5448,11 @@ function update(time, delta) {
     }
 
     // Player attack or item pickup (Spacebar)
+    // Player attack or item pickup (Spacebar)
     // Priority: Pick up items if nearby, otherwise attack
     if (Phaser.Input.Keyboard.JustDown(spaceKey)) {
-        let itemPickedUp = false;
-
-        // Check for nearby items first
-        items.forEach((item, index) => {
-            if (!item.sprite || !item.sprite.active) return;
-
-            const distance = Phaser.Math.Distance.Between(
-                player.x, player.y,
-                item.sprite.x, item.sprite.y
-            );
-
-            // Pick up item if player is close (within 30 pixels)
-            if (distance < 30 && !itemPickedUp) {
-                pickupItem(item, index);
-                itemPickedUp = true; // Only pick up one item per key press
-            }
-        });
-
-        // Only attack if no item was picked up
-        if (!itemPickedUp) {
+        // Try pickup first
+        if (!triggerItemPickup()) {
             playerAttack(time);
         }
     }
@@ -5383,74 +5536,7 @@ function update(time, delta) {
         if (shopVisible) {
             closeShop();
         } else {
-            // Check for transition markers first
-            let nearMarker = false;
-
-            // Check Mana Flux interactions first (closest priority)
-            if (checkManaFluxInteraction()) {
-                nearMarker = true; // Prevent other interactions
-            }
-
-            for (const marker of transitionMarkers) {
-                if (!marker || !marker.x || !marker.y) continue;
-                const distance = Phaser.Math.Distance.Between(player.x, player.y, marker.x, marker.y);
-                if (distance <= marker.radius) {
-                    const targetLevel = marker.dungeonLevel || 1;
-
-                    // Check if trying to go to next level - require previous level boss to be defeated
-                    if (marker.targetMap === 'dungeon' && targetLevel > 1) {
-                        const previousLevel = targetLevel - 1;
-                        const previousLevelKey = `level_${previousLevel}`;
-                        const previousLevelCompleted = dungeonCompletions[previousLevelKey] || false;
-
-                        if (!previousLevelCompleted) {
-                            // Boss not defeated - show message and prevent transition
-                            showDamageNumber(player.x, player.y - 40, `Defeat Level ${previousLevel} Boss First!`, 0xff0000);
-                            console.log(`❌ Cannot go to level ${targetLevel} - level ${previousLevel} boss not defeated`);
-                            nearMarker = true; // Mark as handled to prevent other interactions
-                            break;
-                        }
-
-                        // Also require all monsters to be defeated
-                        const livingMonsters = monsters.filter(m => m.active && !m.isDead);
-                        if (livingMonsters.length > 0) {
-                            showDamageNumber(player.x, player.y - 40, `Defeat All Monsters! (${livingMonsters.length} Left)`, 0xff0000);
-                            console.log(`❌ Cannot go to level ${targetLevel} - ${livingMonsters.length} monsters remaining`);
-                            nearMarker = true;
-                            break;
-                        }
-                    }
-
-                    console.log(`🚪 Transitioning to ${marker.targetMap} level ${targetLevel}`);
-                    try {
-                        transitionToMap(marker.targetMap, targetLevel);
-                    } catch (e) {
-                        console.error('❌ Error during transition:', e);
-                    }
-                    nearMarker = true;
-                    break;
-                }
-            }
-
-            // If not near a marker, check building or NPC interaction
-            if (!nearMarker) {
-                // If building UI is open, close it
-                if (buildingPanelVisible) {
-                    closeBuildingUI();
-                    return;
-                }
-
-                // Check buildings first (in town), then NPCs
-                if (currentMap === 'town') {
-                    checkBuildingInteraction();
-                    // If building UI didn't open, check NPCs
-                    if (!buildingPanelVisible) {
-                        checkNPCInteraction();
-                    }
-                } else {
-                    checkNPCInteraction();
-                }
-            }
+            triggerWorldInteraction();
         }
     }
 
@@ -7490,12 +7576,21 @@ function generateRandomItem() {
     }
     else if (rand < 0.45) {
         // 20% - Consumable
-        return {
-            type: 'consumable',
-            name: 'Health Potion',
-            quality: 'Common',
-            healAmount: Phaser.Math.Between(20, 40)
-        };
+        if (Math.random() < 0.5) {
+            return {
+                type: 'consumable',
+                name: 'Health Potion',
+                quality: 'Common',
+                healAmount: Phaser.Math.Between(20, 40)
+            };
+        } else {
+            return {
+                type: 'consumable',
+                name: 'Mana Potion',
+                quality: 'Common',
+                manaAmount: Phaser.Math.Between(15, 30)
+            };
+        }
     }
     else if (rand < 0.60) {
         // 15% - Armor
@@ -7892,7 +7987,11 @@ function dropItemsFromMonster(x, y) {
         else if (item.type === 'boots') spriteKey = 'item_boots';
         else if (item.type === 'gloves') spriteKey = 'item_gloves';
         else if (item.type === 'belt') spriteKey = 'item_belt';
-        else if (item.type === 'consumable') spriteKey = 'item_consumable';
+        else if (item.type === 'belt') spriteKey = 'item_belt';
+        else if (item.type === 'consumable') {
+            spriteKey = (item.name === 'Mana Potion') ? 'mana_potion' : 'item_consumable';
+        }
+        else if (item.type === 'quest_item') spriteKey = 'item_consumable'; // Use consumable sprite for shards etc.
         else if (item.type === 'quest_item') spriteKey = 'item_consumable'; // Use consumable sprite for shards etc.
 
         const itemSprite = scene.add.sprite(x, y, spriteKey);
@@ -8292,6 +8391,11 @@ function updateInventoryItems() {
         inventoryPanel.container.add(emptyText);
         inventoryPanel.items.push({ text: emptyText });
     }
+
+    // Set up controller navigation for inventory items
+    if (typeof setMenuItems === 'function') {
+        setMenuItems(inventoryPanel.items, slotsPerRow);
+    }
 }
 
 
@@ -8641,9 +8745,14 @@ function destroyInventoryUI() {
         inventoryPanel = null;
     }
 
-
     // Final cleanup - ensure tooltip is gone
     hideTooltip(true);
+
+    // Clear controller menu selection
+    if (typeof clearMenuSelection === 'function') {
+        clearMenuSelection();
+    }
+
     inventoryVisible = false;
 }
 
@@ -9441,6 +9550,11 @@ function updateEquipmentInventoryItems() {
         // Reset scroll position to minScroll (top)
         equipmentPanel.scrollbar.setScroll(equipmentPanel.minScroll || 0);
     }
+
+    // Set up controller navigation for equipment inventory items
+    if (typeof setMenuItems === 'function') {
+        setMenuItems(equipmentPanel.inventoryItems, 6);
+    }
 }
 
 /**
@@ -9715,6 +9829,11 @@ function destroyEquipmentUI() {
         equipmentPanel.slots = {};
         equipmentPanel.inventoryItems = [];
         equipmentPanel = null;
+    }
+
+    // Clear controller menu selection
+    if (typeof clearMenuSelection === 'function') {
+        clearMenuSelection();
     }
 
     // Hide any visible tooltips
@@ -11100,7 +11219,7 @@ function hideNewQuestModal() {
 }
 
 // Quest preview modal for NPC dialog offers
-let questPreviewModal = null;
+var questPreviewModal = null;
 
 /**
  * Show quest preview modal from NPC dialog (before accepting)
@@ -11109,6 +11228,7 @@ let questPreviewModal = null;
  * @param {Function} onDecline - Callback when quest is declined
  */
 function showQuestPreviewModal(questId, onAccept, onDecline) {
+    console.log('[Quest Debug] START showQuestPreviewModal with ID:', questId);
     const scene = game.scene.scenes[0];
 
     // Get quest definition from UQE
@@ -11228,19 +11348,30 @@ function showQuestPreviewModal(questId, onAccept, onDecline) {
 
     // Accept handler
     const acceptHandler = () => {
+        console.log('✅ Quest Preview: Accept Clicked');
         hideQuestPreviewModal();
-        if (onAccept) onAccept();
+        if (onAccept) {
+            console.log('   -> Calling onAccept callback');
+            onAccept();
+        } else {
+            console.warn('   -> No onAccept callback provided!');
+        }
     };
 
     // Decline handler  
     const declineHandler = () => {
+        console.log('❌ Quest Preview: Decline Clicked');
         hideQuestPreviewModal();
         if (onDecline) onDecline();
     };
 
+    acceptBtn.setName('QuestAcceptBtn');
+    console.log('--- Registering Accept Handler ---');
     acceptBtn.on('pointerover', () => acceptBtn.setFillStyle(0x00cc00));
     acceptBtn.on('pointerout', () => acceptBtn.setFillStyle(0x00aa00));
     acceptBtn.on('pointerdown', acceptHandler);
+    console.log(`--- AcceptBtn Listeners: ${acceptBtn.listenerCount('pointerdown')} ---`);
+
     acceptBtnText.setInteractive({ useHandCursor: true }).on('pointerdown', acceptHandler);
 
     declineBtn.on('pointerover', () => declineBtn.setFillStyle(0x888888));
@@ -11259,12 +11390,17 @@ function showQuestPreviewModal(questId, onAccept, onDecline) {
     escKey.on('down', escHandler);
 
     // Assign to global variable for management
+    console.log('[Quest Debug] Assigning questPreviewModal global...');
+    console.log('[Quest Debug] acceptBtn is:', acceptBtn);
     questPreviewModal = {
         overlay, modalBg, header, questTitle, questDesc,
         objLabel, objectiveTexts, rewardsLabel, rewardTexts,
         acceptBtn, acceptBtnText, declineBtn, declineBtnText,
         escKey, escHandler
     };
+    // Explicitly expose to window for controller access
+    window.questPreviewModal = questPreviewModal;
+    console.log('[Quest Debug] window.questPreviewModal assigned. Keys:', Object.keys(window.questPreviewModal));
 
     return questPreviewModal;
 }
@@ -11280,9 +11416,9 @@ function hideQuestPreviewModal() {
         if (questPreviewModal.questTitle) questPreviewModal.questTitle.destroy();
         if (questPreviewModal.questDesc) questPreviewModal.questDesc.destroy();
         if (questPreviewModal.objLabel) questPreviewModal.objLabel.destroy();
-        questPreviewModal.objectiveTexts.forEach(t => t.destroy());
+        if (questPreviewModal.objectiveTexts) questPreviewModal.objectiveTexts.forEach(t => t.destroy());
         if (questPreviewModal.rewardsLabel) questPreviewModal.rewardsLabel.destroy();
-        questPreviewModal.rewardTexts.forEach(t => t.destroy());
+        if (questPreviewModal.rewardTexts) questPreviewModal.rewardTexts.forEach(t => t.destroy());
         if (questPreviewModal.acceptBtn) questPreviewModal.acceptBtn.destroy();
         if (questPreviewModal.acceptBtnText) questPreviewModal.acceptBtnText.destroy();
         if (questPreviewModal.declineBtn) questPreviewModal.declineBtn.destroy();
@@ -11290,8 +11426,10 @@ function hideQuestPreviewModal() {
         if (questPreviewModal.escKey && questPreviewModal.escHandler) {
             questPreviewModal.escKey.removeListener('down', questPreviewModal.escHandler);
         }
-        questPreviewModal = null;
     }
+    // Cleanup global
+    questPreviewModal = null;
+    window.questPreviewModal = null;
 }
 
 // ============================================
@@ -12186,7 +12324,7 @@ function checkNPCInteraction() {
     if (dialogVisible) {
         // If dialog is open, close it
         closeDialog();
-        return;
+        return true; // Handled
     }
 
     // Find nearest NPC in range
@@ -12209,7 +12347,10 @@ function checkNPCInteraction() {
 
     if (closestNPC && closestNPC.dialogId) {
         startDialog(closestNPC);
+        return true; // Found an NPC to interact with
     }
+
+    return false; // No interaction
 }
 
 // ============================================
@@ -13268,7 +13409,7 @@ function buyItem(item, price) {
     // Check if we can stack with existing consumable
     let stacked = false;
     if (item.type === 'consumable' && item.name) {
-        const existingStack = playerStats.inventory.find(i => 
+        const existingStack = playerStats.inventory.find(i =>
             i.type === 'consumable' && i.name === item.name
         );
         if (existingStack) {
@@ -13283,7 +13424,7 @@ function buyItem(item, price) {
             showDamageNumber(player.x, player.y - 40, 'Inventory full!', 0xff0000);
             return;
         }
-        
+
         // Create item copy for inventory
         const purchasedItem = {
             ...item,
@@ -13510,7 +13651,7 @@ function updateShopInventoryItems() {
                 } else {
                     playerStats.inventory.splice(itemIndex, 1);
                 }
-                
+
                 playerStats.gold += sellPrice;
 
                 // Update displays
@@ -13560,6 +13701,11 @@ function updateShopInventoryItems() {
         shopPanel.inventoryScrollbar.updateMaxScroll(Math.max(0, inventoryTotalHeight - shopPanel.inventoryVisibleHeight - shopPanel.inventoryContainerOffset), inventoryTotalHeight);
         // Reset scroll position to top
         shopPanel.inventoryScrollbar.setScroll(shopPanel.minScroll || 0);
+    }
+
+    // Set up controller navigation for shop inventory items
+    if (typeof setMenuItems === 'function') {
+        setMenuItems(shopPanel.inventoryItems, 5);
     }
 }
 
@@ -13640,6 +13786,11 @@ function closeShop() {
         shopPanel.items = [];
         shopPanel.inventoryItems = [];
         shopPanel = null;
+    }
+
+    // Clear controller menu selection
+    if (typeof clearMenuSelection === 'function') {
+        clearMenuSelection();
     }
 
     shopVisible = false;
@@ -14154,8 +14305,8 @@ function createTavernUI() {
                     console.log(`   Inventory consumables:`, playerStats.inventory
                         .filter(i => i.type === 'consumable')
                         .map(i => `${i.name} (qty:${i.quantity || 1})`));
-                    
-                    const existingStack = playerStats.inventory.find(i => 
+
+                    const existingStack = playerStats.inventory.find(i =>
                         i.type === 'consumable' && i.name === item.name
                     );
                     if (existingStack) {
@@ -14497,14 +14648,15 @@ function checkAutoLoad() {
  * Ability definitions
  */
 const ABILITY_DEFINITIONS = {
-    heal: {
-        name: 'Heal',
+    ice_nova: {
+        name: 'Ice Nova',
         manaCost: 20,
         cooldown: 3000, // 3 seconds
-        healAmount: 30,
-        icon: 'heal_effect',
-        color: 0x00ff00,
-        description: 'Restores 30 HP'
+        damage: 15,
+        range: 150,
+        icon: 'fireball_effect', // Reusing effect sprite
+        color: 0x00ffff,
+        description: 'Freezes enemies and deals damage'
     },
     fireball: {
         name: 'Fireball',
@@ -14809,8 +14961,300 @@ function usePotion(potionType) {
         scene.time.delayedCall(100, () => {
             slot.bg.setFillStyle(potionType === 'health' ? 0x442222 : 0x222244, 0.9);
         });
+        updateAbilityBar(); // Update UI
     }
 }
+
+/**
+ * Update Ability/Mana Bar UI
+ */
+function updateAbilityBar() {
+    if (manaBar) {
+        manaBar.scaleX = Math.max(0, playerStats.mana / playerStats.maxMana);
+    }
+}
+
+/**
+ * Use an ability
+ * @param {number} abilityIndex - 1, 2, or 3
+ */
+function useAbility(abilityIndex) {
+    // Implement ability logic here based on index
+    // 1: Fireball
+    // 2: Ice Nova
+    // 3: Shield
+
+    // Check if ability is unlocked or available (simplified for now)
+    const abilityName = abilityIndex === 1 ? 'fireball' : (abilityIndex === 2 ? 'ice_nova' : 'shield');
+
+    // Basic mana check (example values)
+    const manaCost = abilityIndex === 1 ? 10 : (abilityIndex === 2 ? 20 : 30);
+
+    if (playerStats.mana < manaCost) {
+        addChatMessage(`Not enough mana! Need ${manaCost}`, 0xff6666);
+        return;
+    }
+
+    /* 
+       Note: Actual ability implementation was likely here before. 
+       Re-implementing basic dispatch.
+    */
+
+    if (abilityIndex === 1) {
+        // Fireball logic
+        castFireball();
+    } else if (abilityIndex === 2) {
+        // Ice Nova logic
+        castIceNova();
+    } else if (abilityIndex === 3) {
+        // Shield logic
+        castShield();
+    }
+
+    // Deduct mana
+    playerStats.mana -= manaCost;
+    updateAbilityBar(); // Update UI
+
+    // Trigger visual cooldown
+    triggerAbilityCooldown(abilityIndex);
+}
+
+/**
+ * Trigger visual cooldown on ability bar
+ * @param {number} abilityIndex - 1, 2, or 3
+ */
+function triggerAbilityCooldown(abilityIndex) {
+    if (!abilityBar || !abilityBar.buttons || !abilityBar.buttons[abilityIndex - 1]) return;
+
+    const button = abilityBar.buttons[abilityIndex - 1];
+    const abilityName = abilityIndex === 1 ? 'fireball' : (abilityIndex === 2 ? 'ice_nova' : 'shield');
+    const cooldownDuration = ABILITY_DEFINITIONS[abilityName].cooldown;
+
+    // Show overlay
+    if (button.cooldownOverlay) {
+        button.cooldownOverlay.setVisible(true);
+        button.cooldownOverlay.scaleY = 1;
+
+        // Tween the overlay scaling down (e.g. shutter effect) or just alpha
+        // Let's do a simple height reduction to represent time
+        const scene = game.scene.scenes[0];
+
+        // Remove existing tween if any
+        if (button.cooldownTween) {
+            button.cooldownTween.remove();
+        }
+
+        button.cooldownTween = scene.tweens.add({
+            targets: button.cooldownOverlay,
+            scaleY: 0,
+            duration: cooldownDuration,
+            ease: 'Linear',
+            onComplete: () => {
+                button.cooldownOverlay.setVisible(false);
+                button.cooldownOverlay.scaleY = 1; // Reset
+            }
+        });
+    }
+
+    // Show text timer
+    if (button.cooldownText) {
+        button.cooldownText.setVisible(true);
+        button.cooldownText.setText((cooldownDuration / 1000).toFixed(1));
+
+        const scene = game.scene.scenes[0];
+
+        // Update text loop
+        if (button.textEvent) {
+            button.textEvent.remove();
+        }
+
+        let remaining = cooldownDuration;
+        button.textEvent = scene.time.addEvent({
+            delay: 100,
+            repeat: Math.ceil(cooldownDuration / 100) - 1,
+            callback: () => {
+                remaining -= 100;
+                if (remaining <= 0) {
+                    button.cooldownText.setVisible(false);
+                } else {
+                    button.cooldownText.setText((remaining / 1000).toFixed(1));
+                }
+            }
+        });
+    }
+}
+
+function castFireball() {
+    const scene = game.scene.scenes[0];
+    // Fix: Use correct direction strings (west, east, north, south) matches game logic
+    const angle = player.facingDirection === 'west' ? Math.PI : (player.facingDirection === 'east' ? 0 : (player.facingDirection === 'north' ? -Math.PI / 2 : Math.PI / 2));
+
+    // Play sound
+    playSound('fireball_cast');
+
+    // Animate player
+    if (scene.anims.exists('attack')) {
+        player.play('attack');
+    }
+
+    // FIREBALL LOGIC: Linear projectile / "Beam" impact
+    // For simplicity, we'll scan monsters in a line in front of the player
+    const range = 200;
+    const width = 60;
+    let hitCount = 0;
+
+    monsters.forEach(monster => {
+        if (!monster || !monster.active || monster.hp <= 0) return;
+
+        // Calculate relative position rotated by player direction
+        const dx = monster.x - player.x;
+        const dy = monster.y - player.y;
+
+        // Simple directional check
+        let inZone = false;
+        // Fix: Update checks to use 'east', 'west', 'south', 'north'
+        if (player.facingDirection === 'east') {
+            inZone = dx > 0 && dx < range && Math.abs(dy) < width;
+        } else if (player.facingDirection === 'west') {
+            inZone = dx < 0 && Math.abs(dx) < range && Math.abs(dy) < width;
+        } else if (player.facingDirection === 'south') {
+            inZone = dy > 0 && dy < range && Math.abs(dx) < width;
+        } else if (player.facingDirection === 'north') {
+            inZone = dy < 0 && Math.abs(dy) < range && Math.abs(dx) < width;
+        }
+
+        if (inZone) {
+            // HIT!
+            hitCount++;
+            const baseDamage = playerStats.attack * 2.5; // High damage
+            const damage = Math.floor(baseDamage * Phaser.Math.FloatBetween(0.9, 1.1));
+
+            monster.hp -= damage;
+            createHitEffects(monster.x, monster.y, true, 'fire'); // Force critical visual for fire
+            showDamageNumber(monster.x, monster.y - 20, `-${damage}`, 0xff4400, true, 'fire');
+
+            if (monster.hp <= 0) {
+                handleMonsterDeath(monster);
+            }
+        }
+    });
+
+    if (hitCount > 0) {
+        addChatMessage(`Fireball hit ${hitCount} enemies!`, 0xff4400);
+    } else {
+        addChatMessage("Fireball fizzled...", 0x888888);
+    }
+}
+
+function castIceNova() {
+    // Define scene and other variables first
+    const scene = game.scene.scenes[0];
+    // Play sound with 2s duration limit
+    const iceNovaSound = scene.sound.add('ice_nova_sound');
+    iceNovaSound.play();
+    scene.time.delayedCall(2000, () => {
+        if (iceNovaSound && iceNovaSound.isPlaying) {
+            iceNovaSound.stop();
+        }
+    });
+    // END_SOUND_FIX
+
+    // ICE NOVA LOGIC: PBAOE (Point Blank Area of Effect)
+    const radius = 150;
+    let hitCount = 0;
+
+    monsters.forEach(monster => {
+        if (!monster || !monster.active || monster.hp <= 0) return;
+
+        const dist = Phaser.Math.Distance.Between(player.x, player.y, monster.x, monster.y);
+
+        if (dist <= radius) {
+            hitCount++;
+            const baseDamage = playerStats.attack * 1.5;
+            const damage = Math.floor(baseDamage * Phaser.Math.FloatBetween(0.8, 1.2));
+
+            monster.hp -= damage;
+            createHitEffects(monster.x, monster.y, false, 'ice');
+            showDamageNumber(monster.x, monster.y - 20, `-${damage}`, 0x00ffff, false, 'ice');
+
+            // "Freeze" / Slow effect (simulate by reducing speed temp)
+            if (monster.speed && !monster.isFrozen) {
+                monster.originalSpeed = monster.speed;
+                monster.speed *= 0.5;
+                monster.isFrozen = true;
+                // Tint blue
+                if (typeof monster.setTint === 'function') {
+                    monster.setTint(0x00ffff);
+                }
+
+                // Restore after 3 seconds
+                game.scene.scenes[0].time.delayedCall(3000, () => {
+                    if (monster && monster.active) {
+                        monster.speed = monster.originalSpeed || 50;
+                        monster.isFrozen = false;
+                        if (typeof monster.clearTint === 'function') {
+                            monster.clearTint();
+                        }
+                    }
+                });
+            }
+
+            if (monster.hp <= 0) {
+                handleMonsterDeath(monster);
+            }
+        }
+    });
+
+    addChatMessage(`Ice Nova froze ${hitCount} enemies!`, 0x00ffff);
+}
+
+function castShield() {
+    // START_SOUND_FIX: Use 'heal_cast' as placeholder since 'shield_cast' is missing
+    playSound('heal_cast');
+    // END_SOUND_FIX
+
+    // SHIELD LOGIC: Temporary Health / Defense Buff
+    // For simplicity, let's heal slightly and add a visual shield
+
+    const healAmount = 20;
+    playerStats.hp = Math.min(playerStats.maxHp, playerStats.hp + healAmount);
+    showDamageNumber(player.x, player.y - 30, `+${healAmount} Shield`, 0xffff00);
+
+    // Add visual indicator (yellow circle)
+    const scene = game.scene.scenes[0];
+    const shieldSprite = scene.add.circle(player.x, player.y, 30, 0xffff00, 0.3);
+    shieldSprite.setDepth(player.depth + 1);
+
+    // Follow player for 5 seconds
+    const duration = 5000;
+    const startTime = scene.time.now;
+
+    const updateShield = () => {
+        if (!player || !player.active) {
+            shieldSprite.destroy();
+            return;
+        }
+
+        const elapsed = scene.time.now - startTime;
+        if (elapsed > duration) {
+            shieldSprite.destroy();
+            scene.events.off('update', updateShield);
+            addChatMessage("Divine Shield faded.", 0xffff00);
+            return;
+        }
+
+        shieldSprite.x = player.x;
+        shieldSprite.y = player.y;
+        shieldSprite.setAlpha(0.3 + Math.sin(elapsed / 200) * 0.1);
+    };
+
+    scene.events.on('update', updateShield);
+    addChatMessage("Divine Shield activated!", 0xffff00);
+}
+
+// Expose ability functions globally for controller
+window.usePotion = usePotion;
+window.useAbility = useAbility;
 
 // ============================================
 // DIALOG QUEUE SYSTEM
@@ -14991,7 +15435,8 @@ function showQuestCompletedPopup(quest) {
     closeBtnBg.on('pointerout', () => closeBtnBg.setFillStyle(0x333333));
 
     // Store as global blocker with destroy method
-    questCompletedModal = {
+    window.questCompletedModal = {
+        closeBtn: closeBtnBg,
         destroy: () => {
             if (overlay) overlay.destroy();
             if (bg) bg.destroy();
@@ -15000,9 +15445,13 @@ function showQuestCompletedPopup(quest) {
             if (rewardText) rewardText.destroy();
             if (closeBtnBg) closeBtnBg.destroy();
             if (closeBtnText) closeBtnText.destroy();
+            window.questCompletedModal = null;
             questCompletedModal = null;
         }
     };
+    questCompletedModal = window.questCompletedModal;
+
+    console.log('[Quest Debug] questCompletedModal (Standard) assigned with closeBtn');
 
     // Pulse animation (Manual tween on main elements)
     scene.tweens.add({
@@ -16750,7 +17199,7 @@ function playMonsterDeathAnimation(monster) {
 // QUEST TRACKER HUD (WoW-style persistent tracker)
 // ============================================
 let questTrackerHUD = null;
-let questTrackerEntries = {}; // keyed by quest ID
+// let questTrackerEntries = {}; // Moved to top of file
 
 /**
  * Initialize/Update the persistent quest tracker HUD
@@ -17133,14 +17582,19 @@ function showQuestCompletedPopupEnhanced(quest) {
     closeBtnBg.on('pointerout', () => closeBtnBg.setFillStyle(0x333333));
 
     // Store global reference
-    questCompletedModal = {
+    window.questCompletedModal = {
+        closeBtn: closeBtnBg,
         destroy: () => {
             elements.forEach(el => {
                 if (el && el.destroy) el.destroy();
             });
+            window.questCompletedModal = null;
             questCompletedModal = null;
         }
     };
+    questCompletedModal = window.questCompletedModal;
+
+    console.log('[Quest Debug] questCompletedModal (Enhanced) assigned with closeBtn');
 
     // Pulse animation
     scene.tweens.add({
@@ -17156,6 +17610,7 @@ function showQuestCompletedPopupEnhanced(quest) {
  * Enhanced Quest Preview Modal with Portrait and Details
  */
 function showQuestPreviewModalEnhanced(questId, onAccept, onDecline) {
+    console.log(`[Quest Debug] START showQuestPreviewModalEnhanced for ${questId}`);
     const scene = game.scene.scenes[0];
 
     // Get quest definition from UQE
@@ -17389,15 +17844,24 @@ function showQuestPreviewModalEnhanced(questId, onAccept, onDecline) {
     declineBtn.on('pointerout', () => declineBtn.setFillStyle(0x666666));
     declineBtn.on('pointerdown', declineHandler);
 
-    // Store global reference for destroy
-    questPreviewModal = {
+    // Store global reference for destroy and controller access
+    window.questPreviewModal = {
+        acceptBtn: acceptBtn,
+        declineBtn: declineBtn,
         destroy: () => {
             elements.forEach(e => {
                 if (e && e.destroy) e.destroy();
             });
+            window.questPreviewModal = null;
             questPreviewModal = null;
         }
     };
+    questPreviewModal = window.questPreviewModal;
+
+    console.log('[Quest Debug] questPreviewModal assigned with buttons:', {
+        acceptBtn: !!acceptBtn,
+        declineBtn: !!declineBtn
+    });
 
     // Animation
     scene.tweens.add({
@@ -17515,14 +17979,7 @@ function updateManaFluxNodes() {
 }
 
 // Defense Quest Wave Spawner State
-let defenseSpawnerState = {
-    active: false,
-    lastSpawnTime: 0,
-    spawnedMonsters: [],
-    waveInterval: 12000, // 12 seconds between waves
-    monstersPerWave: 4,
-    maxMonsters: 10
-};
+// let defenseSpawnerState = { ... }; // Moved to top of file
 
 /**
  * Update Defense Quest Spawner (for main_01_005 "Resonant Frequencies")

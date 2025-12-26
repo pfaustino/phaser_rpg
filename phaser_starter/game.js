@@ -4523,6 +4523,15 @@ function create() {
     grassDebugKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.M);
     console.log('✅ Grass debug key (M) initialized:', grassDebugKey);
 
+    // Initialize Controller System
+    if (typeof loadControllerConfig === 'function') {
+        loadControllerConfig().then(() => {
+            if (typeof initController === 'function') {
+                initController(this);
+            }
+        });
+    }
+
     // Initialize starting quests
     initializeQuests();
 
@@ -4590,7 +4599,7 @@ function create() {
         .setDepth(30000);
 
     // Version Number
-    this.add.text(this.scale.width - 10, 10, 'v0.9.120', {
+    this.add.text(this.scale.width - 10, 10, 'v0.9.141', {
         fontFamily: 'Arial',
         fontSize: '16px',
         color: '#ffffff',
@@ -8162,8 +8171,146 @@ function closeAllInterfaces() {
 }
 
 /**
- * Toggle inventory visibility
+ * Toggle settings visibility
  */
+function toggleSettings() {
+    const scene = game.scene.scenes[0];
+
+    // If already open, close it
+    if (settingsVisible) {
+        settingsVisible = false;
+        destroySettingsUI();
+        return;
+    }
+
+    // Close all other interfaces before opening
+    closeAllInterfaces();
+
+    // Now open settings
+    settingsVisible = true;
+    createSettingsUI();
+}
+
+/**
+ * Create Settings UI panel
+ */
+function createSettingsUI() {
+    const scene = game.scene.scenes[0];
+    const centerX = scene.cameras.main.width / 2;
+    const centerY = scene.cameras.main.height / 2;
+    const panelWidth = 400;
+    const panelHeight = 300;
+
+    // Background
+    const bg = scene.add.rectangle(centerX, centerY, panelWidth, panelHeight, 0x1a1a1a, 0.95)
+        .setScrollFactor(0).setDepth(400).setStrokeStyle(3, 0xffffff);
+
+    // Title
+    const title = scene.add.text(centerX, centerY - panelHeight / 2 + 30, 'SETTINGS', {
+        fontSize: '28px',
+        fill: '#ffffff',
+        fontStyle: 'bold'
+    }).setScrollFactor(0).setDepth(401).setOrigin(0.5);
+
+    settingsPanel = {
+        bg: bg,
+        title: title,
+        elements: []
+    };
+
+    // --- Music Toggle ---
+    const musicStatus = musicEnabled ? 'ON' : 'OFF';
+    const musicColor = musicEnabled ? '#00ff00' : '#ff0000';
+
+    const musicBtnBg = scene.add.rectangle(centerX, centerY - 20, 200, 50, 0x333333)
+        .setScrollFactor(0).setDepth(401).setInteractive({ useHandCursor: true });
+
+    const musicBtnText = scene.add.text(centerX, centerY - 20, `Music: ${musicStatus}`, {
+        fontSize: '20px',
+        fill: musicColor
+    }).setScrollFactor(0).setDepth(402).setOrigin(0.5);
+
+    musicBtnBg.on('pointerdown', () => {
+        musicEnabled = !musicEnabled;
+        // Update text
+        musicBtnText.setText(`Music: ${musicEnabled ? 'ON' : 'OFF'}`);
+        musicBtnText.setColor(musicEnabled ? '#00ff00' : '#ff0000');
+
+        // Toggle actual music
+        if (typeof toggleMusic === 'function') {
+            toggleMusic(musicEnabled);
+        } else {
+            // Fallback if global toggleMusic missing
+            if (scene.sound) scene.sound.mute = !musicEnabled;
+        }
+        playSound('menu_select');
+    });
+
+    // Hover effects
+    musicBtnBg.on('pointerover', () => musicBtnBg.setFillStyle(0x555555));
+    musicBtnBg.on('pointerout', () => musicBtnBg.setFillStyle(0x333333));
+
+    settingsPanel.elements.push(musicBtnBg, musicBtnText);
+
+    // --- New Game Button ---
+    const newGameBtnBg = scene.add.rectangle(centerX, centerY + 50, 200, 50, 0x330000)
+        .setScrollFactor(0).setDepth(401).setInteractive({ useHandCursor: true })
+        .setStrokeStyle(1, 0xff0000);
+
+    const newGameBtnText = scene.add.text(centerX, centerY + 50, 'NEW GAME', {
+        fontSize: '20px',
+        fill: '#ff4444',
+        fontStyle: 'bold'
+    }).setScrollFactor(0).setDepth(402).setOrigin(0.5);
+
+    newGameBtnBg.on('pointerdown', () => {
+        const confirmDelete = confirm("Are you sure? This will DELETE your save file!");
+        if (confirmDelete) {
+            localStorage.clear();
+            location.reload();
+        }
+    });
+
+    newGameBtnBg.on('pointerover', () => newGameBtnBg.setFillStyle(0x550000));
+    newGameBtnBg.on('pointerout', () => newGameBtnBg.setFillStyle(0x330000));
+
+    settingsPanel.elements.push(newGameBtnBg, newGameBtnText);
+
+
+    // --- Close Button ---
+    const closeBtnBg = scene.add.rectangle(centerX, centerY + panelHeight / 2 - 40, 100, 40, 0x444444)
+        .setScrollFactor(0).setDepth(401).setInteractive({ useHandCursor: true });
+
+    const closeText = scene.add.text(centerX, centerY + panelHeight / 2 - 40, 'Close', {
+        fontSize: '18px',
+        fill: '#ffffff'
+    }).setScrollFactor(0).setDepth(402).setOrigin(0.5);
+
+    closeBtnBg.on('pointerdown', () => {
+        toggleSettings();
+        playSound('menu_select');
+    });
+
+    closeBtnBg.on('pointerover', () => closeBtnBg.setFillStyle(0x666666));
+    closeBtnBg.on('pointerout', () => closeBtnBg.setFillStyle(0x444444));
+
+    settingsPanel.elements.push(closeBtnBg, closeText);
+}
+
+/**
+ * Destroy Settings UI
+ */
+function destroySettingsUI() {
+    if (settingsPanel) {
+        if (settingsPanel.bg) settingsPanel.bg.destroy();
+        if (settingsPanel.title) settingsPanel.title.destroy();
+        if (settingsPanel.elements) {
+            settingsPanel.elements.forEach(el => el.destroy());
+        }
+        settingsPanel = null;
+    }
+}
+
 function toggleInventory() {
     const scene = game.scene.scenes[0];
 

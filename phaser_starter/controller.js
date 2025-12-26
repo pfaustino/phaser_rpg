@@ -113,6 +113,7 @@ function initController(scene) {
 
     // Set up ESC key handler for menu action
     scene.input.keyboard.on('keydown-ESC', () => {
+        console.log('⌨️ ESC Key Pressed');
         onControllerMenu();
     });
 
@@ -716,9 +717,11 @@ function onControllerMenu() {
     } else if (typeof dialogVisible !== 'undefined' && dialogVisible) {
         if (typeof closeDialog === 'function') closeDialog();
     } else {
-        // Open inventory as default menu
-        if (typeof toggleInventory === 'function') {
-            toggleInventory();
+        // Open Settings menu as default
+        if (typeof toggleSettings === 'function') {
+            toggleSettings();
+        } else if (typeof window.toggleSettings === 'function') {
+            window.toggleSettings();
         }
     }
 }

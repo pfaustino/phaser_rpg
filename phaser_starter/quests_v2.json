@@ -178,7 +178,7 @@
             "id": "main_01_009",
             "title": "Infested Veins",
             "description": "The Watchtower basement is crawling with Echo Rats drawn to the corruption. Clear them out before descending further.",
-            "giver": "Guard Thorne",
+            "giver": "Captain Thorne",
             "step": 9,
             "requires": "main_01_008",
             "autoAccept": true,
@@ -200,7 +200,7 @@
             "id": "main_01_010",
             "title": "The Forgotten",
             "description": "The miners who were trapped have... returned. Lay them to rest.",
-            "giver": "Guard Thorne",
+            "giver": "Captain Thorne",
             "step": 10,
             "requires": "main_01_009",
             "objectives": [
@@ -455,7 +455,7 @@
             "id": "quest_007",
             "title": "Monster Hunter",
             "description": "Defeat 5 monsters to earn the title of Hunter.",
-            "giver": "Guard Thorne",
+            "giver": "Captain Thorne",
             "objectives": [
                 {
                     "id": "kill_any",
@@ -714,7 +714,7 @@
             "id": "quest_021",
             "title": "Slayer",
             "description": "Defeat 100 monsters across the land.",
-            "giver": "Guard Thorne",
+            "giver": "Captain Thorne",
             "requires": "quest_019",
             "objectives": [
                 {
@@ -792,7 +792,7 @@
             "id": "quest_025",
             "title": "Destroyer",
             "description": "Eliminate 150 monsters.",
-            "giver": "Guard Thorne",
+            "giver": "Captain Thorne",
             "requires": "quest_021",
             "objectives": [
                 {
@@ -870,7 +870,7 @@
             "id": "quest_029",
             "title": "Annihilator",
             "description": "Defeat 120 monsters.",
-            "giver": "Guard Thorne",
+            "giver": "Captain Thorne",
             "requires": "quest_025",
             "objectives": [
                 {
@@ -948,7 +948,7 @@
             "id": "quest_033",
             "title": "Executioner",
             "description": "Slay 135 monsters.",
-            "giver": "Guard Thorne",
+            "giver": "Captain Thorne",
             "requires": "quest_029",
             "objectives": [
                 {
@@ -1026,7 +1026,7 @@
             "id": "quest_037",
             "title": "Legendary Hunter",
             "description": "Vanquish 200 monsters.",
-            "giver": "Guard Thorne",
+            "giver": "Captain Thorne",
             "requires": "quest_033",
             "objectives": [
                 {

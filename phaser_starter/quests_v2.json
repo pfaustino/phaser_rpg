@@ -948,6 +948,82 @@
                 "xp": 700,
                 "gold": 350
             }
+        },
+        "quest_041": {
+            "id": "quest_041",
+            "title": "Heroic Growth",
+            "description": "Reach level 10 to prove your capability.",
+            "giver": "Mage Elara",
+            "requires": "quest_015",
+            "objectives": [
+                {
+                    "id": "reach_level",
+                    "type": "level",
+                    "label": "Reach Level 10",
+                    "target": 10
+                }
+            ],
+            "rewards": {
+                "xp": 1500,
+                "gold": 750
+            }
+        },
+        "quest_042": {
+            "id": "quest_042",
+            "title": "Paragon",
+            "description": "Achieve level 15 and become a paragon of strength.",
+            "giver": "Mage Elara",
+            "requires": "quest_041",
+            "objectives": [
+                {
+                    "id": "reach_level",
+                    "type": "level",
+                    "label": "Reach Level 15",
+                    "target": 15
+                }
+            ],
+            "rewards": {
+                "xp": 4000,
+                "gold": 2000
+            }
+        },
+        "quest_043": {
+            "id": "quest_043",
+            "title": "Legendary Status",
+            "description": "Reach level 20 to become a legend.",
+            "giver": "Mage Elara",
+            "requires": "quest_042",
+            "objectives": [
+                {
+                    "id": "reach_level",
+                    "type": "level",
+                    "label": "Reach Level 20",
+                    "target": 20
+                }
+            ],
+            "rewards": {
+                "xp": 10000,
+                "gold": 5000
+            }
+        },
+        "quest_044": {
+            "id": "quest_044",
+            "title": "Godlike",
+            "description": "Reach level 25. Few mortals ever achieve this power.",
+            "giver": "Mage Elara",
+            "requires": "quest_043",
+            "objectives": [
+                {
+                    "id": "reach_level",
+                    "type": "level",
+                    "label": "Reach Level 25",
+                    "target": 25
+                }
+            ],
+            "rewards": {
+                "xp": 25000,
+                "gold": 12500
+            }
         }
     }
 }

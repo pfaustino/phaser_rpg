@@ -191,7 +191,25 @@ class SurviveObjective extends UqeObjective {
 class LevelObjective extends UqeObjective {
     constructor(data, eventBus) {
         super(data, eventBus);
-        this.progress = 1; // Default starting level
+
+        // Initialize with current player level if available
+        let currentLevel = 1;
+        if (typeof playerStats !== 'undefined' && playerStats.level) {
+            currentLevel = playerStats.level;
+        }
+
+        this.progress = currentLevel; // Start at current level
+
+        // Check immediate completion
+        if (this.progress >= this.target) {
+            this.progress = this.target;
+            this.completed = true;
+            // Delay completion log/event slightly to ensure quest is fully constructed
+            setTimeout(() => {
+                if (this.eventBus) this.eventBus.emit(UQE_EVENTS.OBJECTIVE_UPDATED, { objective: this, amount: 0 });
+            }, 100);
+        }
+
         this.subscribe(UQE_EVENTS.LEVEL_UP, (data) => {
             // Set progress to current level
             if (data.level >= this.target) {

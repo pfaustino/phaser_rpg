@@ -541,6 +541,8 @@ function preload() {
     this.load.image('item_ring', 'assets/images/pixellab-golden-ring-1765494525925.png');
     this.load.image('item_consumable', 'assets/images/pixellab-red-simple-health-potion-1765494342318.png');
     this.load.image('mana_potion', 'assets/images/mana-potion.png');
+    this.load.image('character-fallen', 'assets/images/character-fallen.png');
+    this.load.audio('bell_toll', 'assets/audio/bell-toll-407826.mp3');
 
     // Load player and monster base images
     this.load.image('player', 'assets/player.png');
@@ -4712,6 +4714,10 @@ window.triggerItemPickup = triggerItemPickup;
  * Update loop (like pygame game loop)
  */
 function update(time, delta) {
+    // If game is paused (e.g. death dialog), stop all game logic
+    if (typeof isGamePaused !== 'undefined' && isGamePaused) {
+        return;
+    }
     // Update Unified Quest Engine
     if (window.uqe) {
         window.uqe.update();
@@ -6189,7 +6195,7 @@ function monsterAttackPlayer(monster, time) {
     // Check if player is dead
     if (playerStats.hp <= 0) {
         console.log('Player died!');
-        // TODO: Add death handling
+        showFallenDialog();
     }
 }
 
@@ -14652,6 +14658,203 @@ function loadGame() {
         showDamageNumber(player.x, player.y - 40, 'Load Failed!', 0xff0000);
         return false;
     }
+}
+
+/**
+ * Show "You have Fallen" dialog
+ */
+let fallenDialogContainer = null;
+
+/**
+ * Show "You have Fallen" dialog
+ */
+function showFallenDialog() {
+    // If dialog is already open, do nothing
+    if (fallenDialogContainer) return;
+
+    const scene = game.scene.scenes[0];
+    console.log('💀 Displaying Fallen Dialog');
+
+    // Play death sound
+    try {
+        scene.sound.play('bell_toll', { volume: 0.5 });
+    } catch (e) {
+        console.warn('Could not play death sound:', e);
+    }
+
+    // Pause physics/input
+    scene.physics.pause();
+    isGamePaused = true;
+
+    // --- 1. Background Container (Visuals) ---
+    fallenDialogContainer = scene.add.container(0, 0);
+    fallenDialogContainer.setScrollFactor(0);
+    fallenDialogContainer.setDepth(9000); // High depth for background
+
+    const screenWidth = scene.scale.width;
+    const screenHeight = scene.scale.height;
+    const centerX = screenWidth / 2;
+    const centerY = screenHeight / 2;
+
+    // Dark Overlay (blocks input from world, but we want button to work)
+    const overlay = scene.add.rectangle(centerX, centerY, screenWidth, screenHeight, 0x000000, 0.7);
+    overlay.setInteractive(); // Blocks clicks from reaching game world
+
+    // Dialog Window Background
+    const dialogWidth = 600;
+    const dialogHeight = 500;
+    const dialogBg = scene.add.rectangle(centerX, centerY, dialogWidth, dialogHeight, 0x111111);
+    dialogBg.setStrokeStyle(4, 0x660000); // Dark red border
+
+    // Header Text
+    const fallenText = scene.add.text(centerX, centerY - 180, 'YOU HAVE FALLEN', {
+        fontSize: '42px',
+        fill: '#ff0000',
+        fontFamily: 'Cinzel, serif',
+        fontStyle: 'bold',
+        stroke: '#000000',
+        strokeThickness: 6
+    });
+    fallenText.setOrigin(0.5);
+
+    // Fallen Image (Constrained size)
+    const fallenImage = scene.add.image(centerX, centerY, 'character-fallen');
+    // Scale image to fit inside dialog
+    const maxImgWidth = dialogWidth - 100;
+    const maxImgHeight = 250;
+
+    const scaleX = maxImgWidth / fallenImage.width;
+    const scaleY = maxImgHeight / fallenImage.height;
+    const finalScale = Math.min(scaleX, scaleY, 1.0);
+
+    fallenImage.setScale(finalScale);
+    fallenImage.setOrigin(0.5);
+
+    // Add visuals to container
+    fallenDialogContainer.add([overlay, dialogBg, fallenText, fallenImage]);
+
+    // --- 2. Respawn Button (Separate to ensure input works) ---
+    // We create this OUTSIDE the container to avoid any container input masking issues
+    const btnY = centerY + 180;
+    const btnWidth = 220;
+    const btnHeight = 60;
+
+    // Store reference on the container for easy cleanup
+    fallenDialogContainer.respawnBtn = scene.add.rectangle(centerX, btnY, btnWidth, btnHeight, 0x333333);
+    fallenDialogContainer.respawnBtn.setScrollFactor(0);
+    fallenDialogContainer.respawnBtn.setDepth(9005); // VISIBLY HIGHER than container
+    fallenDialogContainer.respawnBtn.setStrokeStyle(2, 0xffffff);
+
+    // Explicit interactive hit area to be absolutely sure
+    fallenDialogContainer.respawnBtn.setInteractive(
+        new Phaser.Geom.Rectangle(0, 0, btnWidth, btnHeight),
+        Phaser.Geom.Rectangle.Contains
+    );
+
+    fallenDialogContainer.respawnText = scene.add.text(centerX, btnY, 'RESPAWN', {
+        fontSize: '28px',
+        fill: '#ffffff',
+        fontFamily: 'Arial',
+        fontStyle: 'bold'
+    });
+    fallenDialogContainer.respawnText.setScrollFactor(0);
+    fallenDialogContainer.respawnText.setDepth(9006); // Topmost
+    fallenDialogContainer.respawnText.setOrigin(0.5);
+
+    // Hover effects
+    fallenDialogContainer.respawnBtn.on('pointerover', () => {
+        console.log('👆 Hovering Respawn Button');
+        if (fallenDialogContainer && fallenDialogContainer.respawnBtn) {
+            fallenDialogContainer.respawnBtn.setFillStyle(0x555555);
+            scene.input.setDefaultCursor('pointer');
+        }
+    });
+
+    fallenDialogContainer.respawnBtn.on('pointerout', () => {
+        if (fallenDialogContainer && fallenDialogContainer.respawnBtn) {
+            fallenDialogContainer.respawnBtn.setFillStyle(0x333333);
+            scene.input.setDefaultCursor('default');
+        }
+    });
+
+    // Shared Respawn Logic
+    const handleRespawn = () => {
+        console.log('✨ Respawn Action Triggered - Starting Fade');
+
+        // 1. Disable button instantly to prevent double-clicks
+        if (fallenDialogContainer && fallenDialogContainer.respawnBtn) {
+            fallenDialogContainer.respawnBtn.disableInteractive();
+            // Visual feedback: button looks "pressed"
+            fallenDialogContainer.respawnBtn.setFillStyle(0x222222);
+            scene.input.setDefaultCursor('default');
+
+            if (fallenDialogContainer.respawnText) {
+                fallenDialogContainer.respawnText.setText("RESPAWNING...");
+            }
+        }
+
+        // 2. Create Black Fader Overlay (Highest Depth)
+        // Note: We leave fillAlpha as 1 (default) and control visibility via .setAlpha()
+        const fader = scene.add.rectangle(centerX, centerY, screenWidth, screenHeight, 0x000000);
+        fader.setScrollFactor(0);
+        fader.setDepth(10000); // Top of everything
+        fader.setAlpha(0); // Start fully transparent
+
+        // 3. Tween Alpha 0 -> 1 (5 seconds)
+        scene.tweens.add({
+            targets: fader,
+            alpha: 1,
+            duration: 5000,
+            ease: 'Power2',
+            onComplete: () => {
+                // 4. Respawn Logic (Executed after screen is black)
+                console.log('🌑 Screen is black - Executing Respawn Stats Reset');
+
+                // Restore stats
+                playerStats.hp = playerStats.maxHp;
+                playerStats.mana = playerStats.maxMana;
+                playerStats.stamina = playerStats.maxStamina;
+
+                // Update UI
+                if (typeof updatePlayerStatsUI === 'function') updatePlayerStatsUI();
+                if (typeof updateAbilityBar === 'function') updateAbilityBar();
+
+                // Clean up dialog elements
+                if (fallenDialogContainer) {
+                    if (fallenDialogContainer.respawnBtn) fallenDialogContainer.respawnBtn.destroy();
+                    if (fallenDialogContainer.respawnText) fallenDialogContainer.respawnText.destroy();
+                    fallenDialogContainer.destroy();
+                    fallenDialogContainer = null;
+                }
+
+                // Unpause game
+                scene.physics.resume();
+                isGamePaused = false;
+
+                showDamageNumber(player.x, player.y - 50, "Respawned!", 0xffff00);
+                console.log('✅ Respawn Complete');
+
+                // 5. Cleanup Fader (Chain a quick fade out for smoothness, or destroy)
+                // User said "destroy dialog and respawn", implying we return to game.
+                // A quick fade out is nicer than a hard cut.
+                scene.tweens.add({
+                    targets: fader,
+                    alpha: 0,
+                    duration: 1000,
+                    onComplete: () => {
+                        fader.destroy();
+                    }
+                });
+            }
+        });
+    };
+
+    // Attach click handler
+    fallenDialogContainer.respawnBtn.on('pointerdown', handleRespawn);
+
+    // Make text interactive too
+    fallenDialogContainer.respawnText.setInteractive({ useHandCursor: true });
+    fallenDialogContainer.respawnText.on('pointerdown', handleRespawn);
 }
 
 /**

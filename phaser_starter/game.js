@@ -62,10 +62,7 @@ let buildings = []; // Array of building objects for collision
 let dungeonWalls = []; // Array of dungeon wall objects for collision
 let questMarkers = new Map(); // Quest objective markers (key: targetId, value: {sprite, tween})
 let lastQuestMarkerUpdate = 0; // Throttle marker updates
-let specialZones = [
-    { x: 15 * 32, y: 15 * 32, radius: 100, event: 'LOCATION_EXPLORED', label: 'Town Square', id: 'explore_square' },
-    { x: 35 * 32, y: 35 * 32, radius: 100, event: 'LOCATION_EXPLORED', label: 'Temple Ruins', id: 'find_ruins' }
-];
+let specialZones = []; // Populated from zones.json
 
 // Dungeon system
 let currentDungeon = null; // Current dungeon data structure
@@ -317,6 +314,8 @@ function preload() {
     this.load.json('monsterData', 'monsters.json');
     this.load.json('milestoneData', 'milestones.json');
     this.load.json('npcData', 'npc.json');
+    this.load.json('zoneData', 'zones.json');
+
 
 
     // Add load event listeners for debugging - MUST be before load calls
@@ -365,44 +364,33 @@ function preload() {
         frameHeight: 48
     });
 
-    // Load NPC spritesheets
-    this.load.spritesheet('npc_lysa', 'assets/animations/Lysa.png', {
-        frameWidth: 64,
-        frameHeight: 64
-    });
-    this.load.spritesheet('npc_captain_thorne', 'assets/animations/CaptainThorne.png', {
-        frameWidth: 64,
-        frameHeight: 64
-    });
-    this.load.spritesheet('npc_blacksmith_brond', 'assets/animations/BlacksmithBrond.png', {
-        frameWidth: 64,
-        frameHeight: 64
-    });
-    this.load.spritesheet('npc_mage_elara', 'assets/animations/MageElara.png', {
-        frameWidth: 64,
-        frameHeight: 64
-    });
-    this.load.spritesheet('npc_captain_kael', 'assets/animations/CaptainKael.png', {
-        frameWidth: 64,
-        frameHeight: 64
-    });
-    this.load.spritesheet('npc_elder_malik', 'assets/animations/ElderMalik.png', {
-        frameWidth: 64,
-        frameHeight: 64
-    });
-    this.load.spritesheet('npc_garen', 'assets/animations/TrainerGaren.png', {
-        frameWidth: 64, // Assuming standard 64x64 like others
-        frameHeight: 64
+    // Dynamic NPC Loader
+    this.load.on('filecomplete-json-npcData', (key, type, data) => {
+        console.log('✅ NPC Data loaded! Loading NPC assets dynamically...');
+        if (Array.isArray(data)) {
+            data.forEach(npc => {
+                // Load Sprite
+                if (npc.spriteKey && npc.spritePath) {
+                    if (!this.textures.exists(npc.spriteKey)) {
+                        this.load.spritesheet(npc.spriteKey, npc.spritePath, {
+                            frameWidth: npc.frameWidth || 64,
+                            frameHeight: npc.frameHeight || 64
+                        });
+                        console.log(`   + Loaded NPC sprite: ${npc.name} (${npc.spriteKey})`);
+                    }
+                }
+                // Load Portrait
+                if (npc.portraitKey && npc.portraitPath) {
+                    if (!this.textures.exists(npc.portraitKey)) {
+                        this.load.image(npc.portraitKey, npc.portraitPath);
+                        console.log(`   + Loaded NPC portrait: ${npc.name} (${npc.portraitKey})`);
+                    }
+                }
+            });
+        }
     });
 
-    // Load NPC portrait images (landscape, full-width above dialog)
-    this.load.image('portrait_elder_malik', 'assets/images/ElderMalik-Portrait.jpg');
-    this.load.image('portrait_merchant_lysa', 'assets/images/MerchantLysa-Portrait.jpg');
-    this.load.image('portrait_captain_thorne', 'assets/images/CaptainThorne-Portrait.jpg');
-    this.load.image('portrait_captain_kael', 'assets/images/CaptainKael-Portrait.jpg');
-    this.load.image('portrait_mage_elara', 'assets/images/MageElara-Portrait.jpg');
-    this.load.image('portrait_blacksmith_brond', 'assets/images/BlacksmithBrond-Portrait.jpg');
-    this.load.image('portrait_trainer_garen', 'assets/images/TrainerGaren-Portrait.png');
+    // Hardcoded loads REMOVED (Handled by above listener now)
 
     // Try loading other images (will fail silently if files don't exist - that's OK!)
     // Load grass as a spritesheet for variety (96x96 frames)
@@ -423,7 +411,6 @@ function preload() {
 
     console.log('🔄 PRELOAD: load.spritesheet() called for grass');
 
-    // Track if grass spritesheet loaded successfully
     this.load.once('filecomplete-spritesheet-grass', (key, type, data) => {
         console.log('✅ Grass spritesheet loaded successfully!');
         console.log('  Key:', key);
@@ -470,6 +457,43 @@ function preload() {
         } else if (file.key === 'item_consumable') {
             this.customItemImagesLoaded.consumable = false;
             console.error('❌ Custom consumable image failed to load');
+        }
+    });
+
+    // Dynamic Quest Asset Loader (for modding support)
+    this.load.on('filecomplete-json-questDataV2', (key, type, data) => {
+        console.log('✅ Quest Data V2 loaded! Loading quest assets dynamically...');
+        if (data && data.quests) {
+            Object.values(data.quests).forEach(quest => {
+                if (quest.assets && Array.isArray(quest.assets)) {
+                    quest.assets.forEach(asset => {
+                        // Skip if already loaded (unless we want to allow overrides)
+                        if (this.textures.exists(asset.key) && asset.type !== 'audio') {
+                            console.log(`   Detailed: Asset ${asset.key} already exists, skipping.`);
+                            return;
+                        }
+
+                        console.log(`   + Loading quest asset: ${asset.key} (${asset.path})`);
+
+                        switch (asset.type) {
+                            case 'image':
+                                this.load.image(asset.key, asset.path);
+                                break;
+                            case 'spritesheet':
+                                this.load.spritesheet(asset.key, asset.path, {
+                                    frameWidth: asset.frameWidth,
+                                    frameHeight: asset.frameHeight
+                                });
+                                break;
+                            case 'audio':
+                                this.load.audio(asset.key, asset.path);
+                                break;
+                            default:
+                                console.warn(`   ⚠️ Unknown asset type: ${asset.type} for ${asset.key}`);
+                        }
+                    });
+                }
+            });
         }
     });
 
@@ -546,6 +570,7 @@ function preload() {
     this.load.image('item_consumable', 'assets/images/pixellab-red-simple-health-potion-1765494342318.png');
     this.load.image('mana_potion', 'assets/images/mana-potion.png');
     this.load.image('character-fallen', 'assets/images/character-fallen.png');
+    // item_fragment and item_crystal are now loaded dynamically from quests_v2.json
     this.load.audio('bell_toll', 'assets/audio/bell-toll-407826.mp3');
 
     // Load player and monster base images
@@ -695,14 +720,6 @@ function preload() {
         frameHeight: 48
     });
     this.load.spritesheet('monster_orc_attack_west', 'assets/animations/Orc-Attack-West.png', { frameWidth: 32, frameHeight: 32 });
-
-    // NPC Assets
-    this.load.spritesheet('npc_bram', 'assets/animations/Guard-Bram.png', { frameWidth: 64, frameHeight: 64 });
-    this.load.spritesheet('npc_seren', 'assets/animations/Scholar-Seren.png', { frameWidth: 64, frameHeight: 64 });
-
-    // NPC Portraits
-    this.load.image('portrait_bram', 'assets/images/Guard-Seren-Portrait.png'); // Using likely typo filename
-    this.load.image('portrait_seren', 'assets/images/Scholar-Seren-Portrait.png');
 
     // Skeleton walking animations (48x48 frames, 6 frames per direction)
     this.load.spritesheet('monster_skeleton_walk_south', 'assets/animations/monster_skeleton_walk_south.png', {
@@ -2172,6 +2189,11 @@ function createTownMap() {
 
     // Create Mana Fluxes for Quest 7
     createManaFluxes();
+
+    // Initialize NPCs (Data-Driven)
+    if (typeof initializeNPCs === 'function') {
+        initializeNPCs();
+    }
 }
 
 /**
@@ -2308,20 +2330,29 @@ function checkManaFluxInteraction() {
  * Check for interaction with Special Zones (e.g. Town Square Investigation)
  */
 function checkZoneInteraction() {
-    if (!specialZones) return false;
+    // Initialize zones from JSON if not already done
+    if (specialZones.length === 0 && game.scene.scenes[0].cache.json.exists('zoneData')) {
+        const zoneData = game.scene.scenes[0].cache.json.get('zoneData');
+        if (Array.isArray(zoneData)) {
+            specialZones = zoneData;
+            console.log(`Initialized ${specialZones.length} zones from JSON`);
+        }
+    }
+
+    if (!player) return false;
 
     let interacted = false;
+
     specialZones.forEach(zone => {
-        // Check if the associated objective is active
-        // (Assuming window.uqe.isObjectiveActive is not available, we can check quests directly or use uqe internal state if exposed)
-        // Better: Try to complete it and see if it worked?
-        // Or traverse active quests.
-        let isActive = false;
+        // Only check if objective is active (or if zone is always active)
+        let isActive = zone.alwaysActive || false;
+
+        // Check UQE
         if (window.uqe && window.uqe.questLog) {
             Object.values(window.uqe.questLog).forEach(q => {
                 if (q.status === 'ACTIVE' && q.objectives) {
                     q.objectives.forEach(obj => {
-                        if (obj.id === zone.id && !obj.isComplete) isActive = true;
+                        if (obj.id === zone.requiredObjectiveId && !obj.isComplete) isActive = true;
                     });
                 }
             });
@@ -2332,30 +2363,34 @@ function checkZoneInteraction() {
             if (dist <= zone.radius && !interacted) {
                 // Interaction radius met
                 if (window.uqe) {
-                    // Emit Explore Event
-                    window.uqe.eventBus.emit(UQE_EVENTS.LOCATION_EXPLORED, { id: zone.id });
-
-                    // Visual feedback
-                    showDamageNumber(player.x, player.y - 60, "Investigated!", 0x00ffff);
-
-                    // Special Logic: Item Drop for Temple Ruins
-                    if (zone.id === 'find_ruins') {
-                        showDamageNumber(player.x, player.y - 80, "Fragment Found!", 0xffd700);
-                        // Auto-add item if needed, but the quest requires "collect".
-                        // Actually, standard collect objectives require item pickup.
-                        // So we should spawn an item or directly give it.
-                        // Let's directly give it for now to simplify, or spawn a drop.
-                        // Direct give is safer for quest flow.
-                        if (playerStats.inventory) {
-                            if (!playerStats.inventory['artifact_fragment']) playerStats.inventory['artifact_fragment'] = 0;
-                            playerStats.inventory['artifact_fragment']++;
-                            // Trigger collect event
-                            window.uqe.eventBus.emit(UQE_EVENTS.ITEM_COLLECTED, { itemId: 'artifact_fragment', amount: 1 });
-                            showDamageNumber(player.x, player.y - 100, "+1 Artifact Fragment", 0xffffff);
-                        }
-                    }
-
                     interacted = true;
+
+                    // Generic Action Handler
+                    const performAction = (action) => {
+                        if (action.type === 'event') {
+                            window.uqe.eventBus.emit(UQE_EVENTS[action.eventName], action.data || { id: zone.id });
+                            if (action.feedback) showDamageNumber(player.x, player.y - 60, action.feedback, 0x00ffff);
+                        } else if (action.type === 'give_item') {
+                            if (playerStats.inventory) {
+                                if (!playerStats.inventory[action.itemId]) playerStats.inventory[action.itemId] = 0;
+                                playerStats.inventory[action.itemId] += action.amount;
+                                if (action.feedback) showDamageNumber(player.x, player.y - 80, action.feedback, 0xffd700);
+                            }
+                        } else if (action.type === 'composite') {
+                            if (action.actions) {
+                                action.actions.forEach(subAction => performAction(subAction));
+                            }
+                        }
+                    };
+
+                    // Execute defined interaction
+                    if (zone.onInteract) {
+                        performAction(zone.onInteract);
+                    } else {
+                        // Fallback default
+                        window.uqe.eventBus.emit(UQE_EVENTS.LOCATION_EXPLORED, { id: zone.id });
+                        showDamageNumber(player.x, player.y - 60, "Investigated!", 0x00ffff);
+                    }
                 }
             }
         }
@@ -4856,6 +4891,11 @@ function update(time, delta) {
         updateZoneIndicators();
     }
 
+    // Check for Zone Interactions
+    if (typeof checkZoneInteraction === 'function') {
+        checkZoneInteraction();
+    }
+
     // Handle gamepad/controller input
     if (typeof handleGamepadInput === 'function') {
         handleGamepadInput();
@@ -5915,64 +5955,25 @@ function update(time, delta) {
             updateMonsterAnimation(monster, delta);
         }
 
-        // Move towards player if close (use monster's speed stat)
-        // Aggro hysteresis: engage at 200px, disengage at 400px
-        const shouldAggro = distance < MONSTER_AGGRO_RADIUS;
-        const shouldDeaggro = distance > MONSTER_DEAGGRO_RADIUS;
-
-        // Set or clear aggro state
-        if (shouldAggro) {
-            monster.isAggro = true;
-        } else if (shouldDeaggro) {
-            monster.isAggro = false;
-        }
-
-        if (monster.isAggro && distance > 32) {
-            const monsterSpeed = monster.speed || 50;
-
-            // Use A* Pathfinding in dungeon
-            if (currentMap === 'dungeon' && pathfinder) {
-                // Update path every 500ms or if no path
-                if (!monster.lastPathTime || time - monster.lastPathTime > 500 || !monster.currentPath) {
-                    monster.currentPath = pathfinder.findPath(monster.x, monster.y, player.x, player.y);
-                    monster.lastPathTime = time;
-
-                    // Remove first point if it's too close (we are at it)
-                    if (monster.currentPath && monster.currentPath.length > 0) {
-                        const firstPoint = monster.currentPath[0];
-                        const distToFirst = Phaser.Math.Distance.Between(monster.x, monster.y, firstPoint.x, firstPoint.y);
-                        if (distToFirst < 16) monster.currentPath.shift();
-                    }
-                }
-
-                // Follow the path
-                if (monster.currentPath && monster.currentPath.length > 0) {
-                    const nextPoint = monster.currentPath[0];
-                    const distToPoint = Phaser.Math.Distance.Between(monster.x, monster.y, nextPoint.x, nextPoint.y);
-
-                    if (distToPoint < 5) {
-                        monster.currentPath.shift(); // Reached waypoint
-                        // If path empty after shift, we arrived (or are close enough to direct chase)
-                    } else {
-                        this.physics.moveTo(monster, nextPoint.x, nextPoint.y, monsterSpeed);
-                    }
-                } else {
-                    // No path found or path finished (close to player), attempt direct movement
-                    // (Fallback in case A* fails or we are in same tile)
-                    this.physics.moveToObject(monster, player, monsterSpeed);
-                }
-            } else {
-                // Wilderness or no pathfinder: Direct movement
-                this.physics.moveToObject(monster, player, monsterSpeed);
-            }
+        // UNIFIED COMBAT LOGIC (Handled by MonsterRenderer in monsters.js)
+        // This ensures wilderness and dungeon behavior is consistent
+        if (monsterRenderer && typeof monsterRenderer.updateMonsterBehavior === 'function') {
+            // Pass context and callbacks
+            monsterRenderer.updateMonsterBehavior(
+                monster,
+                player,
+                time,
+                delta,
+                currentMap,
+                pathfinder,
+                monsterAttackPlayer // Pass the global attack function
+            );
         } else {
-            monster.body.setVelocity(0);
+            console.warn('⚠️ MonsterRenderer not initialized or missing updateMonsterBehavior');
         }
 
         // Monster attack player if in range
-        if (distance <= monster.attackRange && monster.hp > 0) {
-            monsterAttackPlayer(monster, time);
-        }
+
 
         // Update monster HP bar position and visibility
         if (monster.hpBarBg && monster.hpBar && monster.active) {
@@ -6001,6 +6002,21 @@ function update(time, delta) {
             handleMonsterDeath(monster);
         }
     });
+    // Check if combat just ended and show pending quest modals
+    const currentlyInCombat = isInCombat();
+    if (!currentlyInCombat && (pendingCompletedQuest || pendingNewQuest)) {
+        // Combat ended, show pending quest modals
+        if (pendingCompletedQuest) {
+            const questToShow = pendingCompletedQuest;
+            pendingCompletedQuest = null;
+            showQuestCompletedPopupEnhanced(questToShow);
+        } else if (pendingNewQuest) {
+            // Only show new quest if no completed quest was pending
+            const questToShow = pendingNewQuest;
+            pendingNewQuest = null;
+            showNewQuestModal(questToShow);
+        }
+    }
 }
 
 /**
@@ -6096,21 +6112,7 @@ function handleMonsterDeath(monster) {
 // Items are now manually picked up with Spacebar (handled above)
 // No automatic pickup - player must press Spacebar when near items
 
-// Check if combat just ended and show pending quest modals
-const currentlyInCombat = isInCombat();
-if (!currentlyInCombat && (pendingCompletedQuest || pendingNewQuest)) {
-    // Combat ended, show pending quest modals
-    if (pendingCompletedQuest) {
-        const questToShow = pendingCompletedQuest;
-        pendingCompletedQuest = null;
-        showQuestCompletedPopupEnhanced(questToShow);
-    } else if (pendingNewQuest) {
-        // Only show new quest if no completed quest was pending
-        const questToShow = pendingNewQuest;
-        pendingNewQuest = null;
-        showNewQuestModal(questToShow);
-    }
-}
+
 
 /**
  * Player attack function
@@ -8145,12 +8147,17 @@ function dropItemsFromMonster(x, y) {
         else if (item.type === 'boots') spriteKey = 'item_boots';
         else if (item.type === 'gloves') spriteKey = 'item_gloves';
         else if (item.type === 'belt') spriteKey = 'item_belt';
-        else if (item.type === 'belt') spriteKey = 'item_belt';
+
         else if (item.type === 'consumable') {
             spriteKey = (item.name === 'Mana Potion') ? 'mana_potion' : 'item_consumable';
         }
-        else if (item.type === 'quest_item') spriteKey = 'item_consumable'; // Use consumable sprite for shards etc.
-        else if (item.type === 'quest_item') spriteKey = 'item_consumable'; // Use consumable sprite for shards etc.
+        else if (item.type === 'quest_item') {
+            // Use specific sprite for quest items based on ID
+            // Map item ID to sprite key: crystal_shard -> item_crystal
+            if (item.id === 'crystal_shard') spriteKey = 'item_crystal';
+            else if (item.id === 'artifact_fragment') spriteKey = 'item_fragment';
+            else spriteKey = 'item_consumable'; // Fallback
+        }
 
         const itemSprite = scene.add.sprite(x, y, spriteKey);
         itemSprite.setDepth(8); // Above tiles, below monsters
@@ -8592,8 +8599,14 @@ function updateInventoryItems() {
         else if (item.type === 'boots') spriteKey = 'item_boots';
         else if (item.type === 'gloves') spriteKey = 'item_gloves';
         else if (item.type === 'belt') spriteKey = 'item_belt';
-        else if (item.type === 'consumable') spriteKey = 'item_consumable';
+        else if (item.type === 'consumable') spriteKey = (item.name === 'Mana Potion') ? 'mana_potion' : 'item_consumable';
         else if (item.type === 'gold') spriteKey = 'item_gold';
+        else if (item.type === 'quest_item') {
+            // Specific mapping for quest items
+            if (item.id === 'crystal_shard') spriteKey = 'item_crystal';
+            else if (item.id === 'artifact_fragment') spriteKey = 'item_fragment';
+            else spriteKey = 'item_consumable';
+        }
 
         // Create item sprite
         const itemSprite = scene.add.sprite(x, y, spriteKey);
@@ -9711,8 +9724,14 @@ function updateEquipmentInventoryItems() {
         else if (item.type === 'boots') spriteKey = 'item_boots';
         else if (item.type === 'gloves') spriteKey = 'item_gloves';
         else if (item.type === 'belt') spriteKey = 'item_belt';
-        else if (item.type === 'consumable') spriteKey = 'item_consumable';
+        else if (item.type === 'consumable') spriteKey = (item.name === 'Mana Potion') ? 'mana_potion' : 'item_consumable';
         else if (item.type === 'gold') spriteKey = 'item_gold';
+        else if (item.type === 'quest_item') {
+            // Specific mapping for quest items
+            if (item.id === 'crystal_shard') spriteKey = 'item_crystal';
+            else if (item.id === 'artifact_fragment') spriteKey = 'item_fragment';
+            else spriteKey = 'item_consumable';
+        }
         else {
             // Use default item sprite for unknown types
             spriteKey = 'item_weapon'; // Fallback
@@ -10997,7 +11016,18 @@ function updateQuestLogItems() {
             quest.objectives.forEach(obj => {
                 const statusStr = obj.completed ? '✅' : '⏳';
                 const objProgress = obj.progress !== undefined ? obj.progress : 0;
-                const objText = scene.add.text(detailStartX + 20, detailY, `${statusStr} ${obj.label}: ${objProgress}/${obj.target}`, {
+
+                let textXOffset = 20;
+
+                // Render icon if present
+                if (obj.icon) {
+                    const iconSprite = scene.add.sprite(detailStartX + 20, detailY + 10, obj.icon)
+                        .setScrollFactor(0).setDepth(302).setScale(0.6); // Scale to fit text line
+                    questPanel.questDetailElements.push(iconSprite);
+                    textXOffset += 25; // Shift text to make room for icon
+                }
+
+                const objText = scene.add.text(detailStartX + textXOffset, detailY, `${statusStr} ${obj.label}: ${objProgress}/${obj.target}`, {
                     fontSize: '14px',
                     fill: obj.completed ? '#00ff00' : '#cccccc'
                 }).setScrollFactor(0).setDepth(302).setOrigin(0, 0);
@@ -11735,228 +11765,81 @@ function hideQuestPreviewModal() {
 /**
  * Initialize NPCs in the world
  */
-function initializeNPCs() {
-    const scene = game.scene.scenes[0];
+/**
+ * Initialize NPCs from JSON data
+ */
+function initializeNPCs(passedScene) {
+    const scene = passedScene || game.scene.scenes[0];
+    if (!scene) return;
 
-    // Clear existing NPCs first to prevent duplicates
+    // Clear existing NPCs
     npcs.forEach(npc => {
         if (npc && npc.active) npc.destroy();
     });
     npcs = [];
 
-    const tileSize = scene.tileSize || 32;
-    const mapWidth = scene.mapWidth || 40;
-    const mapHeight = scene.mapHeight || 40;
-    const centerX = Math.floor(mapWidth / 2);
-    const centerY = Math.floor(mapHeight / 2);
-
-    // Helper function to check if position is inside a building
-    function isPositionInBuilding(x, y) {
-        const npcSize = 16; // Half of NPC sprite size
-        for (const building of buildings) {
-            if (x + npcSize > building.x &&
-                x - npcSize < building.x + building.width &&
-                y + npcSize > building.y &&
-                y - npcSize < building.y + building.height) {
-                return true;
-            }
-        }
-        return false;
+    const npcData = scene.cache.json.get('npcData');
+    if (!npcData) {
+        console.error('❌ Failed to load NPC data from JSON');
+        return;
     }
 
-    // Helper function to find a valid position near a target
-    function findValidPosition(targetX, targetY, attempts = 50) {
-        for (let i = 0; i < attempts; i++) {
-            const offsetX = Phaser.Math.Between(-5, 5) * tileSize;
-            const offsetY = Phaser.Math.Between(-5, 5) * tileSize;
-            const testX = targetX + offsetX;
-            const testY = targetY + offsetY;
+    console.log(`Initialising ${npcData.length} NPCs from JSON...`);
 
-            // Check bounds
-            if (testX < tileSize || testX > (mapWidth - 1) * tileSize ||
-                testY < tileSize || testY > (mapHeight - 1) * tileSize) {
-                continue;
-            }
+    // Determine map dimensions safely (fallback to 1280x1280 for town)
+    const mapWidth = (typeof map !== 'undefined' && map && map.widthInPixels) ? map.widthInPixels : 1280;
+    const mapHeight = (typeof map !== 'undefined' && map && map.heightInPixels) ? map.heightInPixels : 1280;
 
-            // Check if not in building
-            if (!isPositionInBuilding(testX, testY)) {
-                return { x: testX, y: testY };
-            }
-        }
-        // Fallback: return original position (will be adjusted manually if needed)
-        return { x: targetX, y: targetY };
-    }
+    npcData.forEach(data => {
+        // Calculate position
+        let x = 0, y = 0;
 
-    // Position NPCs in town near buildings, ensuring they're not inside buildings
-    const npcData = [
-        {
-            id: 'npc_001',
-            name: 'Elder Malik',
-            title: 'Village Elder',
-            targetX: centerX * tileSize,  // Center square
-            targetY: (centerY - 3) * tileSize, // Above center, clear of Inn
-            dialogId: 'elder_intro',
-            questGiver: true
-        },
-        {
-            id: 'npc_002',
-            name: 'Merchant Lysa',
-            title: 'Trader',
-            targetX: (centerX + 6) * tileSize,  // Near shop (to the right)
-            targetY: (centerY + 6) * tileSize, // Below shop
-            dialogId: 'merchant_shop',
-            merchant: true,
-            questGiver: true
-        },
-        {
-            id: 'npc_003',
-            name: 'Captain Thorne',
-            title: 'Guard Captain',
-            targetX: centerX * tileSize,
-            targetY: (mapHeight - 6) * tileSize,
-            dialogId: 'captain_thorne',
-            questGiver: true
-        },
-        {
-            id: 'npc_004',
-            name: 'Captain Kael',
-            title: 'Captain of the Guard',
-            targetX: (centerX - 5) * tileSize,
-            targetY: (mapHeight - 9) * tileSize,
-            dialogId: 'generic_npc',
-            questGiver: true
-        },
-        {
-            id: 'npc_005',
-            name: 'Mage Elara',
-            title: 'Village Mage',
-            targetX: (centerX + 5) * tileSize,
-            targetY: (centerY - 5) * tileSize,
-            dialogId: 'mage_elara',
-            questGiver: true
-        },
-        {
-            id: 'npc_006',
-            name: 'Blacksmith Brond',
-            title: 'Master Smith',
-            targetX: 6 * tileSize,
-            targetY: 20 * tileSize,
-            dialogId: 'blacksmith_brond',
-            questGiver: true
-        },
-        {
-            id: 'npc_007',
-            name: 'Trainer Garen',
-            title: 'Class Trainer',
-            targetX: (centerX - 4) * tileSize, // Near the left side of town square
-            targetY: (centerY + 4) * tileSize,
-            dialogId: 'trainer_garen',
-            questGiver: true
-        },
-        {
-            id: 'npc_008',
-            name: 'Guard Bram',
-            title: 'City Guard',
-            targetX: 12 * tileSize,
-            targetY: 35 * tileSize, // South West
-            dialogId: 'bram_npc',
-            questGiver: true
-        },
-        {
-            id: 'npc_009',
-            name: 'Scholar Seren',
-            title: 'Royal Scholar',
-            targetX: 32 * tileSize,
-            targetY: 8 * tileSize, // North East
-            dialogId: 'seren_npc',
-            questGiver: true
-        }
-    ];
-
-    // Find valid positions for each NPC
-    const positionedNPCs = npcData.map(data => {
-        const pos = findValidPosition(data.targetX, data.targetY);
-        return {
-            id: data.id,
-            name: data.name,
-            title: data.title,
-            x: pos.x,
-            y: pos.y,
-            dialogId: data.dialogId,
-            questGiver: data.questGiver,
-            merchant: data.merchant
-        };
-    });
-
-    positionedNPCs.forEach(data => {
-        // Determine which spritesheet to use based on NPC name
-        let spriteKey = 'npc'; // Default fallback
-        let portraitKey = null; // Portrait for dialog
-        if (data.name === 'Elder Malik') {
-            spriteKey = 'npc_elder_malik';
-            portraitKey = 'portrait_elder_malik';
-        } else if (data.name === 'Merchant Lysa') {
-            spriteKey = 'npc_lysa';
-            portraitKey = 'portrait_merchant_lysa';
-        } else if (data.name === 'Captain Thorne' || data.name === 'Guard Thorne') {
-            spriteKey = 'npc_captain_thorne';
-            portraitKey = 'portrait_captain_thorne';
-        } else if (data.name === 'Guard Kael' || data.name === 'Captain Kael') {
-            spriteKey = 'npc_captain_kael';
-            portraitKey = 'portrait_captain_kael';
-        } else if (data.name === 'Mage Elara') {
-            spriteKey = 'npc_mage_elara';
-            portraitKey = 'portrait_mage_elara';
-        } else if (data.name === 'Blacksmith Brond') {
-            spriteKey = 'npc_blacksmith_brond';
-            portraitKey = 'portrait_blacksmith_brond';
-        } else if (data.name === 'Trainer Garen') {
-            spriteKey = 'npc_garen';
-            portraitKey = 'portrait_trainer_garen';
-        } else if (data.name === 'Guard Bram') {
-            spriteKey = 'npc_bram';
-            portraitKey = 'portrait_bram';
-        } else if (data.name === 'Scholar Seren') {
-            spriteKey = 'npc_seren';
-            portraitKey = 'portrait_seren';
+        if (data.spawnType === 'center') {
+            x = (mapWidth / 2) + (data.offsetX || 0) * 32;
+            y = (mapHeight / 2) + (data.offsetY || 0) * 32;
+        } else if (data.spawnType === 'bottom') {
+            x = (mapWidth / 2) + (data.offsetX || 0) * 32;
+            y = mapHeight - 100 + (data.offsetY || 0) * 32;
+        } else if (data.spawnType === 'absolute') {
+            x = (data.targetX || 0) * 32;
+            y = (data.targetY || 0) * 32;
+        } else {
+            // Default to center
+            x = (mapWidth / 2);
+            y = (mapHeight / 2);
         }
 
-        // Check if spritesheet exists, fallback to default 'npc' if not
+        // Determine sprite key (Use JSON key, fallback to 'npc' if missing in texture manager)
+        let spriteKey = data.spriteKey || 'npc';
         if (!scene.textures.exists(spriteKey)) {
-            console.warn(`⚠️ Spritesheet ${spriteKey} not found, using default NPC sprite`);
+            console.warn(`⚠️ NPC Sprite '${spriteKey}' not found for ${data.name}, falling back to 'npc'`);
             spriteKey = 'npc';
         }
 
-        const npc = scene.physics.add.sprite(data.x, data.y, spriteKey);
-        npc.setDepth(30); // Same depth as monsters
+        const npc = scene.physics.add.sprite(x, y, spriteKey);
+        npc.setDepth(30);
         npc.setCollideWorldBounds(true);
 
-        // If using a spritesheet, set to first frame (idle frame)
-        if (spriteKey !== 'npc' && scene.textures.exists(spriteKey)) {
-            npc.setFrame(0); // Use first frame as idle
+        // Set frame 0 (idle) if available
+        if (scene.textures.exists(spriteKey) && spriteKey !== 'npc') {
+            npc.setFrame(0);
         }
 
-        // Store NPC data
+        // Store NPC properties
         npc.npcId = data.id;
         npc.name = data.name;
         npc.title = data.title;
         npc.dialogId = data.dialogId;
         npc.questGiver = data.questGiver || false;
         npc.merchant = data.merchant || false;
-        npc.interactionRadius = 50; // pixels
+        npc.interactionRadius = 50;
         npc.interactionIndicator = null;
         npc.showIndicator = false;
-        npc.spriteKey = spriteKey; // Store sprite key for reference
-        npc.portraitKey = portraitKey; // Store portrait key for dialog
+        npc.spriteKey = spriteKey;
+        npc.portraitKey = data.portraitKey; // Store portrait key
 
+        // Add to global list
         npcs.push(npc);
-
-        // Add portrait data if available - would need to modify createNPC to accept it or set it after
-        if (portraitKey) {
-            const npc = npcs[npcs.length - 1]; // The one just created
-            if (npc) npc.portrait = portraitKey;
-        }
-
     });
 
     console.log('✅ NPCs initialized:', npcs.length, 'NPCs');
@@ -13365,7 +13248,8 @@ const shopInventory = [
     { type: 'amulet', name: 'Gold Amulet', quality: 'Uncommon', defense: 4, maxHp: 20, price: 100 },
     { type: 'boots', name: 'Leather Boots', quality: 'Common', defense: 1, speed: 5, price: 25 },
     { type: 'boots', name: 'Steel Boots', quality: 'Uncommon', defense: 3, speed: 10, price: 50 },
-    { type: 'consumable', name: 'Health Potion', quality: 'Common', healAmount: 50, price: 20 }
+    { type: 'consumable', name: 'Health Potion', quality: 'Common', healAmount: 50, price: 20 },
+    { type: 'consumable', name: 'Mana Potion', quality: 'Common', manaAmount: 30, price: 20 }
 ];
 
 /**
@@ -13654,7 +13538,12 @@ function updateShopItems() {
         else if (item.type === 'boots') spriteKey = 'item_boots';
         else if (item.type === 'gloves') spriteKey = 'item_gloves';
         else if (item.type === 'belt') spriteKey = 'item_belt';
-        else if (item.type === 'consumable') spriteKey = 'item_consumable';
+        else if (item.type === 'consumable') spriteKey = (item.name === 'Mana Potion') ? 'mana_potion' : 'item_consumable';
+        else if (item.type === 'quest_item') {
+            if (item.id === 'crystal_shard') spriteKey = 'item_crystal';
+            else if (item.id === 'artifact_fragment') spriteKey = 'item_fragment';
+            else spriteKey = 'item_consumable';
+        }
 
         // Check if sprite key exists, use fallback if not
         let finalSpriteKey = spriteKey;
@@ -14009,8 +13898,14 @@ function updateShopInventoryItems() {
         else if (item.type === 'boots') spriteKey = 'item_boots';
         else if (item.type === 'gloves') spriteKey = 'item_gloves';
         else if (item.type === 'belt') spriteKey = 'item_belt';
-        else if (item.type === 'consumable') spriteKey = 'item_consumable';
+        else if (item.type === 'consumable') spriteKey = (item.name === 'Mana Potion') ? 'mana_potion' : 'item_consumable';
         else if (item.type === 'gold') spriteKey = 'item_gold';
+        else if (item.type === 'quest_item') {
+            // Specific mapping for quest items
+            if (item.id === 'crystal_shard') spriteKey = 'item_crystal';
+            else if (item.id === 'artifact_fragment') spriteKey = 'item_fragment';
+            else spriteKey = 'item_consumable';
+        }
 
         // Create item sprite with background (add to container)
         const itemBg = scene.add.rectangle(x, y, itemSize, itemSize, 0x222222, 0.8)
@@ -14699,7 +14594,8 @@ function createTavernUI() {
         const itemBg = scene.add.rectangle(itemX, itemY, 70, 70, 0x333333, 1)
             .setScrollFactor(0).setDepth(401).setStrokeStyle(2, 0x654321);
 
-        const itemSprite = scene.add.sprite(itemX, itemY, 'item_consumable');
+        const spriteKey = (item.name === 'Mana Potion') ? 'mana_potion' : 'item_consumable';
+        const itemSprite = scene.add.sprite(itemX, itemY, spriteKey);
         itemSprite.setScrollFactor(0).setDepth(402).setScale(0.7);
 
         // Item name

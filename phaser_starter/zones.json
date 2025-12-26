@@ -1,0 +1,46 @@
+[
+    {
+        "id": "explore_square",
+        "label": "Town Square",
+        "x": 480,
+        "y": 480,
+        "radius": 100,
+        "requiredObjectiveId": "explore_square",
+        "onInteract": {
+            "type": "event",
+            "eventName": "LOCATION_EXPLORED",
+            "feedback": "Investigated!"
+        }
+    },
+    {
+        "id": "find_ruins",
+        "label": "Temple Ruins",
+        "x": 1120,
+        "y": 1120,
+        "radius": 100,
+        "requiredObjectiveId": "find_ruins",
+        "onInteract": {
+            "type": "composite",
+            "actions": [
+                {
+                    "type": "event",
+                    "eventName": "LOCATION_EXPLORED"
+                },
+                {
+                    "type": "give_item",
+                    "itemId": "artifact_fragment",
+                    "amount": 1,
+                    "feedback": "Fragment Found!"
+                },
+                {
+                    "type": "event",
+                    "eventName": "ITEM_COLLECTED",
+                    "data": {
+                        "itemId": "artifact_fragment",
+                        "amount": 1
+                    }
+                }
+            ]
+        }
+    }
+]

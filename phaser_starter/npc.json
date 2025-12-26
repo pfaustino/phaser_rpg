@@ -9,7 +9,11 @@
         "dialogId": "elder_intro",
         "questGiver": true,
         "spriteKey": "npc_elder_malik",
-        "portraitKey": "portrait_elder_malik"
+        "portraitKey": "portrait_elder_malik",
+        "spritePath": "assets/animations/ElderMalik.png",
+        "portraitPath": "assets/images/ElderMalik-Portrait.jpg",
+        "frameWidth": 64,
+        "frameHeight": 64
     },
     {
         "id": "npc_002",
@@ -22,7 +26,11 @@
         "merchant": true,
         "questGiver": true,
         "spriteKey": "npc_lysa",
-        "portraitKey": "portrait_merchant_lysa"
+        "portraitKey": "portrait_merchant_lysa",
+        "spritePath": "assets/animations/Lysa.png",
+        "portraitPath": "assets/images/MerchantLysa-Portrait.jpg",
+        "frameWidth": 64,
+        "frameHeight": 64
     },
     {
         "id": "npc_003",
@@ -34,7 +42,11 @@
         "dialogId": "captain_thorne",
         "questGiver": true,
         "spriteKey": "npc_captain_thorne",
-        "portraitKey": "portrait_captain_thorne"
+        "portraitKey": "portrait_captain_thorne",
+        "spritePath": "assets/animations/CaptainThorne.png",
+        "portraitPath": "assets/images/CaptainThorne-Portrait.jpg",
+        "frameWidth": 64,
+        "frameHeight": 64
     },
     {
         "id": "npc_004",
@@ -46,31 +58,43 @@
         "dialogId": "generic_npc",
         "questGiver": true,
         "spriteKey": "npc_captain_kael",
-        "portraitKey": "portrait_captain_kael"
+        "portraitKey": "portrait_captain_kael",
+        "spritePath": "assets/animations/CaptainKael.png",
+        "portraitPath": "assets/images/CaptainKael-Portrait.jpg",
+        "frameWidth": 64,
+        "frameHeight": 64
     },
     {
         "id": "npc_005",
         "name": "Mage Elara",
         "title": "Village Mage",
         "spawnType": "center",
-        "offsetX": 5,
-        "offsetY": -5,
+        "offsetX": 0,
+        "offsetY": -8,
         "dialogId": "mage_elara",
         "questGiver": true,
         "spriteKey": "npc_mage_elara",
-        "portraitKey": "portrait_mage_elara"
+        "portraitKey": "portrait_mage_elara",
+        "spritePath": "assets/animations/MageElara.png",
+        "portraitPath": "assets/images/MageElara-Portrait.jpg",
+        "frameWidth": 64,
+        "frameHeight": 64
     },
     {
         "id": "npc_006",
         "name": "Blacksmith Brond",
         "title": "Master Smith",
         "spawnType": "absolute",
-        "targetX": 6,
+        "targetX": 9,
         "targetY": 20,
         "dialogId": "blacksmith_brond",
         "questGiver": true,
         "spriteKey": "npc_blacksmith_brond",
-        "portraitKey": "portrait_blacksmith_brond"
+        "portraitKey": "portrait_blacksmith_brond",
+        "spritePath": "assets/animations/BlacksmithBrond.png",
+        "portraitPath": "assets/images/BlacksmithBrond-Portrait.jpg",
+        "frameWidth": 64,
+        "frameHeight": 64
     },
     {
         "id": "npc_007",
@@ -82,7 +106,11 @@
         "dialogId": "trainer_garen",
         "questGiver": true,
         "spriteKey": "npc_garen",
-        "portraitKey": "portrait_trainer_garen"
+        "portraitKey": "portrait_trainer_garen",
+        "spritePath": "assets/animations/TrainerGaren.png",
+        "portraitPath": "assets/images/TrainerGaren-Portrait.png",
+        "frameWidth": 64,
+        "frameHeight": 64
     },
     {
         "id": "npc_008",
@@ -94,7 +122,11 @@
         "dialogId": "bram_npc",
         "questGiver": true,
         "spriteKey": "npc_bram",
-        "portraitKey": "portrait_bram"
+        "portraitKey": "portrait_bram",
+        "spritePath": "assets/animations/Guard-Bram.png",
+        "portraitPath": "assets/images/Guard-Seren-Portrait.png",
+        "frameWidth": 64,
+        "frameHeight": 64
     },
     {
         "id": "npc_009",
@@ -102,10 +134,14 @@
         "title": "Royal Scholar",
         "spawnType": "absolute",
         "targetX": 32,
-        "targetY": 8,
+        "targetY": 14,
         "dialogId": "seren_npc",
         "questGiver": true,
         "spriteKey": "npc_seren",
-        "portraitKey": "portrait_seren"
+        "portraitKey": "portrait_seren",
+        "spritePath": "assets/animations/Scholar-Seren.png",
+        "portraitPath": "assets/images/Scholar-Seren-Portrait.png",
+        "frameWidth": 64,
+        "frameHeight": 64
     }
 ]

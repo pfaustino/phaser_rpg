@@ -158,6 +158,86 @@ class MonsterRenderer {
             }
         }
     }
+    /**
+     * Update monster behavior (AI)
+     * Handles aggro, movement, and attack triggers for both Wilderness and Dungeons
+     */
+    updateMonsterBehavior(monster, player, time, delta, currentMap, pathfinder, monsterAttackPlayerCallback) {
+        if (!monster || !monster.active || !monster.body) return;
+
+        const distance = Phaser.Math.Distance.Between(
+            player.x, player.y,
+            monster.x, monster.y
+        );
+
+        // Update animation based on movement
+        const isMoving = monster.body.velocity.x !== 0 || monster.body.velocity.y !== 0;
+        this.update(monster, isMoving);
+
+        // Aggro Logic (Hysteresis)
+        const MONSTER_AGGRO_RADIUS = 200;
+        const MONSTER_DEAGGRO_RADIUS = 400;
+
+        if (distance < MONSTER_AGGRO_RADIUS) {
+            monster.isAggro = true;
+        } else if (distance > MONSTER_DEAGGRO_RADIUS) {
+            monster.isAggro = false;
+        }
+
+        // Movement Logic
+        if (monster.isAggro && distance > 32) { // 32 is "stop distance" to prevent clipping
+            const monsterSpeed = monster.speed || 50;
+
+            if (currentMap === 'dungeon' && pathfinder) {
+                // --- Dungeon: Use Pathfinding ---
+                // Update path every 500ms or if no path
+                if (!monster.lastPathTime || time - monster.lastPathTime > 500 || !monster.currentPath) {
+                    monster.currentPath = pathfinder.findPath(monster.x, monster.y, player.x, player.y);
+                    monster.lastPathTime = time;
+
+                    // Remove first point if it's too close
+                    if (monster.currentPath && monster.currentPath.length > 0) {
+                        const firstPoint = monster.currentPath[0];
+                        const distToFirst = Phaser.Math.Distance.Between(monster.x, monster.y, firstPoint.x, firstPoint.y);
+                        if (distToFirst < 16) monster.currentPath.shift();
+                    }
+                }
+
+                // Follow the path
+                if (monster.currentPath && monster.currentPath.length > 0) {
+                    const nextPoint = monster.currentPath[0];
+                    const distToPoint = Phaser.Math.Distance.Between(monster.x, monster.y, nextPoint.x, nextPoint.y);
+
+                    if (distToPoint < 5) {
+                        monster.currentPath.shift(); // Reached waypoint
+                    } else {
+                        this.scene.physics.moveTo(monster, nextPoint.x, nextPoint.y, monsterSpeed);
+                    }
+                } else {
+                    // Fallback to direct movement if path fails or finished
+                    this.scene.physics.moveToObject(monster, player, monsterSpeed);
+                }
+            } else {
+                // --- Wilderness / No Pathfinder: Direct Movement ---
+                this.scene.physics.moveToObject(monster, player, monsterSpeed);
+            }
+        } else {
+            // Stop if not aggro or too close
+            monster.body.setVelocity(0);
+        }
+
+        // Attack Logic (Unified)
+        // Ensure attack range is generous enough (50) vs stop distance (32) to function
+        if (distance <= monster.attackRange && monster.hp > 0) {
+            // Call the attack function (passed as callback or assume global)
+            if (typeof monsterAttackPlayerCallback === 'function') {
+                monsterAttackPlayerCallback(monster, time);
+            } else if (typeof monsterAttackPlayer !== 'undefined') {
+                // Fallback to global if callback not provided
+                monsterAttackPlayer(monster, time);
+            }
+        }
+    }
 }
 
 // End of class definition

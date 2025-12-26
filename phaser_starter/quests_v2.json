@@ -53,6 +53,7 @@
                     "id": "collect_shards",
                     "type": "collect",
                     "itemId": "crystal_shard",
+                    "icon": "item_crystal",
                     "label": "Gather Shards from Monsters",
                     "target": 5
                 }
@@ -60,7 +61,14 @@
             "rewards": {
                 "xp": 80,
                 "gold": 40
-            }
+            },
+            "assets": [
+                {
+                    "type": "image",
+                    "key": "item_crystal",
+                    "path": "assets/images/crystal-shard.png"
+                }
+            ]
         },
         "main_01_004": {
             "id": "main_01_004",
@@ -286,6 +294,7 @@
                     "id": "collect_fragment",
                     "type": "collect",
                     "itemId": "artifact_fragment",
+                    "icon": "item_fragment",
                     "label": "Retrieve Artifact Fragment",
                     "target": 1
                 },
@@ -300,7 +309,14 @@
             "rewards": {
                 "xp": 400,
                 "gold": 200
-            }
+            },
+            "assets": [
+                {
+                    "type": "image",
+                    "key": "item_fragment",
+                    "path": "assets/images/artifact-fragment.png"
+                }
+            ]
         },
         "main_02_004": {
             "id": "main_02_004",

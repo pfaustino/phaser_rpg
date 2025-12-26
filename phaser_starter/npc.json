@@ -26,12 +26,12 @@
     },
     {
         "id": "npc_003",
-        "name": "Guard Thorne",
-        "title": "Guard Officer",
+        "name": "Captain Thorne",
+        "title": "Guard Captain",
         "spawnType": "bottom",
         "offsetX": 0,
         "offsetY": -6,
-        "dialogId": "guard_info",
+        "dialogId": "captain_thorne",
         "questGiver": true,
         "spriteKey": "npc_captain_thorne",
         "portraitKey": "portrait_captain_thorne"
@@ -55,7 +55,7 @@
         "spawnType": "center",
         "offsetX": 5,
         "offsetY": -5,
-        "dialogId": "generic_npc",
+        "dialogId": "mage_elara",
         "questGiver": true,
         "spriteKey": "npc_mage_elara",
         "portraitKey": "portrait_mage_elara"
@@ -83,5 +83,29 @@
         "questGiver": true,
         "spriteKey": "npc_garen",
         "portraitKey": "portrait_trainer_garen"
+    },
+    {
+        "id": "npc_008",
+        "name": "Guard Bram",
+        "title": "City Guard",
+        "spawnType": "absolute",
+        "targetX": 12,
+        "targetY": 35,
+        "dialogId": "bram_npc",
+        "questGiver": true,
+        "spriteKey": "npc_bram",
+        "portraitKey": "portrait_bram"
+    },
+    {
+        "id": "npc_009",
+        "name": "Scholar Seren",
+        "title": "Royal Scholar",
+        "spawnType": "absolute",
+        "targetX": 32,
+        "targetY": 8,
+        "dialogId": "seren_npc",
+        "questGiver": true,
+        "spriteKey": "npc_seren",
+        "portraitKey": "portrait_seren"
     }
 ]

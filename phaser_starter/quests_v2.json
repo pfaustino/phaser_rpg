@@ -209,6 +209,141 @@
                 "gold": 100
             }
         },
+        "main_02_001": {
+            "id": "main_02_001",
+            "title": "Mysterious Arrival",
+            "description": "The tremors have ceased, but a strange energy lingers in the town square. Captain Thorne needs your help to investigate.",
+            "giver": "Captain Thorne",
+            "step": 1,
+            "requires": "main_01_010",
+            "objectives": [
+                {
+                    "id": "talk_thorne_intro",
+                    "type": "talk",
+                    "npcId": "Captain Thorne",
+                    "label": "Speak with Captain Thorne",
+                    "target": 1
+                },
+                {
+                    "id": "explore_square",
+                    "type": "explore_location",
+                    "label": "Investigate Town Square Energy",
+                    "targetX": 15,
+                    "targetY": 15,
+                    "target": 1
+                },
+                {
+                    "id": "return_thorne",
+                    "type": "talk",
+                    "npcId": "Captain Thorne",
+                    "label": "Return to Captain Thorne",
+                    "target": 1
+                }
+            ],
+            "rewards": {
+                "xp": 300,
+                "gold": 150
+            }
+        },
+        "main_02_002": {
+            "id": "main_02_002",
+            "title": "Arcane Insight",
+            "description": "Captain Thorne suggests consulting Mage Elara about the strange energy resonance found in the town square.",
+            "giver": "Captain Thorne",
+            "step": 2,
+            "requires": "main_02_001",
+            "objectives": [
+                {
+                    "id": "talk_elara_intro",
+                    "type": "talk",
+                    "npcId": "Mage Elara",
+                    "label": "Consult Mage Elara",
+                    "target": 1
+                }
+            ],
+            "rewards": {
+                "xp": 350,
+                "gold": 100
+            }
+        },
+        "main_02_003": {
+            "id": "main_02_003",
+            "title": "The Source",
+            "description": "Mage Elara has identified the source of the corruption as ancient ruins in the wilderness. Retrieve the artifact fragment she sensed.",
+            "giver": "Mage Elara",
+            "step": 3,
+            "requires": "main_02_002",
+            "objectives": [
+                {
+                    "id": "find_ruins",
+                    "type": "explore_location",
+                    "label": "Find Temple Ruins",
+                    "targetX": 35,
+                    "targetY": 35,
+                    "target": 1
+                },
+                {
+                    "id": "collect_fragment",
+                    "type": "collect",
+                    "itemId": "artifact_fragment",
+                    "label": "Retrieve Artifact Fragment",
+                    "target": 1
+                },
+                {
+                    "id": "return_thorne_ruins",
+                    "type": "talk",
+                    "npcId": "Captain Thorne",
+                    "label": "Report to Captain Thorne",
+                    "target": 1
+                }
+            ],
+            "rewards": {
+                "xp": 400,
+                "gold": 200
+            }
+        },
+        "main_02_004": {
+            "id": "main_02_004",
+            "title": "Suspects Trail",
+            "description": "The artifact fragment suggests someone tampered with the seal. Interrogate the suspects: Guard Bram, Scholar Seren, and Merchant Lysa.",
+            "giver": "Captain Thorne",
+            "step": 4,
+            "requires": "main_02_003",
+            "objectives": [
+                {
+                    "id": "talk_bram",
+                    "type": "talk",
+                    "npcId": "Guard Bram",
+                    "label": "Interrogate Guard Bram",
+                    "target": 1
+                },
+                {
+                    "id": "talk_seren",
+                    "type": "talk",
+                    "npcId": "Scholar Seren",
+                    "label": "Interrogate Scholar Seren",
+                    "target": 1
+                },
+                {
+                    "id": "talk_lysa",
+                    "type": "talk",
+                    "npcId": "Merchant Lysa",
+                    "label": "Interrogate Merchant Lysa",
+                    "target": 1
+                },
+                {
+                    "id": "return_thorne_suspects",
+                    "type": "talk",
+                    "npcId": "Captain Thorne",
+                    "label": "Present Findings to Thorne",
+                    "target": 1
+                }
+            ],
+            "rewards": {
+                "xp": 500,
+                "gold": 250
+            }
+        },
         "quest_002": {
             "id": "quest_002",
             "title": "Treasure Hunter",

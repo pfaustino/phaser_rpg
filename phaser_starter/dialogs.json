@@ -415,5 +415,254 @@
                 "choices": []
             }
         }
+    },
+    "captain_thorne": {
+        "npcName": "Captain Thorne",
+        "npcTitle": "Guard Captain",
+        "nodes": {
+            "start": {
+                "text": "The town is safe for now, but I remain vigilant. How can I help you, citizen?",
+                "choices": [
+                    {
+                        "text": "What's happening in the Town Square?",
+                        "next": "mysterious_arrival_start",
+                        "isQuest": true,
+                        "condition": "quest_available:main_02_001",
+                        "action": "quest_accept_main",
+                        "questId": "main_02_001"
+                    },
+                    {
+                        "text": "I've investigated the energy (Complete Quest)",
+                        "next": "mysterious_arrival_complete",
+                        "isQuest": true,
+                        "condition": "quest_can_complete:main_02_001",
+                        "action": "complete_quest",
+                        "questId": "main_02_001"
+                    },
+                    {
+                        "text": "Have you heard anything new? (Arcane Insight)",
+                        "next": "arcane_insight_offer",
+                        "isQuest": true,
+                        "condition": "quest_available:main_02_002",
+                        "questId": "main_02_002"
+                    },
+                    {
+                        "text": "I found this artifact fragment at the ruins. (Complete The Source)",
+                        "next": "the_source_complete",
+                        "isQuest": true,
+                        "condition": "quest_can_complete:main_02_003",
+                        "action": "complete_quest",
+                        "questId": "main_02_003"
+                    },
+                    {
+                        "text": "Tell me about the monsters",
+                        "next": "help"
+                    },
+                    {
+                        "text": "Goodbye",
+                        "next": "end"
+                    }
+                ]
+            },
+            "mysterious_arrival_start": {
+                "text": "It's strange. The tremors have stopped, but there's a... humming in the air near the Town Square fountain. The villagers are frightened. I need someone with your experience to take a closer look.",
+                "choices": [
+                    {
+                        "text": "I'll investigate it.",
+                        "next": "end"
+                    }
+                ]
+            },
+            "mysterious_arrival_complete": {
+                "text": "You're back. What did you find? ... A resonance? This is troubling. It matches the descriptions in the old archives. We must be cautious.",
+                "choices": [
+                    {
+                        "text": "What should we do?",
+                        "next": "arcane_insight_offer"
+                    }
+                ]
+            },
+            "arcane_insight_offer": {
+                "text": "Mage Elara would know more about this. She studies the arcane ley lines that run beneath the village. Take this report to her immediately.",
+                "choices": [
+                    {
+                        "text": "I'll speak with her.",
+                        "next": "end",
+                        "isQuest": true,
+                        "action": "quest_accept_main",
+                        "questId": "main_02_002"
+                    }
+                ]
+            },
+            "the_source_complete": {
+                "text": "This fragment... it's vibrating with the same energy as the square. It looks like... a seal piece. If the seal on the ruins is broken, something is trying to get out.",
+                "choices": [
+                    {
+                        "text": "Who would do this?",
+                        "next": "suspects_trail_offer"
+                    }
+                ]
+            },
+            "suspects_trail_offer": {
+                "text": "Only a few people have been near those ruins lately. Guard Bram, Scholar Seren, and... Merchant Lysa was seen trading nearby. Speak to them. Find out what they know.",
+                "choices": [
+                    {
+                        "text": "I'll interrogate them.",
+                        "next": "end",
+                        "isQuest": true,
+                        "action": "quest_accept_main",
+                        "questId": "main_02_004"
+                    }
+                ]
+            },
+            "help": {
+                "text": "The monsters have been getting bolder since the quakes started. They seem drawn to the tremors. Stay safe out there.",
+                "choices": [
+                    {
+                        "text": "I will",
+                        "next": "end"
+                    }
+                ]
+            },
+            "end": {
+                "text": "Stay vigilant!",
+                "choices": []
+            }
+        }
+    },
+    "mage_elara": {
+        "npcName": "Mage Elara",
+        "npcTitle": "Village Mage",
+        "nodes": {
+            "start": {
+                "text": "The energies of this land are shifting... I can feel it in the air. Oh, hello there.",
+                "choices": [
+                    {
+                        "text": "Captain Thorne sent me (Arcane Insight)",
+                        "next": "arcane_insight_complete",
+                        "isQuest": true,
+                        "condition": "quest_active:main_02_002",
+                        "action": "complete_quest",
+                        "questId": "main_02_002"
+                    },
+                    {
+                        "text": "What do you do here?",
+                        "next": "about"
+                    },
+                    {
+                        "text": "Goodbye",
+                        "next": "end"
+                    }
+                ]
+            },
+            "arcane_insight_complete": {
+                "text": "Thorne sent you? Let me see that report... hmm. This is worse than I thought. The ley lines aren't just shifting; they're bleeding.",
+                "choices": [
+                    {
+                        "text": "Bleeding? From where?",
+                        "next": "the_source_offer"
+                    }
+                ]
+            },
+            "the_source_offer": {
+                "text": "I can trace the source to the old ruins in the wilderness, to the northeast. Something there is drawing the power. Go there, find what is causing this, and bring it back to Thorne properly.",
+                "choices": [
+                    {
+                        "text": "I'll go to the ruins.",
+                        "next": "end",
+                        "isQuest": true,
+                        "action": "quest_accept_main",
+                        "questId": "main_02_003"
+                    }
+                ]
+            },
+            "about": {
+                "text": "I study the magical currents of our world. Lately, they have been... disturbed.",
+                "choices": [
+                    {
+                        "text": "I see.",
+                        "next": "start"
+                    }
+                ]
+            },
+            "end": {
+                "text": "May the currents guide you.",
+                "choices": []
+            }
+        }
+    },
+    "bram_npc": {
+        "npcName": "Guard Bram",
+        "npcTitle": "City Guard",
+        "nodes": {
+            "start": {
+                "text": "Keep moving, citizen. The streets aren't safe.",
+                "choices": [
+                    {
+                        "text": "Captain Thorne sent me to ask about the ruins. (Interrogate)",
+                        "next": "interrogate",
+                        "isQuest": true,
+                        "condition": "quest_objective_active:main_02_004:talk_bram",
+                        "action": "complete_objective",
+                        "questId": "main_02_004",
+                        "objectiveId": "talk_bram"
+                    },
+                    {
+                        "text": "Goodbye",
+                        "next": "end"
+                    }
+                ]
+            },
+            "interrogate": {
+                "text": "The ruins? I... I haven't been there in weeks. Just patrol duty. Why would Thorne suspect me?",
+                "choices": [
+                    {
+                        "text": "Just answering questions.",
+                        "next": "end"
+                    }
+                ]
+            },
+            "end": {
+                "text": "Watch your back.",
+                "choices": []
+            }
+        }
+    },
+    "seren_npc": {
+        "npcName": "Scholar Seren",
+        "npcTitle": "Royal Scholar",
+        "nodes": {
+            "start": {
+                "text": "So much history lost...",
+                "choices": [
+                    {
+                        "text": "I'm investigating the corruption. (Interrogate)",
+                        "next": "interrogate",
+                        "isQuest": true,
+                        "condition": "quest_objective_active:main_02_004:talk_seren",
+                        "action": "complete_objective",
+                        "questId": "main_02_004",
+                        "objectiveId": "talk_seren"
+                    },
+                    {
+                        "text": "Goodbye",
+                        "next": "end"
+                    }
+                ]
+            },
+            "interrogate": {
+                "text": "Corruption? Yes, I've felt the disturbance. I was studying the old texts, but I assure you, my interest is purely academic.",
+                "choices": [
+                    {
+                        "text": "I'll note that down.",
+                        "next": "end"
+                    }
+                ]
+            },
+            "end": {
+                "text": "Knowledge is power.",
+                "choices": []
+            }
+        }
     }
 }

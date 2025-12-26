@@ -45,7 +45,8 @@ const UQE_EVENTS = {
     TILE_TRAVELED: 'tile_traveled',
     TIME_SURVIVED: 'time_survived',
     LEVEL_UP: 'level_up',
-    GOLD_EARNED: 'gold_earned'
+    GOLD_EARNED: 'gold_earned',
+    LOCATION_EXPLORED: 'location_explored'
 };
 
 class UqeObjective {
@@ -179,6 +180,23 @@ class ExploreObjective extends UqeObjective {
     }
 }
 
+class ExploreLocationObjective extends UqeObjective {
+    constructor(data, eventBus) {
+        super(data, eventBus);
+        // data.id matches the zone ID (e.g., 'explore_square')
+        // OR we can match based on the objective ID directly if we emit that.
+        // Let's assume the event emits { id: 'explore_square' } and we match against our objective's id OR target?
+        // In quests_v2.json: id: "explore_square". 
+        // So we match event.id === this.id
+
+        this.subscribe(UQE_EVENTS.LOCATION_EXPLORED, (data) => {
+            if (data.id === this.id) {
+                this.updateProgress(1);
+            }
+        });
+    }
+}
+
 class SurviveObjective extends UqeObjective {
     constructor(data, eventBus) {
         super(data, eventBus);
@@ -255,6 +273,7 @@ class Quest {
                 case 'talk': obj = new TalkObjective(data, eventBus); break;
                 case 'collect': obj = new CollectObjective(data, eventBus); break;
                 case 'explore': obj = new ExploreObjective(data, eventBus); break;
+                case 'explore_location': obj = new ExploreLocationObjective(data, eventBus); break;
                 case 'survive': obj = new SurviveObjective(data, eventBus); break;
                 case 'level': obj = new LevelObjective(data, eventBus); break;
                 case 'gold': obj = new GoldObjective(data, eventBus); break;

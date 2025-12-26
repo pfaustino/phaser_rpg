@@ -62,6 +62,10 @@ let buildings = []; // Array of building objects for collision
 let dungeonWalls = []; // Array of dungeon wall objects for collision
 let questMarkers = new Map(); // Quest objective markers (key: targetId, value: {sprite, tween})
 let lastQuestMarkerUpdate = 0; // Throttle marker updates
+let specialZones = [
+    { x: 15 * 32, y: 15 * 32, radius: 100, event: 'LOCATION_EXPLORED', label: 'Town Square', id: 'explore_square' },
+    { x: 35 * 32, y: 35 * 32, radius: 100, event: 'LOCATION_EXPLORED', label: 'Temple Ruins', id: 'find_ruins' }
+];
 
 // Dungeon system
 let currentDungeon = null; // Current dungeon data structure
@@ -690,10 +694,15 @@ function preload() {
         frameWidth: 48,
         frameHeight: 48
     });
-    this.load.spritesheet('monster_orc_attack_west', 'assets/animations/monster_orc_attack_west.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
+    this.load.spritesheet('monster_orc_attack_west', 'assets/animations/Orc-Attack-West.png', { frameWidth: 32, frameHeight: 32 });
+
+    // NPC Assets
+    this.load.spritesheet('npc_bram', 'assets/animations/Guard-Bram.png', { frameWidth: 64, frameHeight: 64 });
+    this.load.spritesheet('npc_seren', 'assets/animations/Scholar-Seren.png', { frameWidth: 64, frameHeight: 64 });
+
+    // NPC Portraits
+    this.load.image('portrait_bram', 'assets/images/Guard-Seren-Portrait.png'); // Using likely typo filename
+    this.load.image('portrait_seren', 'assets/images/Scholar-Seren-Portrait.png');
 
     // Skeleton walking animations (48x48 frames, 6 frames per direction)
     this.load.spritesheet('monster_skeleton_walk_south', 'assets/animations/monster_skeleton_walk_south.png', {
@@ -2293,6 +2302,111 @@ function checkManaFluxInteraction() {
     }
 
     return false;
+}
+
+/**
+ * Check for interaction with Special Zones (e.g. Town Square Investigation)
+ */
+function checkZoneInteraction() {
+    if (!specialZones) return false;
+
+    let interacted = false;
+    specialZones.forEach(zone => {
+        // Check if the associated objective is active
+        // (Assuming window.uqe.isObjectiveActive is not available, we can check quests directly or use uqe internal state if exposed)
+        // Better: Try to complete it and see if it worked?
+        // Or traverse active quests.
+        let isActive = false;
+        if (window.uqe && window.uqe.questLog) {
+            Object.values(window.uqe.questLog).forEach(q => {
+                if (q.status === 'ACTIVE' && q.objectives) {
+                    q.objectives.forEach(obj => {
+                        if (obj.id === zone.id && !obj.isComplete) isActive = true;
+                    });
+                }
+            });
+        }
+
+        if (isActive) {
+            const dist = Phaser.Math.Distance.Between(player.x, player.y, zone.x, zone.y);
+            if (dist <= zone.radius && !interacted) {
+                // Interaction radius met
+                if (window.uqe) {
+                    // Emit Explore Event
+                    window.uqe.eventBus.emit(UQE_EVENTS.LOCATION_EXPLORED, { id: zone.id });
+
+                    // Visual feedback
+                    showDamageNumber(player.x, player.y - 60, "Investigated!", 0x00ffff);
+
+                    // Special Logic: Item Drop for Temple Ruins
+                    if (zone.id === 'find_ruins') {
+                        showDamageNumber(player.x, player.y - 80, "Fragment Found!", 0xffd700);
+                        // Auto-add item if needed, but the quest requires "collect".
+                        // Actually, standard collect objectives require item pickup.
+                        // So we should spawn an item or directly give it.
+                        // Let's directly give it for now to simplify, or spawn a drop.
+                        // Direct give is safer for quest flow.
+                        if (playerStats.inventory) {
+                            if (!playerStats.inventory['artifact_fragment']) playerStats.inventory['artifact_fragment'] = 0;
+                            playerStats.inventory['artifact_fragment']++;
+                            // Trigger collect event
+                            window.uqe.eventBus.emit(UQE_EVENTS.ITEM_COLLECTED, { itemId: 'artifact_fragment', amount: 1 });
+                            showDamageNumber(player.x, player.y - 100, "+1 Artifact Fragment", 0xffffff);
+                        }
+                    }
+
+                    interacted = true;
+                }
+            }
+        }
+    });
+
+    return interacted;
+}
+
+/**
+ * Update indicators for special zones
+ */
+function updateZoneIndicators() {
+    const scene = game.scene.scenes[0];
+    if (!specialZones) return;
+
+    specialZones.forEach(zone => {
+        let isActive = false;
+        if (window.uqe && window.uqe.questLog) {
+            Object.values(window.uqe.questLog).forEach(q => {
+                if (q.status === 'ACTIVE' && q.objectives) {
+                    q.objectives.forEach(obj => {
+                        if (obj.id === zone.id && !obj.isComplete) isActive = true;
+                    });
+                }
+            });
+        }
+
+        if (isActive) {
+            if (!zone.indicator) {
+                zone.indicator = scene.add.text(zone.x, zone.y, zone.label ? '✨' : '✨', {
+                    fontSize: '32px',
+                    align: 'center'
+                })
+                    .setOrigin(0.5)
+                    .setDepth(5);
+
+                // Add pulsing animation
+                scene.tweens.add({
+                    targets: zone.indicator,
+                    scale: 1.2,
+                    alpha: 0.8,
+                    yoyo: true,
+                    repeat: -1,
+                    duration: 800
+                });
+            }
+            zone.indicator.setVisible(true);
+        } else {
+            if (zone.indicator) zone.indicator.setVisible(false);
+        }
+    });
 }
 
 /**
@@ -4620,6 +4734,11 @@ function triggerWorldInteraction() {
     // Check for transition markers first
     let nearMarker = false;
 
+    // Check for zone interactions (Quests)
+    if (typeof checkZoneInteraction === 'function' && checkZoneInteraction()) {
+        return true;
+    }
+
     // Check Mana Flux interactions first (closest priority)
     if (typeof checkManaFluxInteraction === 'function' && checkManaFluxInteraction()) {
         return true; // Handled
@@ -4730,6 +4849,11 @@ function update(time, delta) {
     // Update Unified Quest Engine
     if (window.uqe) {
         window.uqe.update();
+    }
+
+    // Update Zone Indicators
+    if (typeof updateZoneIndicators === 'function') {
+        updateZoneIndicators();
     }
 
     // Handle gamepad/controller input
@@ -11686,11 +11810,11 @@ function initializeNPCs() {
         },
         {
             id: 'npc_003',
-            name: 'Guard Thorne',
-            title: 'Guard Officer',
+            name: 'Captain Thorne',
+            title: 'Guard Captain',
             targetX: centerX * tileSize,
             targetY: (mapHeight - 6) * tileSize,
-            dialogId: 'guard_info',
+            dialogId: 'captain_thorne',
             questGiver: true
         },
         {
@@ -11708,7 +11832,7 @@ function initializeNPCs() {
             title: 'Village Mage',
             targetX: (centerX + 5) * tileSize,
             targetY: (centerY - 5) * tileSize,
-            dialogId: 'generic_npc',
+            dialogId: 'mage_elara',
             questGiver: true
         },
         {
@@ -11717,7 +11841,7 @@ function initializeNPCs() {
             title: 'Master Smith',
             targetX: 6 * tileSize,
             targetY: 20 * tileSize,
-            dialogId: 'generic_npc',
+            dialogId: 'blacksmith_brond',
             questGiver: true
         },
         {
@@ -11727,6 +11851,24 @@ function initializeNPCs() {
             targetX: (centerX - 4) * tileSize, // Near the left side of town square
             targetY: (centerY + 4) * tileSize,
             dialogId: 'trainer_garen',
+            questGiver: true
+        },
+        {
+            id: 'npc_008',
+            name: 'Guard Bram',
+            title: 'City Guard',
+            targetX: 12 * tileSize,
+            targetY: 35 * tileSize, // South West
+            dialogId: 'bram_npc',
+            questGiver: true
+        },
+        {
+            id: 'npc_009',
+            name: 'Scholar Seren',
+            title: 'Royal Scholar',
+            targetX: 32 * tileSize,
+            targetY: 8 * tileSize, // North East
+            dialogId: 'seren_npc',
             questGiver: true
         }
     ];
@@ -11756,7 +11898,7 @@ function initializeNPCs() {
         } else if (data.name === 'Merchant Lysa') {
             spriteKey = 'npc_lysa';
             portraitKey = 'portrait_merchant_lysa';
-        } else if (data.name === 'Guard Thorne') {
+        } else if (data.name === 'Captain Thorne' || data.name === 'Guard Thorne') {
             spriteKey = 'npc_captain_thorne';
             portraitKey = 'portrait_captain_thorne';
         } else if (data.name === 'Guard Kael' || data.name === 'Captain Kael') {
@@ -11771,6 +11913,12 @@ function initializeNPCs() {
         } else if (data.name === 'Trainer Garen') {
             spriteKey = 'npc_garen';
             portraitKey = 'portrait_trainer_garen';
+        } else if (data.name === 'Guard Bram') {
+            spriteKey = 'npc_bram';
+            portraitKey = 'portrait_bram';
+        } else if (data.name === 'Scholar Seren') {
+            spriteKey = 'npc_seren';
+            portraitKey = 'portrait_seren';
         }
 
         // Check if spritesheet exists, fallback to default 'npc' if not
@@ -12517,7 +12665,15 @@ function checkNPCInteraction() {
         }
     });
 
+    if (closestNPC) {
+        console.log(`[DEBUG_DIALOG] Nearest NPC: ${closestNPC.name} (Dist: ${closestDistance.toFixed(1)}, Radius: ${closestNPC.interactionRadius})`);
+        addChatMessage(`[DEBUG] Nearest: ${closestNPC.name} (${closestDistance.toFixed(0)}/${closestNPC.interactionRadius})`, 0xaaaaaa);
+    } else {
+        console.log(`[DEBUG_DIALOG] No NPC found in range`);
+    }
+
     if (closestNPC && closestNPC.dialogId) {
+        console.log(`[DEBUG_DIALOG] Starting dialog with ${closestNPC.name} (ID: ${closestNPC.dialogId})`);
         startDialog(closestNPC);
         return true; // Found an NPC to interact with
     }
@@ -12601,6 +12757,51 @@ function evaluateDialogCondition(conditionStr, stats) {
         case 'gold_at_least':
             return stats.gold >= parseInt(param);
 
+        case 'quest_can_complete':
+            if (!isQuestActive(param)) return false;
+            if (window.uqe) {
+                const quest = window.uqe.activeQuests.find(q => q.id === param);
+                if (quest) {
+                    // Allow completion if only 'talk' objectives remain (which this dialog will satisfy)
+                    const incomplete = quest.objectives.filter(o => !o.isComplete());
+                    if (incomplete.length === 0) return true;
+                    const nonTalkIncomplete = incomplete.filter(o => o.type !== 'talk');
+                    return nonTalkIncomplete.length === 0;
+                }
+            }
+            return false;
+
+        case 'quest_objective_active':
+            // Param is QUEST_ID:OBJECTIVE_ID. But split(':') only gives the first part?
+            // "condition": "quest_objective_active:main_02_004:talk_bram"
+            // The initial split only split on first colon. So param is "main_02_004:talk_bram"?
+            // Let's verify initial split logic.
+            // const [type, param] = conditionStr.split(':'); -> This only splits once if logic is standard destructuring? 
+            // NO, split(':') returns array of ALL parts!
+            // const [type, param] = ['a', 'b', 'c'] -> param is 'b'. 'c' is lost.
+            // I need to fetch the full args.
+            // Let's re-parse inside the case if needed, OR fix the splitter.
+            // Existing split: const [type, param] = conditionStr.split(':');
+            // If conditionStr is "quest_objective_active:Q:O", type="quest_objective_active", param="Q".
+            // So I need to use the rest of the string.
+            // Better: re-split conditionStr.
+            {
+                const parts = conditionStr.split(':');
+                if (parts.length < 3) return false;
+                const qId = parts[1];
+                const oId = parts[2];
+
+                if (!isQuestActive(qId)) return false;
+                if (window.uqe) {
+                    const quest = window.uqe.activeQuests.find(q => q.id === qId);
+                    if (quest) {
+                        const obj = quest.objectives.find(o => o.id === oId);
+                        return obj && !obj.isComplete();
+                    }
+                }
+                return false;
+            }
+
         default:
             console.warn(`Unknown dialog condition type: ${type}`);
             return true;
@@ -12631,8 +12832,14 @@ function deepCloneDialog(obj) {
  */
 function startDialog(npc) {
     let dialogData = dialogDatabase[npc.dialogId];
+    console.log(`[DEBUG_DIALOG] startDialog called for ${npc.name}. DialogID: ${npc.dialogId}. Found data: ${!!dialogData}`);
+
     if (!dialogData) {
+        console.warn(`[DEBUG_DIALOG] Dialog data NOT FOUND for ${npc.dialogId}. Using generic fallback.`);
+        addChatMessage(`[DEBUG] Missing dialog: ${npc.dialogId}`, 0xff0000);
         dialogData = dialogDatabase['generic_npc'];
+    } else {
+        addChatMessage(`[DEBUG] Starting dialog: ${npc.name}`, 0x00ff00);
     }
 
     // Clone to avoid modifying the original database - use custom clone to preserve functions
@@ -12812,8 +13019,11 @@ function updateDialogUI(node) {
                 } else {
                     result = evaluateDialogCondition(choice.condition, playerStats);
                 }
+                console.log(`[DEBUG_DIALOG] Choice '${choice.text}' condition result: ${result} (Condition: ${choice.condition})`);
                 if (result) visibleChoices++;
-            } catch (err) { /* skip */ }
+            } catch (err) {
+                console.error(`[DEBUG_DIALOG] Error evaluating condition for '${choice.text}':`, err);
+            }
         }
     });
 
@@ -12980,17 +13190,63 @@ function updateDialogUI(node) {
                 if (choice.next) showDialogNode(choice.next);
                 if (choice.next) showDialogNode(choice.next);
                 else closeDialog();
-            } else if (action === 'quest_complete' || action === 'quest_turnin') {
+            } else if (action === 'complete_objective') {
+                // Handle single objective completion (e.g. Interrogation)
+                if (window.uqe && choice.questId && choice.objectiveId) {
+                    const quest = window.uqe.activeQuests.find(q => q.id === choice.questId);
+                    if (quest) {
+                        const obj = quest.objectives.find(o => o.id === choice.objectiveId);
+                        if (obj && !obj.isComplete()) {
+                            obj.progress = obj.target;
+                            obj.completed = true;
+                            // Check if this completes the whole quest
+                            quest.checkCompletion();
+                            window.uqe.update();
+
+                            addChatMessage(`Objective updated: ${obj.description || choice.objectiveId}`, 0x00ff00);
+                        }
+                    }
+                }
+                if (choice.next) showDialogNode(choice.next);
+                else closeDialog();
+
+            } else if (action === 'quest_complete' || action === 'quest_turnin' || action === 'complete_quest') {
                 // Handle quest completion via dialog
                 console.log('✅ Action was quest completion - closing dialog to unblock queue');
 
                 // Complete the quest via UQE
                 if (window.uqe && choice.questId) {
-                    window.uqe.completeQuest(choice.questId);
+                    window.uqe.completeQuest(choice.questId); // Assuming completeQuest helper exists in UQE wrapper or use uqe.activeQuests logic
+                    // Actually UQE engine has completeQuest? No, engine.update() handles it.
+                    // But for manual turn-in, we might need to force it or set a flag?
+                    // NO wait, UQE automatically completes once all objectives are done.
+                    // BUT for 'talk' objectives, they auto-complete on talk.
+                    // If the quest requires a "Turn In" action, implying the final step was manual?
+                    // Re-checking UQE: `Quest.checkCompletion()` checks if all objectives are complete.
+                    // If the dialogue IS the final objective (Talk), it should have completed by now?
+                    // Wait, `startDialog` emits `NPC_TALK`. If the last objective was `talk`, it completes. `uqe.update()` moves it to completed.
+                    // So `action: complete_quest` might be redundant or just for UI feedback/closing.
+                    // BUT, if we want to ensure it is marked complete, we can call it.
+                    // Does UQE have `completeQuest`?
+                    // Checking UQE class... it has no `completeQuest` method exposed on `uqe`?
+                    // It has `acceptQuest`.
+                    // It has `update` which calls `checkCompletion`.
+                    // If we want to FORCE completion, we might need to find the quest and set `completed = true`?
+                    // OR set the remaining 'talk' objective to complete.
+
+                    const quest = window.uqe.activeQuests.find(q => q.id === choice.questId);
+                    if (quest) {
+                        // Mark all objectives as complete?
+                        // Or just force complete.
+                        quest.objectives.forEach(o => o.progress = o.target);
+                        quest.objectives.forEach(o => o.completed = true);
+                        quest.checkCompletion(); // This sets quest.completed = true
+                        window.uqe.update(); // This moves it to completedQuests
+                    }
                 }
 
                 closeDialog();
-            } else if (action === 'quest_advance' || action === 'quest_accept' || action === 'quest_accept_side' || action === 'quest_accept_v2') {
+            } else if (action === 'quest_advance' || action === 'quest_accept' || action === 'quest_accept_side' || action === 'quest_accept_v2' || action === 'quest_accept_main') {
                 // UNIFIED UQE BRIDGE REDIRECT with PREVIEW MODAL
                 const questEngine = window.uqe;
                 if (questId && typeof questEngine !== 'undefined' && questEngine.allDefinitions[questId]) {
@@ -14771,6 +15027,32 @@ function loadGame() {
             // For town, also ensure NPCs are initialized
             if (savedMap === 'town') {
                 initializeNPCs();
+
+                // FORCE REFRESH FROM JSON (Fix for stale save data)
+                try {
+                    const scene = game.scene.scenes[0];
+                    const npcData = scene.cache.json.get('npcData');
+                    if (npcData && Array.isArray(npcData)) {
+                        console.log('[Fix] Refreshing NPCs from latest JSON...');
+                        npcs.forEach(npc => {
+                            // Match by ID if available, otherwise loose match could be dangerous so stick to ID
+                            const def = npcData.find(d => d.id === npc.id);
+                            if (def) {
+                                if (npc.name !== def.name || npc.dialogId !== def.dialogId) {
+                                    console.log(`[Fix] Updating NPC ${npc.id}: "${npc.name}" -> "${def.name}", Dialog: "${npc.dialogId}" -> "${def.dialogId}"`);
+                                    npc.name = def.name;
+                                    npc.dialogId = def.dialogId;
+                                    // Update visual name if it exists
+                                    if (npc.nameText) {
+                                        npc.nameText.setText(def.name);
+                                    }
+                                }
+                            }
+                        });
+                    }
+                } catch (err) {
+                    console.error('[Fix] Failed to refresh NPCs:', err);
+                }
             }
 
             // For wilderness, spawn monsters
@@ -14799,6 +15081,46 @@ function loadGame() {
 
         showDamageNumber(player.x, player.y - 40, 'Game Loaded!', 0x00ff00);
         console.log('✅ Game loaded from localStorage');
+
+        // Expose debug tool
+        window.debugFixNPCs = function () {
+            console.log('🔧 Running NPC Fixer...');
+            const scene = game.scene.scenes[0];
+            const npcData = scene.cache.json.get('npcData');
+
+            if (!npcData) {
+                console.error('❌ npcData not found in cache!');
+                return;
+            }
+
+            console.log(`Found ${npcData.length} NPC definitions in JSON.`);
+            let updated = 0;
+
+            npcs.forEach(npc => {
+                const def = npcData.find(d => d.id === npc.id);
+                if (def) {
+                    // Check for mismatches
+                    if (npc.name !== def.name || npc.dialogId !== def.dialogId) {
+                        console.log(`Mismatch for ${npc.id}:`);
+                        console.log(`  Current: Name="${npc.name}", Dialog="${npc.dialogId}"`);
+                        console.log(`  Target:  Name="${def.name}", Dialog="${def.dialogId}"`);
+
+                        npc.name = def.name;
+                        npc.dialogId = def.dialogId;
+                        if (npc.nameText) npc.nameText.setText(def.name);
+
+                        console.log('  ✅ Fixed!');
+                        updated++;
+                    }
+                } else {
+                    console.warn(`⚠️ NPC ${npc.id} (${npc.name}) has no matching definition in JSON!`);
+                }
+            });
+
+            console.log(`🔧 Fix complete. Updated ${updated} NPCs.`);
+            addChatMessage(`Fixed ${updated} NPCs. Try talking now!`, 0x00ff00);
+        };
+
         return true;
     } catch (e) {
         console.error('Failed to load game:', e);
@@ -19065,3 +19387,51 @@ Objectives:`);
 // Attach to window for console access
 window.debugQuest = debugQuest;
 console.log('🔧 Quest debug commands loaded. Type debugQuest.help() for usage.');
+
+// ============================================
+// DEBUG TOOLS
+// ============================================
+window.debugFixNPCs = function () {
+    console.log('🔧 Running NPC Fixer...');
+    const scene = game.scene.scenes[0];
+    const npcData = scene.cache.json.get('npcData');
+
+    if (!npcData) {
+        console.error('❌ npcData not found in cache!');
+        return;
+    }
+
+    console.log(`Found ${npcData.length} NPC definitions in JSON.`);
+    let updated = 0;
+
+    // Check both global npcs array
+    npcs.forEach(npc => {
+        const def = npcData.find(d => d.id === npc.id);
+        if (def) {
+            // Check for mismatches
+            if (npc.name !== def.name || npc.dialogId !== def.dialogId) {
+                console.log(`Mismatch for ${npc.id}:`);
+                console.log(`  Current: Name="${npc.name}", Dialog="${npc.dialogId}"`);
+                console.log(`  Target:  Name="${def.name}", Dialog="${def.dialogId}"`);
+
+                npc.name = def.name;
+                npc.dialogId = def.dialogId;
+                if (npc.nameText) npc.nameText.setText(def.name);
+
+                console.log('  ✅ Fixed!');
+                updated++;
+            }
+        } else {
+            console.warn(`⚠️ NPC ${npc.id} (${npc.name}) has no matching definition in JSON!`);
+        }
+    });
+
+    // Force save
+    if (typeof saveGame === 'function') {
+        saveGame();
+        console.log('💾 Game saved with fixed NPCs.');
+    }
+
+    console.log(`🔧 Fix complete. Updated ${updated} NPCs.`);
+    addChatMessage(`Fixed ${updated} NPCs. Try talking now!`, 0x00ff00);
+};

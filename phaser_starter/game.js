@@ -1854,10 +1854,23 @@ function dropBossLoot(x, y, level) {
         const itemSprite = scene.add.sprite(itemX, itemY, spriteKey);
         itemSprite.setDepth(8);
 
+        // Make item interactive for click-to-pickup
+        // Reverting to default hit area to debug specific hit test issues
+        itemSprite.setInteractive();
+        itemSprite.isItem = true;
+        itemSprite.itemId = item.type + '_' + Date.now() + '_' + i;
+        itemSprite.itemData = item;
+
+        // Add Hover Effect
+        if (typeof window.enableHoverEffect === 'function') {
+            window.enableHoverEffect(itemSprite, scene);
+        }
         // Store item data (match structure used by dropItemsFromMonster)
         item.sprite = itemSprite;
         item.x = itemSprite.x;
         item.y = itemSprite.y;
+
+        items.push(item);
 
         // Pulsing animation (more noticeable for boss loot)
         scene.tweens.add({
@@ -2338,6 +2351,9 @@ function create() {
     // Add 'Q' key for quest log
     questKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.Q);
 
+    // Add F8 for Visual Debugging (Input Hit Areas)
+    this.debugKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.F8);
+
     // Add 'F' key for interaction
     interactKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.F);
 
@@ -2417,6 +2433,56 @@ function create() {
     // Unlock on any key press or click
     this.input.keyboard.on('keydown', unlockAudio);
     this.input.on('pointerdown', unlockAudio);
+
+    // Handle clicks on interactive objects (Monsters, NPCs)
+    // Initialize click tracking variables
+    this.lastEntityClickTime = 0;
+    this.lastWindowCloseTime = 0;
+
+    this.input.on('gameobjectdown', (pointer, gameObject) => {
+        // Only handle primary button (left click)
+        if (pointer.button !== 0) return;
+
+        console.log('👉 GameObject Down:', gameObject.type, 'Key:', gameObject.texture ? gameObject.texture.key : 'no-texture', 'Depth:', gameObject.depth, 'isItem:', gameObject.isItem);
+
+        // Block interaction if any UI window is open
+        if (isAnyWindowOpen()) {
+            console.log('⛔ Interaction blocked by open window');
+            return;
+        }
+
+        // Check if it's an NPC or Monster
+        if (gameObject.npcId || gameObject.monsterId) {
+            console.log('🎯 Clicked on entity:', gameObject.name || gameObject.monsterType);
+
+            // Record click time to prevent update loop from immediately overriding this
+            // with a "ground click" event
+            this.lastEntityClickTime = this.time.now;
+            // Also track window close time to prevent click-through
+            // this.lastWindowCloseTime = 0; // This line is now initialized outside.
+
+            // Set as target for movement/interaction
+            this.clickMoveTarget = { x: gameObject.x, y: gameObject.y };
+            this.clickTargetEntity = gameObject; // Store the specific entity
+            this.isMovingToClick = true;
+
+            // Prevent the general pointerdown event (ground click) from overriding this
+            pointer.event.stopPropagation();
+        }
+        // Handle Item Clicks
+        else if (gameObject.isItem) {
+            console.log('🎒 Clicked on item:', gameObject.itemData ? gameObject.itemData.name : 'Unknown Item');
+
+            this.lastEntityClickTime = this.time.now;
+
+            // Set target for movement to item
+            this.clickMoveTarget = { x: gameObject.x, y: gameObject.y };
+            this.clickTargetEntity = gameObject;
+            this.isMovingToClick = true;
+
+            pointer.event.stopPropagation();
+        }
+    });
 
     // Set up mouse wheel event listener for shop scrolling (left panel only)
     this.input.on('wheel', (pointer, gameObjects, deltaX, deltaY, deltaZ) => {
@@ -2711,25 +2777,169 @@ function update(time, delta) {
         let moving = false;
         let newDirection = player.facingDirection; // Default to current direction
 
-        // Only handle keyboard movement if no controller movement
+        // Keyboard Movement supersedes mouse movement
         if (cursors.left.isDown || this.wasd.A.isDown) {
             player.setVelocityX(-speed);
             newDirection = 'west';
             moving = true;
+            this.isMovingToClick = false; // Cancel click movement
         } else if (cursors.right.isDown || this.wasd.D.isDown) {
             player.setVelocityX(speed);
             newDirection = 'east';
             moving = true;
+            this.isMovingToClick = false; // Cancel click movement
         }
 
         if (cursors.up.isDown || this.wasd.W.isDown) {
             player.setVelocityY(-speed);
             newDirection = 'north';
             moving = true;
+            this.isMovingToClick = false; // Cancel click movement
         } else if (cursors.down.isDown || this.wasd.S.isDown) {
             player.setVelocityY(speed);
             newDirection = 'south';
             moving = true;
+            this.isMovingToClick = false; // Cancel click movement
+        }
+
+        // Mouse/Touch Movement (Click-to-Move)
+        const pointer = this.input.activePointer;
+
+        // Check for click input to set target
+        // We use pointer down to set the target (works for click and drag/hold)
+        if (pointer.isDown && pointer.button === 0) {
+            // DEBUG: Log everything under the pointer
+            const debugHitTest = this.input.hitTestPointer(pointer);
+            if (debugHitTest.length > 0) {
+                console.log('🖱️ Pointer Down Hit Test Results:', debugHitTest.length, 'objects');
+                debugHitTest.forEach((obj, idx) => {
+                    console.log(`   [${idx}] Type: ${obj.type}, Depth: ${obj.depth}, Item: ${obj.isItem}, Monster: ${obj.monsterId}, NPC: ${obj.npcId}, Name: ${obj.name}`);
+                });
+            } else {
+                console.log('🖱️ Pointer Down: No objects detected under cursor');
+            }
+
+            // Robust UI Check: Block if cursor is over any high-depth object (UI > 100)
+            const hitObjects = this.input.hitTestPointer(pointer);
+            const isOverUI = hitObjects.some(obj => {
+                const isUI = obj.depth > 100 && !obj.monsterId && !obj.npcId;
+                if (isUI) console.log('🛑 Blocking UI Object:', obj.type, 'Depth:', obj.depth, 'Name:', obj.name);
+                return isUI;
+            });
+
+            if (isOverUI) {
+                return;
+            }
+
+            // Check if clicking on UI (HUD area at top) 
+            if (pointer.y > 60) {
+                // Block movement if any UI window is open (except HUD)
+                if (!isAnyWindowOpen()) {
+                    // Check if we specifically clicked an entity recently (within 250ms)
+                    if (this.time.now - this.lastEntityClickTime < 250) {
+                        return;
+                    }
+
+                    // Check if a window just closed recently (within 500ms)
+                    // This prevents clicks on "Accept/Complete" buttons from registering as movement
+                    if (this.lastWindowCloseTime && this.time.now - this.lastWindowCloseTime < 500) {
+                        console.log('🛑 Movement blocked due to recent window close. Delta:', this.time.now - this.lastWindowCloseTime);
+                        return;
+                    }
+
+                    console.log('Movement Triggered. WindowsOpen:', isAnyWindowOpen(), 'LastCloseDelta:', this.time.now - (this.lastWindowCloseTime || 0));
+
+                    // Set target position
+                    this.clickMoveTarget = { x: pointer.worldX, y: pointer.worldY };
+                    this.isMovingToClick = true;
+                    // Reset target entity when clicking on empty ground
+                    this.clickTargetEntity = null;
+                }
+            }
+        }
+
+        // Process movement towards target if active
+        if (!moving && this.isMovingToClick && this.clickMoveTarget) {
+            const distance = Phaser.Math.Distance.Between(player.x, player.y, this.clickMoveTarget.x, this.clickMoveTarget.y);
+
+            if (distance > 10) {
+                // Determine effective target range based on entity type
+                let targetRange = 10;
+                if (this.clickTargetEntity) {
+                    // Update target position in case entity moved
+                    this.clickMoveTarget = { x: this.clickTargetEntity.x, y: this.clickTargetEntity.y };
+
+                    if (this.clickTargetEntity.monsterId) {
+                        targetRange = 40; // Attack range (reliable for 50px check)
+                    } else if (this.clickTargetEntity.npcId) {
+                        targetRange = 40; // Interaction range (reliable for 50px check)
+                    } else if (this.clickTargetEntity.isItem) {
+                        targetRange = 20; // Move closer for items
+                    }
+                }
+
+                // Move towards target if outside range
+                const distToTarget = Phaser.Math.Distance.Between(player.x, player.y, this.clickMoveTarget.x, this.clickMoveTarget.y);
+
+                if (distToTarget > targetRange) {
+                    this.physics.moveTo(player, this.clickMoveTarget.x, this.clickMoveTarget.y, speed);
+                    moving = true;
+
+                    // Update direction based on velocity
+                    if (Math.abs(player.body.velocity.x) > Math.abs(player.body.velocity.y)) {
+                        newDirection = player.body.velocity.x > 0 ? 'east' : 'west';
+                    } else {
+                        newDirection = player.body.velocity.y > 0 ? 'south' : 'north';
+                    }
+                } else {
+                    // Reached target (or close enough to interact)
+                    player.setVelocity(0);
+                    this.isMovingToClick = false;
+
+                    // Trigger interaction if we have a target entity
+                    if (this.clickTargetEntity) {
+                        const entity = this.clickTargetEntity;
+                        this.clickTargetEntity = null; // Clear target after interaction
+
+                        // Handle Monster Attack
+                        if (entity.monsterId) {
+                            console.log('⚔️ Auto-attacking monster:', entity.name);
+                            // Face the monster
+                            const angle = Phaser.Math.Angle.Between(player.x, player.y, entity.x, entity.y);
+                            if (Math.abs(Math.cos(angle)) > Math.abs(Math.sin(angle))) {
+                                player.facingDirection = Math.cos(angle) > 0 ? 'east' : 'west';
+                            } else {
+                                player.facingDirection = Math.sin(angle) > 0 ? 'south' : 'north';
+                            }
+                            // Trigger attack
+                            playerAttack();
+                        }
+                        // Handle NPC Interaction
+                        else if (entity.npcId) {
+                            console.log('💬 Auto-interacting with NPC:', entity.name);
+                            checkNPCInteraction();
+                        }
+                        // Handle Item Pickup
+                        else if (entity.isItem) {
+                            console.log('🎒 Auto-pickup item:', entity.itemData ? entity.itemData.name : 'Unknown Item');
+
+                            // Iterate to find the index
+                            const itemIndex = items.findIndex(i => i.sprite === entity || i === entity.itemData);
+                            if (entity.itemData) {
+                                pickupItem(entity.itemData, itemIndex !== -1 ? itemIndex : -1);
+                            } else {
+                                // Fallback if itemData missing
+                                console.warn('Item missing itemData', entity);
+                                if (entity.destroy) entity.destroy();
+                            }
+                        }
+                    }
+                }
+            } else {
+                // Reached target (generic move)
+                player.setVelocity(0);
+                this.isMovingToClick = false;
+            }
         }
 
         // Check if controller is providing movement
@@ -3458,6 +3668,47 @@ function update(time, delta) {
         }
     }
 
+    // Toggle Debug Visualization (F8)
+    if (scene.debugKey && Phaser.Input.Keyboard.JustDown(scene.debugKey)) {
+        scene.debugMode = !scene.debugMode;
+        console.log(`🔧 Debug Mode: ${scene.debugMode ? 'ON' : 'OFF'}`);
+        addChatMessage(`Debug Mode: ${scene.debugMode ? 'Enabled' : 'Disabled'}`, 0xff00ff);
+
+        // Physics Debug
+        if (!scene.physics.world.debugGraphic) {
+            scene.physics.world.createDebugGraphic();
+        }
+        scene.physics.world.debugGraphic.visible = scene.debugMode;
+
+        // Input Hit Area Debug - GLOBAL SCAN
+        let count = 0;
+        scene.children.list.forEach(child => {
+            if (child.input && child.input.enabled) {
+                if (scene.debugMode) {
+                    scene.input.enableDebug(child, 0xffff00);
+                    count++;
+                } else {
+                    scene.input.removeDebug(child);
+                }
+            }
+            // Also check containers
+            if (child.type === 'Container' && child.list) {
+                child.list.forEach(grandchild => {
+                    if (grandchild.input && grandchild.input.enabled) {
+                        if (scene.debugMode) {
+                            scene.input.enableDebug(grandchild, 0xffff00);
+                            count++;
+                        } else {
+                            scene.input.removeDebug(grandchild);
+                        }
+                    }
+                });
+            }
+        });
+        console.log(`FOUND ${count} interactive objects.`);
+        console.log('Items List Size:', items.length);
+    }
+
     // Update quest log if visible
     if (questVisible) {
         updateQuestLog();
@@ -4012,6 +4263,11 @@ function monsterAttackPlayer(monster, time) {
     playerStats.hp -= actualDamage;
     playerStats.hp = Math.max(0, playerStats.hp);
 
+    // Check for player death
+    if (playerStats.hp <= 0) {
+        showFallenDialog();
+    }
+
     // Create hit effects on player (red particles - physical damage)
     createHitEffects(player.x, player.y, false, 'physical');
 
@@ -4061,26 +4317,26 @@ function createHitEffects(x, y, isCritical = false, damageType = 'physical', wea
 
     // Color-coded by weapon type / damage type
     let colors;
-    
+
     // Override colors based on weapon type if physical
     if (damageType === 'physical') {
         if (weaponType === 'Unarmed') {
-             colors = [0xffffff, 0xcccccc]; // White dust
+            colors = [0xffffff, 0xcccccc]; // White dust
         } else if (weaponType === 'Staff' || weaponType === 'Wand') {
-             colors = [0x00ffff, 0x0088ff, 0xaa00ff]; // Magic
+            colors = [0x00ffff, 0x0088ff, 0xaa00ff]; // Magic
         } else if (weaponType === 'Sword') {
-             colors = [0xffffff, 0xaaaaaa, 0xff0000]; // Steel and blood
+            colors = [0xffffff, 0xaaaaaa, 0xff0000]; // Steel and blood
         } else if (weaponType === 'Hammer' || weaponType === 'Mace') {
-             colors = [0xff8800, 0x884400, 0xffff44]; // Impact/Sparks
+            colors = [0xff8800, 0x884400, 0xffff44]; // Impact/Sparks
         } else if (weaponType === 'Axe') {
-             colors = [0xff0000, 0x880000, 0xffffff]; // Blood and steel
+            colors = [0xff0000, 0x880000, 0xffffff]; // Blood and steel
         } else if (weaponType === 'Dagger') {
-             colors = [0xffff00, 0xffffff]; // Quick flash
+            colors = [0xffff00, 0xffffff]; // Quick flash
         } else {
-             // Default Physical
-             colors = isCritical
-            ? [0xff0000, 0xff8800, 0xffd700, 0xffffff] 
-            : [0xffd700, 0xff8800, 0xffff00];
+            // Default Physical
+            colors = isCritical
+                ? [0xff0000, 0xff8800, 0xffd700, 0xffffff]
+                : [0xffd700, 0xff8800, 0xffff00];
         }
     } else if (damageType === 'magic') {
         // Blue/purple for magic damage
@@ -5134,6 +5390,25 @@ function getXPNeededForLevel(level) {
 }
 
 /**
+ * Check if any UI window is currently open
+ * Used to block movement/interaction when clicking on UI
+ */
+function isAnyWindowOpen() {
+    return inventoryVisible ||
+        equipmentVisible ||
+        settingsVisible ||
+        questVisible ||
+        dialogVisible ||
+        shopVisible ||
+        buildingPanelVisible ||
+        assetsVisible ||
+        grassDebugVisible ||
+        (questCompletedModal && questCompletedModal.visible) ||
+        (newQuestModal && newQuestModal.visible) ||
+        (questPreviewModal !== null);
+}
+
+/**
  * Update UI bars
  */
 function updateUI() {
@@ -5323,6 +5598,18 @@ function dropItemsFromMonster(x, y) {
             repeat: -1,
             ease: 'Sine.easeInOut'
         });
+
+        // Make item interactive for click-to-pickup
+        // Reverting to default hit area to debug specific hit test issues
+        itemSprite.setInteractive();
+        itemSprite.isItem = true;
+        itemSprite.itemId = item.type + '_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
+        itemSprite.itemData = item;
+
+        // Add Hover Effect
+        if (typeof window.enableHoverEffect === 'function') {
+            window.enableHoverEffect(itemSprite, scene);
+        }
 
         // Store item data
         item.sprite = itemSprite;
@@ -8496,7 +8783,15 @@ function hideQuestCompletedModal() {
         if (questCompletedModal.escKey && questCompletedModal.escHandler) {
             questCompletedModal.escKey.removeListener('down', questCompletedModal.escHandler);
         }
+
         questCompletedModal = null;
+
+        // Record closure time to prevent click-through
+        if (game.scene.scenes[0]) {
+            const s = game.scene.scenes[0];
+            s.lastWindowCloseTime = s.time.now;
+            console.log('🚫 Dialog closed at:', s.lastWindowCloseTime);
+        }
     }
     // Note: Don't show pending new quest here - let the close handlers do it
     // This allows the close handlers to control the flow
@@ -8687,7 +8982,15 @@ function hideNewQuestModal() {
         if (newQuestModal.escKey && newQuestModal.escHandler) {
             newQuestModal.escKey.removeListener('down', newQuestModal.escHandler);
         }
+
         newQuestModal = null;
+
+        // Record closure time to prevent click-through
+        if (game.scene.scenes[0]) {
+            const s = game.scene.scenes[0];
+            s.lastWindowCloseTime = s.time.now;
+            console.log('🚫 Dialog closed at:', s.lastWindowCloseTime);
+        }
     }
 }
 
@@ -8722,9 +9025,16 @@ function showQuestPreviewModal(questId, onAccept, onDecline) {
     const modalWidth = 520;
     const modalHeight = 480;
 
+    // Force cleanup of any orphaned overlay
+    const existingOverlay = scene.children.list.find(c => c.name === 'QuestPreviewOverlay');
+    if (existingOverlay) {
+        console.warn('⚠️ Found orphaned QuestPreviewOverlay - destroying it');
+        existingOverlay.destroy();
+    }
+
     // Background overlay
     const overlay = scene.add.rectangle(centerX, centerY, scene.cameras.main.width, scene.cameras.main.height, 0x000000, 0.85)
-        .setScrollFactor(0).setDepth(700).setInteractive();
+        .setScrollFactor(0).setDepth(700).setInteractive().setName('QuestPreviewOverlay');
 
     // Modal background
     const modalBg = scene.add.rectangle(centerX, centerY, modalWidth, modalHeight, 0x1a1a1a, 0.98)
@@ -8900,9 +9210,17 @@ function hideQuestPreviewModal() {
             questPreviewModal.escKey.removeListener('down', questPreviewModal.escHandler);
         }
     }
+
     // Cleanup global
     questPreviewModal = null;
     window.questPreviewModal = null;
+
+    // Record closure time to prevent click-through
+    if (game.scene.scenes[0]) {
+        const s = game.scene.scenes[0];
+        s.lastWindowCloseTime = s.time.now;
+        console.log('🚫 Quest Preview closed at:', s.lastWindowCloseTime);
+    }
 }
 
 // ============================================
@@ -8966,6 +9284,8 @@ function initializeNPCs(passedScene) {
         const npc = scene.physics.add.sprite(x, y, spriteKey);
         npc.setDepth(30);
         npc.setCollideWorldBounds(true);
+        // Make interactive for click-to-interact
+        npc.setInteractive();
 
         // Set frame 0 (idle) if available
         if (scene.textures.exists(spriteKey) && spriteKey !== 'npc') {
@@ -10188,7 +10508,11 @@ function updateDialogUI(node) {
         });
 
         // Button click handler
-        buttonBg.on('pointerdown', () => {
+        buttonBg.on('pointerdown', (pointer) => {
+            if (pointer && pointer.event) {
+                pointer.event.stopPropagation();
+            }
+
             const questId = choice.questId;
             const action = choice.action;
 
@@ -10373,6 +10697,13 @@ function closeDialog() {
     currentDialogNode = null;
     currentShopNPC = null;
     dialogVisible = false;
+
+    // Record closure time to prevent click-through
+    if (game.scene.scenes[0]) {
+        const s = game.scene.scenes[0];
+        s.lastWindowCloseTime = s.time.now;
+        console.log('🚫 Dialog closed at:', s.lastWindowCloseTime);
+    }
 }
 
 // ============================================
@@ -12621,9 +12952,9 @@ function createAbilityBar() {
     const manaPotionBg = scene.add.rectangle(manaPotionX, abilityBarY, 60, 60, 0x222244, 0.9)
         .setScrollFactor(0).setDepth(200).setStrokeStyle(2, 0x4444ff);
 
-    const manaPotionIcon = scene.add.sprite(manaPotionX, abilityBarY, 'item_consumable');
+    const manaPotionIcon = scene.add.sprite(manaPotionX, abilityBarY, 'mana_potion');
     manaPotionIcon.setScrollFactor(0).setDepth(201).setScale(0.8);
-    manaPotionIcon.setTint(0x4444ff);
+    // manaPotionIcon.setTint(0x4444ff); // Use original sprite colors
 
     const manaKeyText = scene.add.text(manaPotionX - 20, abilityBarY - 20, '6', {
         fontSize: '14px',
@@ -14090,6 +14421,14 @@ function spawnMonster(x, y, type, hpOverride, attackOverride, xpOverride, isBoss
         monster.attackRange = isBoss ? 70 : 50;
         monster.isBoss = isBoss;
         monster.isDead = false;
+
+        // Make monster interactive for click-to-attack
+        monster.setInteractive();
+
+        // Add Hover Effect
+        if (typeof window.enableHoverEffect === 'function') {
+            window.enableHoverEffect(monster, scene);
+        }
 
         if (isBoss) {
             monster.setScale(1.5);
@@ -15612,6 +15951,13 @@ function showQuestCompletedPopupEnhanced(quest) {
             });
             window.questCompletedModal = null;
             questCompletedModal = null;
+
+            // Record closure time to prevent click-through
+            if (game.scene.scenes[0]) {
+                const s = game.scene.scenes[0];
+                s.lastWindowCloseTime = s.time.now;
+                console.log('🚫 Quest Completed Modal (Enhanced) closed at:', s.lastWindowCloseTime);
+            }
         }
     };
     questCompletedModal = window.questCompletedModal;
@@ -15848,12 +16194,24 @@ function showQuestPreviewModalEnhanced(questId, onAccept, onDecline) {
     const acceptHandler = () => {
         elements.forEach(e => e.destroy());
         questPreviewModal = null;
+
+        // Record closure time
+        if (game.scene.scenes[0]) {
+            game.scene.scenes[0].lastWindowCloseTime = game.scene.scenes[0].time.now;
+        }
+
         if (onAccept) onAccept();
     };
 
     const declineHandler = () => {
         elements.forEach(e => e.destroy());
         questPreviewModal = null;
+
+        // Record closure time
+        if (game.scene.scenes[0]) {
+            game.scene.scenes[0].lastWindowCloseTime = game.scene.scenes[0].time.now;
+        }
+
         if (onDecline) onDecline();
     };
 
@@ -15871,9 +16229,13 @@ function showQuestPreviewModalEnhanced(questId, onAccept, onDecline) {
         acceptBtn: acceptBtn,
         declineBtn: declineBtn,
         destroy: () => {
-            elements.forEach(e => {
-                if (e && e.destroy) e.destroy();
-            });
+            elements.forEach(e => e.destroy());
+
+            // Record closure time
+            if (game.scene.scenes[0]) {
+                game.scene.scenes[0].lastWindowCloseTime = game.scene.scenes[0].time.now;
+            }
+
             window.questPreviewModal = null;
             questPreviewModal = null;
         }

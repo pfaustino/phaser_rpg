@@ -38,6 +38,14 @@ class MonsterRenderer {
         this.scene.physics.add.existing(container);
 
         // Set up the body based on layers
+        // Calculate bounds first to set body size
+        const bounds = bp.appearance.layers[0] || { width: 32, height: 32 };
+        const w = bounds.width || (bounds.radius * 2) || 40;
+        const h = bounds.height || (bounds.radius * 2) || 40;
+
+        container.body.setSize(w, h);
+        container.body.setOffset(-w / 2, -h / 2); // Center the body on the container (0,0)
+
         appearance.layers.sort((a, b) => (a.z || 0) - (b.z || 0)).forEach(layer => {
             let element;
             if (layer.type === 'shape') {
@@ -56,6 +64,28 @@ class MonsterRenderer {
         // Store metadata for animations
         container.setData('blueprint', bp);
         container.setData('isMethod2', true);
+
+        // Critical: Set properties that game.js expects for interaction
+        container.monsterId = blueprintId; // Needed for gameobjectdown check
+        container.monsterType = bp.name;
+        container.hp = bp.stats.hp;
+        container.maxHp = bp.stats.hp;
+        container.attack = bp.stats.attack;
+        container.speed = bp.stats.speed;
+        container.xp = bp.stats.xp;
+        container.attackRange = 50;
+        container.attackCooldown = 2000;
+        container.lastAttackTime = 0;
+
+        // Make interactive
+        // Use a hit area rectangle based on appearance bounds
+        // (bounds, w, h are already calculated at the top of the function)
+        container.setInteractive(new Phaser.Geom.Rectangle(-w / 2, -h / 2, w, h), Phaser.Geom.Rectangle.Contains);
+
+        // Add Hover Effect
+        if (typeof window.enableHoverEffect === 'function') {
+            window.enableHoverEffect(container, this.scene);
+        }
 
         // Initial animation
         this.applyAnimations(container);

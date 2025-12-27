@@ -209,3 +209,589 @@ function getSuffix(suffixName) {
 function getItemSet(setName) {
     return _itemSets[setName] || null;
 }
+
+// ============================================
+// ITEM GENERATION LOGIC (Moved from game.js)
+// ============================================
+
+/**
+ * Get material based on quality tier
+ */
+function getMaterialForQuality(quality) {
+    const qualityTiers = {
+        'Common': ['Iron'],
+        'Uncommon': ['Iron', 'Steel'],
+        'Rare': ['Steel', 'Silver'],
+        'Epic': ['Silver', 'Gold', 'Mithril'],
+        'Legendary': ['Gold', 'Mithril', 'Dragonbone']
+    };
+    const available = qualityTiers[quality] || qualityTiers['Common'];
+    return Phaser.Math.RND.pick(available);
+}
+
+/**
+ * Get weapon type based on quality (better quality = more variety)
+ */
+function getWeaponTypeForQuality(quality) {
+    const qualityWeapons = {
+        'Common': ['Sword', 'Axe', 'Mace'],
+        'Uncommon': ['Sword', 'Axe', 'Mace', 'Dagger'],
+        'Rare': ['Sword', 'Axe', 'Mace', 'Dagger', 'Staff', 'Bow'],
+        'Epic': Object.keys(getWeaponTypes()),
+        'Legendary': Object.keys(getWeaponTypes())
+    };
+    const available = qualityWeapons[quality] || qualityWeapons['Common'];
+    return Phaser.Math.RND.pick(available);
+}
+
+/**
+ * Get prefix based on quality
+ */
+function getPrefixForQuality(quality) {
+    const prefixes = getPrefixes();
+    const available = Object.keys(prefixes).filter(p =>
+        prefixes[p].quality.includes(quality)
+    );
+    if (available.length === 0) return null;
+    return Math.random() < 0.4 ? Phaser.Math.RND.pick(available) : null; // 40% chance
+}
+
+/**
+ * Get suffix based on quality
+ */
+function getSuffixForQuality(quality) {
+    const suffixes = getSuffixes();
+    const available = Object.keys(suffixes).filter(s =>
+        suffixes[s].quality.includes(quality)
+    );
+    if (available.length === 0) return null;
+    return Math.random() < 0.3 ? Phaser.Math.RND.pick(available) : null; // 30% chance
+}
+
+/**
+ * Generate special properties for item
+ */
+function generateSpecialProperties(item, quality) {
+    const props = {};
+    const qualityLevels = { 'Common': 1, 'Uncommon': 2, 'Rare': 3, 'Epic': 4, 'Legendary': 5 };
+    const qLevel = qualityLevels[quality] || 1;
+
+    // Higher quality = more likely to have special properties
+    const hasSpecial = Math.random() < (0.1 + qLevel * 0.1); // 10-50% chance
+
+    if (hasSpecial) {
+        // Critical chance (weapons and rings)
+        if ((item.type === 'weapon' || item.type === 'ring') && Math.random() < 0.3) {
+            props.critChance = 0.02 + (qLevel * 0.01);
+        }
+
+        // Lifesteal (weapons and amulets)
+        if ((item.type === 'weapon' || item.type === 'amulet') && Math.random() < 0.25) {
+            props.lifesteal = 0.02 + (qLevel * 0.01);
+        }
+
+        // Elemental damage (weapons only, rare)
+        if (item.type === 'weapon' && qLevel >= 3 && Math.random() < 0.2) {
+            props.elementalDamage = {
+                type: Phaser.Math.RND.pick(getElementalTypes()),
+                amount: qLevel * 2
+            };
+        }
+
+        // Resistances (armor pieces)
+        if (['armor', 'helmet', 'boots', 'gloves', 'belt'].includes(item.type) && Math.random() < 0.3) {
+            const resistanceTypes = ['physical', 'magic', 'fire', 'ice', 'lightning'];
+            const resType = Phaser.Math.RND.pick(resistanceTypes);
+            props.resistance = {};
+            props.resistance[resType] = 0.05 + (qLevel * 0.02);
+        }
+    }
+
+    return props;
+}
+
+/**
+ * Assign item to a set (rare chance)
+ */
+function assignItemSet(item, quality) {
+    if (quality === 'Common' || quality === 'Uncommon') return null;
+
+    // Only Epic and Legendary can be set items, and only 30% chance
+    if ((quality === 'Epic' || quality === 'Legendary') && Math.random() < 0.3) {
+        const itemSets = getItemSets();
+        const setNames = Object.keys(itemSets);
+        const set = Phaser.Math.RND.pick(setNames);
+        if (itemSets[set].pieces.includes(item.type)) {
+            return set;
+        }
+    }
+    return null;
+}
+
+/**
+ * Build item name with all components
+ */
+function buildItemName(item) {
+    const parts = [];
+
+    if (item.prefix) parts.push(item.prefix);
+    if (item.material) parts.push(item.material);
+    if (item.weaponType) parts.push(item.weaponType);
+    else if (item.type !== 'weapon') {
+        // For non-weapons, use the type as the base name
+        parts.push(item.type.charAt(0).toUpperCase() + item.type.slice(1));
+    }
+    if (item.suffix) parts.push(item.suffix);
+
+    return parts.join(' ') || `${item.quality} ${item.type}`;
+}
+
+/**
+ * Calculate final item stats with all modifiers
+ */
+function calculateItemStats(baseItem, quality) {
+    const qualityLevels = { 'Common': 1, 'Uncommon': 2, 'Rare': 3, 'Epic': 4, 'Legendary': 5 };
+    const qLevel = qualityLevels[quality] || 1;
+
+    let attackPower = baseItem.attackPower || 0;
+    let defense = baseItem.defense || 0;
+    let maxHp = baseItem.maxHp || 0;
+    let speed = baseItem.speed || 0;
+    let critChance = baseItem.critChance || 0;
+
+    // Apply material multiplier
+    const materials = getMaterials();
+    if (baseItem.material && materials[baseItem.material]) {
+        const mult = materials[baseItem.material].multiplier;
+        attackPower = Math.floor(attackPower * mult);
+        defense = Math.floor(defense * mult);
+    }
+
+    // Apply prefix bonuses
+    const prefixesData = getPrefixes();
+    if (baseItem.prefix && prefixesData[baseItem.prefix]) {
+        const prefix = prefixesData[baseItem.prefix];
+        if (prefix.attackBonus) attackPower = Math.floor(attackPower * (1 + prefix.attackBonus));
+        if (prefix.defenseBonus) defense = Math.floor(defense * (1 + prefix.defenseBonus));
+        if (prefix.hpBonus) maxHp = Math.floor(maxHp * (1 + prefix.hpBonus));
+        if (prefix.critBonus) critChance += prefix.critBonus;
+        if (prefix.lifesteal) baseItem.lifesteal = (baseItem.lifesteal || 0) + prefix.lifesteal;
+        if (prefix.resistance) {
+            baseItem.resistance = baseItem.resistance || {};
+            Object.assign(baseItem.resistance, prefix.resistance);
+        }
+    }
+
+    // Apply suffix bonuses
+    const suffixesData = getSuffixes();
+    if (baseItem.suffix && suffixesData[baseItem.suffix]) {
+        const suffix = suffixesData[baseItem.suffix];
+        if (suffix.attackBonus) attackPower = Math.floor(attackPower * (1 + suffix.attackBonus));
+        if (suffix.defenseBonus) defense = Math.floor(defense * (1 + suffix.defenseBonus));
+        if (suffix.hpBonus) maxHp = Math.floor(maxHp * (1 + suffix.hpBonus));
+        if (suffix.speedBonus) speed = Math.floor(speed * (1 + suffix.speedBonus));
+        if (suffix.critBonus) critChance += suffix.critBonus;
+        if (suffix.lifesteal) baseItem.lifesteal = (baseItem.lifesteal || 0) + suffix.lifesteal;
+        if (suffix.resistance) {
+            baseItem.resistance = baseItem.resistance || {};
+            Object.assign(baseItem.resistance, suffix.resistance);
+        }
+    }
+
+    // Round values
+    attackPower = Math.max(1, Math.floor(attackPower));
+    defense = Math.max(0, Math.floor(defense));
+    maxHp = Math.max(0, Math.floor(maxHp));
+    speed = Math.max(0, Math.floor(speed));
+    critChance = Math.min(0.5, Math.max(0, critChance)); // Cap at 50%
+
+    return { attackPower, defense, maxHp, speed, critChance };
+}
+
+/**
+ * Generate a random item drop
+ */
+function generateRandomItem() {
+    const rand = Math.random();
+
+    // Drop rates in order (highest to lowest):
+    // 1. Coin (Gold): 25%
+    // 2. Consumable: 20%
+    // 3. Armor: 15%
+    // 4. Gloves: 12%
+    // 5. Boots: 10%
+    // 6. Helmet: 8%
+    // 7. Weapon: 5%
+    // 8. Belt: 3%
+    // 9. Ring: 1.5%
+    // 10. Amulet: 0.5%
+    // Total: 100%
+
+    if (rand < 0.25) {
+        // 25% - Coin (Gold)
+        const goldAmount = Phaser.Math.Between(5, 25);
+        return {
+            type: 'gold',
+            amount: goldAmount,
+            name: `${goldAmount} Gold`,
+            quality: 'Common'
+        };
+    }
+    else if (rand < 0.45) {
+        // 20% - Consumable
+        if (Math.random() < 0.5) {
+            return {
+                type: 'consumable',
+                name: 'Health Potion',
+                quality: 'Common',
+                healAmount: Phaser.Math.Between(20, 40)
+            };
+        } else {
+            return {
+                type: 'consumable',
+                name: 'Mana Potion',
+                quality: 'Common',
+                manaAmount: Phaser.Math.Between(15, 30)
+            };
+        }
+    }
+    else if (rand < 0.60) {
+        // 15% - Armor
+        const qualities = ['Common', 'Uncommon'];
+        const quality = Phaser.Math.RND.pick(qualities);
+        const material = getMaterialForQuality(quality);
+        const baseDefense = quality === 'Common' ? Phaser.Math.Between(3, 6) : Phaser.Math.Between(6, 10);
+
+        const prefix = getPrefixForQuality(quality);
+        const suffix = getSuffixForQuality(quality);
+
+        const item = {
+            type: 'armor',
+            quality: quality,
+            material: material,
+            prefix: prefix,
+            suffix: suffix,
+            defense: baseDefense
+        };
+
+        const specialProps = generateSpecialProperties(item, quality);
+        Object.assign(item, specialProps);
+        item.set = assignItemSet(item, quality);
+        item.name = buildItemName(item);
+        const finalStats = calculateItemStats(item, quality);
+        Object.assign(item, finalStats);
+
+        return item;
+    }
+    else if (rand < 0.72) {
+        // 12% - Gloves
+        const qualities = ['Common', 'Uncommon'];
+        const quality = Phaser.Math.RND.pick(qualities);
+        const defense = quality === 'Common' ? Phaser.Math.Between(1, 3) : Phaser.Math.Between(3, 5);
+        const attackBonus = quality === 'Common' ? Phaser.Math.Between(1, 2) : Phaser.Math.Between(2, 4);
+        return {
+            type: 'gloves',
+            name: `${quality} Gloves`,
+            quality: quality,
+            defense: defense,
+            attackPower: attackBonus
+        };
+    }
+    else if (rand < 0.82) {
+        // 10% - Boots
+        const qualities = ['Common', 'Uncommon'];
+        const quality = Phaser.Math.RND.pick(qualities);
+        const material = getMaterialForQuality(quality);
+        const baseDefense = quality === 'Common' ? Phaser.Math.Between(1, 3) : Phaser.Math.Between(3, 5);
+        const baseSpeed = quality === 'Common' ? 5 : 10;
+
+        const prefix = getPrefixForQuality(quality);
+        const suffix = getSuffixForQuality(quality);
+
+        const item = {
+            type: 'boots',
+            quality: quality,
+            material: material,
+            prefix: prefix,
+            suffix: suffix,
+            defense: baseDefense,
+            speed: baseSpeed
+        };
+
+        const specialProps = generateSpecialProperties(item, quality);
+        Object.assign(item, specialProps);
+        item.set = assignItemSet(item, quality);
+        item.name = buildItemName(item);
+        const finalStats = calculateItemStats(item, quality);
+        Object.assign(item, finalStats);
+
+        return item;
+    }
+    else if (rand < 0.95) {
+        // 5% - Weapon
+        const qualities = ['Common', 'Uncommon', 'Rare'];
+        const quality = Phaser.Math.RND.pick(qualities);
+
+        // Get weapon type and material
+        const weaponType = getWeaponTypeForQuality(quality);
+        const material = getMaterialForQuality(quality);
+        const weaponData = getWeaponTypes()[weaponType];
+
+        // Base attack power based on quality
+        const baseAttack = quality === 'Common' ? Phaser.Math.Between(5, 10) :
+            quality === 'Uncommon' ? Phaser.Math.Between(10, 15) :
+                Phaser.Math.Between(15, 20);
+
+        // Apply weapon type modifier
+        let attackPower = Math.floor(baseAttack * weaponData.baseAttack);
+        let critChance = weaponData.critChance;
+
+        // Get prefix and suffix
+        const prefix = getPrefixForQuality(quality);
+        const suffix = getSuffixForQuality(quality);
+
+        // Create base item
+        const item = {
+            type: 'weapon',
+            quality: quality,
+            weaponType: weaponType,
+            material: material,
+            prefix: prefix,
+            suffix: suffix,
+            attackPower: attackPower,
+            critChance: critChance,
+            speed: weaponData.speed
+        };
+
+        // Add special properties
+        const specialProps = generateSpecialProperties(item, quality);
+        Object.assign(item, specialProps);
+
+        // Assign set
+        item.set = assignItemSet(item, quality);
+
+        // Build name and calculate final stats
+        item.name = buildItemName(item);
+        const finalStats = calculateItemStats(item, quality);
+        Object.assign(item, finalStats);
+
+        return item;
+    }
+    else if (rand < 0.98) {
+        // 3% - Belt
+        const qualities = ['Common', 'Uncommon'];
+        const quality = Phaser.Math.RND.pick(qualities);
+        const material = getMaterialForQuality(quality);
+        const baseDefense = quality === 'Common' ? Phaser.Math.Between(2, 4) : Phaser.Math.Between(4, 6);
+        const baseHp = quality === 'Common' ? 10 : 15;
+
+        const prefix = getPrefixForQuality(quality);
+        const suffix = getSuffixForQuality(quality);
+
+        const item = {
+            type: 'belt',
+            quality: quality,
+            material: material,
+            prefix: prefix,
+            suffix: suffix,
+            defense: baseDefense,
+            maxHp: baseHp
+        };
+
+        const specialProps = generateSpecialProperties(item, quality);
+        Object.assign(item, specialProps);
+        item.set = assignItemSet(item, quality);
+        item.name = buildItemName(item);
+        const finalStats = calculateItemStats(item, quality);
+        Object.assign(item, finalStats);
+
+        return item;
+    }
+    else if (rand < 0.995) {
+        // 1.5% - Ring
+        const qualities = ['Common', 'Uncommon', 'Rare'];
+        const quality = Phaser.Math.RND.pick(qualities);
+        const attackBonus = quality === 'Common' ? Phaser.Math.Between(1, 3) :
+            quality === 'Uncommon' ? Phaser.Math.Between(3, 5) :
+                Phaser.Math.Between(5, 8);
+        return {
+            type: 'ring',
+            name: `${quality} Ring`,
+            quality: quality,
+            attackPower: attackBonus,
+            defense: Math.floor(attackBonus / 2) // Rings give both attack and defense
+        };
+    }
+    else {
+        // 0.5% - Amulet (rarest)
+        const qualities = ['Common', 'Uncommon', 'Rare'];
+        const quality = Phaser.Math.RND.pick(qualities);
+        const material = getMaterialForQuality(quality);
+        const baseDefense = quality === 'Common' ? Phaser.Math.Between(2, 4) :
+            quality === 'Uncommon' ? Phaser.Math.Between(4, 6) :
+                Phaser.Math.Between(6, 10);
+        const baseHp = quality === 'Common' ? 10 : quality === 'Uncommon' ? 20 : 30;
+
+        const prefix = getPrefixForQuality(quality);
+        const suffix = getSuffixForQuality(quality);
+
+        const item = {
+            type: 'amulet',
+            quality: quality,
+            material: material,
+            prefix: prefix,
+            suffix: suffix,
+            defense: baseDefense,
+            maxHp: baseHp
+        };
+
+        const specialProps = generateSpecialProperties(item, quality);
+        Object.assign(item, specialProps);
+        item.set = assignItemSet(item, quality);
+        item.name = buildItemName(item);
+        const finalStats = calculateItemStats(item, quality);
+        Object.assign(item, finalStats);
+
+        return item;
+    }
+}
+
+/**
+ * Generate random item of specific type and quality (enhanced version)
+ */
+function generateRandomItemOfType(itemType, quality = 'Common') {
+    const qualityLevels = {
+        'Common': 1,
+        'Uncommon': 2,
+        'Rare': 3,
+        'Epic': 4,
+        'Legendary': 5
+    };
+
+    const qLevel = qualityLevels[quality] || 1;
+    const material = getMaterialForQuality(quality);
+    const prefix = getPrefixForQuality(quality);
+    const suffix = getSuffixForQuality(quality);
+
+    let item = {};
+
+    switch (itemType) {
+        case 'weapon':
+            const weaponType = getWeaponTypeForQuality(quality);
+            const weaponData = getWeaponTypes()[weaponType];
+            const baseAttack = 5 + (qLevel * 5) + Phaser.Math.Between(0, 5);
+            let attackPower = Math.floor(baseAttack * weaponData.baseAttack);
+
+            item = {
+                type: 'weapon',
+                quality: quality,
+                weaponType: weaponType,
+                material: material,
+                prefix: prefix,
+                suffix: suffix,
+                attackPower: attackPower,
+                critChance: weaponData.critChance,
+                speed: weaponData.speed
+            };
+            break;
+        case 'armor':
+            const armorDefense = 3 + (qLevel * 3) + Phaser.Math.Between(0, 3);
+            item = {
+                type: 'armor',
+                quality: quality,
+                material: material,
+                prefix: prefix,
+                suffix: suffix,
+                defense: armorDefense
+            };
+            break;
+        case 'helmet':
+            const helmetDefense = 2 + (qLevel * 2) + Phaser.Math.Between(0, 2);
+            item = {
+                type: 'helmet',
+                quality: quality,
+                material: material,
+                prefix: prefix,
+                suffix: suffix,
+                defense: helmetDefense
+            };
+            break;
+        case 'boots':
+            const bootsDefense = 1 + (qLevel * 2) + Phaser.Math.Between(0, 2);
+            item = {
+                type: 'boots',
+                quality: quality,
+                material: material,
+                prefix: prefix,
+                suffix: suffix,
+                defense: bootsDefense,
+                speed: 5 + (qLevel * 2)
+            };
+            break;
+        case 'gloves':
+            const glovesDefense = 1 + (qLevel * 2) + Phaser.Math.Between(0, 2);
+            const glovesAttack = 1 + (qLevel * 1) + Phaser.Math.Between(0, 2);
+            item = {
+                type: 'gloves',
+                quality: quality,
+                material: material,
+                prefix: prefix,
+                suffix: suffix,
+                defense: glovesDefense,
+                attackPower: glovesAttack
+            };
+            break;
+        case 'belt':
+            const beltDefense = 2 + (qLevel * 2) + Phaser.Math.Between(0, 2);
+            item = {
+                type: 'belt',
+                quality: quality,
+                material: material,
+                prefix: prefix,
+                suffix: suffix,
+                defense: beltDefense,
+                maxHp: 10 + (qLevel * 5)
+            };
+            break;
+        case 'ring':
+            const ringAttack = 1 + (qLevel * 2) + Phaser.Math.Between(0, 2);
+            item = {
+                type: 'ring',
+                quality: quality,
+                material: material,
+                prefix: prefix,
+                suffix: suffix,
+                attackPower: ringAttack,
+                defense: Math.floor(ringAttack / 2)
+            };
+            break;
+        case 'amulet':
+            const amuletDefense = 2 + (qLevel * 2) + Phaser.Math.Between(0, 2);
+            item = {
+                type: 'amulet',
+                quality: quality,
+                material: material,
+                prefix: prefix,
+                suffix: suffix,
+                defense: amuletDefense,
+                maxHp: 10 + (qLevel * 10)
+            };
+            break;
+        default:
+            return generateRandomItem(); // Fallback
+    }
+
+    // Add special properties
+    const specialProps = generateSpecialProperties(item, quality);
+    Object.assign(item, specialProps);
+
+    // Assign set
+    item.set = assignItemSet(item, quality);
+
+    // Build name and calculate final stats
+    item.name = buildItemName(item);
+    const finalStats = calculateItemStats(item, quality);
+    Object.assign(item, finalStats);
+
+    return item;
+}

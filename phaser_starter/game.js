@@ -56,27 +56,13 @@ let monsters = [];
 let items = []; // Items on the ground
 let npcs = []; // NPCs in the world
 let spaceKey;
-let currentMap = 'town'; // 'town', 'wilderness', or 'dungeon'
-let transitionMarkers = []; // Array of transition marker objects
-let buildings = []; // Array of building objects for collision
-let dungeonWalls = []; // Array of dungeon wall objects for collision
+let isGamePaused = false;
+
 let questMarkers = new Map(); // Quest objective markers (key: targetId, value: {sprite, tween})
 let lastQuestMarkerUpdate = 0; // Throttle marker updates
 let specialZones = []; // Populated from zones.json
 
-// Dungeon system
-let currentDungeon = null; // Current dungeon data structure
-let dungeonLevel = 1; // Current dungeon floor level
-let dungeonCache = {}; // Cache of generated dungeons (key: "level_1", "level_2", etc.)
-let dungeonCompletions = {}; // Track which dungeons are completed (key: "level_1" -> true/false)
-let dungeonTilesets = {
-    floor: null,
-    wall: null,
-    floorMetadata: null,
-    wallMetadata: null,
-    floorTileLookup: {}, // Corner pattern -> tile data lookup
-    wallTileLookup: {} // Corner pattern -> tile data lookup
-};
+// Monster spawn settings
 
 // Monster spawn settings
 const MAX_MONSTERS = 24;
@@ -1388,585 +1374,10 @@ function preload() {
 
 
 /**
- * Create town map with streets, buildings, and NPCs
- */
-function createTownMap() {
-    const scene = game.scene.scenes[0];
-    const tileSize = 32;
-    const mapWidth = 40;
-    const mapHeight = 40;
-
-    // Clear existing buildings and markers
-    buildings = [];
-    transitionMarkers = [];
-
-    // Ensure mana regen is running (safe to call multiple times)
-    startManaRegen();
-
-    // Create base grass tiles using spritesheet for variety
-    let grassFrameCount = 1;
-    let useFrames = false;
-
-    if (scene.textures.exists('grass')) {
-        const grassTexture = scene.textures.get('grass');
-        if (grassTexture && grassTexture.frameTotal && grassTexture.frameTotal > 0) {
-            grassFrameCount = grassTexture.frameTotal;
-            useFrames = true;
-        }
-    }
-
-    for (let y = 0; y < mapHeight; y++) {
-        for (let x = 0; x < mapWidth; x++) {
-            // Add medium green background behind each grass tile
-            const bgRect = scene.add.rectangle(x * tileSize, y * tileSize, tileSize, tileSize, 0x59BD59, 1.0);
-            bgRect.setOrigin(0);
-            bgRect.setDepth(-1); // Behind the grass tile
-
-            // Use random frame from spritesheet if available, otherwise use default
-            // Scale 96x96 frames down to 32x32 tiles
-            const scaleFactor = 32 / 96; // 0.333...
-            if (useFrames) {
-                const frameIndex = Math.floor(Math.random() * grassFrameCount);
-                const tile = scene.add.image(x * tileSize, y * tileSize, 'grass', frameIndex).setOrigin(0);
-                tile.setScale(scaleFactor);
-                tile.setDepth(0);
-            } else {
-                // Use default grass texture (no frame index)
-                const tile = scene.add.image(x * tileSize, y * tileSize, 'grass').setOrigin(0);
-                tile.setScale(scaleFactor);
-                tile.setDepth(0);
-            }
-        }
-    }
-
-    // Create main streets (cross pattern through center)
-    const centerX = Math.floor(mapWidth / 2);
-    const centerY = Math.floor(mapHeight / 2);
-
-    // Horizontal main street (5 tiles wide)
-    for (let x = 0; x < mapWidth; x++) {
-        for (let dy = -2; dy <= 2; dy++) {
-            const y = centerY + dy;
-            if (y >= 0 && y < mapHeight) {
-                const tile = scene.add.image(x * tileSize, y * tileSize, 'dirt').setOrigin(0);
-                tile.setDepth(0);
-            }
-        }
-    }
-
-    // Vertical main street (5 tiles wide)
-    for (let y = 0; y < mapHeight; y++) {
-        for (let dx = -2; dx <= 2; dx++) {
-            const x = centerX + dx;
-            if (x >= 0 && x < mapWidth) {
-                const tile = scene.add.image(x * tileSize, y * tileSize, 'dirt').setOrigin(0);
-                tile.setDepth(0);
-            }
-        }
-    }
-
-    // Define player spawn and exit positions (before placing buildings)
-    const entranceX = centerX * tileSize;
-    const entranceY = (mapHeight - 7) * tileSize; // Exit marker position (moved north to clear UI)
-    const playerSpawnX = entranceX;
-    const playerSpawnY = entranceY - 50; // Player spawns above exit
-
-    // Helper function to check if a building would block player spawn or exit
-    function wouldBlockPlayerOrExit(buildingX, buildingY, buildingWidth, buildingHeight) {
-        // Very large buffer zone to ensure clear path (12 tiles = 384 pixels)
-        const buffer = 12 * tileSize;
-
-        // Player spawn area (much larger protected zone)
-        const spawnArea = {
-            x: playerSpawnX - buffer,
-            y: playerSpawnY - buffer,
-            width: buffer * 2,
-            height: buffer * 2
-        };
-
-        // Exit marker area (much larger protected zone)
-        const exitArea = {
-            x: entranceX - buffer,
-            y: entranceY - buffer,
-            width: buffer * 2,
-            height: buffer * 2
-        };
-
-        // Check if building overlaps spawn area (any part of building)
-        if (buildingX < spawnArea.x + spawnArea.width &&
-            buildingX + buildingWidth > spawnArea.x &&
-            buildingY < spawnArea.y + spawnArea.height &&
-            buildingY + buildingHeight > spawnArea.y) {
-            return true;
-        }
-
-        // Check if building overlaps exit area (any part of building)
-        if (buildingX < exitArea.x + exitArea.width &&
-            buildingX + buildingWidth > exitArea.x &&
-            buildingY < exitArea.y + exitArea.height &&
-            buildingY + buildingHeight > exitArea.y) {
-            return true;
-        }
-
-        // Also check if building would create a dead-end by blocking access from spawn to exit
-        // Create a path corridor between spawn and exit
-        const corridorWidth = 8 * tileSize; // 8 tiles wide corridor (wider)
-        const corridorX = Math.min(playerSpawnX, entranceX) - corridorWidth / 2;
-        const corridorY = Math.min(playerSpawnY, entranceY);
-        const corridorHeight = Math.abs(playerSpawnY - entranceY) + buffer;
-
-        if (buildingX < corridorX + corridorWidth &&
-            buildingX + buildingWidth > corridorX &&
-            buildingY < corridorY + corridorHeight &&
-            buildingY + buildingHeight > corridorY) {
-            return true;
-        }
-
-        return false;
-    }
-
-    // Building colors
-    const buildingColors = {
-        inn: 0x8B4513,        // Brown
-        tavern: 0x654321,      // Dark brown
-        blacksmith: 0x696969,  // Gray
-        shop: 0xFFD700,       // Gold
-        house: 0xCD853F,       // Peru
-        market: 0xFFA500,      // Orange
-        watchtower: 0x483D8B   // Dark Slate Blue
-    };
-
-    // Place important buildings with quadrant restrictions
-    // Upper left quadrant (x < centerX, y < centerY): Only Inn
-    // Other 3 quadrants: All other buildings
-    // This ensures player spawn area (bottom center) stays clear
-
-    // Helper function to check if building is in upper left quadrant
-    function isInUpperLeftQuadrant(buildingX, buildingY, buildingWidth, buildingHeight) {
-        // Check if any part of building is in upper left (x < centerX, y < centerY)
-        const buildingMaxX = buildingX + buildingWidth;
-        const buildingMaxY = buildingY + buildingHeight;
-        return buildingMaxX <= centerX * tileSize && buildingMaxY <= centerY * tileSize;
-    }
-
-    // Helper function to check if building is in other 3 quadrants (not upper left)
-    function isInOtherQuadrants(buildingX, buildingY, buildingWidth, buildingHeight) {
-        // Check if building is NOT entirely in upper left
-        const buildingMaxX = buildingX + buildingWidth;
-        const buildingMaxY = buildingY + buildingHeight;
-        return !(buildingMaxX <= centerX * tileSize && buildingMaxY <= centerY * tileSize);
-    }
-
-    const buildingData = [
-        // Inn: Upper left quadrant only - positioned near center for easier access
-        { type: 'inn', x: 5, y: 8, width: 6, height: 5, color: buildingColors.inn, quadrant: 'upperLeft' },
-        // Other buildings: Other 3 quadrants (upper right, lower left, lower right)
-        // Tavern: Upper right, closer to center
-        { type: 'tavern', x: centerX + 4, y: 8, width: 5, height: 5, color: buildingColors.tavern, quadrant: 'other' },
-        // Blacksmith: Lower left quadrant, positioned in middle-left area for better visibility
-        // At x: 3 (left side), y: 18 (middle area, well above spawn at y: 37, maxY = 22)
-        // This ensures it's visible from spawn and not in upper left quadrant
-        { type: 'blacksmith', x: 3, y: 18, width: 5, height: 4, color: buildingColors.blacksmith, quadrant: 'other' },
-        // Shop: Lower right, moved up to avoid spawn area
-        { type: 'shop', x: centerX + 4, y: 15, width: 5, height: 4, color: buildingColors.shop, quadrant: 'other' },
-        // Market: Near center, upper area
-        { type: 'market', x: centerX + 2, y: centerY - 4, width: 3, height: 3, color: buildingColors.market, quadrant: 'other' },
-        // Watchtower: Upper right, further from center
-        { type: 'watchtower', x: mapWidth - 10, y: 5, width: 4, height: 8, color: buildingColors.watchtower, quadrant: 'other' }
-    ];
-
-    // Filter out buildings that would block spawn/exit or violate quadrant rules
-    const validBuildings = buildingData.filter(building => {
-        const buildingX = building.x * tileSize;
-        const buildingY = building.y * tileSize;
-        const buildingWidth = building.width * tileSize;
-        const buildingHeight = building.height * tileSize;
-
-        // Check spawn/exit blocking
-        const wouldBlock = wouldBlockPlayerOrExit(buildingX, buildingY, buildingWidth, buildingHeight);
-        if (wouldBlock) {
-            console.log(`⚠️ Skipping ${building.type} at (${building.x}, ${building.y}) - would block spawn/exit`);
-            return false;
-        }
-
-        // Check quadrant restrictions
-        if (building.quadrant === 'upperLeft') {
-            // Inn must be in upper left quadrant
-            if (!isInUpperLeftQuadrant(buildingX, buildingY, buildingWidth, buildingHeight)) {
-                console.log(`⚠️ Skipping ${building.type} at (${building.x}, ${building.y}) - not in upper left quadrant`);
-                return false;
-            }
-        } else if (building.quadrant === 'other') {
-            // Other buildings must NOT be in upper left quadrant
-            if (!isInOtherQuadrants(buildingX, buildingY, buildingWidth, buildingHeight)) {
-                console.log(`⚠️ Skipping ${building.type} at (${building.x}, ${building.y}) - is in upper left quadrant (reserved for Inn)`);
-                return false;
-            }
-        }
-
-        return true;
-    });
-
-    // Place buildings (only valid ones that don't block spawn/exit)
-    console.log(`🏗️ Placing ${validBuildings.length} valid buildings out of ${buildingData.length} total`);
-    validBuildings.forEach(building => {
-        const buildingCenterX = building.x * tileSize + (building.width * tileSize) / 2;
-        const buildingCenterY = building.y * tileSize + (building.height * tileSize) / 2;
-        console.log(`✅ Creating building: ${building.type} at tile (${building.x}, ${building.y}) = pixel (${buildingCenterX}, ${buildingCenterY})`);
-
-        // Create building rectangle
-        const buildingRect = scene.add.rectangle(
-            buildingCenterX,
-            buildingCenterY,
-            building.width * tileSize,
-            building.height * tileSize,
-            building.color,
-            0.9
-        ).setDepth(1).setStrokeStyle(2, 0x000000);
-
-        // Add building to collision list with interaction properties
-        buildings.push({
-            x: building.x * tileSize,
-            y: building.y * tileSize,
-            width: building.width * tileSize,
-            height: building.height * tileSize,
-            type: building.type,
-            rect: buildingRect,
-            centerX: buildingCenterX,
-            centerY: buildingCenterY,
-            interactionRadius: 120, // pixels - increased from 80 to make buildings easier to interact with
-            interactionIndicator: null,
-            showIndicator: false
-        });
-
-        // Add building label with better visibility
-        const label = scene.add.text(
-            buildingCenterX,
-            buildingCenterY,
-            building.type.toUpperCase(),
-            {
-                fontSize: '12px',
-                fill: '#ffffff',
-                fontStyle: 'bold',
-                stroke: '#000000',
-                strokeThickness: 2
-            }
-        ).setDepth(2).setOrigin(0.5, 0.5);
-
-        // Special debug for blacksmith
-        if (building.type === 'blacksmith') {
-            console.log(`🔨 BLACKSMITH created at pixel position (${buildingCenterX}, ${buildingCenterY})`);
-            console.log(`   Map size: ${mapWidth}x${mapHeight} tiles = ${mapWidth * tileSize}x${mapHeight * tileSize} pixels`);
-            console.log(`   Blacksmith is in the LOWER LEFT area of the map`);
-            console.log(`   Building rect active: ${buildingRect.active}, visible: ${buildingRect.visible}`);
-            console.log(`   Label active: ${label.active}, visible: ${label.visible}`);
-            // Force render by ensuring it's in the scene
-            if (!buildingRect.active) {
-                console.warn('⚠️ Blacksmith rect is not active!');
-            }
-            if (!label.active) {
-                console.warn('⚠️ Blacksmith label is not active!');
-            }
-        }
-    });
-
-    // Place some regular houses around the edges (avoiding spawn/exit)
-    // Exclude bottom center area where spawn/exit are - make it EXTREMELY large
-    const protectedBottomArea = {
-        minX: centerX - 18, // 18 tiles left of center (extremely wide protection)
-        maxX: centerX + 18, // 18 tiles right of center
-        minY: mapHeight - 20, // 20 tiles from bottom (extremely tall protection)
-        maxY: mapHeight
-    };
-
-    for (let i = 0; i < 8; i++) {
-        let houseX, houseY, houseW, houseH;
-        let attempts = 0;
-        let valid = false;
-
-        while (!valid && attempts < 50) {
-            houseW = Phaser.Math.Between(4, 6);
-            houseH = Phaser.Math.Between(4, 6);
-            houseX = Phaser.Math.Between(2, mapWidth - houseW - 2);
-            houseY = Phaser.Math.Between(2, mapHeight - houseH - 2);
-
-            // Check if not on street or overlapping buildings
-            valid = true;
-            const streetBuffer = 3;
-            const buildingMinX = houseX;
-            const buildingMaxX = houseX + houseW;
-            const buildingMinY = houseY;
-            const buildingMaxY = houseY + houseH;
-
-            // Check if building overlaps the horizontal street (Y corridor)
-            if (buildingMaxY >= centerY - streetBuffer && buildingMinY <= centerY + streetBuffer) {
-                valid = false;
-            }
-
-            // Check if building overlaps the vertical street (X corridor)
-            if (valid && buildingMaxX >= centerX - streetBuffer && buildingMinX <= centerX + streetBuffer) {
-                valid = false;
-            }
-
-            // Check if in protected bottom area (spawn/exit zone)
-            // Check if ANY part of building overlaps protected area (not just center)
-            if (valid) {
-                const buildingMinX = houseX;
-                const buildingMaxX = houseX + houseW;
-                const buildingMinY = houseY;
-                const buildingMaxY = houseY + houseH;
-
-                // Check if building overlaps protected area
-                if (buildingMaxX >= protectedBottomArea.minX &&
-                    buildingMinX <= protectedBottomArea.maxX &&
-                    buildingMaxY >= protectedBottomArea.minY &&
-                    buildingMinY <= protectedBottomArea.maxY) {
-                    valid = false;
-                }
-            }
-
-            // Check if in upper left quadrant (reserved for Inn only)
-            if (valid) {
-                const buildingMaxX = houseX + houseW;
-                const buildingMaxY = houseY + houseH;
-                // Upper left quadrant: x < centerX, y < centerY
-                if (buildingMaxX <= centerX && buildingMaxY <= centerY) {
-                    valid = false;
-                }
-            }
-
-            // Check if would block player spawn or exit (using helper function)
-            if (valid) {
-                const buildingX = houseX * tileSize;
-                const buildingY = houseY * tileSize;
-                const buildingWidth = houseW * tileSize;
-                const buildingHeight = houseH * tileSize;
-                if (wouldBlockPlayerOrExit(buildingX, buildingY, buildingWidth, buildingHeight)) {
-                    valid = false;
-                    // Don't log here - too many attempts
-                }
-            }
-
-            // Check if overlapping existing buildings
-            if (valid) {
-                for (const b of buildings) {
-                    if (houseX * tileSize < b.x + b.width && houseX * tileSize + houseW * tileSize > b.x &&
-                        houseY * tileSize < b.y + b.height && houseY * tileSize + houseH * tileSize > b.y) {
-                        valid = false;
-                        break;
-                    }
-                }
-            }
-            attempts++;
-        }
-
-        if (valid) {
-            const houseRect = scene.add.rectangle(
-                houseX * tileSize + (houseW * tileSize) / 2,
-                houseY * tileSize + (houseH * tileSize) / 2,
-                houseW * tileSize,
-                houseH * tileSize,
-                buildingColors.house,
-                0.8
-            ).setDepth(1).setStrokeStyle(2, 0x000000);
-
-            // Calculate house center for interaction
-            const houseCenterX = (houseX * tileSize) + (houseW * tileSize) / 2;
-            const houseCenterY = (houseY * tileSize) + (houseH * tileSize) / 2;
-
-            buildings.push({
-                x: houseX * tileSize,
-                y: houseY * tileSize,
-                width: houseW * tileSize,
-                height: houseH * tileSize,
-                type: 'house',
-                rect: houseRect,
-                centerX: houseCenterX,
-                centerY: houseCenterY,
-                interactionRadius: 80,
-                interactionIndicator: null,
-                showIndicator: false
-            });
-        }
-    }
-
-    // Create town entrance marker (at bottom edge, center) - make it very visible
-    // Note: entranceX and entranceY are already defined above
-
-    // Create a more prominent marker with multiple visual elements
-    const entranceMarker = scene.add.rectangle(entranceX, entranceY, tileSize * 4, tileSize * 4, 0x00ff00, 0.7)
-        .setDepth(25).setStrokeStyle(5, 0x00ff00); // Very high depth, thicker stroke
-
-    // Add a pulsing glow effect
-    const glowMarker = scene.add.rectangle(entranceX, entranceY, tileSize * 5, tileSize * 5, 0x00ff00, 0.3)
-        .setDepth(24).setStrokeStyle(3, 0x00ff00);
-
-    const entranceText = scene.add.text(entranceX, entranceY, 'TOWN\nEXIT\n[F]', {
-        fontSize: '16px',
-        fill: '#ffffff',
-        fontStyle: 'bold',
-        align: 'center',
-        stroke: '#000000',
-        strokeThickness: 4,
-        shadow: {
-            offsetX: 2,
-            offsetY: 2,
-            color: '#000000',
-            blur: 4,
-            stroke: true,
-            fill: true
-        }
-    }).setDepth(26).setOrigin(0.5, 0.5); // Highest depth to ensure visibility
-
-    // Store glow for animation
-    transitionMarkers.push({
-        x: entranceX,
-        y: entranceY,
-        radius: tileSize * 2,
-        targetMap: 'wilderness',
-        marker: entranceMarker,
-        glow: glowMarker,
-        text: entranceText
-    });
-
-    transitionMarkers.push({
-        x: entranceX,
-        y: entranceY,
-        radius: tileSize * 1.5,
-        targetMap: 'wilderness',
-        marker: entranceMarker,
-        text: entranceText
-    });
-
-    // Store map info
-    scene.mapWidth = mapWidth;
-    scene.mapHeight = mapHeight;
-    scene.tileSize = tileSize;
-
-    // Set world bounds
-    const playerSize = 32;
-    const worldWidth = mapWidth * tileSize;
-    const worldHeight = mapHeight * tileSize;
-    scene.physics.world.setBounds(
-        playerSize / 2,
-        playerSize / 2,
-        worldWidth - playerSize,
-        worldHeight - playerSize
-    );
-
-    // Position player at town center (near entrance) - ensure it's clear of buildings
-    // Check spawn position AFTER all buildings are placed
-    function isPositionInBuilding(x, y, playerSize) {
-        for (const building of buildings) {
-            if (x + playerSize > building.x &&
-                x - playerSize < building.x + building.width &&
-                y + playerSize > building.y &&
-                y - playerSize < building.y + building.height) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    if (player) {
-        const playerSize = 16; // Half of player sprite size
-        let safeSpawnX = entranceX;
-        let safeSpawnY = entranceY - 50; // Default spawn position
-        let spawnFound = false;
-
-        console.log(`🔍 Searching for safe spawn. Default: (${safeSpawnX}, ${safeSpawnY})`);
-        console.log(`   Total buildings placed: ${buildings.length}`);
-        buildings.forEach((b, i) => {
-            console.log(`   Building ${i}: (${b.x}, ${b.y}, ${b.width}, ${b.height})`);
-        });
-
-        // Check if default spawn is clear
-        if (!isPositionInBuilding(safeSpawnX, safeSpawnY, playerSize)) {
-            spawnFound = true;
-            console.log('✅ Default spawn position is clear');
-        } else {
-            console.log('❌ Default spawn blocked, searching for safe position...');
-            // Try positions going up from exit (on the main street) - more thorough search
-            for (let offset = 64; offset <= 500 && !spawnFound; offset += 32) {
-                const testX = entranceX;
-                const testY = entranceY - offset;
-
-                if (!isPositionInBuilding(testX, testY, playerSize)) {
-                    safeSpawnX = testX;
-                    safeSpawnY = testY;
-                    spawnFound = true;
-                    console.log(`✅ Found safe spawn at offset ${offset}: (${testX}, ${testY})`);
-                }
-            }
-
-            // If still not found, try positions to the left/right of exit - wider search
-            if (!spawnFound) {
-                for (let offset = -200; offset <= 200 && !spawnFound; offset += 32) {
-                    for (let yOffset = 50; yOffset <= 300 && !spawnFound; yOffset += 32) {
-                        const testX = entranceX + offset;
-                        const testY = entranceY - yOffset;
-
-                        if (!isPositionInBuilding(testX, testY, playerSize)) {
-                            safeSpawnX = testX;
-                            safeSpawnY = testY;
-                            spawnFound = true;
-                            console.log(`✅ Found safe spawn at (${testX}, ${testY})`);
-                        }
-                    }
-                }
-            }
-        }
-
-        player.x = safeSpawnX;
-        player.y = safeSpawnY;
-        console.log(`✅ Player spawned at: (${Math.floor(safeSpawnX)}, ${Math.floor(safeSpawnY)})`);
-        console.log(`   Spawn area protected: X=${playerSpawnX - 16 * tileSize} to ${playerSpawnX + 16 * tileSize}, Y=${playerSpawnY - 16 * tileSize} to ${playerSpawnY + 16 * tileSize}`);
-
-        // Verify spawn is actually clear
-        if (isPositionInBuilding(safeSpawnX, safeSpawnY, playerSize)) {
-            console.error('❌ ERROR: Player spawned inside a building!');
-            console.error(`   Player at: (${safeSpawnX}, ${safeSpawnY})`);
-            // Try to find ANY clear position on the map as last resort
-            for (let y = 100; y < worldHeight - 100 && !spawnFound; y += 64) {
-                for (let x = 100; x < worldWidth - 100 && !spawnFound; x += 64) {
-                    if (!isPositionInBuilding(x, y, playerSize)) {
-                        player.x = x;
-                        player.y = y;
-                        console.log(`⚠️ Emergency spawn at: (${x}, ${y})`);
-                        spawnFound = true;
-                    }
-                }
-            }
-        }
-
-        if (!spawnFound) {
-            console.warn('⚠️ Could not find completely clear spawn position, using default');
-        }
-    }
-
-    console.log('✅ Town map created with', buildings.length, 'buildings');
-
-    // Create Mana Fluxes for Quest 7
-    createManaFluxes();
-
-    // Initialize NPCs (Data-Driven)
-    if (typeof initializeNPCs === 'function') {
-        initializeNPCs();
-    }
-}
-
-/**
  * Create Mana Fluxes for the "Mana Instability" quest
  */
 function createManaFluxes() {
     const scene = game.scene.scenes[0];
-    manaFluxes = [];
-
-    // Only create if quest 7 is active (main_01_007)
-    // Or just create them always for flavor, but make them interactable only if quest is active
-    // For simplicity, we create them always but interaction depends on quest
-
-    // 3 locations in town
     const locations = [
         { x: 10, y: 15 }, // Near top-left
         { x: 30, y: 10 }, // Near top-right
@@ -2203,1448 +1614,13 @@ function updateZoneIndicators() {
     });
 }
 
-/**
- * Create wilderness map (original map generation)
- */
-function createWildernessMap() {
-    const scene = game.scene.scenes[0];
-    const tileSize = 32;
-    const mapWidth = 50;
-    const mapHeight = 50;
 
-    // Clear existing buildings and markers
-    buildings = [];
-    transitionMarkers = [];
-
-    // Check for grass spritesheet frames for variety
-    let grassFrameCount = 1;
-    let useFrames = false;
-
-    if (scene.textures.exists('grass')) {
-        const grassTexture = scene.textures.get('grass');
-        if (grassTexture && grassTexture.frameTotal && grassTexture.frameTotal > 0) {
-            grassFrameCount = grassTexture.frameTotal;
-            useFrames = true;
-        }
-    }
-
-    // Create tilemap with variety
-    for (let y = 0; y < mapHeight; y++) {
-        for (let x = 0; x < mapWidth; x++) {
-            let tileType = 'grass';
-
-            // Create walls around edges
-            if (x === 0 || x === mapWidth - 1 || y === 0 || y === mapHeight - 1) {
-                tileType = 'wall';
-            } else {
-                // Add variety to the map
-                const rand = Math.random();
-                if (rand < 0.1) {
-                    tileType = 'dirt';
-                } else if (rand < 0.15) {
-                    tileType = 'stone';
-                }
-                // else grass (default)
-            }
-
-            // Add medium green background behind grass tiles
-            if (tileType === 'grass') {
-                const bgRect = scene.add.rectangle(x * tileSize, y * tileSize, tileSize, tileSize, 0x59BD59, 1.0);
-                bgRect.setOrigin(0);
-                bgRect.setDepth(-1); // Behind the grass tile
-            }
-
-            // Add tiles to a static group for better performance
-            // Use random frame from spritesheet if available for grass tiles
-            const scaleFactor = 32 / 96; // 0.333...
-            let tile;
-            if (tileType === 'grass' && useFrames) {
-                const frameIndex = Math.floor(Math.random() * grassFrameCount);
-                tile = scene.add.image(x * tileSize, y * tileSize, 'grass', frameIndex).setOrigin(0);
-                tile.setScale(scaleFactor);
-            } else {
-                tile = scene.add.image(x * tileSize, y * tileSize, tileType).setOrigin(0);
-                // Scale grass tiles from 96x96 spritesheet frames down to 32x32
-                if (tileType === 'grass') {
-                    tile.setScale(scaleFactor);
-                }
-            }
-            tile.setDepth(0); // Background layer
-        }
-    }
-
-    // Create wilderness exit marker (at top center)
-    const exitX = (mapWidth / 2) * tileSize;
-    const exitY = 2 * tileSize;
-
-    const exitMarker = scene.add.rectangle(exitX, exitY, tileSize * 2, tileSize * 2, 0x00ff00, 0.5)
-        .setDepth(3).setStrokeStyle(3, 0x00ff00);
-
-    const exitText = scene.add.text(exitX, exitY, 'RETURN\nTO TOWN', {
-        fontSize: '12px',
-        fill: '#ffffff',
-        fontStyle: 'bold',
-        align: 'center'
-    }).setDepth(4).setOrigin(0.5, 0.5);
-
-    transitionMarkers.push({
-        x: exitX,
-        y: exitY,
-        radius: tileSize * 1.5,
-        targetMap: 'town',
-        marker: exitMarker,
-        text: exitText
-    });
-
-    // Store map info
-    scene.mapWidth = mapWidth;
-    scene.mapHeight = mapHeight;
-    scene.tileSize = tileSize;
-
-    // Set world bounds
-    const playerSize = 32;
-    const worldWidth = mapWidth * tileSize;
-    const worldHeight = mapHeight * tileSize;
-    scene.physics.world.setBounds(
-        playerSize / 2,
-        playerSize / 2,
-        worldWidth - playerSize,
-        worldHeight - playerSize
-    );
-
-    // Position player near exit marker
-    if (player) {
-        player.x = exitX;
-        player.y = exitY + 50;
-    }
-
-    // Create dungeon entrance markers (2-3 scattered around map)
-    createDungeonEntrances(mapWidth, mapHeight, tileSize);
-
-    console.log('✅ Wilderness map created');
-}
-
-/**
- * Create dungeon entrance markers in wilderness
- */
-function createDungeonEntrances(mapWidth, mapHeight, tileSize) {
-    const scene = game.scene.scenes[0];
-    const numEntrances = Phaser.Math.Between(2, 3);
-
-    for (let i = 0; i < numEntrances; i++) {
-        // Place away from edges (buffer zone)
-        const buffer = 5;
-        const x = Phaser.Math.Between(buffer, mapWidth - buffer - 1) * tileSize;
-        const y = Phaser.Math.Between(buffer, mapHeight - buffer - 1) * tileSize;
-
-        // Create entrance marker - use cave entrance image if available, otherwise fallback to rectangle
-        let entrance;
-        if (scene.textures.exists('dungeon_entrance')) {
-            entrance = scene.add.image(x, y, 'dungeon_entrance')
-                .setDepth(3)
-                .setDisplaySize(tileSize * 2, tileSize * 2);
-        } else {
-            // Fallback to rectangle if image didn't load
-            entrance = scene.add.rectangle(x, y, tileSize * 2, tileSize * 2, 0x444444, 0.8)
-                .setDepth(3).setStrokeStyle(3, 0x888888);
-        }
-
-        const text = scene.add.text(x, y, 'DUNGEON\nENTRANCE', {
-            fontSize: '12px',
-            fill: '#ffffff',
-            fontStyle: 'bold',
-            align: 'center'
-        }).setDepth(4).setOrigin(0.5, 0.5);
-
-        transitionMarkers.push({
-            x: x,
-            y: y,
-            radius: tileSize * 1.5,
-            targetMap: 'dungeon',
-            dungeonLevel: 1, // Always start at level 1
-            marker: entrance,
-            text: text
-        });
-    }
-}
-
-/**
- * Transition between maps
- */
-function transitionToMap(targetMap, level = 1) {
-    const scene = game.scene.scenes[0];
-
-    // Clear monsters when leaving wilderness or dungeon
-    if (currentMap === 'wilderness' || currentMap === 'dungeon') {
-        monsters.forEach(m => {
-            if (m && m.active) {
-                // Destroy HP bars before destroying monster
-                if (m.hpBarBg) m.hpBarBg.destroy();
-                if (m.hpBar) m.hpBar.destroy();
-                m.destroy();
-            }
-        });
-        monsters = [];
-    }
-
-    // Clear dungeon walls when leaving dungeon
-    if (currentMap === 'dungeon') {
-        dungeonWalls = [];
-    }
-
-    // Clear NPCs (will be repositioned)
-    npcs.forEach(npc => {
-        // Clean up indicators before destroying NPC
-        if (npc.interactionIndicator && npc.interactionIndicator.active) {
-            npc.interactionIndicator.destroy();
-            npc.interactionIndicator = null;
-        }
-        if (npc && npc.active) npc.destroy();
-    });
-    npcs = [];
-
-    // Clear buildings and transition markers
-    // Close building UI if open
-    if (buildingPanelVisible) {
-        closeBuildingUI();
-    }
-
-    // Clean up building indicators
-    buildings.forEach(b => {
-        if (b.interactionIndicator && b.interactionIndicator.active) {
-            b.interactionIndicator.destroy();
-        }
-        if (b.rect && b.rect.active) b.rect.destroy();
-    });
-    buildings = [];
-
-    transitionMarkers.forEach(m => {
-        if (m.marker && m.marker.active) m.marker.destroy();
-        if (m.glow && m.glow.active) m.glow.destroy();
-        if (m.text && m.text.active) m.text.destroy();
-    });
-    transitionMarkers = [];
-
-    // Clear all tiles (depth 0-4) - but only if NOT transitioning to dungeon
-    // (dungeon will clear its own tiles)
-    if (targetMap !== 'dungeon') {
-        const toDestroy = [];
-        // Create snapshot to avoid modification during iteration
-        const childrenSnapshot = Array.from(scene.children.list || []);
-        childrenSnapshot.forEach(child => {
-            if (child && child.depth >= 0 && child.depth <= 4 && child !== player) {
-                toDestroy.push(child);
-            }
-        });
-        // Destroy in reverse order
-        for (let i = toDestroy.length - 1; i >= 0; i--) {
-            const child = toDestroy[i];
-            if (child && child.active) {
-                try {
-                    child.destroy();
-                } catch (e) {
-                    console.warn('Error destroying child:', e);
-                }
-            }
-        }
-    }
-
-    // Handle background music - stop all music first
-    if (villageMusic && villageMusic.isPlaying) {
-        villageMusic.stop();
-        villageMusic.destroy();
-        villageMusic = null;
-        console.log('🎵 Stopped village music');
-    }
-    if (wildernessMusic && wildernessMusic.isPlaying) {
-        wildernessMusic.stop();
-        wildernessMusic.destroy();
-        wildernessMusic = null;
-        console.log('🎵 Stopped wilderness music');
-    }
-    if (dungeonMusic && dungeonMusic.isPlaying) {
-        dungeonMusic.stop();
-        dungeonMusic.destroy();
-        dungeonMusic = null;
-        console.log('🎵 Stopped dungeon music');
-    }
-
-    // Start appropriate music for the target map
-    if (musicEnabled && scene.sound) {
-        let musicKey = null;
-        let musicName = '';
-
-        if (targetMap === 'town') {
-            musicKey = 'village_music';
-            musicName = 'village';
-        } else if (targetMap === 'wilderness') {
-            musicKey = 'wilderness_music';
-            musicName = 'wilderness';
-        } else if (targetMap === 'dungeon') {
-            musicKey = 'dungeon_music';
-            musicName = 'dungeon';
-        }
-
-        if (musicKey) {
-            console.log(`🎵 Attempting to start ${musicName} music...`);
-            console.log('   - Sound system exists:', !!scene.sound);
-            console.log('   - Audio cache exists:', !!scene.cache.audio);
-            console.log(`   - ${musicName} music in cache:`, scene.cache.audio.exists(musicKey));
-
-            if (scene.cache.audio.exists(musicKey)) {
-                try {
-                    const music = scene.sound.add(musicKey, {
-                        volume: 0.5,
-                        loop: true,
-                        seek: 0
-                    });
-
-                    // Store reference based on map type
-                    if (targetMap === 'town') {
-                        villageMusic = music;
-                    } else if (targetMap === 'wilderness') {
-                        wildernessMusic = music;
-                    } else if (targetMap === 'dungeon') {
-                        dungeonMusic = music;
-                    }
-
-                    // Try to play
-                    const playResult = music.play();
-                    if (playResult && typeof playResult.then === 'function') {
-                        // playResult is a Promise
-                        playResult.then(() => {
-                            console.log(`🎵 Started ${musicName} music successfully`);
-                        }).catch(err => {
-                            console.warn(`⚠️ Could not play ${musicName} music (may need user interaction):`, err);
-                        });
-                    } else {
-                        // playResult is not a Promise (or is null/undefined)
-                        console.log(`🎵 Started ${musicName} music`);
-                    }
-                } catch (e) {
-                    console.error(`❌ Error playing ${musicName} music:`, e);
-                }
-            } else {
-                console.warn(`⚠️ ${musicName} music not found in cache. Available audio keys:`, Object.keys(scene.cache.audio.entries || {}));
-            }
-        }
-    } else if (!musicEnabled) {
-        console.log('🎵 Music is disabled, skipping background music');
-    }
-
-    // Create new map
-    if (targetMap === 'town') {
-        createTownMap();
-        initializeNPCs(); // Reposition NPCs in town
-    } else if (targetMap === 'dungeon') {
-        dungeonLevel = level;
-        try {
-            createDungeonMap(level);
-            if (!currentDungeon) {
-                console.error('❌ Failed to create dungeon, returning to wilderness');
-                createWildernessMap();
-                spawnInitialMonsters.call(scene, scene.mapWidth * scene.tileSize, scene.mapHeight * scene.tileSize);
-                currentMap = 'wilderness';
-                return;
-            }
-            // Spawn monsters after dungeon is created (don't fail dungeon if this errors)
-            try {
-                spawnDungeonMonsters();
-            } catch (e) {
-                console.error('❌ Error spawning dungeon monsters (dungeon still created):', e);
-                console.error(e.stack);
-                // Don't fallback - dungeon is created, just no monsters
-            }
-        } catch (e) {
-            console.error('❌ Error creating dungeon:', e);
-            console.error(e.stack);
-            // Only fallback if dungeon creation itself failed
-            createWildernessMap();
-            spawnInitialMonsters.call(scene, scene.mapWidth * scene.tileSize, scene.mapHeight * scene.tileSize);
-            currentMap = 'wilderness';
-            return;
-        }
-    } else {
-        createWildernessMap();
-        spawnInitialMonsters.call(scene, scene.mapWidth * scene.tileSize, scene.mapHeight * scene.tileSize);
-    }
-
-    currentMap = targetMap;
-
-    // Update camera for new map - NO bounds so player stays centered
-    // const worldWidth = scene.mapWidth * scene.tileSize;
-    // const worldHeight = scene.mapHeight * scene.tileSize;
-    // scene.cameras.main.setBounds(0, 0, worldWidth, worldHeight);
-    scene.cameras.main.startFollow(player);
-
-    console.log('✅ Transitioned to', targetMap);
-
-    // UQE Bridge: Emit map entered event (for Quest 8)
-    if (window.uqe && window.uqe.eventBus) {
-        window.uqe.eventBus.emit('map_entered', { map: targetMap, level: level });
-        console.log(`⚡ Emitted map_entered: ${targetMap} (Level ${level})`);
-    }
-}
-
-/**
- * ========================================
- * DUNGEON GENERATION SYSTEM
- * ========================================
- */
-
-/**
- * Generate a procedural dungeon
- */
-function generateDungeon(level, width, height, seed = null) {
-    // Use seed for reproducible generation
-    // Note: Phaser's RND.sow() may not work as expected, so we'll use a simple seeded RNG
-    if (!seed) {
-        // Generate new random seed
-        seed = Date.now() + Math.floor(Math.random() * 1000000);
-    }
-
-    // Simple seeded random function - CRITICAL: Must start from the same seed each time for determinism
-    // Store original seed to ensure we can reset if needed
-    const originalSeed = seed;
-    let seedValue = seed;
-    const seededRandom = () => {
-        seedValue = (seedValue * 9301 + 49297) % 233280;
-        return seedValue / 233280;
-    };
-
-    // Reset function to ensure determinism (call this at start of generation)
-    const resetSeed = () => {
-        seedValue = originalSeed;
-    };
-
-    // Reset seed at start to ensure deterministic generation
-    resetSeed();
-
-    // Helper functions using seeded random
-    const seededBetween = (min, max) => {
-        return Math.floor(seededRandom() * (max - min + 1)) + min;
-    };
-
-    const seededPick = (array) => {
-        return array[Math.floor(seededRandom() * array.length)];
-    };
-
-    const dungeon = {
-        level: level,
-        seed: seed,
-        width: width,
-        height: height,
-        rooms: [],
-        corridors: [],
-        mapData: [],
-        entrance: null,
-        exit: null,
-        seededRandom: seededRandom,
-        seededBetween: seededBetween,
-        seededPick: seededPick
-    };
-
-    // Initialize mapData with all floors (0 = wall, 1 = floor)
-    // Start with floor everywhere, then add walls where needed
-    for (let y = 0; y < height; y++) {
-        dungeon.mapData[y] = [];
-        for (let x = 0; x < width; x++) {
-            dungeon.mapData[y][x] = 1; // Floor (base layer)
-        }
-    }
-
-    // Step 1: Generate rooms
-    const roomCount = seededBetween(8, 12);
-    console.log(`  Generating ${roomCount} rooms...`);
-    dungeon.rooms = generateRooms(dungeon, roomCount);
-    console.log(`  Generated ${dungeon.rooms.length} rooms`);
-
-    if (dungeon.rooms.length === 0) {
-        console.error('❌ No rooms generated!');
-        return null;
-    }
-
-    // Step 2: Connect rooms with corridors
-    console.log('  Connecting rooms...');
-    dungeon.corridors = connectRooms(dungeon);
-
-    // Step 3: Since we start with all floors, we need to add walls
-    // First, mark rooms and corridors as floor (they already are, but this ensures they stay floor)
-    // Then add walls around the perimeter and in empty areas
-    console.log('  Adding walls to map...');
-    addWallsToDungeon(dungeon);
-
-    // Step 4: Place entrance and exit
-    placeDungeonFeatures(dungeon);
-
-    console.log(`  ✅ Dungeon generated: ${dungeon.rooms.length} rooms, ${dungeon.corridors.length} corridors`);
-    return dungeon;
-}
-
-/**
- * Spawn monsters in the dungeon
- */
-function spawnDungeonMonsters() {
-    console.log('💀 spawning dungeon monsters...');
-    const scene = game.scene.scenes[0];
-    if (!currentDungeon || !currentDungeon.rooms) {
-        console.error('❌ Cannot spawn monsters: No dungeon generated');
-        return;
-    }
-
-    // Clear existing monsters
-    clearAppearingText(); // Helper to clear lingering text
-
-    // Monster types for Dungeon Level 1
-    // Matches Quest 9 (Echo Rats) and Quest 10 (Skeleton Miners)
-    const dungeonMonsters = [
-        { name: 'Skeleton Miner', textureKey: 'monster_skeleton', hp: 40, attack: 12, speed: 45, xp: 25, type: 'Skeleton Miner' },
-        { name: 'Echo Rat', textureKey: 'monster_echo_rat', hp: 20, attack: 8, speed: 85, xp: 15, type: 'Echo Rat' },
-        { name: 'Cave Spider', textureKey: 'monster_spider', hp: 30, attack: 10, speed: 70, xp: 20, type: 'Cave Spider' }
-    ];
-
-    let spawnCount = 0;
-
-    // Spawn 1-3 monsters per room (skipping the first room/entrance)
-    currentDungeon.rooms.forEach((room, index) => {
-        // Skip the specific entrance room to give player a safe start
-        // Finding room closest to entrance
-        const entranceX = currentDungeon.entrance.x;
-        const entranceY = currentDungeon.entrance.y;
-        const distToEntrance = Phaser.Math.Distance.Between(room.centerX, room.centerY, entranceX, entranceY);
-
-        // If this is the room containing the entrance (distance is 0 or very small), skip it
-        if (distToEntrance < 5) {
-            console.log('  Testing safe zone: Skipping monster spawn in entrance room');
-            return;
-        }
-
-        const count = Phaser.Math.Between(1, 3);
-        for (let i = 0; i < count; i++) {
-            // Random position within room (padded by 1 tile)
-            const x = (Phaser.Math.Between(room.x + 1, room.x + room.width - 2)) * scene.tileSize;
-            const y = (Phaser.Math.Between(room.y + 1, room.y + room.height - 2)) * scene.tileSize;
-
-            const monsterTemplate = dungeonMonsters[Phaser.Math.Between(0, dungeonMonsters.length - 1)];
-
-            // Spawn the monster
-            spawnMonster.call(scene, x, y, monsterTemplate);
-            spawnCount++;
-        }
-    });
-
-    console.log(`✅ Spawned ${spawnCount} monsters in the dungeon`);
-}
-
-/**
- * Generate rooms for the dungeon
- */
-function generateRooms(dungeon, count) {
-    const rooms = [];
-    const minRoomSize = 3;
-    const maxRoomSize = 8;
-    const maxAttempts = 200;
-
-    // Use dungeon's seeded random functions
-    const seededBetween = dungeon.seededBetween || Phaser.Math.Between;
-
-    // Ensure we have valid bounds
-    if (dungeon.width < maxRoomSize + 4 || dungeon.height < maxRoomSize + 4) {
-        console.warn('Dungeon too small for room generation');
-        return rooms;
-    }
-
-    for (let i = 0; i < count; i++) {
-        let attempts = 0;
-        let placed = false;
-
-        while (!placed && attempts < maxAttempts) {
-            const width = seededBetween(minRoomSize, maxRoomSize);
-            const height = seededBetween(minRoomSize, maxRoomSize);
-
-            // Ensure valid bounds
-            const maxX = Math.max(2, dungeon.width - width - 2);
-            const maxY = Math.max(2, dungeon.height - height - 2);
-
-            if (maxX <= 2 || maxY <= 2) {
-                // Can't place more rooms
-                break;
-            }
-
-            const x = seededBetween(2, maxX);
-            const y = seededBetween(2, maxY);
-
-            const newRoom = {
-                x: x,
-                y: y,
-                width: width,
-                height: height,
-                centerX: x + Math.floor(width / 2),
-                centerY: y + Math.floor(height / 2),
-                type: 'normal'
-            };
-
-            // Check for overlaps
-            if (!rooms.some(room => roomsOverlap(newRoom, room))) {
-                rooms.push(newRoom);
-                placed = true;
-            }
-            attempts++;
-        }
-
-        // If we couldn't place this room, stop trying
-        if (!placed) {
-            console.log(`⚠️ Could only place ${rooms.length} of ${count} rooms`);
-            break;
-        }
-    }
-
-    // Ensure we have at least 2 rooms (entrance and exit)
-    if (rooms.length < 2) {
-        console.warn('Not enough rooms generated, creating minimal dungeon');
-        // Create at least 2 rooms manually
-        rooms.length = 0;
-        rooms.push({ x: 5, y: 5, width: 5, height: 5, centerX: 7, centerY: 7, type: 'normal' });
-        rooms.push({ x: dungeon.width - 10, y: dungeon.height - 10, width: 5, height: 5, centerX: dungeon.width - 7, centerY: dungeon.height - 7, type: 'normal' });
-    }
-
-    return rooms;
-}
-
-/**
- * Check if two rooms overlap
- */
-function roomsOverlap(room1, room2) {
-    return room1.x < room2.x + room2.width &&
-        room1.x + room1.width > room2.x &&
-        room1.y < room2.y + room2.height &&
-        room1.y + room1.height > room2.y;
-}
-
-/**
- * Connect rooms with corridors
- */
-function connectRooms(dungeon) {
-    const corridors = [];
-
-    // Simple: Connect each room to the next (creates a path)
-    for (let i = 0; i < dungeon.rooms.length - 1; i++) {
-        const room1 = dungeon.rooms[i];
-        const room2 = dungeon.rooms[i + 1];
-
-        // Create L-shaped corridor
-        const corridor = createLShapedCorridor(
-            room1.centerX, room1.centerY,
-            room2.centerX, room2.centerY
-        );
-
-        corridors.push(corridor);
-    }
-
-    // Also connect first room to last room (creates a loop)
-    if (dungeon.rooms.length > 2) {
-        const firstRoom = dungeon.rooms[0];
-        const lastRoom = dungeon.rooms[dungeon.rooms.length - 1];
-        const corridor = createLShapedCorridor(
-            firstRoom.centerX, firstRoom.centerY,
-            lastRoom.centerX, lastRoom.centerY
-        );
-        corridors.push(corridor);
-    }
-
-    return corridors;
-}
-
-/**
- * Create L-shaped corridor between two points (3 tiles wide for easier navigation)
- */
-function createLShapedCorridor(x1, y1, x2, y2) {
-    const path = [];
-    const corridorWidth = 3; // Make corridors 3 tiles wide
-
-    // Horizontal first, then vertical
-    const startX = Math.min(x1, x2);
-    const endX = Math.max(x1, x2);
-    const startY = Math.min(y1, y2);
-    const endY = Math.max(y1, y2);
-
-    // Horizontal segment - create width
-    for (let x = startX; x <= endX; x++) {
-        // Add center line and one tile on each side
-        for (let offset = -Math.floor(corridorWidth / 2); offset <= Math.floor(corridorWidth / 2); offset++) {
-            path.push({ x: x, y: y1 + offset });
-        }
-    }
-
-    // Vertical segment - create width
-    for (let y = startY; y <= endY; y++) {
-        // Add center line and one tile on each side
-        for (let offset = -Math.floor(corridorWidth / 2); offset <= Math.floor(corridorWidth / 2); offset++) {
-            const point = { x: x2 + offset, y: y };
-            // Avoid duplicates
-            if (!path.some(p => p.x === point.x && p.y === point.y)) {
-                path.push(point);
-            }
-        }
-    }
-
-    return { path: path };
-}
-
-/**
- * Carve rooms into the map
- */
-function carveRooms(dungeon) {
-    dungeon.rooms.forEach(room => {
-        for (let y = room.y; y < room.y + room.height; y++) {
-            for (let x = room.x; x < room.x + room.width; x++) {
-                if (x >= 0 && x < dungeon.width && y >= 0 && y < dungeon.height) {
-                    dungeon.mapData[y][x] = 1; // Floor
-                }
-            }
-        }
-    });
-}
-
-/**
- * Add walls to dungeon - since we start with all floors, mark everything as wall
- * except rooms and corridors (which stay as floor)
- */
-function addWallsToDungeon(dungeon) {
-    // Create a set of all floor positions (rooms + corridors)
-    const floorPositions = new Set();
-
-    // Mark all room positions as floor
-    dungeon.rooms.forEach(room => {
-        for (let y = room.y; y < room.y + room.height; y++) {
-            for (let x = room.x; x < room.x + room.width; x++) {
-                if (x >= 0 && x < dungeon.width && y >= 0 && y < dungeon.height) {
-                    floorPositions.add(`${x},${y}`);
-                }
-            }
-        }
-    });
-
-    // Mark all corridor positions as floor
-    dungeon.corridors.forEach(corridor => {
-        if (corridor.path) {
-            corridor.path.forEach(point => {
-                if (point.x >= 0 && point.x < dungeon.width && point.y >= 0 && point.y < dungeon.height) {
-                    floorPositions.add(`${point.x},${point.y}`);
-                }
-            });
-        }
-    });
-
-    // Now mark everything as wall except the floor positions
-    for (let y = 0; y < dungeon.height; y++) {
-        for (let x = 0; x < dungeon.width; x++) {
-            const key = `${x},${y}`;
-            if (!floorPositions.has(key)) {
-                dungeon.mapData[y][x] = 0; // Wall
-            }
-            // Floor positions already have mapData[y][x] = 1 from initialization
-        }
-    }
-}
-
-/**
- * Carve corridors into the map (kept for reference, but not used when starting with floors)
- */
-function carveCorridors(dungeon) {
-    dungeon.corridors.forEach(corridor => {
-        corridor.path.forEach(point => {
-            if (point.x >= 0 && point.x < dungeon.width &&
-                point.y >= 0 && point.y < dungeon.height) {
-                dungeon.mapData[point.y][point.x] = 1; // Floor
-            }
-        });
-    });
-}
-
-/**
- * Place entrance and exit in dungeon
- */
-function placeDungeonFeatures(dungeon) {
-    if (dungeon.rooms.length === 0) return;
-
-    // Entrance in first room
-    const entranceRoom = dungeon.rooms[0];
-    dungeon.entrance = {
-        x: entranceRoom.centerX,
-        y: entranceRoom.centerY
-    };
-
-    // Exit in last room
-    const exitRoom = dungeon.rooms[dungeon.rooms.length - 1];
-    dungeon.exit = {
-        x: exitRoom.centerX,
-        y: exitRoom.centerY
-    };
-}
-
-/**
- * Create dungeon map from generated data
- */
-function createDungeonMap(level) {
-    const scene = game.scene.scenes[0];
-    if (!scene) {
-        console.error('❌ Scene not available for dungeon creation');
-        return;
-    }
-
-    const tileSize = 32;
-
-    try {
-        // Check if dungeon already exists in cache or needs regeneration
-        const dungeonKey = `level_${level}`;
-        const isCompleted = dungeonCompletions[dungeonKey] || false;
-
-        console.log(`🏗️ Creating dungeon level ${level}...`);
-        console.log(`🔍 Current dungeon cache state:`, {
-            dungeonKey,
-            cacheExists: !!dungeonCache[dungeonKey],
-            cacheHasSeed: !!(dungeonCache[dungeonKey] && dungeonCache[dungeonKey].seed),
-            cacheSeed: dungeonCache[dungeonKey]?.seed,
-            isCompleted,
-            currentDungeonExists: !!currentDungeon,
-            currentDungeonSeed: currentDungeon?.seed
-        });
-
-        // Debug: Log cache state
-        console.log(`🔍 Dungeon cache check for ${dungeonKey}:`, {
-            exists: !!dungeonCache[dungeonKey],
-            hasSeed: !!(dungeonCache[dungeonKey] && dungeonCache[dungeonKey].seed),
-            seed: dungeonCache[dungeonKey]?.seed,
-            isCompleted: isCompleted,
-            cacheKeys: Object.keys(dungeonCache)
-        });
-
-        if (isCompleted) {
-            // Generate new dungeon (boss was defeated, reset it)
-            console.log(`🔄 Dungeon level ${level} was completed, generating new one...`);
-            currentDungeon = generateDungeon(level, 40, 40);
-            dungeonCache[dungeonKey] = currentDungeon;
-        } else if (dungeonCache[dungeonKey] && dungeonCache[dungeonKey].seed) {
-            // Regenerate from saved seed
-            const savedSeed = dungeonCache[dungeonKey].seed;
-            console.log(`📦 Regenerating dungeon level ${level} from seed ${savedSeed}...`);
-
-            // CRITICAL: Ensure we use the exact same seed value (convert to number if needed)
-            const numericSeed = typeof savedSeed === 'number' ? savedSeed : parseInt(savedSeed, 10);
-            if (isNaN(numericSeed)) {
-                console.error(`❌ Invalid seed value: ${savedSeed}, generating new dungeon`);
-                currentDungeon = generateDungeon(level, 40, 40);
-                dungeonCache[dungeonKey] = currentDungeon;
-            } else {
-                currentDungeon = generateDungeon(
-                    level,
-                    40, 40,
-                    numericSeed
-                );
-                if (!currentDungeon) {
-                    console.error('❌ generateDungeon returned null when using seed');
-                    return;
-                }
-                // Ensure seed is preserved in cache (use the numeric seed we passed in)
-                currentDungeon.seed = numericSeed;
-                dungeonCache[dungeonKey] = currentDungeon;
-                console.log(`✅ Regenerated dungeon with seed ${numericSeed}, confirmed seed: ${currentDungeon.seed}`);
-            }
-        } else {
-            // Generate new dungeon
-            console.log(`🆕 Generating new dungeon level ${level} (no seed found in cache)...`);
-            currentDungeon = generateDungeon(level, 40, 40);
-            if (!currentDungeon) {
-                console.error('❌ generateDungeon returned null');
-                return;
-            }
-            dungeonCache[dungeonKey] = currentDungeon;
-            console.log(`✅ Generated new dungeon with seed ${currentDungeon.seed}`);
-        }
-
-        if (!currentDungeon || !currentDungeon.mapData) {
-            console.error('❌ Failed to generate dungeon - no mapData');
-            return;
-        }
-
-        console.log(`✅ Dungeon generated successfully: ${currentDungeon.width}x${currentDungeon.height}, ${currentDungeon.rooms.length} rooms`);
-    } catch (e) {
-        console.error('❌ Error generating dungeon:', e);
-        console.error(e.stack);
-        // Don't return here - let the error propagate so transitionToMap can handle it
-        throw e;
-    }
-
-    try {
-        // Clear previous tiles (create a copy of the list to avoid modification during iteration)
-        const toDestroy = [];
-        if (scene.children && scene.children.list) {
-            // Create a snapshot of children to avoid modification during iteration
-            const childrenSnapshot = Array.from(scene.children.list);
-            childrenSnapshot.forEach(child => {
-                if (child && child.depth >= 0 && child.depth <= 4 && child !== player) {
-                    toDestroy.push(child);
-                }
-            });
-        }
-        // Destroy in reverse order to avoid index issues
-        for (let i = toDestroy.length - 1; i >= 0; i--) {
-            const child = toDestroy[i];
-            if (child && child.active) {
-                try {
-                    child.destroy();
-                } catch (e) {
-                    console.warn('Error destroying child:', e);
-                }
-            }
-        }
-
-        // Set dungeon background to dark blue-grey (similar to floor tiles)
-        // This color matches the dark stone floor appearance
-        scene.cameras.main.setBackgroundColor('#1a1a2e');
-
-        // Create tiles from dungeon.mapData - ensure EVERY cell gets a tile
-        console.log(`🎨 Rendering dungeon tiles (${currentDungeon.width}x${currentDungeon.height})...`);
-        let tileCount = 0;
-        let floorCount = 0;
-        let wallCount = 0;
-        for (let y = 0; y < currentDungeon.height; y++) {
-            for (let x = 0; x < currentDungeon.width; x++) {
-                const tileType = currentDungeon.mapData[y][x];
-                // Ensure tileType is valid (should be 0 or 1)
-                if (tileType === undefined || tileType === null) {
-                    console.warn(`Invalid tileType at (${x}, ${y}), defaulting to wall`);
-                    currentDungeon.mapData[y][x] = 0; // Default to wall
-                }
-                createDungeonTile(x, y, currentDungeon.mapData[y][x], tileSize);
-                if (currentDungeon.mapData[y][x] === 1) floorCount++;
-                else wallCount++;
-                tileCount++;
-            }
-        }
-        console.log(`✅ Dungeon tiles rendered: ${tileCount} tiles (${floorCount} floors, ${wallCount} walls)`);
-    } catch (e) {
-        console.error('❌ Error rendering dungeon tiles:', e);
-        console.error(e.stack);
-        throw e; // Propagate error
-    }
-
-    // Create entrance and exit markers
-    try {
-        createDungeonMarkers(tileSize);
-    } catch (e) {
-        console.error('❌ Error creating dungeon markers:', e);
-        // Don't throw - markers are not critical
-    }
-
-    // Store map info
-    scene.mapWidth = currentDungeon.width;
-    scene.mapHeight = currentDungeon.height;
-    scene.tileSize = tileSize;
-
-    // Set world bounds
-    const playerSize = 32;
-    const worldWidth = currentDungeon.width * tileSize;
-
-    // Initialize A* Pathfinding
-    if (!pathfinder) {
-        pathfinder = new AStarPathfinding(tileSize);
-    }
-    if (currentDungeon && currentDungeon.mapData) {
-        pathfinder.initializeGrid(currentDungeon.mapData);
-    }
-    const worldHeight = currentDungeon.height * tileSize;
-    scene.physics.world.setBounds(
-        playerSize / 2,
-        playerSize / 2,
-        worldWidth - playerSize,
-        worldHeight - playerSize
-    );
-
-    // Position player at entrance
-    if (player && currentDungeon.entrance) {
-        player.x = currentDungeon.entrance.x * tileSize;
-        player.y = currentDungeon.entrance.y * tileSize;
-    }
-
-    console.log(`✅ Dungeon level ${level} created (seed: ${currentDungeon.seed}, rooms: ${currentDungeon.rooms.length})`);
-}
-
-/**
- * Create texture frames from tileset for each tile
- * For wall tiles, process to make white pixels transparent
- */
-function createTilesetFrames(tilesetKey, metadata, type) {
-    console.log(`🔧 createTilesetFrames called: tilesetKey=${tilesetKey}, type=${type}`);
-    if (!metadata || !metadata.tileset_data || !metadata.tileset_data.tiles) {
-        console.warn(`⚠️ createTilesetFrames: No metadata or tiles for ${tilesetKey}`);
-        return;
-    }
-
-    const tiles = metadata.tileset_data.tiles;
-    console.log(`📦 Processing ${tiles.length} tiles for ${type} tileset`);
-    const sourceTexture = this.textures.get(tilesetKey);
-
-    if (!sourceTexture) {
-        console.error(`❌ Source texture ${tilesetKey} not found!`);
-        return;
-    }
-
-    tiles.forEach(tile => {
-        const bbox = tile.bounding_box;
-        const frameKey = `dungeon_${type}_${tile.id}`;
-
-        // Remove existing texture if it exists to force reprocessing
-        if (this.textures.exists(frameKey)) {
-            this.textures.remove(frameKey);
-        }
-
-        // Process both floor and wall tilesets to remove green/white pixels
-        if (type === 'wall' || type === 'floor') {
-            // For wall tiles, process to make white pixels transparent
-            try {
-                // Create a canvas to process the image
-                const canvas = document.createElement('canvas');
-                canvas.width = bbox.width;
-                canvas.height = bbox.height;
-                const ctx = canvas.getContext('2d');
-
-                // Get the source image - try different methods to access it
-                let sourceImage = sourceTexture.getSourceImage();
-                if (!sourceImage && sourceTexture.source) {
-                    sourceImage = sourceTexture.source[0]?.image || sourceTexture.source[0]?.canvas;
-                }
-
-                if (sourceImage) {
-                    // Draw the tile region to canvas
-                    if (sourceImage instanceof HTMLImageElement || sourceImage instanceof HTMLCanvasElement || sourceImage instanceof ImageBitmap) {
-                        ctx.drawImage(sourceImage, bbox.x, bbox.y, bbox.width, bbox.height, 0, 0, bbox.width, bbox.height);
-
-                        // Process pixels: make white (or near-white) pixels transparent
-                        const imageData = ctx.getImageData(0, 0, bbox.width, bbox.height);
-                        const data = imageData.data;
-
-                        if (type === 'wall' && tile.id === 0) {
-                            console.log(`🎨 Processing first wall tile ${frameKey}, imageData size: ${data.length}, pixels: ${data.length / 4}`);
-                        }
-                        let transparentCount = 0;
-
-                        for (let i = 0; i < data.length; i += 4) {
-                            const r = data[i];
-                            const g = data[i + 1];
-                            const b = data[i + 2];
-                            const avg = (r + g + b) / 3;
-
-                            // For walls: remove white/light pixels (new tileset is already dark, no green processing needed)
-                            // For floors: remove green pixels (bright green that shouldn't be there)
-                            if (type === 'wall') {
-                                // Make pixels transparent if they're very light (threshold 220 for faint patterns)
-                                // New dark tileset shouldn't have bright green, so we only need to handle white/light pixels
-                                if (avg > 220 || (r > 220 && g > 220 && b > 220)) {
-                                    data[i + 3] = 0; // Set alpha to 0 (transparent)
-                                    transparentCount++;
-                                }
-                            } else if (type === 'floor') {
-                                // Remove bright green pixels (common in tilesets as background)
-                                // Check if it's a bright green color (high green, lower red/blue)
-                                if (g > 200 && g > r + 50 && g > b + 50) {
-                                    data[i + 3] = 0; // Set alpha to 0 (transparent)
-                                    transparentCount++;
-                                }
-                                // Also remove very light pixels (white/light grey backgrounds)
-                                if (avg > 240) {
-                                    data[i + 3] = 0;
-                                    transparentCount++;
-                                }
-                            }
-                        }
-
-                        if (transparentCount > 0) {
-                            console.log(`Processed ${type} tile ${frameKey}: made ${transparentCount} pixels transparent`);
-                        }
-
-                        ctx.putImageData(imageData, 0, 0);
-
-                        // Create texture from processed canvas
-                        this.textures.addCanvas(frameKey, canvas);
-                    } else {
-                        // Fallback: just add frame normally if we can't process
-                        sourceTexture.add(frameKey, 0, bbox.x, bbox.y, bbox.width, bbox.height);
-                    }
-                } else {
-                    // Fallback: just add frame normally
-                    sourceTexture.add(frameKey, 0, bbox.x, bbox.y, bbox.width, bbox.height);
-                }
-            } catch (e) {
-                console.warn(`Failed to process ${type} tile ${frameKey}, using normal frame:`, e);
-                // Fallback: just add frame normally
-                sourceTexture.add(frameKey, 0, bbox.x, bbox.y, bbox.width, bbox.height);
-            }
-        } else {
-            // Should not reach here - both floor and wall are processed above
-            sourceTexture.add(frameKey, 0, bbox.x, bbox.y, bbox.width, bbox.height);
-        }
-    });
-
-    console.log(`✅ Created ${tiles.length} texture frames for ${type} tileset`);
-}
-
-/**
- * Build lookup table for dungeon tiles based on corner patterns
- */
-function buildDungeonTileLookup(type) {
-    const metadata = type === 'floor' ? dungeonTilesets.floorMetadata : dungeonTilesets.wallMetadata;
-    if (!metadata || !metadata.tileset_data || !metadata.tileset_data.tiles) {
-        console.warn(`⚠️ No metadata tiles found for ${type}`);
-        return;
-    }
-
-    const lookup = type === 'floor' ? dungeonTilesets.floorTileLookup : dungeonTilesets.wallTileLookup;
-    const tiles = metadata.tileset_data.tiles;
-
-    // Build lookup: corner pattern string -> tile data
-    tiles.forEach(tile => {
-        const corners = tile.corners;
-        // Create pattern key: "NW_NE_SE_SW" format
-        const patternKey = `${corners.NW}_${corners.NE}_${corners.SE}_${corners.SW}`;
-        lookup[patternKey] = {
-            id: tile.id,
-            boundingBox: tile.bounding_box,
-            corners: corners
-        };
-    });
-
-    console.log(`✅ Built ${type} tile lookup with ${Object.keys(lookup).length} patterns`);
-}
-
-/**
- * Get corner terrain type for Wang tiling
- * For a cell at (x, y), we check the 4 corners by looking at adjacent cells:
- * - NW corner: check cell (x, y) itself
- * - NE corner: check cell (x+1, y)
- * - SE corner: check cell (x+1, y+1)
- * - SW corner: check cell (x, y+1)
- * 
- * For floor tileset: "lower" = dark stone, "upper" = lighter stone (both are floors)
- * For wall tileset: "lower" = floor, "upper" = wall
- */
-function getCornerTerrain(cellX, cellY, corner, mapData, width, height, isFloorTileset) {
-    let checkX = cellX;
-    let checkY = cellY;
-
-    // Adjust coordinates based on which corner we're checking
-    if (corner === 'NE' || corner === 'SE') {
-        checkX = cellX + 1;
-    }
-    if (corner === 'SE' || corner === 'SW') {
-        checkY = cellY + 1;
-    }
-
-    // Clamp to map bounds (treat out-of-bounds as wall)
-    if (checkX < 0 || checkX >= width || checkY < 0 || checkY >= height) {
-        return isFloorTileset ? 'lower' : 'upper'; // Out of bounds: floor tileset uses lower, wall uses upper
-    }
-
-    const tileType = mapData[checkY][checkX];
-
-    if (isFloorTileset) {
-        // For floor tileset: "lower" = dark stone, "upper" = lighter stone (both are floor types)
-        // Use only "lower" (dark stone) for consistent floor appearance
-        // This avoids the checkerboard pattern
-        return 'lower';
-    } else {
-        // For wall tileset: floor = "lower", wall = "upper"
-        return tileType === 0 ? 'upper' : 'lower';
-    }
-}
-
-/**
- * Get the appropriate tile from tileset based on Wang tiling corners
- */
-function getWangTile(x, y, mapData, width, height, type) {
-    const isFloorTileset = type === 'floor';
-
-    // Get corner terrain types (NW, NE, SE, SW) for cell at (x, y)
-    const nw = getCornerTerrain(x, y, 'NW', mapData, width, height, isFloorTileset);
-    const ne = getCornerTerrain(x, y, 'NE', mapData, width, height, isFloorTileset);
-    const se = getCornerTerrain(x, y, 'SE', mapData, width, height, isFloorTileset);
-    const sw = getCornerTerrain(x, y, 'SW', mapData, width, height, isFloorTileset);
-
-    // Create pattern key
-    const patternKey = `${nw}_${ne}_${se}_${sw}`;
-
-    // Look up tile
-    const lookup = type === 'floor' ? dungeonTilesets.floorTileLookup : dungeonTilesets.wallTileLookup;
-    let tileData = lookup[patternKey];
-
-    if (!tileData) {
-        // Try fallback: use base tile (all corners same type)
-        const allLower = patternKey.split('_').every(c => c === 'lower');
-        const fallbackKey = allLower ? 'lower_lower_lower_lower' : 'upper_upper_upper_upper';
-        tileData = lookup[fallbackKey];
-
-        // If still no match, try to find any tile with mostly matching corners
-        if (!tileData) {
-            // Find the first available tile as ultimate fallback
-            const firstKey = Object.keys(lookup)[0];
-            tileData = firstKey ? lookup[firstKey] : null;
-        }
-    }
-
-    return tileData;
-}
-
-/**
- * Create a dungeon tile using Wang tiling
- */
-function createDungeonTile(x, y, tileType, tileSize) {
-    const scene = game.scene.scenes[0];
-    let tile;
-
-    // Check if tilesets are loaded and working
-    const floorTilesetLoaded = scene.textures.exists('dungeon_floor_tileset');
-    const wallTilesetLoaded = scene.textures.exists('dungeon_wall_tileset');
-    const hasMetadata = dungeonTilesets.floorMetadata && dungeonTilesets.wallMetadata;
-    const hasLookups = Object.keys(dungeonTilesets.floorTileLookup).length > 0 &&
-        Object.keys(dungeonTilesets.wallTileLookup).length > 0;
-    const useTilesets = floorTilesetLoaded && wallTilesetLoaded && hasMetadata && hasLookups;
-
-    // Debug: log once to see what's happening
-    if (x === 0 && y === 0 && tileType === 1 && !useTilesets) {
-        console.warn('⚠️ Dungeon tilesets not available, using fallback colors:', {
-            floorTilesetLoaded,
-            wallTilesetLoaded,
-            hasMetadata,
-            hasLookups,
-            floorLookupSize: Object.keys(dungeonTilesets.floorTileLookup).length,
-            wallLookupSize: Object.keys(dungeonTilesets.wallTileLookup).length
-        });
-    }
-
-    if (tileType === 0) {
-        // Wall
-        if (useTilesets) {
-            // Use Wang tiling for walls
-            const tileData = getWangTile(x, y, currentDungeon.mapData, currentDungeon.width, currentDungeon.height, 'wall');
-            if (tileData && tileData.boundingBox) {
-                const bbox = tileData.boundingBox;
-                try {
-                    // Use pre-created texture frame
-                    const frameKey = `dungeon_wall_${tileData.id}`;
-                    // Check if we created a processed frame (for walls) or use the original tileset
-                    if (scene.textures.exists(frameKey)) {
-                        // Use the processed frame (with white pixels made transparent)
-                        tile = scene.add.image(x * tileSize, y * tileSize, frameKey);
-                        tile.setOrigin(0);
-                        tile.setDisplaySize(tileSize, tileSize);
-                        // Apply dark tint for dungeon-like appearance
-                        tile.setTint(0x1a1a1a); // Very dark gray tint
-                    } else {
-                        // Fallback: use crop method - process pixels directly to remove green
-                        const sourceTexture = scene.textures.get('dungeon_wall_tileset');
-                        const sourceImage = sourceTexture.getSourceImage();
-
-                        if (sourceImage) {
-                            // Create a canvas to process the tile region
-                            const canvas = document.createElement('canvas');
-                            canvas.width = bbox.width;
-                            canvas.height = bbox.height;
-                            const ctx = canvas.getContext('2d');
-
-                            // Draw the tile region
-                            ctx.drawImage(sourceImage, bbox.x, bbox.y, bbox.width, bbox.height, 0, 0, bbox.width, bbox.height);
-
-                            // Process pixels to remove white/light pixels (new dark tileset shouldn't need green processing)
-                            const imageData = ctx.getImageData(0, 0, bbox.width, bbox.height);
-                            const data = imageData.data;
-
-                            for (let i = 0; i < data.length; i += 4) {
-                                const r = data[i];
-                                const g = data[i + 1];
-                                const b = data[i + 2];
-                                const avg = (r + g + b) / 3;
-
-                                // Remove very light pixels (white/light backgrounds)
-                                if (avg > 220 || (r > 220 && g > 220 && b > 220)) {
-                                    data[i + 3] = 0; // Make transparent
-                                }
-                            }
-
-                            ctx.putImageData(imageData, 0, 0);
-
-                            // Create texture from processed canvas
-                            const processedKey = `dungeon_wall_processed_${tileData.id}_${bbox.x}_${bbox.y}`;
-                            if (!scene.textures.exists(processedKey)) {
-                                scene.textures.addCanvas(processedKey, canvas);
-                            }
-
-                            tile = scene.add.image(x * tileSize, y * tileSize, processedKey);
-                            tile.setOrigin(0);
-                            tile.setDisplaySize(tileSize, tileSize);
-                            // Apply dark tint for dungeon-like appearance
-                            tile.setTint(0x1a1a1a); // Very dark gray tint
-                        } else {
-                            // Ultimate fallback: use crop method without processing
-                            tile = scene.add.image(x * tileSize, y * tileSize, 'dungeon_wall_tileset');
-                            tile.setOrigin(0);
-                            tile.setCrop(bbox.x, bbox.y, bbox.width, bbox.height);
-                            tile.setDisplaySize(tileSize, tileSize);
-                            // Apply dark tint for dungeon-like appearance
-                            tile.setTint(0x1a1a1a); // Very dark gray tint
-                        }
-                    }
-                } catch (e) {
-                    console.warn(`Failed to create wall tile at (${x}, ${y}):`, e);
-                    // Fallback to solid color - dark and dank dungeon color
-                    tile = scene.add.rectangle(x * tileSize, y * tileSize, tileSize, tileSize, 0x151515, 1.0)
-                        .setOrigin(0);
-                }
-            } else {
-                // Fallback to solid color if lookup failed - dark and dank dungeon color
-                tile = scene.add.rectangle(x * tileSize, y * tileSize, tileSize, tileSize, 0x151515, 1.0)
-                    .setOrigin(0);
-            }
-        } else {
-            // Fallback: use dark colored rectangle (stone-like) - dark and dank dungeon color
-            tile = scene.add.rectangle(x * tileSize, y * tileSize, tileSize, tileSize, 0x151515, 1.0)
-                .setOrigin(0);
-        }
-
-        // Add wall to collision array
-        dungeonWalls.push({
-            x: x * tileSize,
-            y: y * tileSize,
-            width: tileSize,
-            height: tileSize,
-            rect: tile
-        });
-    } else {
-        // Floor
-        if (useTilesets) {
-            // Use Wang tiling for floors
-            const tileData = getWangTile(x, y, currentDungeon.mapData, currentDungeon.width, currentDungeon.height, 'floor');
-            if (tileData && tileData.boundingBox) {
-                const bbox = tileData.boundingBox;
-                try {
-                    // Use pre-created texture frame (processed to remove green)
-                    const frameKey = `dungeon_floor_${tileData.id}`;
-                    // Check if we created a processed frame (for floors) or use the original tileset
-                    if (scene.textures.exists(frameKey)) {
-                        // Use the processed frame (with green pixels made transparent)
-                        tile = scene.add.image(x * tileSize, y * tileSize, frameKey);
-                        tile.setOrigin(0);
-                        tile.setDisplaySize(tileSize, tileSize);
-                    } else if (scene.textures.exists('dungeon_floor_tileset') &&
-                        scene.textures.get('dungeon_floor_tileset').has(frameKey)) {
-                        // Fallback: use frame from tileset
-                        tile = scene.add.image(x * tileSize, y * tileSize, 'dungeon_floor_tileset', frameKey);
-                        tile.setOrigin(0);
-                        tile.setDisplaySize(tileSize, tileSize);
-                    } else {
-                        // Fallback: use crop method
-                        tile = scene.add.image(x * tileSize, y * tileSize, 'dungeon_floor_tileset');
-                        tile.setOrigin(0);
-                        tile.setCrop(bbox.x, bbox.y, bbox.width, bbox.height);
-                        tile.setDisplaySize(tileSize, tileSize);
-                    }
-                } catch (e) {
-                    console.warn(`Failed to create floor tile at (${x}, ${y}):`, e);
-                    // Fallback to solid color
-                    tile = scene.add.rectangle(x * tileSize, y * tileSize, tileSize, tileSize, 0x555555, 1.0)
-                        .setOrigin(0);
-                }
-            } else {
-                // Fallback to solid color if lookup failed - use dark grey (not green)
-                tile = scene.add.rectangle(x * tileSize, y * tileSize, tileSize, tileSize, 0x333333, 1.0)
-                    .setOrigin(0);
-            }
-        } else {
-            // Fallback: use dark grey rectangle (stone floor-like) - ensure no green
-            tile = scene.add.rectangle(x * tileSize, y * tileSize, tileSize, tileSize, 0x333333, 1.0)
-                .setOrigin(0);
-        }
-    }
-
-    // Ensure tile is created and has proper depth
-    if (tile) {
-        tile.setDepth(0);
-    } else {
-        // Ultimate fallback - create a dark tile so nothing is green
-        console.warn(`Failed to create tile at (${x}, ${y}), creating fallback`);
-        tile = scene.add.rectangle(x * tileSize, y * tileSize, tileSize, tileSize, 0x333333, 1.0)
-            .setOrigin(0).setDepth(0);
-    }
-}
-
-/**
- * Create dungeon entrance and exit markers
- */
-function createDungeonMarkers(tileSize) {
-    const scene = game.scene.scenes[0];
-    transitionMarkers = [];
-
-    // Entrance marker (exit to wilderness)
-    if (currentDungeon.entrance) {
-        const entranceX = currentDungeon.entrance.x * tileSize;
-        const entranceY = currentDungeon.entrance.y * tileSize;
-
-        const entranceMarker = scene.add.rectangle(entranceX, entranceY, tileSize * 2, tileSize * 2, 0x00ff00, 0.5)
-            .setDepth(3).setStrokeStyle(3, 0x00ff00);
-
-        const entranceText = scene.add.text(entranceX, entranceY, 'EXIT\nTO SURFACE', {
-            fontSize: '12px',
-            fill: '#ffffff',
-            fontStyle: 'bold',
-            align: 'center'
-        }).setDepth(4).setOrigin(0.5, 0.5);
-
-        transitionMarkers.push({
-            x: entranceX,
-            y: entranceY,
-            radius: tileSize * 1.5,
-            targetMap: 'wilderness',
-            marker: entranceMarker,
-            text: entranceText
-        });
-    }
-
-    // Exit marker (stairs to next level)
-    if (currentDungeon.exit) {
-        const exitX = currentDungeon.exit.x * tileSize;
-        const exitY = currentDungeon.exit.y * tileSize;
-
-        const exitMarker = scene.add.rectangle(exitX, exitY, tileSize * 2, tileSize * 2, 0xff8800, 0.5)
-            .setDepth(3).setStrokeStyle(3, 0xff8800);
-
-        const exitText = scene.add.text(exitX, exitY, `STAIRS\nLEVEL ${dungeonLevel + 1}`, {
-            fontSize: '12px',
-            fill: '#ffffff',
-            fontStyle: 'bold',
-            align: 'center'
-        }).setDepth(4).setOrigin(0.5, 0.5);
-
-        transitionMarkers.push({
-            x: exitX,
-            y: exitY,
-            radius: tileSize * 1.5,
-            targetMap: 'dungeon',
-            dungeonLevel: dungeonLevel + 1,
-            marker: exitMarker,
-            text: exitText
-        });
-    }
-}
-
-/**
- * Spawn monsters in dungeon rooms
- */
 function spawnDungeonMonsters() {
     const scene = game.scene.scenes[0];
-    if (!currentDungeon || !currentDungeon.rooms) return;
+    if (!MapManager.currentDungeon || !MapManager.currentDungeon.rooms) return;
 
     // Spawn monsters in rooms (not entrance room, not exit room)
-    const combatRooms = currentDungeon.rooms.slice(1, -1); // Skip first and last room
+    const combatRooms = MapManager.currentDungeon.rooms.slice(1, -1); // Skip first and last room
 
     combatRooms.forEach(room => {
         // Spawn 1-3 monsters per room
@@ -3658,7 +1634,7 @@ function spawnDungeonMonsters() {
             // Early floors (1-2) spawn Echo creatures for main quest
             let dungeonMonsterTypes = [];
 
-            if (dungeonLevel <= 2) {
+            if (MapManager.dungeonLevel <= 2) {
                 // Floor 1-2: Echo creatures for main quest line
                 dungeonMonsterTypes = [
                     { name: 'Echo Rat', textureKey: 'monster_echo_mite', hp: 20, attack: 4, speed: 70, xp: 8, isProcedural: false, monsterType: 'echo_rat', spawnAmount: [3, 5] },
@@ -3696,9 +1672,9 @@ function spawnDungeonMonsters() {
             }
 
             const selectedType = Phaser.Utils.Array.GetRandom(dungeonMonsterTypes);
-            const scaledHp = selectedType.hp + (dungeonLevel * 10);
-            const scaledAttack = selectedType.attack + (dungeonLevel * 2);
-            const scaledXp = (selectedType.xp || 10) + (dungeonLevel * 5);
+            const scaledHp = selectedType.hp + (MapManager.dungeonLevel * 10);
+            const scaledAttack = selectedType.attack + (MapManager.dungeonLevel * 2);
+            const scaledXp = (selectedType.xp || 10) + (MapManager.dungeonLevel * 5);
 
             // Determine pack size based on spawnAmount
             const spawnAmount = selectedType.spawnAmount || [1, 1];
@@ -3716,12 +1692,12 @@ function spawnDungeonMonsters() {
     });
 
     // Spawn boss in exit room
-    if (currentDungeon.exit && currentDungeon.rooms.length > 0) {
-        const bossRoom = currentDungeon.rooms[currentDungeon.rooms.length - 1];
+    if (MapManager.currentDungeon.exit && MapManager.currentDungeon.rooms.length > 0) {
+        const bossRoom = MapManager.currentDungeon.rooms[MapManager.currentDungeon.rooms.length - 1];
         const bossX = bossRoom.centerX * scene.tileSize;
         const bossY = bossRoom.centerY * scene.tileSize;
 
-        spawnBossMonster(bossX, bossY, dungeonLevel);
+        spawnBossMonster(bossX, bossY, MapManager.dungeonLevel);
     }
 }
 
@@ -3766,11 +1742,11 @@ function onBossDefeated(level, x, y) {
     const dungeonKey = `level_${level}`;
 
     // Mark dungeon as completed
-    dungeonCompletions[dungeonKey] = true;
+    MapManager.dungeonCompletions[dungeonKey] = true;
 
     // Clear dungeon from cache (force regeneration on next entry)
-    delete dungeonCache[dungeonKey];
-    currentDungeon = null;
+    delete MapManager.dungeonCache[dungeonKey];
+    MapManager.currentDungeon = null;
 
     // Drop boss loot
     dropBossLoot(x, y, level);
@@ -3849,14 +1825,14 @@ function dropBossLoot(x, y, level) {
             itemY = y + Math.sin(angle) * radius;
 
             // Check if position is walkable (in dungeon)
-            if (currentDungeon && currentDungeon.mapData) {
+            if (MapManager.currentDungeon && MapManager.currentDungeon.mapData) {
                 const tileX = Math.floor(itemX / tileSize);
                 const tileY = Math.floor(itemY / tileSize);
 
                 // Check bounds
-                if (tileX >= 0 && tileX < currentDungeon.width &&
-                    tileY >= 0 && tileY < currentDungeon.height) {
-                    const tileType = currentDungeon.mapData[tileY][tileX];
+                if (tileX >= 0 && tileX < MapManager.currentDungeon.width &&
+                    tileY >= 0 && tileY < MapManager.currentDungeon.height) {
+                    const tileType = MapManager.currentDungeon.mapData[tileY][tileX];
                     if (tileType === 1) { // Floor tile (walkable)
                         break; // Found valid position
                     }
@@ -3915,6 +1891,14 @@ function dropBossLoot(x, y, level) {
  */
 function create() {
     console.log('🚀 CREATE FUNCTION CALLED - Starting tileset processing');
+
+    // Initialize Map Manager
+    if (typeof MapManager !== 'undefined') {
+        MapManager.init(this);
+        console.log('✅ MapManager initialized');
+    } else {
+        console.error('❌ MapManager not found!');
+    }
 
     // Initialize procedural monster renderer (Method 2)
     monsterRenderer = new MonsterRenderer(this);
@@ -4048,58 +2032,17 @@ function create() {
     }
 
     // Parse dungeon tileset metadata and create texture frames
-    try {
-        if (this.cache.text.exists('dungeon_floor_metadata')) {
-            const floorMetadataText = this.cache.text.get('dungeon_floor_metadata');
-            dungeonTilesets.floorMetadata = JSON.parse(floorMetadataText);
-
-            // Create texture frames for floor tiles
-            if (this.textures.exists('dungeon_floor_tileset')) {
-                createTilesetFrames.call(this, 'dungeon_floor_tileset', dungeonTilesets.floorMetadata, 'floor');
-                console.log('✅ Dungeon floor tileset image loaded and frames created');
-            } else {
-                console.warn('⚠️ Dungeon floor tileset image not found');
-            }
-
-            buildDungeonTileLookup('floor');
-            console.log('✅ Dungeon floor tileset metadata loaded');
-        } else {
-            console.warn('⚠️ Dungeon floor metadata not found in cache');
-        }
-
-        if (this.cache.text.exists('dungeon_wall_metadata')) {
-            console.log('📋 Found dungeon_wall_metadata in cache');
-            const wallMetadataText = this.cache.text.get('dungeon_wall_metadata');
-            dungeonTilesets.wallMetadata = JSON.parse(wallMetadataText);
-            console.log('📋 Parsed wall metadata, tiles:', dungeonTilesets.wallMetadata?.tileset_data?.tiles?.length || 0);
-
-            // Create texture frames for wall tiles
-            if (this.textures.exists('dungeon_wall_tileset')) {
-                console.log('🔨 About to call createTilesetFrames for wall tileset');
-                console.log('🔨 Texture exists check passed');
-                try {
-                    createTilesetFrames.call(this, 'dungeon_wall_tileset', dungeonTilesets.wallMetadata, 'wall');
-                    console.log('✅ createTilesetFrames completed for wall tileset');
-                } catch (e) {
-                    console.error('❌ Error in createTilesetFrames:', e);
-                }
-                console.log('✅ Dungeon wall tileset image loaded and frames created');
-            } else {
-                console.warn('⚠️ Dungeon wall tileset image not found in textures');
-            }
-
-            buildDungeonTileLookup('wall');
-            console.log('✅ Dungeon wall tileset metadata loaded');
-        } else {
-            console.warn('⚠️ Dungeon wall metadata not found in cache');
-        }
-    } catch (e) {
-        console.warn('⚠️ Could not load dungeon tileset metadata:', e);
-        console.error(e.stack);
+    if (typeof MapManager !== 'undefined') {
+        MapManager.loadDungeonTilesets();
     }
 
     // Start with town map
-    createTownMap();
+    // Create initial map
+    if (typeof MapManager !== 'undefined') {
+        MapManager.createTownMap();
+    } else {
+        console.error('❌ MapManager not defined!');
+    }
 
     // Start village music on initial load
     console.log('🎵 Checking for village music...');
@@ -4539,7 +2482,7 @@ function triggerWorldInteraction() {
     }
 
     // Check transition markers
-    for (const marker of transitionMarkers) {
+    for (const marker of MapManager.transitionMarkers) {
         if (!marker || !marker.x || !marker.y) continue;
         const distance = Phaser.Math.Distance.Between(player.x, player.y, marker.x, marker.y);
         if (distance <= marker.radius) {
@@ -4549,7 +2492,7 @@ function triggerWorldInteraction() {
             if (marker.targetMap === 'dungeon' && targetLevel > 1) {
                 const previousLevel = targetLevel - 1;
                 const previousLevelKey = `level_${previousLevel}`;
-                const previousLevelCompleted = dungeonCompletions[previousLevelKey] || false;
+                const previousLevelCompleted = MapManager.dungeonCompletions[previousLevelKey] || false;
 
                 if (!previousLevelCompleted) {
                     showDamageNumber(player.x, player.y - 40, `Defeat Level ${previousLevel} Boss First!`, 0xff0000);
@@ -4568,7 +2511,7 @@ function triggerWorldInteraction() {
 
             console.log(`🚪 Transitioning to ${marker.targetMap} level ${targetLevel}`);
             try {
-                transitionToMap(marker.targetMap, targetLevel);
+                MapManager.transitionToMap(marker.targetMap, targetLevel);
             } catch (e) {
                 console.error('❌ Error during transition:', e);
             }
@@ -4584,8 +2527,8 @@ function triggerWorldInteraction() {
         return true;
     }
 
-    // Check buildings first (in town), then NPCs
-    if (typeof currentMap !== 'undefined' && currentMap === 'town') {
+    // Check MapManager.buildings first (in town), then NPCs
+    if (typeof MapManager.currentMap !== 'undefined' && MapManager.currentMap === 'town') {
         if (typeof checkBuildingInteraction === 'function') {
             checkBuildingInteraction();
             // If building UI opened, return true
@@ -4862,7 +2805,7 @@ function update(time, delta) {
     }
 
     // Check building collisions (only in town) - allow sliding along walls (using dungeon wall logic)
-    if (currentMap === 'town' && buildings.length > 0) {
+    if (MapManager.currentMap === 'town' && MapManager.buildings.length > 0) {
         const playerSize = 12; // Smaller collision box for easier navigation (matches dungeon)
         const deltaTime = delta / 1000;
 
@@ -4870,11 +2813,11 @@ function update(time, delta) {
         const originalVelX = player.body.velocity.x;
         const originalVelY = player.body.velocity.y;
 
-        // Check if player is currently overlapping with any buildings
+        // Check if player is currently overlapping with any MapManager.buildings
         let isTouchingBuilding = false;
         let touchingBuildings = [];
 
-        for (const building of buildings) {
+        for (const building of MapManager.buildings) {
             const overlap = player.x + playerSize > building.x &&
                 player.x - playerSize < building.x + building.width &&
                 player.y + playerSize > building.y &&
@@ -4887,7 +2830,7 @@ function update(time, delta) {
         }
 
         // First, check if player is stuck inside a building and push them out immediately
-        for (const building of buildings) {
+        for (const building of MapManager.buildings) {
             const isInside = player.x + playerSize > building.x &&
                 player.x - playerSize < building.x + building.width &&
                 player.y + playerSize > building.y &&
@@ -4934,7 +2877,7 @@ function update(time, delta) {
             const testX = player.x + originalVelX * deltaTime;
             const testY = player.y; // Use current Y position
 
-            for (const building of buildings) {
+            for (const building of MapManager.buildings) {
                 if (testX + playerSize > building.x &&
                     testX - playerSize < building.x + building.width &&
                     testY + playerSize > building.y &&
@@ -4950,7 +2893,7 @@ function update(time, delta) {
             const testX = player.x; // Use current X position
             const testY = player.y + originalVelY * deltaTime;
 
-            for (const building of buildings) {
+            for (const building of MapManager.buildings) {
                 if (testX + playerSize > building.x &&
                     testX - playerSize < building.x + building.width &&
                     testY + playerSize > building.y &&
@@ -4986,7 +2929,7 @@ function update(time, delta) {
                     const isHorizontalBuilding = building.width >= building.height;
                     const isVerticalBuilding = building.height >= building.width;
 
-                    // For vertical buildings: allow Y movement (sliding along) OR X movement away from building
+                    // For vertical MapManager.buildings: allow Y movement (sliding along) OR X movement away from building
                     if (isVerticalBuilding) {
                         const isOverlapping = player.x + playerSize > building.x &&
                             player.x - playerSize < building.x + building.width &&
@@ -5000,10 +2943,10 @@ function update(time, delta) {
 
                         // If moving X away from the building (distance increases) AND we're overlapping, allow it
                         if (originalVelX !== 0 && isOverlapping && newDistX > currentDistX) {
-                            // Moving away from vertical building - check if it would collide with other buildings
+                            // Moving away from vertical building - check if it would collide with other MapManager.buildings
                             const testX = player.x + originalVelX * deltaTime;
                             let wouldCollideWithOther = false;
-                            for (const otherBuilding of buildings) {
+                            for (const otherBuilding of MapManager.buildings) {
                                 if (otherBuilding === building) continue;
                                 if (testX + playerSize > otherBuilding.x &&
                                     testX - playerSize < otherBuilding.x + otherBuilding.width &&
@@ -5021,7 +2964,7 @@ function update(time, delta) {
                             const slidePlayerSize = playerSize - 2;
                             const testY = player.y + originalVelY * deltaTime;
                             let yWouldCollide = false;
-                            for (const otherBuilding of buildings) {
+                            for (const otherBuilding of MapManager.buildings) {
                                 if (otherBuilding === building) continue;
                                 if (player.x + slidePlayerSize > otherBuilding.x &&
                                     player.x - slidePlayerSize < otherBuilding.x + otherBuilding.width &&
@@ -5037,7 +2980,7 @@ function update(time, delta) {
                         }
                     }
 
-                    // For horizontal buildings: allow X movement (sliding along) OR Y movement away from building
+                    // For horizontal MapManager.buildings: allow X movement (sliding along) OR Y movement away from building
                     if (isHorizontalBuilding) {
                         const buildingCenterY = building.y + building.height / 2;
                         const currentDistY = Math.abs(player.y - buildingCenterY);
@@ -5054,7 +2997,7 @@ function update(time, delta) {
                             // Moving away from horizontal building - allow Y movement
                             const testY = player.y + originalVelY * deltaTime;
                             let wouldCollideWithOther = false;
-                            for (const otherBuilding of buildings) {
+                            for (const otherBuilding of MapManager.buildings) {
                                 if (otherBuilding === building) continue;
                                 if (player.x + playerSize > otherBuilding.x &&
                                     player.x - playerSize < otherBuilding.x + otherBuilding.width &&
@@ -5072,7 +3015,7 @@ function update(time, delta) {
                             const slidePlayerSize = playerSize - 2;
                             const testX = player.x + originalVelX * deltaTime;
                             let xWouldCollide = false;
-                            for (const otherBuilding of buildings) {
+                            for (const otherBuilding of MapManager.buildings) {
                                 if (otherBuilding === building) continue;
                                 if (testX + slidePlayerSize > otherBuilding.x &&
                                     testX - slidePlayerSize < otherBuilding.x + otherBuilding.width &&
@@ -5092,7 +3035,7 @@ function update(time, delta) {
         }
 
         // Apply movement restrictions - only block the axis that collides
-        // This allows sliding along buildings when moving diagonally
+        // This allows sliding along MapManager.buildings when moving diagonally
         if (!canMoveX) {
             player.setVelocityX(0);
         }
@@ -5113,7 +3056,7 @@ function update(time, delta) {
     }
 
     // Check dungeon wall collisions - allow sliding along walls
-    if (currentMap === 'dungeon' && dungeonWalls.length > 0) {
+    if (MapManager.currentMap === 'dungeon' && MapManager.dungeonWalls.length > 0) {
         const playerSize = 12; // Smaller collision box for easier navigation (was 16)
         const deltaTime = delta / 1000;
 
@@ -5125,7 +3068,7 @@ function update(time, delta) {
         let isTouchingWall = false;
         let touchingWalls = [];
 
-        for (const wall of dungeonWalls) {
+        for (const wall of MapManager.dungeonWalls) {
             const overlap = player.x + playerSize > wall.x &&
                 player.x - playerSize < wall.x + wall.width &&
                 player.y + playerSize > wall.y &&
@@ -5138,7 +3081,7 @@ function update(time, delta) {
         }
 
         // First, check if player is stuck inside a wall and push them out immediately
-        for (const wall of dungeonWalls) {
+        for (const wall of MapManager.dungeonWalls) {
             const isInside = player.x + playerSize > wall.x &&
                 player.x - playerSize < wall.x + wall.width &&
                 player.y + playerSize > wall.y &&
@@ -5186,7 +3129,7 @@ function update(time, delta) {
             const testX = player.x + originalVelX * deltaTime;
             const testY = player.y; // Use current Y position
 
-            for (const wall of dungeonWalls) {
+            for (const wall of MapManager.dungeonWalls) {
                 if (testX + playerSize > wall.x &&
                     testX - playerSize < wall.x + wall.width &&
                     testY + playerSize > wall.y &&
@@ -5202,7 +3145,7 @@ function update(time, delta) {
             const testX = player.x; // Use current X position
             const testY = player.y + originalVelY * deltaTime;
 
-            for (const wall of dungeonWalls) {
+            for (const wall of MapManager.dungeonWalls) {
                 if (testX + playerSize > wall.x &&
                     testX - playerSize < wall.x + wall.width &&
                     testY + playerSize > wall.y &&
@@ -5259,7 +3202,7 @@ function update(time, delta) {
                             // Moving away from vertical wall - check if it would collide with other walls
                             const testX = player.x + originalVelX * deltaTime;
                             let wouldCollideWithOther = false;
-                            for (const otherWall of dungeonWalls) {
+                            for (const otherWall of MapManager.dungeonWalls) {
                                 if (otherWall === wall) continue;
                                 if (testX + playerSize > otherWall.x &&
                                     testX - playerSize < otherWall.x + otherWall.width &&
@@ -5277,7 +3220,7 @@ function update(time, delta) {
                             const slidePlayerSize = playerSize - 2;
                             const testY = player.y + originalVelY * deltaTime;
                             let yWouldCollide = false;
-                            for (const otherWall of dungeonWalls) {
+                            for (const otherWall of MapManager.dungeonWalls) {
                                 if (otherWall === wall) continue;
                                 if (player.x + slidePlayerSize > otherWall.x &&
                                     player.x - slidePlayerSize < otherWall.x + otherWall.width &&
@@ -5295,7 +3238,7 @@ function update(time, delta) {
                             const slidePlayerSize = playerSize - 2;
                             const testY = player.y + originalVelY * deltaTime;
                             let yWouldCollide = false;
-                            for (const otherWall of dungeonWalls) {
+                            for (const otherWall of MapManager.dungeonWalls) {
                                 if (otherWall === wall) continue;
                                 if (player.x + slidePlayerSize > otherWall.x &&
                                     player.x - slidePlayerSize < otherWall.x + otherWall.width &&
@@ -5331,7 +3274,7 @@ function update(time, delta) {
                             // But still check if it would collide with other walls
                             const testY = player.y + originalVelY * deltaTime;
                             let wouldCollideWithOther = false;
-                            for (const otherWall of dungeonWalls) {
+                            for (const otherWall of MapManager.dungeonWalls) {
                                 if (otherWall === wall) continue;
                                 if (player.x + playerSize > otherWall.x &&
                                     player.x - playerSize < otherWall.x + otherWall.width &&
@@ -5349,7 +3292,7 @@ function update(time, delta) {
                             const slidePlayerSize = playerSize - 2;
                             const testX = player.x + originalVelX * deltaTime;
                             let xWouldCollide = false;
-                            for (const otherWall of dungeonWalls) {
+                            for (const otherWall of MapManager.dungeonWalls) {
                                 if (otherWall === wall) continue;
                                 if (testX + slidePlayerSize > otherWall.x &&
                                     testX - slidePlayerSize < otherWall.x + otherWall.width &&
@@ -5542,7 +3485,7 @@ function update(time, delta) {
     checkQuestProgress();
 
     // Monster respawn system - only in wilderness
-    if (currentMap === 'wilderness' && monsters.length < MONSTER_RESPAWN_THRESHOLD) {
+    if (MapManager.currentMap === 'wilderness' && monsters.length < MONSTER_RESPAWN_THRESHOLD) {
         const scene = game.scene.scenes[0];
         const mapWidth = scene.mapWidth * scene.tileSize;
         const mapHeight = scene.mapHeight * scene.tileSize;
@@ -5620,12 +3563,12 @@ function update(time, delta) {
     updateNPCIndicators();
 
     // Update building indicators (only in town)
-    if (currentMap === 'town') {
+    if (MapManager.currentMap === 'town') {
         updateBuildingIndicators();
     }
 
     // Update transition marker visibility (pulse effect when near)
-    transitionMarkers.forEach(marker => {
+    MapManager.transitionMarkers.forEach(marker => {
         if (marker.marker && marker.marker.active) {
             const distance = Phaser.Math.Distance.Between(player.x, player.y, marker.x, marker.y);
             const pulseSpeed = 300;
@@ -5695,6 +3638,11 @@ function update(time, delta) {
     }
 
     // Monster AI and combat
+    // Add collision against dungeon walls
+    if (MapManager.currentMap === 'dungeon' && MapManager.wallGroup && monsters.length > 0) {
+        this.physics.collide(monsters, MapManager.wallGroup);
+    }
+
     monsters.forEach((monster, index) => {
         // Skip if monster is invalid or destroyed
         if (!monster || !monster.active || !monster.body) {
@@ -5723,7 +3671,7 @@ function update(time, delta) {
                 player,
                 time,
                 delta,
-                currentMap,
+                MapManager.currentMap,
                 pathfinder,
                 monsterAttackPlayer // Pass the global attack function
             );
@@ -5816,8 +3764,8 @@ function handleMonsterDeath(monster) {
     // ----------------------
 
     // Check if this was a boss in a dungeon
-    if (monster.isBoss && currentMap === 'dungeon') {
-        onBossDefeated(dungeonLevel, monster.x, monster.y);
+    if (monster.isBoss && MapManager.currentMap === 'dungeon') {
+        onBossDefeated(MapManager.dungeonLevel, monster.x, monster.y);
     }
 
     // Destroy HP bars
@@ -5987,7 +3935,7 @@ function playerAttack(time) {
         closestMonster.hp = Math.max(0, closestMonster.hp);
 
         // Create hit particle effects (physical damage)
-        createHitEffects(closestMonster.x, closestMonster.y, isCritical, 'physical');
+        createHitEffects(closestMonster.x, closestMonster.y, isCritical, 'physical', weaponType);
 
         // Screen shake on critical hits
         if (isCritical) {
@@ -6100,54 +4048,78 @@ function monsterAttackPlayer(monster, time) {
  * @param {boolean} isCritical - Whether this is a critical hit
  * @param {string} damageType - 'physical' or 'magic' (default: 'physical')
  */
-function createHitEffects(x, y, isCritical = false, damageType = 'physical') {
+function createHitEffects(x, y, isCritical = false, damageType = 'physical', weaponType = 'Unarmed') {
     const scene = game.scene.scenes[0];
 
     // Create particle emitter for hit sparks
     if (!scene.textures.exists('hit_spark')) {
-        return; // Particle texture not created yet
+        // Fallback or ensure texture exists
     }
 
-    const particleCount = isCritical ? 20 : 10; // More particles for critical hits
+    const particleCount = isCritical ? 30 : 16; // Increased count
+    const baseSize = isCritical ? 5 : 3;
 
-    // Color-coded by damage type
+    // Color-coded by weapon type / damage type
     let colors;
-    if (damageType === 'magic') {
+    
+    // Override colors based on weapon type if physical
+    if (damageType === 'physical') {
+        if (weaponType === 'Unarmed') {
+             colors = [0xffffff, 0xcccccc]; // White dust
+        } else if (weaponType === 'Staff' || weaponType === 'Wand') {
+             colors = [0x00ffff, 0x0088ff, 0xaa00ff]; // Magic
+        } else if (weaponType === 'Sword') {
+             colors = [0xffffff, 0xaaaaaa, 0xff0000]; // Steel and blood
+        } else if (weaponType === 'Hammer' || weaponType === 'Mace') {
+             colors = [0xff8800, 0x884400, 0xffff44]; // Impact/Sparks
+        } else if (weaponType === 'Axe') {
+             colors = [0xff0000, 0x880000, 0xffffff]; // Blood and steel
+        } else if (weaponType === 'Dagger') {
+             colors = [0xffff00, 0xffffff]; // Quick flash
+        } else {
+             // Default Physical
+             colors = isCritical
+            ? [0xff0000, 0xff8800, 0xffd700, 0xffffff] 
+            : [0xffd700, 0xff8800, 0xffff00];
+        }
+    } else if (damageType === 'magic') {
         // Blue/purple for magic damage
         colors = isCritical
             ? [0x4400ff, 0x8800ff, 0xaa88ff, 0xffffff] // Purple/blue/white for critical magic
             : [0x4400ff, 0x6600ff, 0x8888ff]; // Blue/purple for normal magic
     } else {
-        // Yellow/orange for physical damage
-        colors = isCritical
-            ? [0xff0000, 0xff8800, 0xffd700, 0xffffff] // Red/orange/gold/white for critical
-            : [0xffd700, 0xff8800, 0xffff00]; // Yellow/orange for normal hits
+        // Default Fallback
+        colors = [0xffd700, 0xff8800];
     }
 
     // Create particles manually (Phaser 3 particle system)
     for (let i = 0; i < particleCount; i++) {
         const angle = Phaser.Math.FloatBetween(0, Math.PI * 2);
-        const speed = Phaser.Math.FloatBetween(30, 80);
-        const distance = Phaser.Math.FloatBetween(0, 20);
+        const speed = Phaser.Math.FloatBetween(50, 120); // Faster spread
+        const distance = Phaser.Math.FloatBetween(5, 30); // Larger initial area
         const color = Phaser.Utils.Array.GetRandom(colors);
+        const size = Phaser.Math.FloatBetween(baseSize, baseSize + 2); // Larger variable size
 
         const particle = scene.add.circle(
             x + Math.cos(angle) * distance,
             y + Math.sin(angle) * distance,
-            isCritical ? 3 : 2,
+            size,
             color,
-            0.9
+            1.0
         ).setDepth(201);
+
+        // Add additive blending for "glow" effect
+        particle.setBlendMode(Phaser.BlendModes.ADD);
 
         // Animate particle
         scene.tweens.add({
             targets: particle,
-            x: x + Math.cos(angle) * speed,
-            y: y + Math.sin(angle) * speed,
+            x: x + Math.cos(angle) * speed * 1.5,
+            y: y + Math.sin(angle) * speed * 1.5,
             alpha: 0,
-            scale: 0,
-            duration: Phaser.Math.Between(200, 400),
-            ease: 'Power2',
+            scale: { from: 1, to: 0.1 },
+            duration: Phaser.Math.Between(400, 700), // Longer duration
+            ease: 'Quad.easeOut',
             onComplete: () => {
                 if (particle && particle.active) {
                     particle.destroy();
@@ -11150,13 +9122,13 @@ function createSettingsUI() {
                 let musicKey = null;
                 let musicName = '';
 
-                if (currentMap === 'town' && scene.cache.audio.exists('village_music')) {
+                if (MapManager.currentMap === 'town' && scene.cache.audio.exists('village_music')) {
                     musicKey = 'village_music';
                     musicName = 'village';
-                } else if (currentMap === 'wilderness' && scene.cache.audio.exists('wilderness_music')) {
+                } else if (MapManager.currentMap === 'wilderness' && scene.cache.audio.exists('wilderness_music')) {
                     musicKey = 'wilderness_music';
                     musicName = 'wilderness';
-                } else if (currentMap === 'dungeon' && scene.cache.audio.exists('dungeon_music')) {
+                } else if (MapManager.currentMap === 'dungeon' && scene.cache.audio.exists('dungeon_music')) {
                     musicKey = 'dungeon_music';
                     musicName = 'dungeon';
                 }
@@ -11187,11 +9159,11 @@ function createSettingsUI() {
                             seek: 0
                         });
 
-                        if (currentMap === 'town') {
+                        if (MapManager.currentMap === 'town') {
                             villageMusic = music;
-                        } else if (currentMap === 'wilderness') {
+                        } else if (MapManager.currentMap === 'wilderness') {
                             wildernessMusic = music;
-                        } else if (currentMap === 'dungeon') {
+                        } else if (MapManager.currentMap === 'dungeon') {
                             dungeonMusic = music;
                         }
 
@@ -11403,7 +9375,7 @@ function updateNPCIndicators() {
     const scene = game.scene.scenes[0];
 
     // Only show NPC indicators in town (NPCs don't exist in wilderness/dungeon)
-    if (currentMap !== 'town') {
+    if (MapManager.currentMap !== 'town') {
         // Clean up any lingering indicators
         npcs.forEach(npc => {
             if (npc.interactionIndicator && npc.interactionIndicator.active) {
@@ -11567,7 +9539,7 @@ function updateNPCIndicators() {
 function updateBuildingIndicators() {
     const scene = game.scene.scenes[0];
 
-    buildings.forEach((building, index) => {
+    MapManager.buildings.forEach((building, index) => {
         if (!building.rect || !building.rect.active) {
             if (building.type && ['inn', 'tavern', 'blacksmith'].includes(building.type)) {
                 console.log(`⚠️ Building ${index} (${building.type}) has no active rect`);
@@ -11643,7 +9615,7 @@ function updateBuildingIndicators() {
  * Check for building interaction when F is pressed
  */
 function checkBuildingInteraction() {
-    if (currentMap !== 'town') {
+    if (MapManager.currentMap !== 'town') {
         console.log('❌ Not in town, skipping building interaction');
         return;
     }
@@ -11652,13 +9624,13 @@ function checkBuildingInteraction() {
         return;
     }
 
-    console.log(`🔍 Checking building interaction. Total buildings: ${buildings.length}`);
+    console.log(`🔍 Checking building interaction. Total MapManager.buildings: ${MapManager.buildings.length}`);
 
     // Find nearest building in range
     let closestBuilding = null;
     let closestDistance = Infinity;
 
-    buildings.forEach((building, index) => {
+    MapManager.buildings.forEach((building, index) => {
         if (!building.rect || !building.rect.active) {
             console.log(`⚠️ Building ${index} (${building.type}) has no active rect`);
             return;
@@ -13927,9 +11899,9 @@ function createTavernUI() {
 function saveGame() {
     // Build dungeon seeds object from cache
     const dungeonSeeds = {};
-    Object.keys(dungeonCache).forEach(key => {
-        if (dungeonCache[key] && dungeonCache[key].seed) {
-            dungeonSeeds[key] = dungeonCache[key].seed;
+    Object.keys(MapManager.dungeonCache).forEach(key => {
+        if (MapManager.dungeonCache[key] && MapManager.dungeonCache[key].seed) {
+            dungeonSeeds[key] = MapManager.dungeonCache[key].seed;
         }
     });
 
@@ -13955,10 +11927,10 @@ function saveGame() {
             x: player.x,
             y: player.y
         },
-        currentMap: currentMap,
-        dungeonLevel: dungeonLevel,
+        currentMap: MapManager.currentMap,
+        dungeonLevel: MapManager.dungeonLevel,
         dungeonSeeds: dungeonSeeds,
-        dungeonCompletions: dungeonCompletions,
+        dungeonCompletions: MapManager.dungeonCompletions,
         uqeQuests: uqe.getSaveData(),
         timestamp: Date.now()
     };
@@ -14043,37 +12015,37 @@ function loadGame() {
             Object.keys(saveData.dungeonSeeds).forEach(key => {
                 const seed = saveData.dungeonSeeds[key];
                 const level = parseInt(key.replace('level_', ''));
-                dungeonCache[key] = { seed: seed, level: level };
+                MapManager.dungeonCache[key] = { seed: seed, level: level };
                 console.log(`  - ${key}: seed=${seed}, level=${level}`);
             });
-            console.log('📦 Dungeon cache after restore:', Object.keys(dungeonCache));
+            console.log('📦 Dungeon cache after restore:', Object.keys(MapManager.dungeonCache));
         } else {
             console.warn('⚠️ No dungeon seeds found in save data');
         }
 
         if (saveData.dungeonCompletions) {
-            dungeonCompletions = saveData.dungeonCompletions;
+            MapManager.dungeonCompletions = saveData.dungeonCompletions;
         }
 
         if (saveData.dungeonLevel) {
-            dungeonLevel = saveData.dungeonLevel;
+            MapManager.dungeonLevel = saveData.dungeonLevel;
         }
 
         // Restore map and recreate if needed
-        // IMPORTANT: Use saveData.currentMap (where player saved) not current currentMap (where player is now)
+        // IMPORTANT: Use saveData.currentMap (where player saved) not current MapManager.currentMap (where player is now)
         const savedMap = saveData.currentMap;
         if (savedMap) {
             // Always use transitionToMap to ensure proper cleanup, even if we're already on that map
-            // This ensures buildings/NPCs from previous map are properly destroyed
+            // This ensures MapManager.buildings/NPCs from previous map are properly destroyed
             const savedLevel = saveData.dungeonLevel || 1;
 
             // IMPORTANT: For dungeons, ensure cache is properly set up before transition
             if (savedMap === 'dungeon' && saveData.dungeonSeeds) {
                 const dungeonKey = `level_${savedLevel}`;
                 // Double-check that the seed is in cache before transitioning
-                if (saveData.dungeonSeeds[dungeonKey] && (!dungeonCache[dungeonKey] || !dungeonCache[dungeonKey].seed)) {
+                if (saveData.dungeonSeeds[dungeonKey] && (!MapManager.dungeonCache[dungeonKey] || !MapManager.dungeonCache[dungeonKey].seed)) {
                     console.log(`🔧 Ensuring seed is in cache for ${dungeonKey} before transition...`);
-                    dungeonCache[dungeonKey] = {
+                    MapManager.dungeonCache[dungeonKey] = {
                         seed: saveData.dungeonSeeds[dungeonKey],
                         level: savedLevel
                     };
@@ -14087,7 +12059,7 @@ function loadGame() {
             } : null;
 
             // Transition to the saved map (this will clean up everything)
-            transitionToMap(savedMap, savedLevel);
+            MapManager.transitionToMap(savedMap, savedLevel);
 
             // Restore player position after map transition
             if (savedPlayerPos) {
@@ -14411,6 +12383,7 @@ function checkAutoLoad() {
 // ============================================
 
 let regenTimerEvent = null;
+let hpRegenTimerEvent = null;
 
 /**
  * Starts the passive regeneration loop
@@ -14439,6 +12412,46 @@ function startManaRegen() {
                 playerStats.mana = Math.min(playerStats.maxMana, playerStats.mana + 1);
                 if (typeof updateAbilityBar === 'function') {
                     updateAbilityBar(); // Update UI
+                }
+            }
+        }
+    });
+}
+
+/**
+ * Starts the passive HP regeneration loop
+ * Rate: 1 HP per 5 seconds
+ */
+function startHpRegen() {
+    console.log('❤️ Starting HP Regeneration System');
+    // Safety check for game/scene
+    if (!game || !game.scene || !game.scene.scenes || !game.scene.scenes[0]) {
+        console.warn('⚠️ Cannot start hp regen: Scene not ready');
+        return;
+    }
+
+    const scene = game.scene.scenes[0];
+
+    // Clear existing timer if any
+    if (hpRegenTimerEvent) {
+        hpRegenTimerEvent.remove();
+    }
+
+    hpRegenTimerEvent = scene.time.addEvent({
+        delay: 5000, // 5 seconds
+        loop: true,
+        callback: () => {
+            if (typeof playerStats !== 'undefined' && playerStats.hp < playerStats.maxHp && !isGamePaused) {
+                playerStats.hp = Math.min(playerStats.maxHp, playerStats.hp + 1);
+
+                // Update Main UI
+                if (typeof updateUI === 'function') {
+                    updateUI();
+                }
+
+                // Update Player Floating Bar
+                if (typeof player !== 'undefined' && player && player.hpBar && player.hpBarBg && player.active) {
+                    player.hpBar.width = (playerStats.hp / playerStats.maxHp) * (player.hpBarBg.width - 2);
                 }
             }
         }
@@ -18187,7 +16200,7 @@ function updateQuestMarkers(time) {
                 }
             } else if (obj.type === 'collect' && obj.itemId === 'dungeon_entry_token') {
                 // Mark dungeon entrances (handled separately via transition markers)
-                transitionMarkers.forEach(tm => {
+                MapManager.transitionMarkers.forEach(tm => {
                     if (tm.targetMap === 'dungeon' && tm.marker) {
                         neededMarkers.set('dungeon_entrance', { target: tm.marker, type: 'enter' });
                     }
@@ -18506,3 +16519,4 @@ window.debugFixNPCs = function () {
     console.log(`🔧 Fix complete. Updated ${updated} NPCs.`);
     addChatMessage(`Fixed ${updated} NPCs. Try talking now!`, 0x00ff00);
 };
+

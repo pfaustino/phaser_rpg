@@ -41,22 +41,10 @@ let player;
 let cursors;
 let map;
 // Global State Variables
-let defenseSpawnerState = {
-    active: false,
-    lastSpawnTime: 0,
-    spawnedMonsters: [],
-    waveInterval: 12000, // 12 seconds between waves
-    monstersPerWave: 4,
-    maxMonsters: 10
-};
-let questTrackerEntries = [];
-let lastPlayerX = 0;
-let lastPlayerY = 0;
-let monsters = [];
-let items = []; // Items on the ground
-let npcs = []; // NPCs in the world
+// Global State Variables
+// (Moved to GameState.js)
+// (Moved to GameState.js: questTrackerEntries, lastPlayerX/Y, monsters, items, npcs, isGamePaused)
 let spaceKey;
-let isGamePaused = false;
 
 let questMarkers = new Map(); // Quest objective markers (key: targetId, value: {sprite, tween})
 let lastQuestMarkerUpdate = 0; // Throttle marker updates
@@ -65,68 +53,12 @@ let specialZones = []; // Populated from zones.json
 // Monster spawn settings
 
 // Monster spawn settings
-const MAX_MONSTERS = 24;
-const MONSTER_AGGRO_RADIUS = 200; // Pixels - monsters start chasing within this distance
-const MONSTER_DEAGGRO_RADIUS = 400; // Pixels - monsters stop chasing beyond this distance
-const MONSTER_RESPAWN_THRESHOLD = MAX_MONSTERS / 2; // Respawn when below 12
+// Monster spawn settings
+// (Moved to Constants.js)
 
 // Player stats
-let playerStats = {
-    hp: 100,
-    maxHp: 100,
-    mana: 50,
-    maxMana: 50,
-    stamina: 100,
-    maxStamina: 100,
-    xp: 0,
-    level: 1,
-    baseAttack: 10,  // Base attack (without equipment)
-    baseDefense: 5,  // Base defense (without equipment)
-    attack: 10,      // Current attack (base + equipment)
-    defense: 5,      // Current defense (base + equipment)
-    lastAttackTime: 0,
-    attackCooldown: 500, // milliseconds
-    attackSpeedBonus: 0,  // Attack speed bonus (0-1, reduces cooldown)
-    speedBonus: 0,        // Speed bonus from equipment
-    comboCount: 0,       // Combo counter
-    comboTimer: 0,       // Time since last attack (for combo reset)
-    comboResetTime: 2000, // Combo resets after 2 seconds of no attacks
-    gold: 0,
-    inventory: [], // Temporary storage for picked up items
-    equipment: {
-        weapon: null,
-        armor: null,
-        helmet: null,
-        ring: null,
-        amulet: null,
-        boots: null,
-        gloves: null,
-        belt: null
-    },
-    // Quest system
-    quests: {
-        active: [],      // Active side quests
-        main: [],        // Active main quests
-        available: [],   // Available quests (rejected/cancelled)
-        completed: []    // Completed quest IDs
-    },
-    questStats: {        // Track quest progress
-        monstersKilled: 0,
-        itemsCollected: 0,
-        goldEarned: 0,
-        tilesTraveled: 0,
-        survivalTime: 0,
-        availableTabClicked: 0,
-        storyProgress: {}
-    },
-    questChains: {}, // Track quest chain progress
-    // Abilities system
-    abilities: {
-        heal: { lastUsed: 0 },
-        fireball: { lastUsed: 0 },
-        shield: { lastUsed: 0 }
-    }
-};
+// Player stats
+// (Moved to GameState.js)
 
 // ============================================
 // QUEST HELPERS (Global Bridge)
@@ -274,13 +206,8 @@ let audioUnlocked = false; // Track if audio context has been unlocked
 let npcRegistry = {};
 
 // Item quality colors
-const QUALITY_COLORS = {
-    'Common': 0x9d9d9d,    // Gray
-    'Uncommon': 0x1eff00,  // Green
-    'Rare': 0x0070dd,      // Blue
-    'Epic': 0xa335ee,      // Purple
-    'Legendary': 0xff8000  // Orange
-};
+// Item quality colors
+// (Moved to Constants.js)
 
 /**
  * Preload assets (like pygame loading images)
@@ -16886,12 +16813,12 @@ window.debugFixNPCs = function () {
 // ============================================
 // HOVER EFFECT UTILS
 // ============================================
-window.enableHoverEffect = function(gameObject, scene) {
+window.enableHoverEffect = function (gameObject, scene) {
     if (!gameObject || !scene) return;
-    
+
     // Use Phaser 3.60+ FX (We are on 3.80)
     // This provides a pixel-perfect outline/glow around visible pixels
-    
+
     // Store reference to the fx
     let glowFx = null;
     let pulseTween = null;
@@ -16907,7 +16834,7 @@ window.enableHoverEffect = function(gameObject, scene) {
         // Color: 0xffffff (White), Strength: 4, Quality: 0.1
         if (gameObject.postFX) {
             glowFx = gameObject.postFX.addGlow(0xffffff, 4, 0, false, 0.1, 10);
-            
+
             // Pulse the glow strength
             pulseTween = scene.tweens.add({
                 targets: glowFx,

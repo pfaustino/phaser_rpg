@@ -118,25 +118,35 @@ let chatMessages = [];
 const MAX_CHAT_MESSAGES = 50;
 
 // Inventory UI
-var inventoryVisible = false;
+// Inventory UI (Managed by UIManager)
+// inventoryVisible, inventoryPanel proxy to UIManager
+Object.defineProperties(window, {
+    inventoryVisible: { get: () => UIManager.inventoryVisible, set: (v) => UIManager.inventoryVisible = v },
+    inventoryPanel: { get: () => UIManager.inventoryPanel, set: (v) => UIManager.inventoryPanel = v },
+    inventoryItems: { get: () => [], set: () => { } }, // Deprecated
+    currentTooltip: { get: () => UIManager.currentTooltip, set: (v) => UIManager.currentTooltip = v },
+    tooltipHideTimer: { get: () => UIManager.tooltipHideTimer, set: (v) => UIManager.tooltipHideTimer = v },
+
+    equipmentVisible: { get: () => UIManager.equipmentVisible, set: (v) => UIManager.equipmentVisible = v },
+    equipmentPanel: { get: () => UIManager.equipmentPanel, set: (v) => UIManager.equipmentPanel = v },
+
+    settingsVisible: { get: () => UIManager.settingsVisible, set: (v) => UIManager.settingsVisible = v },
+    settingsPanel: { get: () => UIManager.settingsPanel, set: (v) => UIManager.settingsPanel = v },
+
+    questVisible: { get: () => UIManager.questVisible, set: (v) => UIManager.questVisible = v },
+    questPanel: { get: () => UIManager.questPanel, set: (v) => UIManager.questPanel = v },
+    questLogTab: { get: () => UIManager.questLogTab, set: (v) => UIManager.questLogTab = v },
+    selectedQuestIndex: { get: () => UIManager.selectedQuestIndex, set: (v) => UIManager.selectedQuestIndex = v },
+
+    dialogVisible: { get: () => UIManager.dialogVisible, set: (v) => UIManager.dialogVisible = v },
+    dialogPanel: { get: () => UIManager.dialogPanel, set: (v) => UIManager.dialogPanel = v }
+});
+
 let inventoryKey;
-var inventoryPanel = null;
-let inventoryItems = []; // Array of item display objects
-// Tooltip state
-let currentTooltip = null;
-let tooltipHideTimer = null;
-
-// Equipment UI
-var equipmentVisible = false;
 let equipmentKey;
-var equipmentPanel = null;
-
-
-// Settings UI
-var settingsVisible = false;
 let settingsKey;
-var settingsPanel = null;
-let musicEnabled = true; // Default to enabled
+let settingsKey2; // Was not there but safe
+let musicEnabled = true;
 
 // Background music
 let villageMusic = null;
@@ -144,22 +154,16 @@ let wildernessMusic = null;
 let dungeonMusic = null;
 
 // Quest UI
-let questVisible = false;
 let questKey;
-let questPanel = null;
 var questCompletedModal = null;
 var newQuestModal = null;
-let selectedQuestIndex = 0;
-let questLogTab = 'current'; // 'current' or 'completed'
-var pendingNewQuest = null; // Store new quest to show after completed modal closes
-let pendingCompletedQuest = null; // Store completed quest to show after combat ends
-let questManager = null; // Manager for data-driven quests
-let monsterRenderer = null; // Renderer for data-driven monsters
-let pathfinder = null; // A* Pathfinding system
+var pendingNewQuest = null;
+let pendingCompletedQuest = null;
+let questManager = null;
+let monsterRenderer = null;
+let pathfinder = null;
 
 // Dialog UI
-var dialogVisible = false;
-var dialogPanel = null;
 let currentDialog = null;
 let currentDialogNode = null;
 let interactKey; // 'F' key for interaction
@@ -1239,6 +1243,22 @@ function preload() {
     this.load.audio('dagger_hit', 'assets/audio/dagger-hit.mp3');
     this.load.audio('staff_hit', 'assets/audio/staff-swing.mp3');
     this.load.audio('bow_hit', 'assets/audio/bow-release.mp3');
+
+    // Load Building Assets
+    // Load Building Assets
+    this.load.image('tavern', 'assets/images/tavern.png?v=3');
+    this.load.image('shop', 'assets/images/shop.png?v=3');
+    this.load.image('blacksmith', 'assets/images/blacksmith.png?v=3');
+    this.load.image('temple', 'assets/images/temple.png?v=3');
+    this.load.image('library', 'assets/images/library.png?v=3');
+    this.load.image('apothecary', 'assets/images/apothecary.png?v=3');
+    this.load.image('guild', 'assets/images/guild-hall.png?v=3');
+    this.load.image('house', 'assets/images/house1.png?v=3');
+    this.load.image('house1', 'assets/images/house1.png?v=3');
+    this.load.image('house2', 'assets/images/house2.png?v=3');
+    this.load.image('house3', 'assets/images/house3.png?v=3');
+    this.load.image('inn', 'assets/images/inn.png?v=3');
+    this.load.image('tower', 'assets/images/tower.png?v=3');
 
     // Load background music for all areas
     this.load.audio('village_music', 'assets/audio/music/Village_Hearth_FULL_SONG_MusicGPT.mp3');
@@ -5294,18 +5314,7 @@ function getXPNeededForLevel(level) {
  * Used to block movement/interaction when clicking on UI
  */
 function isAnyWindowOpen() {
-    return inventoryVisible ||
-        equipmentVisible ||
-        settingsVisible ||
-        questVisible ||
-        dialogVisible ||
-        shopVisible ||
-        buildingPanelVisible ||
-        assetsVisible ||
-        grassDebugVisible ||
-        (questCompletedModal && questCompletedModal.visible) ||
-        (newQuestModal && newQuestModal.visible) ||
-        (questPreviewModal !== null);
+    return UIManager.isAnyWindowOpen();
 }
 
 /**
@@ -5611,824 +5620,87 @@ function pickupItem(item, index) {
  * Close all open interfaces
  */
 function closeAllInterfaces() {
-    if (inventoryVisible) {
-        inventoryVisible = false;
-        destroyInventoryUI();
-    }
-    if (equipmentVisible) {
-        equipmentVisible = false;
-        destroyEquipmentUI();
-    }
-    if (questVisible) {
-        questVisible = false;
-        destroyQuestLogUI();
-    }
-    if (shopVisible) {
-        shopVisible = false;
-        closeShop();
-    }
-    if (settingsVisible) {
-        settingsVisible = false;
-        destroySettingsUI();
-    }
-    // Note: dialogVisible and buildingPanelVisible may have their own close handlers
-    // Add them here if needed
+    UIManager.closeAllInterfaces();
 }
 
 /**
  * Toggle settings visibility
  */
 function toggleSettings() {
-    const scene = game.scene.scenes[0];
-
-    // If already open, close it
-    if (settingsVisible) {
-        settingsVisible = false;
-        destroySettingsUI();
-        return;
-    }
-
-    // Close all other interfaces before opening
-    closeAllInterfaces();
-
-    // Now open settings
-    settingsVisible = true;
-    createSettingsUI();
+    UIManager.toggleSettings();
 }
 
-/**
- * Create Settings UI panel
- */
 /**
  * Create Settings UI panel
  */
 function createSettingsUI() {
-    const scene = game.scene.scenes[0];
-    const centerX = scene.cameras.main.width / 2;
-    const centerY = scene.cameras.main.height / 2;
-    const panelWidth = 400;
-    const panelHeight = 460;
-
-    // Background
-    const bg = scene.add.rectangle(centerX, centerY, panelWidth, panelHeight, 0x1a1a1a, 0.95)
-        .setScrollFactor(0).setDepth(10000).setStrokeStyle(3, 0xffffff); // Depth 10000 to be on top
-
-    // Title
-    const title = scene.add.text(centerX, centerY - panelHeight / 2 + 30, 'SETTINGS', {
-        fontSize: '28px',
-        fill: '#ffffff',
-        fontStyle: 'bold'
-    }).setScrollFactor(0).setDepth(10001).setOrigin(0.5);
-
-    settingsPanel = { // Use global settingsPanel
-        bg: bg,
-        title: title,
-        elements: []
-    };
-
-    let currentY = centerY - 100;
-    const spacing = 60;
-
-    // --- Music Toggle ---
-    const musicStatus = musicEnabled ? 'ON' : 'OFF';
-    const musicColor = musicEnabled ? '#00ff00' : '#ff0000';
-
-    const musicBtnBg = scene.add.rectangle(centerX, currentY, 200, 50, 0x333333)
-        .setScrollFactor(0).setDepth(10001).setInteractive({ useHandCursor: true });
-
-    const musicBtnText = scene.add.text(centerX, currentY, `Music: ${musicStatus}`, {
-        fontSize: '20px', fill: musicColor
-    }).setScrollFactor(0).setDepth(10002).setOrigin(0.5);
-
-    musicBtnBg.on('pointerdown', () => {
-        musicEnabled = !musicEnabled;
-        musicBtnText.setText(`Music: ${musicEnabled ? 'ON' : 'OFF'}`);
-        musicBtnText.setColor(musicEnabled ? '#00ff00' : '#ff0000');
-        if (typeof toggleMusic === 'function') {
-            toggleMusic(musicEnabled);
-        } else if (scene.sound) {
-            scene.sound.mute = !musicEnabled;
-        }
-        playSound('menu_select');
-    });
-
-    settingsPanel.elements.push(musicBtnBg, musicBtnText);
-    currentY += spacing;
-
-    // --- Save Game ---
-    const saveBtnBg = scene.add.rectangle(centerX, currentY, 200, 50, 0x004400)
-        .setScrollFactor(0).setDepth(10001).setInteractive({ useHandCursor: true })
-        .setStrokeStyle(1, 0x00ff00);
-    const saveBtnText = scene.add.text(centerX, currentY, 'SAVE GAME', {
-        fontSize: '20px', fill: '#00ff00', fontStyle: 'bold'
-    }).setScrollFactor(0).setDepth(10002).setOrigin(0.5);
-
-    saveBtnBg.on('pointerdown', () => {
-        if (typeof window.saveGame === 'function') window.saveGame();
-        playSound('menu_select');
-    });
-    settingsPanel.elements.push(saveBtnBg, saveBtnText);
-
-    currentY += spacing;
-
-    // --- Load Game ---
-    const loadBtnBg = scene.add.rectangle(centerX, currentY, 200, 50, 0x000044)
-        .setScrollFactor(0).setDepth(10001).setInteractive({ useHandCursor: true })
-        .setStrokeStyle(1, 0x4444ff);
-    const loadBtnText = scene.add.text(centerX, currentY, 'LOAD GAME', {
-        fontSize: '20px', fill: '#aaaaff', fontStyle: 'bold'
-    }).setScrollFactor(0).setDepth(10002).setOrigin(0.5);
-
-    loadBtnBg.on('pointerdown', () => {
-        if (typeof window.loadGame === 'function') {
-            window.toggleSettings(); // Close menu
-            window.loadGame();
-        }
-        playSound('menu_select');
-    });
-    settingsPanel.elements.push(loadBtnBg, loadBtnText);
-
-    currentY += spacing;
-
-    // --- New Game ---
-    const newGameBtnBg = scene.add.rectangle(centerX, currentY, 200, 50, 0x330000)
-        .setScrollFactor(0).setDepth(10001).setInteractive({ useHandCursor: true })
-        .setStrokeStyle(1, 0xff0000);
-    const newGameBtnText = scene.add.text(centerX, currentY, 'NEW GAME', {
-        fontSize: '20px', fill: '#ff4444', fontStyle: 'bold'
-    }).setScrollFactor(0).setDepth(10002).setOrigin(0.5);
-
-    newGameBtnBg.on('pointerdown', () => {
-        if (confirm("Are you sure? This will DELETE your save file!")) {
-            localStorage.clear();
-            location.reload();
-        }
-    });
-    settingsPanel.elements.push(newGameBtnBg, newGameBtnText);
-
-    // --- Close ---
-    const closeBtnBg = scene.add.rectangle(centerX, centerY + panelHeight / 2 - 40, 100, 40, 0x444444)
-        .setScrollFactor(0).setDepth(10001).setInteractive({ useHandCursor: true });
-    const closeText = scene.add.text(centerX, centerY + panelHeight / 2 - 40, 'Close', {
-        fontSize: '18px', fill: '#ffffff'
-    }).setScrollFactor(0).setDepth(10002).setOrigin(0.5);
-
-    closeBtnBg.on('pointerdown', () => {
-        window.toggleSettings();
-        playSound('menu_select');
-    });
-    settingsPanel.elements.push(closeBtnBg, closeText);
+    UIManager.createSettingsUI();
 }
-
 
 /**
  * Destroy Settings UI
  */
 function destroySettingsUI() {
-    if (settingsPanel) {
-        if (settingsPanel.bg) settingsPanel.bg.destroy();
-        if (settingsPanel.title) settingsPanel.title.destroy();
-        if (settingsPanel.elements) {
-            settingsPanel.elements.forEach(el => el.destroy());
-        }
-        settingsPanel = null;
-    }
+    UIManager.destroySettingsUI();
 }
 
 function toggleInventory() {
-    const scene = game.scene.scenes[0];
-
-    // If already open, close it
-    if (inventoryVisible) {
-        inventoryVisible = false;
-        destroyInventoryUI();
-        return;
-    }
-
-    // Close all other interfaces before opening
-    closeAllInterfaces();
-
-    // Now open inventory
-    inventoryVisible = true;
-    createInventoryUI();
+    UIManager.toggleInventory();
 }
 
 /**
  * Create inventory UI panel
  */
+/**
+ * Create inventory UI panel
+ */
 function createInventoryUI() {
-    const scene = game.scene.scenes[0];
-
-    // Create background panel (centered on screen)
-    // Width calculated for 6 columns: 6 slots (60px) + 5 spacings (10px) + padding = ~450px, using 650px for comfortable spacing
-    const panelWidth = 650;
-    const panelHeight = 600;
-    const centerX = scene.cameras.main.width / 2;
-    const centerY = scene.cameras.main.height / 2;
-
-    // Create background and title first
-    const bg = scene.add.rectangle(centerX, centerY, panelWidth, panelHeight, 0x1a1a1a, 0.95)
-        .setScrollFactor(0).setDepth(300).setStrokeStyle(3, 0xffffff);
-
-    const title = scene.add.text(centerX, centerY - panelHeight / 2 + 20, 'INVENTORY', {
-        fontSize: '28px',
-        fill: '#ffffff',
-        fontStyle: 'bold'
-    }).setScrollFactor(0).setDepth(301).setOrigin(0.5, 0);
-
-    const closeText = scene.add.text(centerX + panelWidth / 2 - 20, centerY - panelHeight / 2 + 20, 'Press I to Close', {
-        fontSize: '14px',
-        fill: '#aaaaaa'
-    }).setScrollFactor(0).setDepth(301).setOrigin(1, 0);
-
-    inventoryPanel = {
-        bg,
-        title,
-        closeText,
-        items: []
-    };
-
-    // Container for items
-    const inventoryStartY = centerY - panelHeight / 2 + 80;
-    const inventoryVisibleHeight = panelHeight - 120;
-    const inventoryContainer = scene.add.container(centerX, inventoryStartY);
-    inventoryContainer.setScrollFactor(0).setDepth(301);
-
-    // Mask for items
-    const inventoryMask = scene.make.graphics();
-    inventoryMask.fillStyle(0xffffff);
-    inventoryMask.fillRect(centerX - panelWidth / 2, inventoryStartY, panelWidth, inventoryVisibleHeight);
-    inventoryMask.setScrollFactor(0);
-    const maskGeometry = inventoryMask.createGeometryMask();
-    inventoryContainer.setMask(maskGeometry);
-
-    // Scrollbar
-    const scrollbar = setupScrollbar({
-        scene,
-        x: centerX + panelWidth / 2 - 25,
-        y: inventoryStartY,
-        height: inventoryVisibleHeight,
-        depth: 303,
-        minScroll: 0,
-        initialScroll: 0,
-        container: inventoryContainer,
-        containerStartY: inventoryStartY,
-        containerOffset: 0,
-        wheelHitArea: inventoryPanel.bg,
-        visibleHeight: inventoryVisibleHeight
-    });
-
-    inventoryPanel.container = inventoryContainer;
-    inventoryPanel.mask = inventoryMask;
-    inventoryPanel.maskGeometry = maskGeometry;
-    inventoryPanel.scrollbar = scrollbar;
-    inventoryPanel.startY = inventoryStartY;
-    inventoryPanel.visibleHeight = inventoryVisibleHeight;
-
-    // Show items
-    updateInventoryItems();
-
+    UIManager.createInventoryUI();
 }
 
 /**
  * Update inventory items display
  */
+/**
+ * Update inventory items display
+ */
 function updateInventoryItems() {
-    const scene = game.scene.scenes[0];
-    if (!inventoryPanel) {
-        console.warn('⚠️ updateInventoryItems: inventoryPanel is null');
-        return;
-    }
-
-    console.log(`📦 updateInventoryItems: Displaying ${playerStats.inventory.length} items`);
-
-    // Always hide tooltip when refreshing inventory items
-    hideTooltip(true);
-
-    // Clear container
-    if (inventoryPanel.container) {
-        inventoryPanel.container.removeAll(true);
-    }
-    inventoryPanel.items = [];
-
-    const slotSize = 60;
-    const slotsPerRow = 6;
-    const spacing = 30; // Increased spacing for labels
-    const panelWidth = inventoryPanel.bg.width;
-    const panelHeight = inventoryPanel.bg.height;
-
-    // Calculate grid start position (relative to container)
-    const gridWidth = slotsPerRow * slotSize + (slotsPerRow - 1) * spacing;
-    const startX = -gridWidth / 2 + slotSize / 2;
-    const startY = 40; // Increased top padding inside container to prevent cut-off
-
-
-
-    // Display items
-    console.log(`📦 Rendering ${playerStats.inventory.length} items in inventory UI`);
-    playerStats.inventory.forEach((item, index) => {
-        console.log(`  - Item ${index}: ${item.name} (type: ${item.type})`);
-        const row = Math.floor(index / slotsPerRow);
-        const col = index % slotsPerRow;
-        const x = startX + col * (slotSize + spacing);
-        const y = startY + row * (slotSize + spacing);
-
-        // Get item sprite key
-        let spriteKey = 'item_weapon';
-        if (item.type === 'weapon') {
-            // For weapons, use weapon-specific sprite based on weaponType
-            const weaponType = item.weaponType || 'Sword';
-            const weaponKey = `weapon_${weaponType.toLowerCase()}`;
-            // Check if weapon-specific sprite exists, otherwise fallback to item_weapon
-            if (scene.textures.exists(weaponKey)) {
-                spriteKey = weaponKey;
-            } else {
-                spriteKey = 'item_weapon'; // Fallback
-            }
-        } else if (item.type === 'armor') spriteKey = 'item_armor';
-        else if (item.type === 'helmet') spriteKey = 'item_helmet';
-        else if (item.type === 'ring') spriteKey = 'item_ring';
-        else if (item.type === 'amulet') spriteKey = 'item_amulet';
-        else if (item.type === 'boots') spriteKey = 'item_boots';
-        else if (item.type === 'gloves') spriteKey = 'item_gloves';
-        else if (item.type === 'belt') spriteKey = 'item_belt';
-        else if (item.type === 'consumable') spriteKey = (item.name === 'Mana Potion') ? 'mana_potion' : 'item_consumable';
-        else if (item.type === 'gold') spriteKey = 'item_gold';
-        else if (item.type === 'quest_item') {
-            // Specific mapping for quest items
-            if (item.id === 'crystal_shard') spriteKey = 'item_crystal';
-            else if (item.id === 'artifact_fragment') spriteKey = 'item_fragment';
-            else spriteKey = 'item_consumable';
-        }
-
-        // Create item sprite
-        const itemSprite = scene.add.sprite(x, y, spriteKey);
-        itemSprite.setScrollFactor(0).setDepth(302).setScale(0.8);
-
-        // Add quality border around the sprite
-        const qualityColor = QUALITY_COLORS[item.quality] || QUALITY_COLORS['Common'];
-        const borderWidth = 2;
-        const spriteSize = slotSize * 0.8; // Match sprite scale
-        const borderRect = scene.add.rectangle(x, y, spriteSize + borderWidth * 2, spriteSize + borderWidth * 2, qualityColor, 0)
-            .setStrokeStyle(borderWidth, qualityColor)
-            .setScrollFactor(0)
-            .setDepth(300.5); // Above inventory panel bg but below sprite
-
-        // Create item name text (small, below sprite) - include quantity for stacked items
-        const displayName = (item.quantity && item.quantity > 1) ? `${item.name} x${item.quantity}` : item.name;
-        const itemText = scene.add.text(x, y + slotSize / 2 + 5, displayName, {
-            fontSize: '10px',
-            fill: '#ffffff',
-            wordWrap: { width: slotSize }
-        }).setScrollFactor(0).setDepth(302).setOrigin(0.5, 0);
-
-        // Make items interactive for tooltips
-        itemSprite.setInteractive({ useHandCursor: true });
-
-        // Store display item object for cleanup
-        const displayItem = {
-            sprite: itemSprite,
-            text: itemText,
-            borderRect: borderRect
-        };
-
-        // Store cleanup function on sprite for proper removal
-        const onPointerOver = () => {
-            // Show new unified tooltip (includes action hints)
-            showTooltip(item, x, y, 'inventory');
-        };
-
-        const onPointerOut = () => {
-            hideTooltip();
-        };
-
-        itemSprite.on('pointerover', onPointerOver);
-        itemSprite.on('pointerout', onPointerOut);
-
-        // Add all to container
-        inventoryPanel.container.add([borderRect, itemSprite, itemText]);
-
-        // Store cleanup handlers
-        itemSprite._tooltipHandlers = { onPointerOver, onPointerOut };
-
-        // Click to equip (only for equippable items)
-        const equippableTypes = ['weapon', 'armor', 'helmet', 'ring', 'amulet', 'boots', 'gloves', 'belt'];
-        if (equippableTypes.includes(item.type)) {
-            itemSprite.on('pointerdown', () => {
-                equipItemFromInventory(item, index);
-                hideTooltip(true); // Hide tooltip immediately after equipping
-            });
-        }
-        // Click to use consumables
-        else if (item.type === 'consumable' && item.healAmount) {
-            itemSprite.on('pointerdown', () => {
-                useConsumable(item, index);
-                hideTooltip(true); // Hide tooltip immediately after using
-            });
-        }
-
-        inventoryPanel.items.push({
-            sprite: itemSprite,
-            text: itemText,
-            borderRect: borderRect,
-            item: item
-        });
-    });
-
-    // Update scrollbar
-    const totalRows = Math.ceil(playerStats.inventory.length / slotsPerRow);
-    const totalContentHeight = totalRows * (slotSize + spacing) + 20; // 20 for padding
-    if (inventoryPanel.scrollbar) {
-        inventoryPanel.scrollbar.updateMaxScroll(Math.max(0, totalContentHeight - inventoryPanel.visibleHeight), totalContentHeight);
-    }
-
-    // Show empty message if no items
-    if (playerStats.inventory.length === 0) {
-        const emptyText = scene.add.text(0, 50, 'Inventory is empty\nKill monsters to collect items!', {
-            fontSize: '18px',
-            fill: '#888888',
-            align: 'center',
-            fontStyle: 'italic'
-        }).setScrollFactor(0).setDepth(302).setOrigin(0.5, 0);
-        inventoryPanel.container.add(emptyText);
-        inventoryPanel.items.push({ text: emptyText });
-    }
-
-    // Set up controller navigation for inventory items
-    if (typeof setMenuItems === 'function') {
-        setMenuItems(inventoryPanel.items, slotsPerRow);
-    }
+    UIManager.updateInventoryItems();
 }
 
-
 /**
- * showTooltip - Unified tooltip system for Inventory, Equipment, and Shop
- * @param {Object} item - The item data object
- * @param {number} x - Pointer X coordinate
- * @param {number} y - Pointer Y coordinate
- * @param {string} context - 'inventory', 'equipment', 'shop_buy', or 'shop_sell'
+ * showTooltip - Unified tooltip system
  */
 function showTooltip(item, x, y, context = 'inventory') {
-    const scene = game.scene.scenes[0];
-    if (!item) return;
-
-    // Clear any existing tooltip or hide timer immediately
-    if (tooltipHideTimer) {
-        scene.time.removeEvent(tooltipHideTimer);
-        tooltipHideTimer = null;
-    }
-    hideTooltip(true); // Force immediate hide of previous
-
-    let tooltipLines = [];
-
-    // 1. Header: Name
-    tooltipLines.push(item.name || 'Unknown Item');
-
-    // 2. Sub-header: Quality and Type
-    if (item.quality) {
-        tooltipLines.push(`Quality: ${item.quality}`);
-    }
-    if (item.type) {
-        const typeStr = item.type.charAt(0).toUpperCase() + item.type.slice(1);
-        tooltipLines.push(`Type: ${typeStr}`);
-    }
-
-    // 3. Stats
-    if (item.attackPower) tooltipLines.push(`Attack: +${item.attackPower}`);
-    if (item.defense) tooltipLines.push(`Defense: +${item.defense}`);
-    if (item.maxHp) tooltipLines.push(`Max HP: +${item.maxHp}`);
-    if (item.healAmount) tooltipLines.push(`Heal: ${item.healAmount} HP`);
-    if (item.speed) tooltipLines.push(`Speed: +${item.speed}`);
-    if (item.critChance) tooltipLines.push(`Crit: +${(item.critChance * 100).toFixed(1)}%`);
-    if (item.lifesteal) tooltipLines.push(`Lifesteal: +${(item.lifesteal * 100).toFixed(1)}%`);
-
-    // 4. Set Info
-    const itemSetsForTooltip = getItemSets();
-    if (item.set && itemSetsForTooltip && itemSetsForTooltip[item.set]) {
-        tooltipLines.push('');
-        tooltipLines.push(`Set: ${item.set}`);
-        const setInfo = itemSetsForTooltip[item.set];
-        if (setInfo && setInfo.pieces) {
-            tooltipLines.push(`Pieces: ${setInfo.pieces.join(', ')}`);
-        }
-    }
-
-    // 5. Context-Specific Actions & Prices
-    if (context === 'inventory') {
-        const equippableTypes = ['weapon', 'armor', 'helmet', 'ring', 'amulet', 'boots', 'gloves', 'belt'];
-        if (equippableTypes.includes(item.type)) {
-            tooltipLines.push('');
-            tooltipLines.push('Click to Equip');
-        } else if (item.type === 'consumable') {
-            tooltipLines.push('');
-            tooltipLines.push('Click to Use');
-        }
-    } else if (context === 'equipment') {
-        tooltipLines.push('');
-        tooltipLines.push('Click to Unequip');
-    } else if (context === 'shop_buy') {
-        tooltipLines.push('');
-        tooltipLines.push(`Price: ${item.price || 0} Gold`);
-        tooltipLines.push('Click to Buy');
-    } else if (context === 'shop_sell') {
-        const sellPrice = item.price ? Math.floor(item.price * 0.5) : (typeof calculateItemSellPrice === 'function' ? calculateItemSellPrice(item) : 0);
-        tooltipLines.push('');
-        tooltipLines.push(`Value: ${sellPrice} Gold`);
-        tooltipLines.push('Click to Sell');
-    }
-
-    const tooltipText = tooltipLines.join('\n');
-    const qualityColor = (QUALITY_COLORS && QUALITY_COLORS[item.quality]) ? QUALITY_COLORS[item.quality] : 0xffffff;
-
-    // Create text object
-    const text = scene.add.text(0, 0, tooltipText, {
-        fontSize: '14px',
-        fill: '#ffffff',
-        padding: { x: 10, y: 10 },
-        wordWrap: { width: 220 }
-    }).setScrollFactor(0).setDepth(1001).setOrigin(0);
-
-
-    // Position logic
-    const bounds = text.getBounds();
-    let tx = x + 20;
-    let ty = y + 20;
-
-    // Boundary checks
-    if (tx + bounds.width > scene.cameras.main.width) {
-        tx = x - bounds.width - 20;
-    }
-    if (ty + bounds.height > scene.cameras.main.height) {
-        ty = y - bounds.height - 20;
-    }
-
-    text.setPosition(tx, ty);
-
-    // Optional background rectangle for better visibility with quality border
-    const bg = scene.add.rectangle(tx + bounds.width / 2, ty + bounds.height / 2, bounds.width, bounds.height, 0x000000, 0.9)
-        .setScrollFactor(0).setDepth(999).setStrokeStyle(2, qualityColor);
-
-    currentTooltip = { text, bg };
+    UIManager.showTooltip(item, x, y, context);
 }
 
 /**
  * hideTooltip - Hides the active tooltip
- * @param {boolean} immediate - If true, destroys immediately without delay
  */
 function hideTooltip(immediate = false) {
-    const scene = game.scene.scenes[0];
-
-    const performHide = () => {
-        if (currentTooltip) {
-            if (currentTooltip.text) currentTooltip.text.destroy();
-            if (currentTooltip.bg) currentTooltip.bg.destroy();
-            currentTooltip = null;
-        }
-    };
-
-    if (immediate) {
-        performHide();
-    } else {
-        // Debounce hide slightly to prevent flickering during rapid movement
-        if (!tooltipHideTimer && scene && scene.time) {
-            tooltipHideTimer = scene.time.delayedCall(50, () => {
-                performHide();
-                tooltipHideTimer = null;
-            });
-        }
-    }
+    UIManager.hideTooltip(immediate);
 }
-
-// Also check for any orphaned tooltip text objects in the scene
-const scene = game.scene.scenes[0];
-
 
 /**
  * Unified scrollbar setup utility
- * @param {Object} params Configuration parameters
- * @returns {Object} Scrollbar instance with update methods
  */
-function setupScrollbar({
-    scene,
-    x,
-    y,
-    width = 12,
-    height,
-    depth = 1000,
-    minScroll = 0,
-    initialScroll = 0,
-    onScroll, // Callback(newPosition)
-    container, // Optional Phaser Container to auto-update .y
-    containerStartY, // Required if using container
-    containerOffset = 0, // Extra offset for container positioning
-    wheelHitArea, // Optional rectangle/object with getBounds() for wheel support
-    visibleHeight // Height of the visible area (usually same as scrollbar height)
-}) {
-    // Create track with origin at top center
-    const track = scene.add.rectangle(x, y, width, height, 0x333333, 0.8)
-        .setScrollFactor(0).setDepth(depth).setStrokeStyle(1, 0x555555)
-        .setInteractive({ useHandCursor: true }).setOrigin(0.5, 0);
-
-    // Thumb height ratio
-    let thumbHeight = 40;
-    const thumb = scene.add.rectangle(x, y, width - 4, thumbHeight, 0x666666, 1)
-        .setScrollFactor(0).setDepth(depth + 1).setStrokeStyle(1, 0x888888)
-        .setInteractive({ useHandCursor: true }).setOrigin(0.5, 0);
-
-    let currentScroll = initialScroll;
-    let maxScroll = 0;
-    let isDragging = false;
-    let dragStartY = 0;
-    let dragStartScroll = 0;
-
-    const setScroll = (newPosition) => {
-        // Clamp scroll position between min and max
-        currentScroll = Math.max(minScroll, Math.min(maxScroll, newPosition));
-
-        // Update thumb position with precision
-        if (maxScroll > minScroll) {
-            const scrollRange = maxScroll - minScroll;
-            const scrollRatio = (currentScroll - minScroll) / scrollRange;
-
-            // Available movement range for the thumb (leave 2px padding at top and bottom)
-            const padding = 2;
-            const availableTrackHeight = height - (padding * 2);
-            const thumbMoveRange = availableTrackHeight - thumb.height;
-
-            // Map scroll ratio to thumb Y position (relative to track Y + padding)
-            if (thumbMoveRange > 0) {
-                thumb.y = y + padding + (scrollRatio * thumbMoveRange);
-            } else {
-                thumb.y = y + padding;
-            }
-        } else {
-            thumb.y = y + 2;
-        }
-
-        // Apply scroll logic to container
-        if (container && containerStartY !== undefined) {
-            container.y = containerStartY - containerOffset - currentScroll;
-        }
-
-        if (onScroll) {
-            onScroll(currentScroll);
-        }
-    };
-
-
-    // Interactions
-    const onPointerDown = (pointer) => {
-        if (!track.visible) return;
-
-        if (thumb.getBounds().contains(pointer.x, pointer.y)) {
-            isDragging = true;
-            dragStartY = pointer.y;
-            dragStartScroll = currentScroll;
-        } else if (track.getBounds().contains(pointer.x, pointer.y)) {
-            // Jump to position
-            const padding = 2;
-            const availableTrackHeight = height - (padding * 2);
-            const thumbMoveRange = availableTrackHeight - thumb.height;
-
-            if (thumbMoveRange > 0) {
-                // Click position relative to track start (offset by padding and half thumb)
-                const clickY = pointer.y - y - padding - (thumb.height / 2);
-                const clickRatio = Math.max(0, Math.min(1, clickY / thumbMoveRange));
-                const scrollRange = maxScroll - minScroll;
-                setScroll(minScroll + clickRatio * scrollRange);
-            }
-        }
-    };
-
-    const onPointerMove = (pointer) => {
-        if (isDragging && pointer.isDown) {
-            const padding = 2;
-            const availableTrackHeight = height - (padding * 2);
-            const thumbMoveRange = availableTrackHeight - thumb.height;
-
-            if (thumbMoveRange > 0 && maxScroll > minScroll) {
-                const deltaY = pointer.y - dragStartY;
-                const scrollChangeRatio = deltaY / thumbMoveRange;
-                const scrollRange = maxScroll - minScroll;
-                setScroll(dragStartScroll + scrollChangeRatio * scrollRange);
-            }
-        }
-    };
-
-
-    const onPointerUp = () => { isDragging = false; };
-
-    const onWheel = (pointer, gameObjects, deltaX, deltaY) => {
-        if (!track.visible || maxScroll <= minScroll) return;
-
-        const hitArea = wheelHitArea || track;
-        const bounds = (hitArea.getBounds ? hitArea.getBounds() : hitArea);
-
-        if (bounds.contains(pointer.x, pointer.y)) {
-            setScroll(currentScroll + deltaY * 0.5);
-        }
-    };
-
-    scene.input.on('pointerdown', onPointerDown);
-    scene.input.on('pointermove', onPointerMove);
-    scene.input.on('pointerup', onPointerUp);
-    scene.input.on('wheel', onWheel);
-
-    const instance = {
-        track,
-        thumb,
-        updateMaxScroll: (newMax, totalContentHeight) => {
-            maxScroll = newMax;
-            if (totalContentHeight > visibleHeight) {
-                const ratio = Math.min(1, visibleHeight / totalContentHeight);
-                const padding = 2;
-                const usableHeight = height - (padding * 2);
-
-                // Calculate thumb height proportionate to usable track height
-                // Ensure min height of 30, but never more than usableHeight
-                thumb.height = Math.min(usableHeight, Math.max(30, usableHeight * ratio));
-
-                track.setVisible(true);
-                thumb.setVisible(true);
-            } else {
-                track.setVisible(false);
-                thumb.setVisible(false);
-            }
-            setScroll(currentScroll); // Refresh position
-        },
-
-        setScroll,
-        getScroll: () => currentScroll,
-        destroy: () => {
-            scene.input.off('pointerdown', onPointerDown);
-            scene.input.off('pointermove', onPointerMove);
-            scene.input.off('pointerup', onPointerUp);
-            scene.input.off('wheel', onWheel);
-            track.destroy();
-            thumb.destroy();
-        },
-        setVisible: (visible) => {
-            if (visible && maxScroll > minScroll) {
-                track.setVisible(true);
-                thumb.setVisible(true);
-            } else {
-                track.setVisible(false);
-                thumb.setVisible(false);
-            }
-        }
-    };
-
-    return instance;
+function setupScrollbar(params) {
+    return UIManager.setupScrollbar(params);
 }
 
 /**
  * Destroy inventory UI
  */
 function destroyInventoryUI() {
-    const scene = game.scene.scenes[0];
-
-    // Always hide tooltip first when closing inventory
-    hideTooltip(true);
-
-    if (inventoryPanel) {
-        if (inventoryPanel.bg && inventoryPanel.bg.active) inventoryPanel.bg.destroy();
-        if (inventoryPanel.title && inventoryPanel.title.active) inventoryPanel.title.destroy();
-        if (inventoryPanel.closeText && inventoryPanel.closeText.active) inventoryPanel.closeText.destroy();
-
-        if (inventoryPanel.scrollbar) {
-            inventoryPanel.scrollbar.destroy();
-        }
-
-        if (inventoryPanel.container) {
-            inventoryPanel.container.destroy();
-        }
-
-        inventoryPanel.items = [];
-        inventoryPanel = null;
-    }
-
-    // Final cleanup - ensure tooltip is gone
-    hideTooltip(true);
-
-    // Clear controller menu selection
-    if (typeof clearMenuSelection === 'function') {
-        clearMenuSelection();
-    }
-
-    inventoryVisible = false;
+    UIManager.destroyInventoryUI();
 }
 
 /**
  * Update inventory (refresh display)
  */
 function updateInventory() {
-    // Refresh item display if inventory changed
-    if (inventoryPanel) {
-        const currentItemCount = inventoryPanel.items.filter(i => i.item).length;
-        if (currentItemCount !== playerStats.inventory.length) {
-            updateInventoryItems();
-        }
-    }
+    UIManager.updateInventory();
 }
 
 // Track last inventory count for change detection
@@ -7824,255 +7096,21 @@ function isInCombat() {
 /**
  * Toggle quest log visibility
  */
+/**
+ * Toggle quest log visibility
+ */
 function toggleQuestLog() {
-    // Don't allow opening quest log during combat
-    if (isInCombat()) {
-        return;
-    }
-
-    const scene = game.scene.scenes[0];
-
-    // If already open, close it
-    if (questVisible) {
-        questVisible = false;
-        destroyQuestLogUI();
-        return;
-    }
-
-    // Close all other interfaces before opening
-    closeAllInterfaces();
-
-    // Now open quest log
-    questVisible = true;
-    createQuestLogUI();
+    UIManager.toggleQuestLog();
 }
 
 /**
  * Create quest log UI panel
  */
+/**
+ * Create quest log UI panel
+ */
 function createQuestLogUI() {
-    const scene = game.scene.scenes[0];
-
-    // Create background panel (centered on screen)
-    const panelWidth = 900;
-    const panelHeight = 600;
-    const centerX = scene.cameras.main.width / 2;
-    const centerY = scene.cameras.main.height / 2;
-
-    // Background
-    const bg = scene.add.rectangle(centerX, centerY, panelWidth, panelHeight, 0x1a1a1a, 0.95)
-        .setScrollFactor(0).setDepth(300).setStrokeStyle(3, 0xffffff);
-
-    // Title
-    const title = scene.add.text(centerX, centerY - panelHeight / 2 + 15, 'QUEST LOG', {
-        fontSize: '28px',
-        fill: '#ffffff',
-        fontStyle: 'bold'
-    }).setScrollFactor(0).setDepth(301).setOrigin(0.5, 0);
-
-    // Close text
-    const closeText = scene.add.text(centerX + panelWidth / 2 - 20, centerY - panelHeight / 2 + 20, 'Press Q to Close', {
-        fontSize: '14px',
-        fill: '#aaaaaa'
-    }).setScrollFactor(0).setDepth(301).setOrigin(1, 0);
-
-    // Tab buttons (four tabs: Main, Current, Available, Completed)
-    const tabY = centerY - panelHeight / 2 + 60;
-    const tabWidth = 110;
-    const tabSpacing = 5;
-    const totalTabWidth = (tabWidth * 4) + (tabSpacing * 3);
-    const tabStartX = centerX - totalTabWidth / 2 + tabWidth / 2;
-
-    // Reset default tab to 'main'
-    questLogTab = 'main';
-
-    const mainTabBtn = scene.add.rectangle(tabStartX, tabY, tabWidth, 35, 0x333333, 0.9)
-        .setScrollFactor(0).setDepth(301).setStrokeStyle(2, 0xffffff).setInteractive({ useHandCursor: true });
-
-    const mainTabText = scene.add.text(tabStartX, tabY, 'Story', {
-        fontSize: '16px',
-        fill: '#ffffff',
-        fontStyle: 'bold'
-    }).setScrollFactor(0).setDepth(302).setOrigin(0.5, 0.5);
-
-    const currentTabBtn = scene.add.rectangle(tabStartX + tabWidth + tabSpacing, tabY, tabWidth, 35, 0x333333, 0.9)
-        .setScrollFactor(0).setDepth(301).setStrokeStyle(2, 0x666666).setInteractive({ useHandCursor: true });
-
-    const currentTabText = scene.add.text(tabStartX + tabWidth + tabSpacing, tabY, 'Active', {
-        fontSize: '16px',
-        fill: '#aaaaaa'
-    }).setScrollFactor(0).setDepth(302).setOrigin(0.5, 0.5);
-
-    const availableTabBtn = scene.add.rectangle(tabStartX + (tabWidth + tabSpacing) * 2, tabY, tabWidth, 35, 0x333333, 0.9)
-        .setScrollFactor(0).setDepth(301).setStrokeStyle(2, 0x666666).setInteractive({ useHandCursor: true });
-
-    const availableTabText = scene.add.text(tabStartX + (tabWidth + tabSpacing) * 2, tabY, 'Available', {
-        fontSize: '16px',
-        fill: '#aaaaaa'
-    }).setScrollFactor(0).setDepth(302).setOrigin(0.5, 0.5);
-
-    const completedTabBtn = scene.add.rectangle(tabStartX + (tabWidth + tabSpacing) * 3, tabY, tabWidth, 35, 0x333333, 0.9)
-        .setScrollFactor(0).setDepth(301).setStrokeStyle(2, 0x666666).setInteractive({ useHandCursor: true });
-
-    const completedTabText = scene.add.text(tabStartX + (tabWidth + tabSpacing) * 3, tabY, 'Completed', {
-        fontSize: '16px',
-        fill: '#aaaaaa'
-    }).setScrollFactor(0).setDepth(302).setOrigin(0.5, 0.5);
-
-    // Tab click handlers
-    const switchToMain = () => {
-        questLogTab = 'main';
-        selectedQuestIndex = 0;
-        updateTabButtons();
-        updateQuestLogItems();
-    };
-
-    const switchToCurrent = () => {
-        questLogTab = 'current';
-        selectedQuestIndex = 0; // Reset selection
-        updateTabButtons();
-        updateQuestLogItems();
-    };
-
-    const switchToAvailable = () => {
-        questLogTab = 'available';
-        selectedQuestIndex = 0; // Reset selection
-
-        // Trigger for UI tutorial quest
-        playerStats.questStats.availableTabClicked = (playerStats.questStats.availableTabClicked || 0) + 1;
-        checkQuestProgress(); // Check if "Exploring Options" is complete
-
-        updateTabButtons();
-        updateQuestLogItems();
-    };
-
-    const switchToCompleted = () => {
-        questLogTab = 'completed';
-        selectedQuestIndex = 0; // Reset selection
-        updateTabButtons();
-        updateQuestLogItems();
-    };
-
-    const updateTabButtons = () => {
-        // Reset all tabs to inactive style
-        mainTabBtn.setStrokeStyle(2, 0x666666);
-        mainTabText.setStyle({ fill: '#aaaaaa', fontStyle: 'normal' });
-        currentTabBtn.setStrokeStyle(2, 0x666666);
-        currentTabText.setStyle({ fill: '#aaaaaa', fontStyle: 'normal' });
-        availableTabBtn.setStrokeStyle(2, 0x666666);
-        availableTabText.setStyle({ fill: '#aaaaaa', fontStyle: 'normal' });
-        completedTabBtn.setStrokeStyle(2, 0x666666);
-        completedTabText.setStyle({ fill: '#aaaaaa', fontStyle: 'normal' });
-
-        // Set active tab style
-        if (questLogTab === 'main') {
-            mainTabBtn.setStrokeStyle(2, 0xffffff);
-            mainTabText.setStyle({ fill: '#ffffff', fontStyle: 'bold' });
-        } else if (questLogTab === 'current') {
-            currentTabBtn.setStrokeStyle(2, 0xffffff);
-            currentTabText.setStyle({ fill: '#ffffff', fontStyle: 'bold' });
-        } else if (questLogTab === 'available') {
-            availableTabBtn.setStrokeStyle(2, 0xffffff);
-            availableTabText.setStyle({ fill: '#ffffff', fontStyle: 'bold' });
-        } else if (questLogTab === 'completed') {
-            completedTabBtn.setStrokeStyle(2, 0xffffff);
-            completedTabText.setStyle({ fill: '#ffffff', fontStyle: 'bold' });
-        }
-    };
-
-    mainTabBtn.on('pointerdown', switchToMain);
-    mainTabText.setInteractive({ useHandCursor: true });
-    mainTabText.on('pointerdown', switchToMain);
-
-    currentTabBtn.on('pointerdown', switchToCurrent);
-    currentTabText.setInteractive({ useHandCursor: true });
-    currentTabText.on('pointerdown', switchToCurrent);
-
-    availableTabBtn.on('pointerdown', switchToAvailable);
-    availableTabText.setInteractive({ useHandCursor: true });
-    availableTabText.on('pointerdown', switchToAvailable);
-
-    completedTabBtn.on('pointerdown', switchToCompleted);
-    completedTabText.setInteractive({ useHandCursor: true });
-    completedTabText.on('pointerdown', switchToCompleted);
-
-    // Container for quest list (to allow scrolling)
-    const listStartX = centerX - panelWidth / 2 + 20;
-    const listStartY = centerY - panelHeight / 2 + 100;
-    const listWidth = 310;
-    const listHeight = panelHeight - 200;
-
-    const listContainer = scene.add.container(listStartX, listStartY);
-    listContainer.setScrollFactor(0).setDepth(301);
-
-    // Mask for quest list
-    const listMask = scene.add.graphics();
-    listMask.fillStyle(0xffffff);
-    listMask.fillRect(listStartX, listStartY, listWidth, listHeight);
-    listMask.setScrollFactor(0).setDepth(299).setVisible(false); // Add to display list but keep invisible
-    const maskGeometry = listMask.createGeometryMask();
-    listContainer.setMask(maskGeometry);
-
-    // Scrollbar using unified utility
-    const scrollbar = setupScrollbar({
-        scene,
-        x: listStartX + listWidth + 10,
-        y: listStartY,
-        height: listHeight,
-        depth: 303,
-        minScroll: 0,
-        initialScroll: 0,
-        container: listContainer,
-        containerStartY: listStartY,
-        containerOffset: 0,
-        wheelHitArea: bg, // Scroll when over the panel
-        visibleHeight: listHeight,
-        // Re-render quest list items on scroll so visible items update
-        onScroll: (newPosition) => {
-            updateQuestLogItems();
-        }
-    });
-
-    // Divider between list and details (starts below tabs)
-    const dividerX = centerX - panelWidth / 2 + 350;
-    const dividerTopY = centerY - panelHeight / 2 + 100; // Below tab bar (was 90)
-    const dividerBottomPadding = 40;
-    const dividerHeight = panelHeight - 140; // Height of content area
-    const divider = scene.add.rectangle(dividerX, dividerTopY + dividerHeight / 2, 2, dividerHeight, 0x666666, 1)
-        .setScrollFactor(0).setDepth(301);
-
-    questPanel = {
-        bg: bg,
-        title: title,
-        closeText: closeText,
-        mainTabBtn: mainTabBtn,
-        mainTabText: mainTabText,
-        currentTabBtn: currentTabBtn,
-        currentTabText: currentTabText,
-        availableTabBtn: availableTabBtn,
-        availableTabText: availableTabText,
-        completedTabBtn: completedTabBtn,
-        completedTabText: completedTabText,
-        divider: divider,
-        container: listContainer,
-        mask: listMask,
-        maskGeometry: maskGeometry,
-        scrollbar: scrollbar,
-        scrollY: 0,
-        listStartX: listStartX,
-        listStartY: listStartY,
-        listWidth: listWidth,
-        listHeight: listHeight,
-        updateTabButtons: updateTabButtons,
-        questListElements: [],
-        questDetailElements: []
-    };
-
-    // Initialize tab buttons
-    updateTabButtons();
-
-    // Show quests
-    updateQuestLogItems();
+    UIManager.createQuestLogUI();
 }
 
 /**
@@ -8081,488 +7119,32 @@ function createQuestLogUI() {
 /**
  * Update quest log items display
  */
-let isUpdatingQuestLog = false; // Recursion guard
+/**
+ * Update quest log items display
+ */
 function updateQuestLogItems() {
-    if (isUpdatingQuestLog) return; // Prevent recursive calls
-    isUpdatingQuestLog = true;
-
-    const scene = game.scene.scenes[0];
-    if (!questPanel) {
-        isUpdatingQuestLog = false;
-        return;
-    }
-
-    // Clear existing quest displays
-    if (questPanel.container) {
-        questPanel.container.removeAll(true);
-    }
-    questPanel.questListElements = [];
-
-    questPanel.questDetailElements.forEach(element => {
-        if (element) element.destroy();
-    });
-    questPanel.questDetailElements = [];
-
-    const centerX = questPanel.bg.x;
-    const centerY = questPanel.bg.y;
-    const panelWidth = questPanel.bg.width;
-    const panelHeight = questPanel.bg.height;
-
-    // List dimensions (from questPanel)
-    const listWidth = questPanel.listWidth;
-    const listHeight = questPanel.listHeight;
-    const listStartX = questPanel.listStartX;
-    const listStartY = questPanel.listStartY;
-    const dividerX = centerX - panelWidth / 2 + 350;
-
-    // Right panel: Quest details
-    const detailStartX = dividerX + 20;
-    const detailStartY = listStartY;
-    const detailWidth = panelWidth - (detailStartX - (centerX - panelWidth / 2)) - 20;
-
-    // Get quests based on current tab
-    let quests = [];
-    if (questLogTab === 'main') {
-        // Story quests: UQE quests that have a 'step' field (main story progression)
-        const storyQuests = [];
-        if (typeof uqe !== 'undefined' && uqe.activeQuests) {
-            uqe.activeQuests.forEach(q => {
-                const def = uqe.allDefinitions[q.id];
-                if (def && def.step) { // Has step = story quest
-                    const totalProgress = q.objectives.reduce((sum, obj) => sum + obj.progress, 0);
-                    const totalTarget = q.objectives.reduce((sum, obj) => sum + obj.target, 0);
-                    storyQuests.push({
-                        id: q.id,
-                        title: q.title,
-                        description: q.description,
-                        progress: totalProgress,
-                        target: totalTarget,
-                        completed: q.completed,
-                        rewards: q.rewards || {},
-                        objectives: q.objectives
-                    });
-                }
-            });
-        }
-        quests = storyQuests;
-        console.log(`📋 Rendering Story tab: found ${quests.length} story quests from UQE`);
-    } else if (questLogTab === 'current') {
-        // Active tab: ALL active UQE quests
-        const activeQuests = [];
-        if (typeof uqe !== 'undefined' && uqe.activeQuests) {
-            uqe.activeQuests.forEach(q => {
-                const totalProgress = q.objectives.reduce((sum, obj) => sum + obj.progress, 0);
-                const totalTarget = q.objectives.reduce((sum, obj) => sum + obj.target, 0);
-                activeQuests.push({
-                    id: q.id,
-                    title: q.title,
-                    description: q.description,
-                    progress: totalProgress,
-                    target: totalTarget,
-                    completed: q.completed,
-                    rewards: q.rewards || {},
-                    objectives: q.objectives
-                });
-            });
-        }
-        quests = activeQuests;
-        console.log(`📋 Rendering Active tab: found ${quests.length} quests from UQE`);
-    } else if (questLogTab === 'available') {
-        // Get available quests from UQE (not active, not completed, prereqs met)
-        const availableQuests = [];
-        if (typeof uqe !== 'undefined' && uqe.allDefinitions) {
-            const uqeCompletedIds = uqe.completedQuests.map(q => q.id);
-            const uqeActiveIds = uqe.activeQuests.map(q => q.id);
-
-            console.log(`🔍 [Available Debug] Total definitions: ${Object.keys(uqe.allDefinitions).length}`);
-            console.log(`🔍 [Available Debug] Active IDs: [${uqeActiveIds.join(', ')}]`);
-            console.log(`🔍 [Available Debug] Completed IDs: [${uqeCompletedIds.join(', ')}]`);
-
-            Object.values(uqe.allDefinitions).forEach(questDef => {
-                const isActive = uqeActiveIds.includes(questDef.id);
-                const isCompleted = uqeCompletedIds.includes(questDef.id);
-
-                // Check prerequisites
-                let prereqMet = true;
-                if (questDef.requires) {
-                    prereqMet = uqeCompletedIds.includes(questDef.requires);
-                }
-
-                console.log(`🔍 [Available Debug] Quest ${questDef.id}: active=${isActive}, completed=${isCompleted}, prereqMet=${prereqMet}, requires=${questDef.requires || 'none'}`);
-
-                // Show if not active, not completed, and prereqs met
-                if (!isActive && !isCompleted && prereqMet) {
-                    // Calculate total target from objectives
-                    const totalTarget = questDef.objectives.reduce((sum, obj) => sum + (obj.target || 1), 0);
-                    availableQuests.push({
-                        id: questDef.id,
-                        title: questDef.title,
-                        description: questDef.description,
-                        giver: questDef.giver,
-                        objectives: questDef.objectives,
-                        rewards: questDef.rewards || {},
-                        isUQE: true,
-                        progress: 0, // Not started yet
-                        target: totalTarget
-                    });
-                }
-            });
-        } else {
-            console.log(`⚠️ [Available Debug] UQE not available or no allDefinitions`);
-        }
-        quests = availableQuests;
-        console.log(`📋 Rendering Available tab: found ${quests.length} quests from UQE`);
-    } else {
-        // Get completed quests from UQE
-        const completedQuests = [];
-        if (typeof uqe !== 'undefined' && uqe.completedQuests) {
-            uqe.completedQuests.forEach(q => {
-                const totalTarget = q.objectives.reduce((sum, obj) => sum + obj.target, 0);
-                completedQuests.push({
-                    id: q.id,
-                    title: q.title,
-                    description: q.description,
-                    completed: true,
-                    progress: totalTarget, // Completed = full progress
-                    target: totalTarget,
-                    rewards: q.rewards || {},
-                    objectives: q.objectives
-                });
-            });
-        }
-        quests = completedQuests;
-        console.log(`📋 Rendering Completed tab: found ${quests.length} quests from UQE`);
-    }
-
-    // Ensure selectedQuestIndex is valid
-    if (selectedQuestIndex >= quests.length) {
-        selectedQuestIndex = Math.max(0, quests.length - 1);
-    }
-    if (quests.length === 0) {
-        selectedQuestIndex = -1;
-    }
-
-    // Quest list on left (RENDERED INTO CONTAINER FOR SCROLLING)
-    if (quests.length === 0) {
-        let noQuestsMessage = 'No active side quests';
-        if (questLogTab === 'main') {
-            noQuestsMessage = 'No active story quests';
-        } else if (questLogTab === 'available') {
-            noQuestsMessage = 'No available quests';
-        } else if (questLogTab === 'completed') {
-            noQuestsMessage = 'No completed quests';
-        }
-        const noQuestsText = scene.add.text(listWidth / 2, listHeight / 2,
-            noQuestsMessage, {
-            fontSize: '16px',
-            fill: '#888888',
-            fontStyle: 'italic'
-        }).setOrigin(0.5, 0.5);
-        questPanel.container.add(noQuestsText);
-
-        // Disable scrollbar when no quests
-        if (questPanel.scrollbar) {
-            questPanel.scrollbar.updateMaxScroll(0, listHeight);
-            questPanel.scrollbar.setVisible(false);
-        }
-    } else {
-        const questItemHeight = 50;
-        const totalContentHeight = quests.length * questItemHeight;
-
-        // Update scrollbar
-        if (questPanel.scrollbar) {
-            const maxScroll = Math.max(0, totalContentHeight - listHeight);
-            questPanel.scrollbar.updateMaxScroll(maxScroll, totalContentHeight);
-        }
-
-        // Optimization: only render quests that are currently visible (plus a buffer)
-        const scrollY = questPanel.scrollbar ? questPanel.scrollbar.getScroll() : 0;
-        const startIndex = Math.floor(scrollY / questItemHeight);
-        const endIndex = Math.min(quests.length, Math.ceil((scrollY + listHeight) / questItemHeight));
-
-        // Render visible quests into the container
-        for (let i = startIndex; i < endIndex; i++) {
-            const quest = quests[i];
-            const isSelected = (i === selectedQuestIndex);
-
-            // USE ABSOLUTE POSITION WITHIN CONTAINER (scrollbar moves the container)
-            const itemY = i * questItemHeight + questItemHeight / 2;
-
-            // Quest item background (relative to container)
-            const itemBg = scene.add.rectangle(listWidth / 2, itemY, listWidth - 10, questItemHeight - 5,
-                isSelected ? 0x444444 : 0x2a2a2a, 0.9)
-                .setStrokeStyle(2, isSelected ? 0x00aaff : 0x555555)
-                .setScrollFactor(0).setDepth(302)
-                .setInteractive({ useHandCursor: true });
-
-            // Quest title
-            const titleText = scene.add.text(10, itemY, quest.title, {
-                fontSize: '16px',
-                fill: isSelected ? '#ffffff' : '#cccccc',
-                fontStyle: 'bold'
-            }).setScrollFactor(0).setDepth(302).setOrigin(0, 0.5);
-
-            // Add to container
-            questPanel.container.add([itemBg, titleText]);
-
-            // Progress indicator for current and main quests
-            const isTrackedTab = (questLogTab === 'current' || questLogTab === 'main');
-            if (isTrackedTab && quest.progress !== undefined && quest.target !== undefined) {
-                const progressPercent = Math.min(quest.progress / quest.target, 1);
-                const progressText = scene.add.text(listWidth - 15, itemY, `${Math.round(progressPercent * 100)}%`, {
-                    fontSize: '12px',
-                    fill: '#00ff00'
-                }).setScrollFactor(0).setDepth(302).setOrigin(1, 0.5);
-                questPanel.container.add(progressText);
-            } else if (questLogTab === 'completed') {
-                const completedIcon = scene.add.text(listWidth - 15, itemY, '✓', {
-                    fontSize: '20px',
-                    fill: '#00ff00'
-                }).setScrollFactor(0).setDepth(302).setOrigin(1, 0.5);
-                questPanel.container.add(completedIcon);
-            }
-
-            // Click handler
-            const selectQuest = () => {
-                selectedQuestIndex = i;
-                updateQuestLogItems();
-            };
-
-            itemBg.on('pointerdown', selectQuest);
-        }
-    }
-
-    // Quest details on right (REMAINS ABSOLUTE, NOT IN SCROLLING CONTAINER)
-    if (quests.length > 0 && selectedQuestIndex >= 0 && selectedQuestIndex < quests.length && selectedQuestIndex !== -1) {
-        const quest = quests[selectedQuestIndex];
-        let detailY = detailStartY;
-
-        // Quest title
-        const detailTitle = scene.add.text(detailStartX, detailY, quest.title, {
-            fontSize: '24px',
-            fill: '#ffffff',
-            fontStyle: 'bold',
-            wordWrap: { width: detailWidth - 20 }
-        }).setScrollFactor(0).setDepth(302).setOrigin(0, 0);
-        questPanel.questDetailElements.push(detailTitle);
-        detailY += 35;
-
-        // Quest description
-        const detailDesc = scene.add.text(detailStartX, detailY, quest.description, {
-            fontSize: '16px',
-            fill: '#cccccc',
-            wordWrap: { width: detailWidth - 20 }
-        }).setScrollFactor(0).setDepth(302).setOrigin(0, 0);
-        questPanel.questDetailElements.push(detailDesc);
-        detailY += 50;
-
-        // Objectives section (Unified Quest Engine / V2)
-        if (quest.objectives) {
-            const objLabel = scene.add.text(detailStartX, detailY, 'Objectives:', {
-                fontSize: '18px',
-                fill: '#ffffff',
-                fontStyle: 'bold'
-            }).setScrollFactor(0).setDepth(302).setOrigin(0, 0);
-            questPanel.questDetailElements.push(objLabel);
-            detailY += 30;
-
-            quest.objectives.forEach(obj => {
-                const statusStr = obj.completed ? '✅' : '⏳';
-                const objProgress = obj.progress !== undefined ? obj.progress : 0;
-
-                let textXOffset = 20;
-
-                // Render icon if present
-                if (obj.icon) {
-                    const iconSprite = scene.add.sprite(detailStartX + 20, detailY + 10, obj.icon)
-                        .setScrollFactor(0).setDepth(302).setScale(0.6); // Scale to fit text line
-                    questPanel.questDetailElements.push(iconSprite);
-                    textXOffset += 25; // Shift text to make room for icon
-                }
-
-                const objText = scene.add.text(detailStartX + textXOffset, detailY, `${statusStr} ${obj.label}: ${objProgress}/${obj.target}`, {
-                    fontSize: '14px',
-                    fill: obj.completed ? '#00ff00' : '#cccccc'
-                }).setScrollFactor(0).setDepth(302).setOrigin(0, 0);
-                questPanel.questDetailElements.push(objText);
-                detailY += 25;
-            });
-            detailY += 15;
-        }
-
-        // Progress section (for current and main quests)
-        const isProgressTab = (questLogTab === 'current' || questLogTab === 'main');
-        if (isProgressTab && quest.progress !== undefined && quest.target !== undefined) {
-            const progressLabel = scene.add.text(detailStartX, detailY, 'Progress:', {
-                fontSize: '18px',
-                fill: '#ffffff',
-                fontStyle: 'bold'
-            }).setScrollFactor(0).setDepth(302).setOrigin(0, 0);
-            questPanel.questDetailElements.push(progressLabel);
-            detailY += 30;
-
-            // Progress bar background
-            const progressBarBgWidth = detailWidth - 20;
-            const progressBarBgX = detailStartX + progressBarBgWidth / 2;
-            const progressBarBgY = detailY + 15;
-            const progressBarBg = scene.add.rectangle(progressBarBgX, progressBarBgY, progressBarBgWidth, 25, 0x333333, 0.8)
-                .setScrollFactor(0).setDepth(301).setStrokeStyle(2, 0x666666);
-            questPanel.questDetailElements.push(progressBarBg);
-
-            // Progress bar fill (left-aligned)
-            const progressPercent = Math.min(quest.progress / quest.target, 1);
-            const progressBarWidth = progressBarBgWidth * progressPercent;
-            // Calculate left edge of background bar
-            const progressBarLeftX = progressBarBgX - progressBarBgWidth / 2;
-            // Position fill bar starting from left edge
-            const progressBar = scene.add.rectangle(
-                progressBarLeftX + progressBarWidth / 2,
-                progressBarBgY,
-                progressBarWidth,
-                21,
-                0x00ff00
-            ).setScrollFactor(0).setDepth(302).setOrigin(0.5, 0.5);
-            questPanel.questDetailElements.push(progressBar);
-
-            // Progress text
-            const progressText = scene.add.text(detailStartX + (detailWidth - 20) / 2, detailY + 15,
-                `${quest.progress}/${quest.target}`, {
-                fontSize: '16px',
-                fill: '#ffffff',
-                fontStyle: 'bold'
-            }).setScrollFactor(0).setDepth(303).setOrigin(0.5, 0.5);
-            questPanel.questDetailElements.push(progressText);
-            detailY += 50;
-        }
-
-        // Rewards section
-        detailY += 10;
-        const rewardsLabel = scene.add.text(detailStartX, detailY, 'Rewards:', {
-            fontSize: '18px',
-            fill: '#ffd700',
-            fontStyle: 'bold'
-        }).setScrollFactor(0).setDepth(302).setOrigin(0, 0);
-        questPanel.questDetailElements.push(rewardsLabel);
-        detailY += 30;
-
-        let rewardsText = '';
-        if (quest.rewards.xp) {
-            rewardsText += `+${quest.rewards.xp} XP`;
-        }
-        if (quest.rewards.gold) {
-            if (rewardsText) rewardsText += '\n';
-            rewardsText += `+${quest.rewards.gold} Gold`;
-        }
-
-        const rewards = scene.add.text(detailStartX, detailY, rewardsText, {
-            fontSize: '16px',
-            fill: '#ffd700'
-        }).setScrollFactor(0).setDepth(302).setOrigin(0, 0);
-        questPanel.questDetailElements.push(rewards);
-
-        // Accept button for available quests
-        if (questLogTab === 'available') {
-            detailY += 60;
-            const acceptBtn = scene.add.rectangle(detailStartX + (detailWidth - 20) / 2, detailY, 200, 40, 0x00aa00, 0.9)
-                .setScrollFactor(0).setDepth(301).setStrokeStyle(2, 0x00ff00).setInteractive({ useHandCursor: true });
-
-            const acceptBtnText = scene.add.text(detailStartX + (detailWidth - 20) / 2, detailY, 'Accept Quest', {
-                fontSize: '18px',
-                fill: '#ffffff',
-                fontStyle: 'bold'
-            }).setScrollFactor(0).setDepth(302).setOrigin(0.5, 0.5);
-
-            const acceptQuest = () => {
-                // Accept quest via UQE
-                if (typeof uqe !== 'undefined' && quest.isUQE) {
-                    uqe.acceptQuest(quest.id);
-                    console.log(`✅ [UQE] Quest accepted from Available tab: ${quest.id}`);
-                } else {
-                    // Fallback for legacy quests (if any)
-                    const questIndex = playerStats.quests.available.findIndex(q => q.id === quest.id);
-                    if (questIndex !== -1) {
-                        const questToAccept = playerStats.quests.available[questIndex];
-                        playerStats.quests.available.splice(questIndex, 1);
-                        if (!playerStats.quests.active) playerStats.quests.active = [];
-                        questToAccept.progress = 0;
-                        if (!playerStats.quests.active.find(q => q.id === questToAccept.id)) {
-                            playerStats.quests.active.push(questToAccept);
-                        }
-                    }
-                }
-
-                // Refresh quest log display
-                updateQuestLogItems();
-                playSound('item_pickup');
-            };
-
-            acceptBtn.on('pointerdown', acceptQuest);
-            acceptBtnText.setInteractive({ useHandCursor: true });
-            acceptBtnText.on('pointerdown', acceptQuest);
-
-            questPanel.questDetailElements.push(acceptBtn, acceptBtnText);
-        }
-    } else if (quests.length === 0) {
-        // No quests message already shown in list
-    }
-
-    isUpdatingQuestLog = false; // Reset recursion guard
+    UIManager.updateQuestLogItems();
 }
 
 /**
  * Update quest log (refresh display)
  */
 function updateQuestLog() {
-    // Quest log updates are handled by refreshQuestLog()
+    UIManager.refreshQuestLog();
 }
 
 /**
  * Force quest log refresh
  */
 function refreshQuestLog() {
-    if (questVisible && questPanel) {
-        updateQuestLogItems();
-    }
+    UIManager.refreshQuestLog();
 }
 
 /**
  * Destroy quest log UI
  */
 function destroyQuestLogUI() {
-    const scene = game.scene.scenes[0];
-
-    if (questPanel) {
-        if (questPanel.bg) questPanel.bg.destroy();
-        if (questPanel.title) questPanel.title.destroy();
-        if (questPanel.closeText) questPanel.closeText.destroy();
-        if (questPanel.mainTabBtn) questPanel.mainTabBtn.destroy();
-        if (questPanel.mainTabText) questPanel.mainTabText.destroy();
-        if (questPanel.currentTabBtn) questPanel.currentTabBtn.destroy();
-        if (questPanel.currentTabText) questPanel.currentTabText.destroy();
-        if (questPanel.availableTabBtn) questPanel.availableTabBtn.destroy();
-        if (questPanel.availableTabText) questPanel.availableTabText.destroy();
-        if (questPanel.completedTabBtn) questPanel.completedTabBtn.destroy();
-        if (questPanel.completedTabText) questPanel.completedTabText.destroy();
-        if (questPanel.completedTabText) questPanel.completedTabText.destroy();
-        if (questPanel.divider) questPanel.divider.destroy();
-
-        // New UI components
-        if (questPanel.container) questPanel.container.destroy();
-        if (questPanel.mask) questPanel.mask.destroy();
-        if (questPanel.scrollbar) questPanel.scrollbar.destroy();
-
-        questPanel.questListElements.forEach(element => {
-            if (element) element.destroy();
-        });
-
-        questPanel.questDetailElements.forEach(element => {
-            if (element) element.destroy();
-        });
-
-        questPanel.questListElements = [];
-        questPanel.questDetailElements = [];
-        questPanel = null;
-    }
+    UIManager.destroyQuestLogUI();
 }
 
 /**
@@ -9910,88 +8492,37 @@ function startDialog(npc) {
     currentShopNPC = npc; // Store reference for shop
     dialogVisible = true;
 
-    createDialogUI(npc);
-    showDialogNode('start');
+    UIManager.createDialogUI(npc);
+    UIManager.showDialogNode('start');
 }
 
 /**
  * Show a specific dialog node
  */
+/**
+ * Show a specific dialog node
+ */
 function showDialogNode(nodeId) {
-    if (!currentDialog || !currentDialog.nodes[nodeId]) {
-        closeDialog();
-        return;
-    }
-
-    currentDialogNode = nodeId;
-    const node = currentDialog.nodes[nodeId];
-
-    updateDialogUI(node);
-
-    // If no choices, auto-close after a moment
-    if (node.choices.length === 0) {
-        game.scene.scenes[0].time.delayedCall(2000, () => {
-            closeDialog();
-        });
-    }
+    UIManager.showDialogNode(nodeId);
 }
 
 /**
  * Create dialog UI panel
  */
+/**
+ * Create dialog UI panel
+ */
 function createDialogUI(npc) {
-    const scene = game.scene.scenes[0];
-
-    const panelWidth = 700;
-    const portraitHeight = 150; // Height for landscape portrait
-    // Height will be recalculated dynamically in updateDialogUI
-    const initialPanelHeight = 350;
-    const centerX = scene.cameras.main.width / 2;
-    const centerY = scene.cameras.main.height / 2 + 80;
-
-    // Create landscape portrait using NPC's portraitKey if available
-    let portraitImage = null;
-    if (npc.portraitKey && scene.textures.exists(npc.portraitKey)) {
-        portraitImage = scene.add.image(
-            centerX,
-            centerY - initialPanelHeight / 2 + portraitHeight / 2 + 10,
-            npc.portraitKey
-        ).setScrollFactor(0).setDepth(402);
-
-        // Scale to fit panel width while maintaining aspect ratio
-        const originalWidth = portraitImage.width;
-        const originalHeight = portraitImage.height;
-        const scaleFactor = (panelWidth - 20) / originalWidth;
-        portraitImage.setScale(scaleFactor);
-        // Limit height if too tall
-        if (portraitImage.displayHeight > portraitHeight) {
-            portraitImage.setDisplaySize(panelWidth - 20, portraitHeight);
-        }
-    }
-
-    dialogPanel = {
-        bg: scene.add.rectangle(centerX, centerY, panelWidth, initialPanelHeight, 0x1a1a1a, 0.95)
-            .setScrollFactor(0).setDepth(400).setStrokeStyle(3, 0xffffff),
-        portraitImage: portraitImage,
-        portraitHeight: portraitImage ? portraitHeight : 0,
-        npcNameText: scene.add.text(
-            centerX - panelWidth / 2 + 20,
-            centerY - initialPanelHeight / 2 + (portraitImage ? portraitHeight + 15 : 15),
-            `${npc.name}${npc.title ? ' - ' + npc.title : ''}`, {
-            fontSize: '22px',
-            fill: '#ffd700',
-            fontStyle: 'bold'
-        }).setScrollFactor(0).setDepth(401).setOrigin(0, 0),
-        dialogText: null,
-        choiceButtons: [],
-        npc: npc // Store NPC reference
-    };
+    UIManager.createDialogUI(npc);
 }
 
 /**
  * Update dialog UI with current node
  */
 function updateDialogUI(node) {
+    UIManager.updateDialogUI(node);
+    return;
+    /*
     const scene = game.scene.scenes[0];
     if (!dialogPanel) return;
 
@@ -10125,7 +8656,7 @@ function updateDialogUI(node) {
             try {
                 const unlockedLore = JSON.parse(localStorage.getItem('rpg_unlocked_lore') || '[]');
                 loreAlreadyUnlocked = unlockedLore.includes(choice.loreId);
-            } catch (e) { /* ignore */ }
+            } catch (e) { }
         }
 
         // Build display text with appropriate prefix
@@ -10327,37 +8858,17 @@ function updateDialogUI(node) {
             choice: choice
         });
     });
+    */
 }
 
 /**
  * Close dialog
  */
+/**
+ * Close dialog
+ */
 function closeDialog() {
-    if (dialogPanel) {
-        if (dialogPanel.bg) dialogPanel.bg.destroy();
-        if (dialogPanel.npcNameText) dialogPanel.npcNameText.destroy();
-        if (dialogPanel.dialogText) dialogPanel.dialogText.destroy();
-        if (dialogPanel.portraitImage) dialogPanel.portraitImage.destroy();
-
-        dialogPanel.choiceButtons.forEach(btn => {
-            if (btn.bg) btn.bg.destroy();
-            if (btn.text) btn.text.destroy();
-        });
-
-        dialogPanel = null;
-    }
-
-    currentDialog = null;
-    currentDialogNode = null;
-    currentShopNPC = null;
-    dialogVisible = false;
-
-    // Record closure time to prevent click-through
-    if (game.scene.scenes[0]) {
-        const s = game.scene.scenes[0];
-        s.lastWindowCloseTime = s.time.now;
-        console.log('🚫 Dialog closed at:', s.lastWindowCloseTime);
-    }
+    UIManager.closeDialog();
 }
 
 // ============================================
@@ -10458,7 +8969,7 @@ function chooseClass(className) {
     }
 
     // Close the dialog UI
-    closeDialog();
+    UIManager.closeDialog();
 }
 
 /**
@@ -10468,8 +8979,8 @@ function openShop(npc) {
     if (!npc || !npc.merchant) return;
 
     // Close all other interfaces before opening shop
-    closeAllInterfaces();
-    closeDialog(); // Also close dialog if open
+    UIManager.closeAllInterfaces();
+    UIManager.closeDialog(); // Also close dialog if open
 
     shopVisible = true;
     currentShopNPC = npc; // Set current merchant

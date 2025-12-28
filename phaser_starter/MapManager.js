@@ -113,95 +113,99 @@ const MapManager = {
         // Define spawn/exit
         const entranceX = centerX * tileSize;
         const entranceY = (mapHeight - 7) * tileSize;
-        const playerSpawnX = entranceX;
-        const playerSpawnY = entranceY - 50;
 
-        // Building placement logic
-        const buildingTypes = [
-            { type: 'tavern', width: 6, height: 5, color: 0x8b4513, count: 1, required: true },
-            { type: 'shop', width: 5, height: 4, color: 0x4169e1, count: 1, required: true },
-            { type: 'blacksmith', width: 5, height: 4, color: 0x555555, count: 1, required: true },
-            { type: 'temple', width: 4, height: 6, color: 0xffd700, count: 1, required: true },
-            { type: 'library', width: 5, height: 5, color: 0x800080, count: 1, required: true },
-            { type: 'apothecary', width: 4, height: 4, color: 0x006400, count: 1, required: true },
-            { type: 'guild', width: 6, height: 5, color: 0xa52a2a, count: 1, required: true },
-            { type: 'house', width: 4, height: 4, color: 0xcd853f, count: 8, required: false }
+        // Spawn Player at Village Center (20, 20)
+        const playerSpawnX = centerX * tileSize;
+        const playerSpawnY = centerY * tileSize;
+
+        // Hardcoded Building Layout
+        // Map is 40x40. Center is 20,20.
+        const definedBuildings = [
+            // Key Buildings (Upscaled & Aspect Corrected)
+            // Tavern (AR 1.40): 10x7
+            { type: 'tavern', x: 7, y: 2, width: 10, height: 7 },       // North-West, Left of Road
+
+            // Guild (AR 0.99): 8x8
+            { type: 'guild', x: 23, y: 2, width: 8, height: 8 },        // North-East
+
+            // Temple (AR 1.24): 10x8 (Was squished)
+            { type: 'temple', x: 2, y: 11, width: 10, height: 8 },      // moved lower to accommodate size
+
+            // Shop (AR 1.16): 7x6
+            { type: 'shop', x: 13, y: 13, width: 7, height: 6 },        // West, North of Road
+
+            // Blacksmith (AR 1.18): 7x6
+            { type: 'blacksmith', x: 24, y: 13, width: 7, height: 6 },  // East, North of Road
+
+            // Library (AR 1.19): 8x7
+            { type: 'library', x: 9, y: 23, width: 8, height: 7 },      // South-West
+
+            // Apothecary (AR 1.20): 7x6
+            { type: 'apothecary', x: 24, y: 23, width: 7, height: 6 },  // South-East
+
+            // Residential (Houses - AR ~1.0): 6x6
+            { type: 'house', x: 33, y: 5, width: 6, height: 6 },   // East Side 1
+            { type: 'house', x: 33, y: 13, width: 6, height: 6 },  // East Side 2
+            { type: 'house', x: 33, y: 24, width: 6, height: 6 },  // East Side 3
+
+            { type: 'house', x: 4, y: 33, width: 6, height: 6 },   // Bottom Row 1
+            { type: 'house', x: 12, y: 33, width: 6, height: 6 },  // Bottom Row 2
+            { type: 'house', x: 24, y: 33, width: 6, height: 6 },  // Bottom Row 3
+            { type: 'house', x: 31, y: 33, width: 6, height: 6 },  // Bottom Row 4
+
+            { type: 'house', x: 3, y: 23, width: 6, height: 6 },   // West Side (below Temple)
         ];
 
-        // Helper: Check blocking
-        const wouldBlockPlayerOrExit = (bx, by, bw, bh) => {
-            const buffer = 12 * tileSize;
-            const spawnArea = { x: playerSpawnX - buffer, y: playerSpawnY - buffer, width: buffer * 2, height: buffer * 2 };
-            const exitArea = { x: entranceX - buffer, y: entranceY - buffer, width: buffer * 2, height: buffer * 2 };
+        // Place buildings from hardcoded list
+        definedBuildings.forEach(def => {
+            const bx = def.x;
+            const by = def.y;
 
-            if (bx < spawnArea.x + spawnArea.width && bx + bw > spawnArea.x && by < spawnArea.y + spawnArea.height && by + bh > spawnArea.y) return true;
-            if (bx < exitArea.x + exitArea.width && bx + bw > exitArea.x && by < exitArea.y + exitArea.height && by + bh > exitArea.y) return true;
-            return false;
-        };
+            const pixelX = bx * tileSize;
+            const pixelY = by * tileSize;
+            const pixelW = def.width * tileSize;
+            const pixelH = def.height * tileSize;
 
-        // Place buildings
-        buildingTypes.forEach(def => {
-            for (let i = 0; i < def.count; i++) {
-                let attempts = 0;
-                let valid = false;
+            let buildingVisual;
+            if (scene.textures.exists(def.type)) {
+                // Use specific texture if available
+                buildingVisual = scene.add.image(pixelX + pixelW / 2, pixelY + pixelH / 2, def.type)
+                    .setDepth(1)
+                    .setDisplaySize(pixelW, pixelH);
+            } else if (def.type === 'house') {
+                // Randomize house texture
+                const houseKeys = ['house1', 'house2', 'house3'];
+                const key = Phaser.Utils.Array.GetRandom(houseKeys);
+                const textureToUse = scene.textures.exists(key) ? key : 'house';
 
-                while (!valid && attempts < 100) {
-                    const bx = Phaser.Math.Between(2, mapWidth - def.width - 2);
-                    const by = Phaser.Math.Between(2, mapHeight - def.height - 2);
-
-                    valid = true;
-                    // Check streets
-                    if (by + def.height >= centerY - 3 && by <= centerY + 3) valid = false;
-                    if (valid && bx + def.width >= centerX - 3 && bx <= centerX + 3) valid = false;
-
-                    // Check overlap
-                    if (valid) {
-                        const pixelX = bx * tileSize;
-                        const pixelY = by * tileSize;
-                        const pixelW = def.width * tileSize;
-                        const pixelH = def.height * tileSize;
-
-                        if (wouldBlockPlayerOrExit(pixelX, pixelY, pixelW, pixelH)) valid = false;
-
-                        if (valid) {
-                            for (const pb of this.buildings) {
-                                if (pixelX < pb.x + pb.width && pixelX + pixelW > pb.x &&
-                                    pixelY < pb.y + pb.height && pixelY + pixelH > pb.y) {
-                                    valid = false;
-                                    break;
-                                }
-                            }
-                        }
-                    }
-
-                    if (valid) {
-                        const pixelX = bx * tileSize;
-                        const pixelY = by * tileSize;
-                        const pixelW = def.width * tileSize;
-                        const pixelH = def.height * tileSize;
-
-                        const rect = scene.add.rectangle(
-                            pixelX + pixelW / 2, pixelY + pixelH / 2,
-                            pixelW, pixelH, def.color, 0.9
-                        ).setDepth(1).setStrokeStyle(2, 0x000000);
-
-                        // Label
-                        const label = scene.add.text(
-                            pixelX + pixelW / 2, pixelY + pixelH / 2,
-                            def.type.toUpperCase(),
-                            { fontSize: '12px', fill: '#ffffff', stroke: '#000000', strokeThickness: 2 }
-                        ).setDepth(2).setOrigin(0.5);
-
-                        this.buildings.push({
-                            x: pixelX, y: pixelY, width: pixelW, height: pixelH,
-                            type: def.type, rect: rect, label: label,
-                            centerX: pixelX + pixelW / 2, centerY: pixelY + pixelH / 2,
-                            interactionRadius: 100
-                        });
-                    }
-                    attempts++;
-                }
+                buildingVisual = scene.add.image(pixelX + pixelW / 2, pixelY + pixelH / 2, textureToUse)
+                    .setDepth(1)
+                    .setDisplaySize(pixelW, pixelH);
+            } else {
+                // Fallback to rectangle
+                const color = def.color || 0x888888;
+                buildingVisual = scene.add.rectangle(
+                    pixelX + pixelW / 2, pixelY + pixelH / 2,
+                    pixelW, pixelH, color, 0.9
+                ).setDepth(1).setStrokeStyle(2, 0x000000);
             }
+
+            // Store reference 
+            const rect = buildingVisual;
+
+            // Label
+            const label = scene.add.text(
+                pixelX + pixelW / 2, pixelY + pixelH / 2,
+                def.type.toUpperCase(),
+                { fontSize: '12px', fill: '#ffffff', stroke: '#000000', strokeThickness: 2 }
+            ).setDepth(2).setOrigin(0.5);
+
+            this.buildings.push({
+                x: pixelX, y: pixelY, width: pixelW, height: pixelH,
+                type: def.type, rect: rect, label: label,
+                centerX: pixelX + pixelW / 2, centerY: pixelY + pixelH / 2,
+                interactionRadius: 100
+            });
         });
 
         // Entrance Marker

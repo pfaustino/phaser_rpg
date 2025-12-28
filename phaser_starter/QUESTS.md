@@ -93,7 +93,9 @@ Quest chains allow for sequential storytelling and progression. Completing one q
 
 ## Technical Implementation: JSON Structure
 
-The quest system is data-driven, defined in `quests.json`. This allows for easy modification and AI integration.
+The quest system is data-driven, defined in `quests_v2.json`. This allows for easy modification and AI integration.
+
+> **[IMPORTANT] Developer Guide**: For details on how to add quests, use the Auto-Injector, and debug markers, please read `QUEST_SYSTEM_GUIDE.md`. DO NOT hardcode quests in `dialogs.json`!
 
 ### JSON Schema (UQE v2)
 

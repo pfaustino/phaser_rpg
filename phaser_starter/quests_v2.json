@@ -547,6 +547,7 @@
             "id": "quest_012",
             "title": "Endurance Test",
             "description": "Survive for 5 minutes in the dangerous world.",
+            "giver": "Captain Kael",
             "requires": "quest_006",
             "objectives": [
                 {
@@ -657,6 +658,7 @@
             "id": "quest_018",
             "title": "Unstoppable",
             "description": "Survive for 10 minutes without falling.",
+            "giver": "Captain Kael",
             "requires": "quest_012",
             "objectives": [
                 {

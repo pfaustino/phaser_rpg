@@ -171,25 +171,6 @@
                 "text": "Welcome to my shop! I have the finest wares in the village. Are you looking to buy something, or perhaps you could help me with a business favor?",
                 "choices": [
                     {
-                        "text": "I'd like to browse your wares",
-                        "next": "shop"
-                    },
-                    {
-                        "text": "About that favor...",
-                        "next": "favors",
-                        "isQuest": true,
-                        "condition": "has_available_quest:Merchant Lysa"
-                    },
-                    {
-                        "text": "Goodbye",
-                        "next": "end"
-                    }
-                ]
-            },
-            "favors": {
-                "text": "Business has been tough with the tremors. I need more inventory to stay afloat. Could you help me gather some items or perhaps earn some extra gold for me?",
-                "choices": [
-                    {
                         "text": "I can gather items for you",
                         "isQuest": true,
                         "action": "quest_accept_side",
@@ -206,7 +187,11 @@
                         "condition": "quest_available:quest_004"
                     },
                     {
-                        "text": "Maybe another time",
+                        "text": "I'd like to browse your wares",
+                        "next": "shop"
+                    },
+                    {
+                        "text": "Goodbye",
                         "next": "end"
                     }
                 ]
@@ -423,37 +408,6 @@
             "start": {
                 "text": "The town is safe for now, but I remain vigilant. How can I help you, citizen?",
                 "choices": [
-                    {
-                        "text": "What's happening in the Town Square?",
-                        "next": "mysterious_arrival_start",
-                        "isQuest": true,
-                        "condition": "quest_available:main_02_001",
-                        "action": "quest_accept_main",
-                        "questId": "main_02_001"
-                    },
-                    {
-                        "text": "I've investigated the energy (Complete Quest)",
-                        "next": "mysterious_arrival_complete",
-                        "isQuest": true,
-                        "condition": "quest_can_complete:main_02_001",
-                        "action": "complete_quest",
-                        "questId": "main_02_001"
-                    },
-                    {
-                        "text": "Have you heard anything new? (Arcane Insight)",
-                        "next": "arcane_insight_offer",
-                        "isQuest": true,
-                        "condition": "quest_available:main_02_002",
-                        "questId": "main_02_002"
-                    },
-                    {
-                        "text": "I found this artifact fragment at the ruins. (Complete The Source)",
-                        "next": "the_source_complete",
-                        "isQuest": true,
-                        "condition": "quest_can_complete:main_02_003",
-                        "action": "complete_quest",
-                        "questId": "main_02_003"
-                    },
                     {
                         "text": "Tell me about the monsters",
                         "next": "help"

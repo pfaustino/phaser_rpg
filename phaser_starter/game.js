@@ -7977,6 +7977,7 @@ function updateNPCIndicators() {
 
                 // Get quests for this NPC that are available (not active, not completed, prereqs met)
                 const npcQuests = Object.values(uqe.allDefinitions).filter(q => q.giver === npcName);
+                
                 hasQuestAvailable = npcQuests.some(questDef => {
                     const isActive = uqeActiveIds.includes(questDef.id);
                     const isCompleted = uqeCompletedIds.includes(questDef.id);
@@ -7984,6 +7985,7 @@ function updateNPCIndicators() {
                     if (questDef.requires) {
                         prereqMet = uqeCompletedIds.includes(questDef.requires);
                     }
+
                     return !isActive && !isCompleted && prereqMet;
                 });
             }
@@ -8314,8 +8316,17 @@ function evaluateDialogCondition(conditionStr, stats) {
 
     switch (type) {
         case 'quest_available':
-            // Quest is neither active nor completed
-            return !isQuestActive(param) && !isQuestCompleted(param);
+            // Quest is neither active nor completed AND prerequisites are met
+            if (isQuestActive(param) || isQuestCompleted(param)) return false;
+            // Check prereqs
+            if (window.uqe && window.uqe.allDefinitions) {
+                const def = window.uqe.allDefinitions[param];
+                if (def && def.requires) {
+                    const prereqMet = window.uqe.completedQuests.some(q => q.id === def.requires);
+                    if (!prereqMet) return false;
+                }
+            }
+            return true;
 
         case 'quest_active':
             return isQuestActive(param);

@@ -1110,8 +1110,11 @@ window.UIManager = {
             if (this.questPanel.closeText) this.questPanel.closeText.destroy();
 
             ['main', 'current', 'available', 'completed'].forEach(k => {
-                if (this.questPanel[k + 'TabBtn']) this.questPanel[k + 'TabBtn'].destroy();
-                if (this.questPanel[k + 'TabText']) this.questPanel[k + 'TabText'].destroy();
+                const tab = this.questPanel[k + 'Tab'];
+                if (tab) {
+                    if (tab.btn) tab.btn.destroy();
+                    if (tab.text) tab.text.destroy();
+                }
             });
 
             if (this.questPanel.divider) this.questPanel.divider.destroy();
@@ -1308,7 +1311,17 @@ window.UIManager = {
                         }
                     }
                     this.handleDialogNext(choice);
-                } else if (['quest_advance', 'quest_accept', 'quest_accept_side', 'quest_accept_v2'].includes(choice.action)) {
+                } else if (choice.action === 'complete_quest') {
+                    if (window.uqe && choice.questId) {
+                        const quest = window.uqe.activeQuests.find(q => q.id === choice.questId);
+                        if (quest && quest.canComplete()) {
+                            quest.complete();
+                            if (typeof addChatMessage === 'function') addChatMessage(`Quest Completed: ${quest.title}`, 0x00ff00);
+                            if (typeof playSound === 'function') playSound('quest_complete');
+                        }
+                    }
+                    this.handleDialogNext(choice);
+                } else if (['quest_advance', 'quest_accept', 'quest_accept_side', 'quest_accept_v2', 'quest_accept_main'].includes(choice.action)) {
                     const questId = choice.questId;
                     if (questId && window.uqe && window.uqe.allDefinitions[questId]) {
                         const currentNPC = this.dialogPanel.npc;

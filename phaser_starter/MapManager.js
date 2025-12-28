@@ -146,7 +146,7 @@ const MapManager = {
             // Residential (Houses - AR ~1.0): 6x6
             { type: 'house', x: 33, y: 5, width: 6, height: 6 },   // East Side 1
             { type: 'house', x: 33, y: 13, width: 6, height: 6 },  // East Side 2
-            { type: 'house', x: 33, y: 24, width: 6, height: 6 },  // East Side 3
+            { type: 'tower', x: 33, y: 24, width: 6, height: 7 },  // East Side 3 (Replaced with Tower)
 
             { type: 'house', x: 4, y: 33, width: 6, height: 6 },   // Bottom Row 1
             { type: 'house', x: 12, y: 33, width: 6, height: 6 },  // Bottom Row 2

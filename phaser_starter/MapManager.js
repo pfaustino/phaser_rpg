@@ -246,6 +246,14 @@ const MapManager = {
 
         // Create Mana Fluxes (assuming global or we move it later)
         if (typeof createManaFluxes === 'function') createManaFluxes();
+        // Initialize NPCs (assuming global function)
+        if (typeof initializeNPCs === 'function') initializeNPCs();
+
+        // Create Mana Fluxes (assuming global or we move it later)
+        if (typeof createManaFluxes === 'function') createManaFluxes();
+
+        // Play Town Music
+        if (typeof playBackgroundMusic === 'function') playBackgroundMusic('town');
     },
 
     /**
@@ -340,6 +348,15 @@ const MapManager = {
         }
 
         console.log('✅ Wilderness map created');
+        if (typeof player !== 'undefined') {
+            player.x = exitX;
+            player.y = exitY + 50;
+        }
+
+        console.log('✅ Wilderness map created');
+
+        // Play Wilderness Music
+        if (typeof playBackgroundMusic === 'function') playBackgroundMusic('wilderness');
     },
 
     /**
@@ -479,6 +496,9 @@ const MapManager = {
             scene.physics.world.setBounds(0, 0, dungeon.width * tileSize, dungeon.height * tileSize);
 
             console.log(`✅ Dungeon Level ${level} created`);
+
+            // Play Dungeon Music
+            if (typeof playBackgroundMusic === 'function') playBackgroundMusic('dungeon');
 
             // Update Pathfinding Grid
             if (typeof pathfinder === 'undefined' && typeof AStarPathfinding !== 'undefined') {

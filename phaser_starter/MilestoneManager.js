@@ -188,8 +188,11 @@ class MilestoneManager {
         this.completedMilestones.add(milestone.id);
         this.saveProgress();
 
+        // Normalize unlocks/rewards schema
+        const unlocks = milestone.unlocks || milestone.rewards || {};
+
         // 1. Show notification
-        const msg = milestone.unlocks.notification || `Milestone: ${milestone.name}`;
+        const msg = unlocks.notification || `Milestone: ${milestone.name}`;
         if (window.showDamageNumber && this.scene && this.scene.cameras && this.scene.cameras.main) {
             const x = this.scene.cameras.main.midPoint.x;
             const y = this.scene.cameras.main.midPoint.y - 150;
@@ -199,17 +202,24 @@ class MilestoneManager {
         }
 
         // 2. Unlock Lore
-        if (milestone.unlocks.lore) {
-            milestone.unlocks.lore.forEach(loreId => {
-                if (this.scene.loreManager) {
-                    this.scene.loreManager.unlockLore(loreId, 'milestone');
-                }
-            });
+        // Handle both 'lore' (array) and 'loreUnlock' (string/id)
+        const loreToUnlock = [];
+        if (unlocks.lore && Array.isArray(unlocks.lore)) {
+            loreToUnlock.push(...unlocks.lore);
+        }
+        if (unlocks.loreUnlock) {
+            loreToUnlock.push(unlocks.loreUnlock);
         }
 
+        loreToUnlock.forEach(loreId => {
+            if (this.scene.loreManager) {
+                this.scene.loreManager.unlockLore(loreId, 'milestone');
+            }
+        });
+
         // 3. Unlock Quests
-        if (milestone.unlocks.quests) {
-            milestone.unlocks.quests.forEach(questId => {
+        if (unlocks.quests) {
+            unlocks.quests.forEach(questId => {
                 if (window.questManager) {
                     // If using QuestManager (Legacy/Refactored)
                     // window.questManager.acceptQuest(questId);
@@ -222,12 +232,22 @@ class MilestoneManager {
         }
 
         // 4. Unlock Dialogs
-        if (milestone.unlocks.dialogs) {
-            milestone.unlocks.dialogs.forEach(dialogId => {
+        if (unlocks.dialogs) {
+            unlocks.dialogs.forEach(dialogId => {
                 if (this.scene.dialogManager) {
                     this.scene.dialogManager.enableDialog(dialogId);
                 }
             });
+        }
+
+        // 5. Grant XP (from rewards specific)
+        if (unlocks.xp && window.playerStats) {
+            // Assuming a global addXp function or direct manipulation
+            if (typeof window.addXp === 'function') {
+                window.addXp(unlocks.xp);
+            } else {
+                console.log(`[Milestone] Awarded ${unlocks.xp} XP (Function missing)`);
+            }
         }
     }
 }

@@ -146,12 +146,82 @@ let inventoryKey;
 let equipmentKey;
 let settingsKey;
 let settingsKey2; // Was not there but safe
-let musicEnabled = true;
+window.musicEnabled = true;
 
 // Background music
 let villageMusic = null;
 let wildernessMusic = null;
 let dungeonMusic = null;
+
+/**
+ * Toggle music track muting
+ * @param {boolean} enabled - Whether music should be enabled
+ */
+window.toggleMusic = function(enabled) {
+    console.log(`🎵 Toggling music: ${enabled ? 'ON' : 'OFF'}`);
+    
+    // Toggle specific music tracks only (leave SFX alone)
+    if (villageMusic) { 
+        if (enabled && !villageMusic.isPlaying) villageMusic.play();
+        villageMusic.setMute(!enabled); 
+    }
+    
+    if (wildernessMusic) { 
+        if (enabled && !wildernessMusic.isPlaying) wildernessMusic.play();
+        wildernessMusic.setMute(!enabled); 
+    }
+    
+    if (dungeonMusic) { 
+        if (enabled && !dungeonMusic.isPlaying) dungeonMusic.play();
+        dungeonMusic.setMute(!enabled); 
+    }
+    
+    // Also handle transition logic - if we are supposed to be playing something but it's stopped/muted
+    // Re-trigger music check for current map
+    if (enabled && typeof playBackgroundMusic === 'function' && typeof MapManager !== 'undefined') {
+        playBackgroundMusic(MapManager.currentMap); // Ensure the correct track is playing
+        
+        // Also ensure scene isn't globally muted from previous fallback
+        const scene = game.scene.scenes[0];
+        if (scene && scene.sound) {
+            scene.sound.mute = false;
+        }
+    }
+};
+
+/**
+ * Play background music based on map type
+ * @param {string} mapType - 'town', 'wilderness', 'dungeon'
+ */
+window.playBackgroundMusic = function(mapType) {
+    if (!window.musicEnabled) return;
+    
+    // Stop all current music to ensure clean transitions
+    if (villageMusic && villageMusic.isPlaying) villageMusic.stop();
+    if (wildernessMusic && wildernessMusic.isPlaying) wildernessMusic.stop();
+    if (dungeonMusic && dungeonMusic.isPlaying) dungeonMusic.stop();
+    
+    const scene = game.scene.scenes[0];
+    if (!scene || !scene.sound) return;
+
+    try {
+        if (mapType === 'town') {
+            if (!villageMusic) villageMusic = scene.sound.add('village_music', { loop: true, volume: 0.5 });
+            if (!villageMusic.isPlaying) villageMusic.play();
+            console.log('🎵 Playing Village Music');
+        } else if (mapType === 'wilderness') {
+            if (!wildernessMusic) wildernessMusic = scene.sound.add('wilderness_music', { loop: true, volume: 0.4 });
+            if (!wildernessMusic.isPlaying) wildernessMusic.play();
+            console.log('🎵 Playing Wilderness Music');
+        } else if (mapType === 'dungeon' || mapType === 'tower_dungeon' || mapType === 'temple_ruins') {
+            if (!dungeonMusic) dungeonMusic = scene.sound.add('dungeon_music', { loop: true, volume: 0.5 });
+            if (!dungeonMusic.isPlaying) dungeonMusic.play();
+            console.log('🎵 Playing Dungeon Music');
+        }
+    } catch (e) {
+        console.warn('❌ Error playing music:', e);
+    }
+};
 
 // Quest UI
 let questKey;
@@ -490,6 +560,11 @@ function preload() {
     this.load.image('character-fallen', 'assets/images/character-fallen.png');
     // item_fragment and item_crystal are now loaded dynamically from quests_v2.json
     this.load.audio('bell_toll', 'assets/audio/bell-toll-407826.mp3');
+    
+    // Background Music
+    this.load.audio('village_music', 'assets/audio/music/Village_Hearth_FULL_SONG_MusicGPT.mp3');
+    this.load.audio('wilderness_music', 'assets/audio/music/Wilderness_of_Arcana_FULL_SONG_MusicGPT.mp3');
+    this.load.audio('dungeon_music', 'assets/audio/music/Dungeon_of_Arcana_FULL_SONG_MusicGPT.mp3');
 
     // Load player and monster base images
     this.load.image('player', 'assets/player.png');

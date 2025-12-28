@@ -232,6 +232,7 @@ function preload() {
     this.load.json('milestoneData', 'milestones.json');
     this.load.json('npcData', 'npc.json');
     this.load.json('zoneData', 'zones.json');
+    this.load.json('dungeonData', 'dungeons.json');
 
 
 
@@ -1577,48 +1578,84 @@ function spawnDungeonMonsters() {
             const x = (room.x + Phaser.Math.Between(1, room.width - 1)) * scene.tileSize;
             const y = (room.y + Phaser.Math.Between(1, room.height - 1)) * scene.tileSize;
 
-            // Spawn random monster type (scaled by level)
-            // Early floors (1-2) spawn Echo creatures for main quest
+            // Spawn random monster type (from dungeon data)
             let dungeonMonsterTypes = [];
+            const dungeonId = MapManager.currentDungeon.id || 'tower_dungeon';
 
-            if (MapManager.dungeonLevel <= 2) {
-                // Floor 1-2: Echo creatures for main quest line
-                dungeonMonsterTypes = [
-                    { name: 'Echo Rat', textureKey: 'monster_echo_mite', hp: 20, attack: 4, speed: 70, xp: 8, isProcedural: false, monsterType: 'echo_rat', spawnAmount: [3, 5] },
-                    { name: 'Echo Rat', textureKey: 'monster_echo_mite', hp: 20, attack: 4, speed: 70, xp: 8, isProcedural: false, monsterType: 'echo_rat', spawnAmount: [3, 5] },
-                    { name: 'Echo Mite', textureKey: 'monster_echo_mite', hp: 15, attack: 3, speed: 60, xp: 5, isProcedural: false, monsterType: 'echo_mite', spawnAmount: [2, 4] }
-                ];
-            } else {
-                // Deeper floors: Standard dungeon monsters
-                dungeonMonsterTypes = [
-                    { name: 'Goblin', textureKey: 'monster_goblin', hp: 30, attack: 5, speed: 50, xp: 10, isProcedural: false, spawnAmount: [1, 3] },
-                    { name: 'Orc', textureKey: 'monster_orc', hp: 50, attack: 8, speed: 40, xp: 20, isProcedural: false, spawnAmount: [1, 2] },
-                    { name: 'Skeleton', textureKey: 'monster_skeleton', hp: 25, attack: 6, speed: 60, xp: 15, isProcedural: false, spawnAmount: [1, 2] }
-                ];
-            }
+            // Get monster pool from data
+            const dungeonData = scene.cache.json.get('dungeonData');
+            const dungeonDef = dungeonData && dungeonData.dungeons ? dungeonData.dungeons[dungeonId] : null;
 
-            // Add procedural versions to the pool if available
-            if (monsterRenderer && Object.keys(monsterRenderer.monsterBlueprints).length > 0) {
-                const blueprints = Object.values(monsterRenderer.monsterBlueprints);
-                blueprints.forEach(bp => {
-                    // Only add if it's one of the dungeon types or a unique one like Prism Slime
-                    if (['Goblin', 'Orc', 'Skeleton', 'Prism Slime'].includes(bp.name)) {
-                        dungeonMonsterTypes.push({
-                            name: bp.name,
-                            id: bp.id,
-                            hp: bp.stats.hp,
-                            attack: bp.stats.attack,
-                            speed: bp.stats.speed,
-                            xp: bp.stats.xp,
-                            textureKey: bp.id,
-                            isProcedural: true,
-                            spawnAmount: bp.stats.spawnAmount || [1, 1]
-                        });
+            if (dungeonDef && dungeonDef.monsters) {
+                // Use defined monsters
+                dungeonDef.monsters.forEach(mDef => {
+                    // Look up stats or use default
+                    // We need to map 'echo_rat' to stats. 
+                    // Ideally we have a monster database. 
+                    // For now, we'll map IDs to the hardcoded stats or procedurally generate
+
+                    // Simple mapping or checking procedural
+                    // If we have procedural blueprints, we can use them
+
+                    // LEGACY MAPPING (Temporary until full data-driven monsters)
+                    let baseStats = {};
+                    if (mDef.id === 'echo_rat') baseStats = { name: 'Echo Rat', textureKey: 'monster_echo_mite', hp: 20, attack: 4, speed: 70, xp: 8, monsterType: 'echo_rat' };
+                    else if (mDef.id === 'skeleton_miner') baseStats = { name: 'Skeleton Miner', textureKey: 'monster_skeleton', hp: 25, attack: 6, speed: 60, xp: 15 };
+                    else if (mDef.id === 'corrupted_guardian') baseStats = { name: 'Corrupted Guardian', textureKey: 'monster_orc', hp: 50, attack: 8, speed: 40, xp: 20 };
+                    else {
+                        // Default fallback
+                        baseStats = { name: mDef.id, textureKey: 'monster_goblin', hp: 30, attack: 5, speed: 50, xp: 10 };
                     }
+
+                    // Apply level scaling
+                    if (mDef.minLevel && MapManager.dungeonLevel < mDef.minLevel) return;
+
+                    dungeonMonsterTypes.push({
+                        ...baseStats,
+                        chance: mDef.chance || 1.0,
+                        spawnAmount: mDef.spawnAmount || [1, 2]
+                    });
                 });
             }
 
-            const selectedType = Phaser.Utils.Array.GetRandom(dungeonMonsterTypes);
+            // Fallback if no monsters defined
+            if (dungeonMonsterTypes.length === 0) {
+                dungeonMonsterTypes = [
+                    { name: 'Goblin', textureKey: 'monster_goblin', hp: 30, attack: 5, speed: 50, xp: 10, spawnAmount: [1, 3] }
+                ];
+            }
+
+            // weighted random choice
+            const totalChance = dungeonMonsterTypes.reduce((sum, m) => sum + (m.chance || 1), 0);
+            let roll = Math.random() * totalChance;
+            let selectedType = dungeonMonsterTypes[0];
+
+            for (const m of dungeonMonsterTypes) {
+                roll -= (m.chance || 1);
+                if (roll <= 0) {
+                    selectedType = m;
+                    break;
+                }
+            }
+
+            // Procedural Override check
+            if (monsterRenderer && Object.keys(monsterRenderer.monsterBlueprints).length > 0) {
+                // Try to match by ID
+                const bp = monsterRenderer.monsterBlueprints[selectedType.name] || monsterRenderer.monsterBlueprints[selectedType.id];
+                if (bp) {
+                    selectedType = {
+                        name: bp.name,
+                        id: bp.id,
+                        hp: bp.stats.hp,
+                        attack: bp.stats.attack,
+                        speed: bp.stats.speed,
+                        xp: bp.stats.xp,
+                        textureKey: bp.id,
+                        isProcedural: true,
+                        spawnAmount: bp.stats.spawnAmount || selectedType.spawnAmount
+                    };
+                }
+            }
             const scaledHp = selectedType.hp + (MapManager.dungeonLevel * 10);
             const scaledAttack = selectedType.attack + (MapManager.dungeonLevel * 2);
             const scaledXp = (selectedType.xp || 10) + (MapManager.dungeonLevel * 5);
@@ -1654,25 +1691,54 @@ function spawnDungeonMonsters() {
 function spawnBossMonster(x, y, level) {
     const scene = game.scene.scenes[0];
 
-    // Use a specific monster type for boss
-    let bossType = 'dragon';
+    // Get dungeon definition
+    const dungeonId = MapManager.currentDungeon ? MapManager.currentDungeon.id : null;
+    const dungeonData = scene.cache.json.get('dungeonData');
+    const dungeonDef = dungeonData && dungeonData.dungeons && dungeonId ? dungeonData.dungeons[dungeonId] : null;
+
+    let bossId = 'dragon';
     let bossName = 'Dragon Boss';
+    let shouldSpawn = true;
+
+    // Data-driven Check
+    if (dungeonDef && dungeonDef.boss) {
+        // Only spawn if this is the correct level
+        if (dungeonDef.boss.level && dungeonDef.boss.level !== level) {
+            shouldSpawn = false;
+        }
+        // Override boss ID
+        if (dungeonDef.boss.monsterId) {
+            bossId = dungeonDef.boss.monsterId;
+            bossName = bossId.replace('_', ' ').toUpperCase();
+        }
+    }
+
+    if (!shouldSpawn) {
+        console.log(`info: No boss spawn for ${dungeonId} at level ${level}`);
+        return;
+    }
+
+    // Determine stats based on ID (or procedural)
+    let textureKey = 'monster_dragon_south';
+    if (bossId === 'echo_beholder') textureKey = 'monster_echo_mite'; // Placeholder
+    else if (bossId === 'corrupted_guardian') textureKey = 'monster_orc';
 
     // Check if we have a special boss blueprint or if the user wants procedural boss
     // For now, let's randomly decide or try to find a "Boss" type blueprint
-    const hasBossBlueprint = monsterRenderer && (monsterRenderer.monsterBlueprints['Boss'] || monsterRenderer.monsterBlueprints['dragon']);
+    const hasBossBlueprint = monsterRenderer && (monsterRenderer.monsterBlueprints[bossId] || monsterRenderer.monsterBlueprints['Boss']);
 
     // 50/50 chance to be procedural if a blueprint exists
     const useProcedural = hasBossBlueprint && Math.random() < 0.5;
 
     const bossTypeData = {
         name: bossName,
-        textureKey: 'monster_dragon_south',
+        textureKey: textureKey,
         hp: 100 + (level * 50),
         attack: 15 + (level * 5),
         speed: 80,
         xp: 50 + (level * 25),
-        isProcedural: useProcedural
+        isProcedural: useProcedural,
+        monsterType: bossId // Store type
     };
 
     const boss = spawnMonster(x, y, bossTypeData, bossTypeData.hp, bossTypeData.attack, bossTypeData.xp, true);
@@ -2495,9 +2561,11 @@ function triggerWorldInteraction() {
     }
 
     // Check transition markers
+    console.log(`[Debug] Checking ${MapManager.transitionMarkers.length} markers. Player at ${Math.floor(player.x)},${Math.floor(player.y)}`);
     for (const marker of MapManager.transitionMarkers) {
         if (!marker || !marker.x || !marker.y) continue;
         const distance = Phaser.Math.Distance.Between(player.x, player.y, marker.x, marker.y);
+        // console.log(`[Debug] Marker dist: ${distance} (Rad: ${marker.radius})`); 
         if (distance <= marker.radius) {
             const targetLevel = marker.dungeonLevel || 1;
 
@@ -2524,7 +2592,7 @@ function triggerWorldInteraction() {
 
             console.log(`🚪 Transitioning to ${marker.targetMap} level ${targetLevel}`);
             try {
-                MapManager.transitionToMap(marker.targetMap, targetLevel);
+                MapManager.transitionToMap(marker.targetMap, targetLevel, marker.dungeonId);
             } catch (e) {
                 console.error('❌ Error during transition:', e);
             }
@@ -2533,6 +2601,9 @@ function triggerWorldInteraction() {
     }
 
     // If not near a marker, check building or NPC interaction
+
+    // Debug Map State
+    console.log(`[Debug] MapManager.currentMap: '${MapManager.currentMap}'`);
 
     // If building UI is open, close it (handled by caller usually, but good check)
     if (typeof buildingPanelVisible !== 'undefined' && buildingPanelVisible) {
@@ -2543,10 +2614,15 @@ function triggerWorldInteraction() {
     // Check MapManager.buildings first (in town), then NPCs
     if (typeof MapManager.currentMap !== 'undefined' && MapManager.currentMap === 'town') {
         if (typeof checkBuildingInteraction === 'function') {
+            console.log('[Debug] Calling checkBuildingInteraction()');
             checkBuildingInteraction();
             // If building UI opened, return true
             if (typeof buildingPanelVisible !== 'undefined' && buildingPanelVisible) return true;
+        } else {
+            console.log('[Debug] checkBuildingInteraction is NOT a function');
         }
+    } else {
+        console.log('[Debug] Skipping building check. Not in town or map undefined.');
     }
 
     if (typeof checkNPCInteraction === 'function') {
@@ -7977,7 +8053,7 @@ function updateNPCIndicators() {
 
                 // Get quests for this NPC that are available (not active, not completed, prereqs met)
                 const npcQuests = Object.values(uqe.allDefinitions).filter(q => q.giver === npcName);
-                
+
                 hasQuestAvailable = npcQuests.some(questDef => {
                     const isActive = uqeActiveIds.includes(questDef.id);
                     const isCompleted = uqeCompletedIds.includes(questDef.id);
@@ -8218,6 +8294,18 @@ function checkBuildingInteraction() {
     });
 
     if (closestBuilding) {
+        // Special handling for Dungeon Buildings
+        if (closestBuilding.type === 'tower') {
+            console.log(`🏰 Entering Tower Dungeon from Town`);
+            MapManager.transitionToMap('dungeon', 1, 'tower_dungeon');
+            return;
+        }
+        else if (closestBuilding.type === 'temple') {
+            console.log(`🏰 Entering Temple Ruins from Town`);
+            MapManager.transitionToMap('dungeon', 1, 'temple_ruins');
+            return;
+        }
+
         console.log(`🏠 Opening UI for ${closestBuilding.type} (distance: ${closestDistance.toFixed(0)})`);
         openBuildingUI(closestBuilding);
     } else {

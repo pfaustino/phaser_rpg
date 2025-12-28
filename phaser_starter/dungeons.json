@@ -1,0 +1,69 @@
+{
+    "dungeons": {
+        "tower_dungeon": {
+            "id": "tower_dungeon",
+            "name": "Watchtower Basement",
+            "levels": 3,
+            "tileset": {
+                "floor": "dungeon_floor",
+                "wall": "dungeon_wall"
+            },
+            "generation": {
+                "width": 50,
+                "height": 50,
+                "roomCount": {
+                    "min": 8,
+                    "max": 12
+                },
+                "roomSize": {
+                    "min": 3,
+                    "max": 8
+                },
+                "corridorWidth": 1
+            },
+            "monsters": [
+                {
+                    "id": "echo_rat",
+                    "chance": 0.5
+                },
+                {
+                    "id": "skeleton_miner",
+                    "minLevel": 2,
+                    "chance": 0.3
+                }
+            ],
+            "boss": {
+                "level": 3,
+                "monsterId": "echo_beholder"
+            }
+        },
+        "temple_ruins": {
+            "id": "temple_ruins",
+            "name": "The Sunken Temple",
+            "levels": 2,
+            "tileset": {
+                "floor": "temple_floor",
+                "wall": "temple_wall"
+            },
+            "generation": {
+                "width": 60,
+                "height": 60,
+                "roomCount": {
+                    "min": 10,
+                    "max": 15
+                },
+                "roomSize": {
+                    "min": 6,
+                    "max": 12
+                },
+                "corridorWidth": 2
+            },
+            "monsters": [
+                {
+                    "id": "corrupted_guardian",
+                    "chance": 0.4
+                }
+            ]
+        }
+    }
+}

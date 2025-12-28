@@ -11,6 +11,11 @@ const MapManager = {
     transitionMarkers: [],
     currentMap: 'town',
 
+    // History State for Dungeon Returns
+    lastMap: null,
+    lastPlayerX: 0,
+    lastPlayerY: 0,
+
     // Dungeon State
     currentDungeon: null,
     dungeonLevel: 1,
@@ -200,11 +205,15 @@ const MapManager = {
                 { fontSize: '12px', fill: '#ffffff', stroke: '#000000', strokeThickness: 2 }
             ).setDepth(2).setOrigin(0.5);
 
+            // Dynamic interaction radius based on size
+            const sizeRadius = Math.max(pixelW, pixelH) / 2;
+            const interactionRadius = sizeRadius + 40; // 40px buffer around the building
+
             this.buildings.push({
                 x: pixelX, y: pixelY, width: pixelW, height: pixelH,
                 type: def.type, rect: rect, label: label,
                 centerX: pixelX + pixelW / 2, centerY: pixelY + pixelH / 2,
-                interactionRadius: 100
+                interactionRadius: interactionRadius
             });
         });
 
@@ -314,7 +323,9 @@ const MapManager = {
                 .setDepth(4).setOrigin(0.5);
 
             this.transitionMarkers.push({
-                x: dx, y: dy, radius: tileSize * 1.5, targetMap: 'dungeon', dungeonLevel: 1, marker: dMarker, text: dText
+                x: dx, y: dy, radius: tileSize * 1.5, targetMap: 'dungeon',
+                dungeonId: i === 0 ? 'tower_dungeon' : 'temple_ruins', // Assign specific dungeons
+                dungeonLevel: 1, marker: dMarker, text: dText
             });
         }
 
@@ -334,18 +345,37 @@ const MapManager = {
     /**
      * Create Dungeon Map
      */
-    createDungeonMap(level) {
+    createDungeonMap(dungeonId, level) {
         const scene = this.scene;
         const tileSize = 32;
 
         try {
-            const dungeonKey = `level_${level}`;
+            // Load dungeon data
+            const dungeonData = scene.cache.json.get('dungeonData');
+            const dungeonDef = dungeonData && dungeonData.dungeons ? dungeonData.dungeons[dungeonId] : null;
+
+            if (!dungeonDef) {
+                console.error(`Dungeon definition not found for ID: ${dungeonId}`);
+                throw new Error("Invalid dungeon ID");
+            }
+
+            const dungeonKey = `${dungeonId}_level_${level}`;
             let dungeon;
 
             if (this.dungeonCache[dungeonKey]) {
                 dungeon = this.dungeonCache[dungeonKey];
             } else {
-                dungeon = this.generateDungeon(level, 50, 50);
+                // Use generation parameters from definition
+                const gen = dungeonDef.generation || {
+                    width: 50, height: 50,
+                    roomCount: { min: 8, max: 12 },
+                    roomSize: { min: 3, max: 8 },
+                    corridorWidth: 1
+                };
+
+                // Parse min/max if needed or pass raw
+                dungeon = this.generateDungeon(level, gen, dungeonDef.tileset);
+                dungeon.id = dungeonId; // Store ID
                 if (dungeon) this.dungeonCache[dungeonKey] = dungeon;
             }
 
@@ -356,17 +386,37 @@ const MapManager = {
             this.dungeonWalls = [];
             if (this.wallGroup) this.wallGroup.clear(true, true);
 
+            // Determine tile keys
+            const floorKey = dungeon.tileset && dungeon.tileset.floor ? dungeon.tileset.floor : 'stone';
+            const wallKey = dungeon.tileset && dungeon.tileset.wall ? dungeon.tileset.wall : 'wall';
+            const hasFloorTex = scene.textures.exists(floorKey);
+            const hasWallTex = scene.textures.exists(wallKey);
+
             // Draw map
             for (let y = 0; y < dungeon.height; y++) {
                 for (let x = 0; x < dungeon.width; x++) {
                     if (dungeon.mapData[y][x] === 1) {
                         // Floor
-                        scene.add.rectangle(x * tileSize, y * tileSize, tileSize, tileSize, 0x222222)
-                            .setOrigin(0).setDepth(-1);
+                        if (hasFloorTex) {
+                            scene.add.image(x * tileSize, y * tileSize, floorKey)
+                                .setOrigin(0).setDepth(-1).setDisplaySize(tileSize, tileSize);
+                        } else {
+                            // Fallback Floor
+                            scene.add.rectangle(x * tileSize, y * tileSize, tileSize, tileSize, 0x222222)
+                                .setOrigin(0).setDepth(-1);
+                        }
                     } else {
                         // Wall
-                        const wall = scene.add.rectangle(x * tileSize, y * tileSize, tileSize, tileSize, 0x444444)
-                            .setOrigin(0).setDepth(0);
+                        let wall;
+                        if (hasWallTex) {
+                            wall = scene.add.image(x * tileSize, y * tileSize, wallKey)
+                                .setOrigin(0).setDepth(0).setDisplaySize(tileSize, tileSize);
+                        } else {
+                            // Fallback Wall
+                            wall = scene.add.rectangle(x * tileSize, y * tileSize, tileSize, tileSize, 0x444444)
+                                .setOrigin(0).setDepth(0);
+                        }
+
                         this.dungeonWalls.push({ x: x * tileSize, y: y * tileSize, width: tileSize, height: tileSize, rect: wall });
 
                         // Add to physics group for monster collision
@@ -393,7 +443,8 @@ const MapManager = {
                 }).setDepth(4).setOrigin(0.5);
 
                 this.transitionMarkers.push({
-                    x: ex, y: ey, radius: tileSize * 1.5, targetMap: level === 1 ? 'wilderness' : 'dungeon',
+                    x: ex, y: ey, radius: tileSize * 1.5, targetMap: (level === 1 && this.lastMap) ? this.lastMap : 'wilderness',
+                    dungeonId: dungeonId, // Persist ID
                     dungeonLevel: level === 1 ? null : level - 1,
                     marker: exitMarker, text: exitText
                 });
@@ -403,7 +454,9 @@ const MapManager = {
                 }
             }
 
-            if (dungeon.exit && level < 3) {
+            // Check max levels from definition
+            const maxLevels = dungeonDef.levels || 3;
+            if (dungeon.exit && level < maxLevels) {
                 const ex = dungeon.exit.x * tileSize;
                 const ey = dungeon.exit.y * tileSize;
                 const nextMarker = scene.add.rectangle(ex, ey, tileSize * 2, tileSize * 2, 0xff0000, 0.5)
@@ -415,7 +468,9 @@ const MapManager = {
                 }).setDepth(4).setOrigin(0.5);
 
                 this.transitionMarkers.push({
-                    x: ex, y: ey, radius: tileSize * 1.5, targetMap: 'dungeon', dungeonLevel: level + 1, marker: nextMarker, text: nextText
+                    x: ex, y: ey, radius: tileSize * 1.5, targetMap: 'dungeon',
+                    dungeonId: dungeonId, // Persist ID
+                    dungeonLevel: level + 1, marker: nextMarker, text: nextText
                 });
             }
 
@@ -442,8 +497,12 @@ const MapManager = {
     /**
      * Generate Procedural Dungeon Data
      */
-    generateDungeon(level, width, height, seed = null) {
-        if (!seed) seed = Date.now();
+    generateDungeon(level, config, tileset) {
+        // config has width, height, roomCount {min, max}, roomSize {min, max}, corridorWidth
+        const width = config.width || 50;
+        const height = config.height || 50;
+        const seed = Date.now(); // We could allow seed passing too
+
         let seedValue = seed;
         const random = () => {
             seedValue = (seedValue * 9301 + 49297) % 233280;
@@ -454,23 +513,37 @@ const MapManager = {
         const dungeon = {
             level, seed, width, height,
             rooms: [], corridors: [], mapData: [],
-            entrance: null, exit: null
+            entrance: null, exit: null,
+            tileset: tileset // Store tileset info
         };
 
         for (let y = 0; y < height; y++) {
             dungeon.mapData[y] = [];
             for (let x = 0; x < width; x++) {
-                dungeon.mapData[y][x] = 1; // Start with all floors
+                dungeon.mapData[y][x] = 1; // Start with all floors (wait, logic was 1=floor?)
+                // Actually based on original code:
+                // 362: if (dungeon.mapData[y][x] === 1) { // Floor
+                // But typically fill with walls (0) and carve floors (1). 
+                // Original code line 463: dungeon.mapData[y][x] = 1; // Start with all floors
+                // Wait, if it starts with all floors, then it carves walls?
+                // Line 516: if (!floorTiles.has) mapData = 0 (Wall).
+                // So effectively it fills with walls later.
             }
         }
 
-        const roomCount = between(8, 12);
+        const minRooms = config.roomCount ? config.roomCount.min : 8;
+        const maxRooms = config.roomCount ? config.roomCount.max : 12;
+        const roomCount = between(minRooms, maxRooms);
+
         const rooms = [];
         for (let i = 0; i < roomCount; i++) {
             let attempts = 0;
             while (attempts < 50) {
-                const rw = between(3, 8);
-                const rh = between(3, 8);
+                const minSize = config.roomSize ? config.roomSize.min : 3;
+                const maxSize = config.roomSize ? config.roomSize.max : 8;
+
+                const rw = between(minSize, maxSize);
+                const rh = between(minSize, maxSize);
                 const rx = between(2, width - rw - 2);
                 const ry = between(2, height - rh - 2);
                 const newRoom = { x: rx, y: ry, width: rw, height: rh, centerX: rx + Math.floor(rw / 2), centerY: ry + Math.floor(rh / 2) };
@@ -504,10 +577,12 @@ const MapManager = {
             }
         });
 
+        const corridorWidth = config.corridorWidth || 1;
+
         for (let i = 0; i < rooms.length - 1; i++) {
             const r1 = rooms[i];
             const r2 = rooms[i + 1];
-            this.carvePath(r1.centerX, r1.centerY, r2.centerX, r2.centerY, floorTiles);
+            this.carvePath(r1.centerX, r1.centerY, r2.centerX, r2.centerY, floorTiles, corridorWidth);
         }
 
         for (let y = 0; y < height; y++) {
@@ -523,26 +598,58 @@ const MapManager = {
         return dungeon;
     },
 
-    carvePath(x1, y1, x2, y2, floorSet) {
+    carvePath(x1, y1, x2, y2, floorSet, width = 1) {
+        const halfW = Math.floor(width / 2) || 0;
+        // Simple L-shape: Horizontal then Vertical
+
         const minX = Math.min(x1, x2), maxX = Math.max(x1, x2);
         for (let x = minX; x <= maxX; x++) {
-            floorSet.add(`${x},${y1}`);
-            floorSet.add(`${x},${y1 - 1}`);
-            floorSet.add(`${x},${y1 + 1}`);
+            for (let w = -halfW; w <= halfW + (width % 2 === 0 ? -1 : 0); w++) {
+                floorSet.add(`${x},${y1 + w}`);
+            }
         }
+
         const minY = Math.min(y1, y2), maxY = Math.max(y1, y2);
+        // Connect at x2
         for (let y = minY; y <= maxY; y++) {
-            floorSet.add(`${x2},${y}`);
-            floorSet.add(`${x2 - 1},${y}`);
-            floorSet.add(`${x2 + 1},${y}`);
+            for (let w = -halfW; w <= halfW + (width % 2 === 0 ? -1 : 0); w++) {
+                floorSet.add(`${x2 + w},${y}`);
+            }
         }
     },
 
-    /**
-     * Transition Logic
-     */
-    transitionToMap(targetMap, level = 1) {
+
+    transitionToMap(targetMap, level = 1, dungeonId = null) {
         const scene = this.scene;
+
+        // Safety: If level is actually the marker object (legacy call from somewhere else), extract data
+        if (typeof level === 'object') {
+            const config = level;
+            level = config.dungeonLevel || 1;
+            dungeonId = config.dungeonId || null;
+            console.log('[MapManager] Adapted object argument to params', { level, dungeonId });
+        }
+
+        // SAVE STATE: When entering dungeon from non-dungeon
+        if (targetMap === 'dungeon' && this.currentMap !== 'dungeon') {
+            this.lastMap = this.currentMap;
+            // Access player from global or scene
+            if (typeof player !== 'undefined') {
+                this.lastPlayerX = player.x;
+                this.lastPlayerY = player.y;
+                console.log(`[MapManager] Saved state: ${this.lastMap} @ ${this.lastPlayerX.toFixed(0)},${this.lastPlayerY.toFixed(0)}`);
+            }
+        }
+
+        // Stop player movement immediately
+        if (typeof player !== 'undefined' && player.body) {
+            player.body.setVelocity(0, 0);
+            if (scene) {
+                scene.isMovingToClick = false;
+                scene.clickMoveTarget = null;
+                scene.clickTargetEntity = null;
+            }
+        }
 
         // Clear quest markers
         if (typeof clearAllQuestMarkers === 'function') {
@@ -608,7 +715,7 @@ const MapManager = {
                 spawnInitialMonsters.call(scene, scene.mapWidth * scene.tileSize, scene.mapHeight * scene.tileSize);
             }
         } else if (targetMap === 'dungeon') {
-            this.createDungeonMap(level);
+            this.createDungeonMap(dungeonId || 'tower_dungeon', level); // Default fallback
             if (typeof spawnDungeonMonsters === 'function') {
                 spawnDungeonMonsters();
             } else {
@@ -617,11 +724,25 @@ const MapManager = {
         }
 
         scene.cameras.main.startFollow(player);
+        scene.cameras.main.startFollow(player);
         console.log(`Transitioned to ${targetMap}`);
+
+        // RESTORE STATE: If returning to the previous map
+        if (targetMap === this.lastMap && (targetMap === 'town' || targetMap === 'wilderness')) {
+            if (typeof player !== 'undefined') {
+                player.x = this.lastPlayerX;
+                player.y = this.lastPlayerY;
+                console.log(`[MapManager] Restored position to ${player.x.toFixed(0)},${player.y.toFixed(0)}`);
+            }
+            // Optional: clear lastMap so we don't accidentally restore again? 
+            // Better to keep it until next dungeon entry overwrites it, or clear it here.
+            // Clearing it is safer to prevent weird jumps if we warp around later.
+            this.lastMap = null;
+        }
 
         // Notify UQE if exists
         if (window.uqe && window.uqe.eventBus) {
-            window.uqe.eventBus.emit('map_entered', { map: targetMap, level: level });
+            window.uqe.eventBus.emit('map_entered', { map: targetMap, level: level, dungeonId: dungeonId });
         }
     },
 

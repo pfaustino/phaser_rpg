@@ -16882,3 +16882,61 @@ window.debugFixNPCs = function () {
     addChatMessage(`Fixed ${updated} NPCs. Try talking now!`, 0x00ff00);
 };
 
+
+// ============================================
+// HOVER EFFECT UTILS
+// ============================================
+window.enableHoverEffect = function(gameObject, scene) {
+    if (!gameObject || !scene) return;
+    
+    // Use Phaser 3.60+ FX (We are on 3.80)
+    // This provides a pixel-perfect outline/glow around visible pixels
+    
+    // Store reference to the fx
+    let glowFx = null;
+    let pulseTween = null;
+
+    gameObject.on('pointerover', () => {
+        // Remove existing if any (safety)
+        if (glowFx) {
+            glowFx.destroy();
+            glowFx = null;
+        }
+
+        // Apply Glow FX
+        // Color: 0xffffff (White), Strength: 4, Quality: 0.1
+        if (gameObject.postFX) {
+            glowFx = gameObject.postFX.addGlow(0xffffff, 4, 0, false, 0.1, 10);
+            
+            // Pulse the glow strength
+            pulseTween = scene.tweens.add({
+                targets: glowFx,
+                outerStrength: 6,
+                duration: 500,
+                yoyo: true,
+                repeat: -1,
+                ease: 'Sine.easeInOut'
+            });
+        }
+    });
+
+    gameObject.on('pointerout', () => {
+        if (pulseTween) {
+            pulseTween.stop();
+            pulseTween = null;
+        }
+        if (glowFx) {
+            // Some objects might be destroyed, so check
+            if (gameObject.postFX) gameObject.postFX.remove(glowFx);
+            glowFx = null;
+        }
+    });
+
+    // Cleanup
+    gameObject.once('destroy', () => {
+        if (pulseTween) pulseTween.stop();
+        if (glowFx && gameObject.postFX) {
+            gameObject.postFX.remove(glowFx);
+        }
+    });
+};

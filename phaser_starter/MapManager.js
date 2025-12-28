@@ -540,6 +540,13 @@ const MapManager = {
     transitionToMap(targetMap, level = 1) {
         const scene = this.scene;
 
+        // Clear quest markers
+        if (typeof clearAllQuestMarkers === 'function') {
+            clearAllQuestMarkers();
+        } else if (typeof window.clearAllQuestMarkers === 'function') {
+            window.clearAllQuestMarkers();
+        }
+
         if (typeof monsters !== 'undefined') {
             monsters.forEach(m => {
                 if (m) {
@@ -578,7 +585,13 @@ const MapManager = {
         });
         this.transitionMarkers = [];
 
-        const children = scene.children.list.filter(c => c.depth >= -1 && c.depth <= 0 && c !== player);
+        // Aggressive cleanup: destroy all world objects that aren't the player
+        // This catches orphaned graphics, particles, etc.
+        const children = scene.children.list.filter(c =>
+            c !== player &&
+            (c.scrollFactorX > 0 || c.scrollFactorY > 0) &&
+            c.type !== 'TilemapLayer' // If using tilemaps, but we use rectangles
+        );
         children.forEach(c => c.destroy());
 
         this.currentMap = targetMap;

@@ -45,7 +45,7 @@ window.showDamageNumber = function (x, y, text, color, isCritical = false, type 
         stroke: '#000000',
         strokeThickness: strokeThickness,
         fontStyle: 'bold'
-    }).setOrigin(0.5).setDepth(200);
+    }).setOrigin(0.5).setDepth(20000); // Increased depth to show over UI
 
     // Add bounce effect for critical hits
     if (isCritical) {

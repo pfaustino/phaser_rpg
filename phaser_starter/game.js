@@ -2213,7 +2213,7 @@ function create() {
     }).setScrollFactor(0).setDepth(100);
 
     // Controls text (toggleable) - default to short version
-    const fullControlsText = 'WASD: Move | SPACE: Attack/Pickup | 1-3: Abilities | I: Inventory | E: Equipment | Q: Quests | F: Interact | F5: Save | F9: Load | H: Help | CTRL+A: Assets';
+    const fullControlsText = 'WASD: Move | SPACE: Attack/Pickup | 1-3: Abilities | I: Inventory | E: Equipment \nQ: Quests | F: Interact | F5: Save | F9: Load | H: Help | CTRL+A: Assets';
     const shortControlsText = 'H: Help';
 
     let controlsText = this.add.text(barX, barY + barSpacing + 70, shortControlsText, {
@@ -2572,6 +2572,11 @@ window.triggerItemPickup = triggerItemPickup;
  * Update loop (like pygame game loop)
  */
 function update(time, delta) {
+    // Update Damage/Healing Numbers
+    if (window.updateDamageNumbers) {
+        window.updateDamageNumbers(time, delta);
+    }
+
     // If game is paused (e.g. death dialog), stop all game logic
     if (typeof isGamePaused !== 'undefined' && isGamePaused) {
         return;
@@ -4333,7 +4338,27 @@ function createHitEffects(x, y, isCritical = false, damageType = 'physical', wea
  * Update weapon sprite based on equipped weapon
  */
 function updateWeaponSprite() {
-    if (!weaponSprite) return;
+    // Check if weaponSprite is destroyed (properties missing) or null
+    // If it has no scene, or scene is undefined, it's likely destroyed
+    if (weaponSprite && (!weaponSprite.scene || !weaponSprite.active)) {
+        weaponSprite = null;
+    }
+
+    if (!weaponSprite) {
+        // Recreate weapon sprite if missing (e.g. after map transition)
+        const scene = game.scene.scenes[0];
+        if (typeof player !== 'undefined' && player && player.active && scene) {
+            weaponSprite = scene.add.sprite(player.x, player.y, 'weapon_sword');
+            weaponSprite.setScale(1.0);
+            weaponSprite.setDepth(player.depth + 1); // 11
+            weaponSprite.setOrigin(0.5, 1.0);
+            weaponSprite.setVisible(false);
+            weaponSprite.isAnimating = false;
+            console.log('🔧 Recreated weaponSprite after transition');
+        } else {
+            return; // Cannot create
+        }
+    }
 
     const equippedWeapon = playerStats.equipment.weapon;
 
@@ -5047,6 +5072,53 @@ function scrollChat(delta) {
 // Damage system moved to DamageSystem.js
 
 /**
+ * Add a message to the chat log
+ * @param {string} text - Message text
+ * @param {number} color - Color hex code
+ * @param {string} icon - Optional emoji icon
+ */
+function addChatMessage(text, color = 0xffffff, icon = '') {
+    // Ensure system chat box exists
+    if (!systemChatBox || !systemChatBox.container) return;
+
+    const scene = game.scene.scenes[0];
+    const fullText = icon ? `${icon} ${text}` : text;
+    const colorHex = `#${color.toString(16).padStart(6, '0')}`;
+
+    console.log(`💬 Chat: ${fullText}`);
+
+    // Create text object
+    const msgText = scene.add.text(systemChatBox.padding, 0, fullText, {
+        fontSize: '14px',
+        fill: colorHex,
+        wordWrap: { width: systemChatBox.width - systemChatBox.padding * 2 }
+    }).setScrollFactor(0).setDepth(302);
+
+    // Add to container
+    systemChatBox.container.add(msgText);
+
+    // Add to messages array
+    systemChatBox.messages.push({
+        text: msgText,
+        height: msgText.height,
+        y: 0
+    });
+
+    // Prune old messages if too many (keep last 50)
+    if (systemChatBox.messages.length > 50) {
+        const removed = systemChatBox.messages.shift();
+        if (removed.text) removed.text.destroy();
+    }
+
+    // Reposition all messages
+    repositionChatMessages();
+
+    // Scroll to bottom
+    updateChatScroll();
+}
+window.addChatMessage = addChatMessage;
+
+/**
  * Update combo display
  */
 function updateComboDisplay() {
@@ -5587,108 +5659,127 @@ function toggleSettings() {
 /**
  * Create Settings UI panel
  */
+/**
+ * Create Settings UI panel
+ */
 function createSettingsUI() {
     const scene = game.scene.scenes[0];
     const centerX = scene.cameras.main.width / 2;
     const centerY = scene.cameras.main.height / 2;
     const panelWidth = 400;
-    const panelHeight = 300;
+    const panelHeight = 460;
 
     // Background
     const bg = scene.add.rectangle(centerX, centerY, panelWidth, panelHeight, 0x1a1a1a, 0.95)
-        .setScrollFactor(0).setDepth(400).setStrokeStyle(3, 0xffffff);
+        .setScrollFactor(0).setDepth(10000).setStrokeStyle(3, 0xffffff); // Depth 10000 to be on top
 
     // Title
     const title = scene.add.text(centerX, centerY - panelHeight / 2 + 30, 'SETTINGS', {
         fontSize: '28px',
         fill: '#ffffff',
         fontStyle: 'bold'
-    }).setScrollFactor(0).setDepth(401).setOrigin(0.5);
+    }).setScrollFactor(0).setDepth(10001).setOrigin(0.5);
 
-    settingsPanel = {
+    settingsPanel = { // Use global settingsPanel
         bg: bg,
         title: title,
         elements: []
     };
 
+    let currentY = centerY - 100;
+    const spacing = 60;
+
     // --- Music Toggle ---
     const musicStatus = musicEnabled ? 'ON' : 'OFF';
     const musicColor = musicEnabled ? '#00ff00' : '#ff0000';
 
-    const musicBtnBg = scene.add.rectangle(centerX, centerY - 20, 200, 50, 0x333333)
-        .setScrollFactor(0).setDepth(401).setInteractive({ useHandCursor: true });
+    const musicBtnBg = scene.add.rectangle(centerX, currentY, 200, 50, 0x333333)
+        .setScrollFactor(0).setDepth(10001).setInteractive({ useHandCursor: true });
 
-    const musicBtnText = scene.add.text(centerX, centerY - 20, `Music: ${musicStatus}`, {
-        fontSize: '20px',
-        fill: musicColor
-    }).setScrollFactor(0).setDepth(402).setOrigin(0.5);
+    const musicBtnText = scene.add.text(centerX, currentY, `Music: ${musicStatus}`, {
+        fontSize: '20px', fill: musicColor
+    }).setScrollFactor(0).setDepth(10002).setOrigin(0.5);
 
     musicBtnBg.on('pointerdown', () => {
         musicEnabled = !musicEnabled;
-        // Update text
         musicBtnText.setText(`Music: ${musicEnabled ? 'ON' : 'OFF'}`);
         musicBtnText.setColor(musicEnabled ? '#00ff00' : '#ff0000');
-
-        // Toggle actual music
         if (typeof toggleMusic === 'function') {
             toggleMusic(musicEnabled);
-        } else {
-            // Fallback if global toggleMusic missing
-            if (scene.sound) scene.sound.mute = !musicEnabled;
+        } else if (scene.sound) {
+            scene.sound.mute = !musicEnabled;
         }
         playSound('menu_select');
     });
 
-    // Hover effects
-    musicBtnBg.on('pointerover', () => musicBtnBg.setFillStyle(0x555555));
-    musicBtnBg.on('pointerout', () => musicBtnBg.setFillStyle(0x333333));
-
     settingsPanel.elements.push(musicBtnBg, musicBtnText);
+    currentY += spacing;
 
-    // --- New Game Button ---
-    const newGameBtnBg = scene.add.rectangle(centerX, centerY + 50, 200, 50, 0x330000)
-        .setScrollFactor(0).setDepth(401).setInteractive({ useHandCursor: true })
+    // --- Save Game ---
+    const saveBtnBg = scene.add.rectangle(centerX, currentY, 200, 50, 0x004400)
+        .setScrollFactor(0).setDepth(10001).setInteractive({ useHandCursor: true })
+        .setStrokeStyle(1, 0x00ff00);
+    const saveBtnText = scene.add.text(centerX, currentY, 'SAVE GAME', {
+        fontSize: '20px', fill: '#00ff00', fontStyle: 'bold'
+    }).setScrollFactor(0).setDepth(10002).setOrigin(0.5);
+
+    saveBtnBg.on('pointerdown', () => {
+        if (typeof window.saveGame === 'function') window.saveGame();
+        playSound('menu_select');
+    });
+    settingsPanel.elements.push(saveBtnBg, saveBtnText);
+
+    currentY += spacing;
+
+    // --- Load Game ---
+    const loadBtnBg = scene.add.rectangle(centerX, currentY, 200, 50, 0x000044)
+        .setScrollFactor(0).setDepth(10001).setInteractive({ useHandCursor: true })
+        .setStrokeStyle(1, 0x4444ff);
+    const loadBtnText = scene.add.text(centerX, currentY, 'LOAD GAME', {
+        fontSize: '20px', fill: '#aaaaff', fontStyle: 'bold'
+    }).setScrollFactor(0).setDepth(10002).setOrigin(0.5);
+
+    loadBtnBg.on('pointerdown', () => {
+        if (typeof window.loadGame === 'function') {
+            window.toggleSettings(); // Close menu
+            window.loadGame();
+        }
+        playSound('menu_select');
+    });
+    settingsPanel.elements.push(loadBtnBg, loadBtnText);
+
+    currentY += spacing;
+
+    // --- New Game ---
+    const newGameBtnBg = scene.add.rectangle(centerX, currentY, 200, 50, 0x330000)
+        .setScrollFactor(0).setDepth(10001).setInteractive({ useHandCursor: true })
         .setStrokeStyle(1, 0xff0000);
-
-    const newGameBtnText = scene.add.text(centerX, centerY + 50, 'NEW GAME', {
-        fontSize: '20px',
-        fill: '#ff4444',
-        fontStyle: 'bold'
-    }).setScrollFactor(0).setDepth(402).setOrigin(0.5);
+    const newGameBtnText = scene.add.text(centerX, currentY, 'NEW GAME', {
+        fontSize: '20px', fill: '#ff4444', fontStyle: 'bold'
+    }).setScrollFactor(0).setDepth(10002).setOrigin(0.5);
 
     newGameBtnBg.on('pointerdown', () => {
-        const confirmDelete = confirm("Are you sure? This will DELETE your save file!");
-        if (confirmDelete) {
+        if (confirm("Are you sure? This will DELETE your save file!")) {
             localStorage.clear();
             location.reload();
         }
     });
-
-    newGameBtnBg.on('pointerover', () => newGameBtnBg.setFillStyle(0x550000));
-    newGameBtnBg.on('pointerout', () => newGameBtnBg.setFillStyle(0x330000));
-
     settingsPanel.elements.push(newGameBtnBg, newGameBtnText);
 
-
-    // --- Close Button ---
+    // --- Close ---
     const closeBtnBg = scene.add.rectangle(centerX, centerY + panelHeight / 2 - 40, 100, 40, 0x444444)
-        .setScrollFactor(0).setDepth(401).setInteractive({ useHandCursor: true });
-
+        .setScrollFactor(0).setDepth(10001).setInteractive({ useHandCursor: true });
     const closeText = scene.add.text(centerX, centerY + panelHeight / 2 - 40, 'Close', {
-        fontSize: '18px',
-        fill: '#ffffff'
-    }).setScrollFactor(0).setDepth(402).setOrigin(0.5);
+        fontSize: '18px', fill: '#ffffff'
+    }).setScrollFactor(0).setDepth(10002).setOrigin(0.5);
 
     closeBtnBg.on('pointerdown', () => {
-        toggleSettings();
+        window.toggleSettings();
         playSound('menu_select');
     });
-
-    closeBtnBg.on('pointerover', () => closeBtnBg.setFillStyle(0x666666));
-    closeBtnBg.on('pointerout', () => closeBtnBg.setFillStyle(0x444444));
-
     settingsPanel.elements.push(closeBtnBg, closeText);
 }
+
 
 /**
  * Destroy Settings UI
@@ -9133,6 +9224,11 @@ function initializeNPCs(passedScene) {
         npc.spriteKey = spriteKey;
         npc.portraitKey = data.portraitKey; // Store portrait key
 
+        // Add Diablo IV style hover glow
+        if (typeof enableHoverEffect === 'function') {
+            enableHoverEffect(npc, scene);
+        }
+
         // Add to global list
         npcs.push(npc);
     });
@@ -9140,277 +9236,7 @@ function initializeNPCs(passedScene) {
     console.log('✅ NPCs initialized:', npcs.length, 'NPCs');
 }
 
-/**
- * Toggle settings panel
- */
-function toggleSettings() {
-    const scene = game.scene.scenes[0];
 
-    // If already open, close it
-    if (settingsVisible) {
-        settingsVisible = false;
-        destroySettingsUI();
-        return;
-    }
-
-    // Close all other interfaces before opening
-    closeAllInterfaces();
-
-    // Now open settings
-    settingsVisible = true;
-    createSettingsUI();
-}
-
-/**
- * Create settings UI panel
- */
-function createSettingsUI() {
-    const scene = game.scene.scenes[0];
-
-    // Create background panel (centered on screen)
-    const panelWidth = 500;
-    const panelHeight = 400;
-    const centerX = scene.cameras.main.width / 2;
-    const centerY = scene.cameras.main.height / 2;
-
-    // Background
-    settingsPanel = {
-        bg: scene.add.rectangle(centerX, centerY, panelWidth, panelHeight, 0x1a1a1a, 0.95)
-            .setScrollFactor(0).setDepth(300).setStrokeStyle(3, 0xffffff),
-        title: scene.add.text(centerX, centerY - panelHeight / 2 + 20, 'SETTINGS', {
-            fontSize: '28px',
-            fill: '#ffffff',
-            fontStyle: 'bold'
-        }).setScrollFactor(0).setDepth(301).setOrigin(0.5, 0),
-        closeText: scene.add.text(centerX + panelWidth / 2 - 20, centerY - panelHeight / 2 + 20, 'Press ESC to Close', {
-            fontSize: '14px',
-            fill: '#aaaaaa'
-        }).setScrollFactor(0).setDepth(301).setOrigin(1, 0),
-        elements: []
-    };
-
-    // Music toggle setting
-    let settingY = centerY - panelHeight / 2 + 80;
-    const settingSpacing = 60;
-
-    // === NEW GAME BUTTON (at top) ===
-    const newGameBtn = scene.add.rectangle(centerX, settingY, 200, 45, 0xaa0000, 1)
-        .setScrollFactor(0).setDepth(301).setStrokeStyle(2, 0xff4444)
-        .setInteractive({ useHandCursor: true });
-
-    const newGameText = scene.add.text(centerX, settingY, '🔄 New Game', {
-        fontSize: '18px',
-        fill: '#ffffff',
-        fontStyle: 'bold'
-    }).setScrollFactor(0).setDepth(302).setOrigin(0.5);
-
-    newGameBtn.on('pointerover', () => newGameBtn.setFillStyle(0xcc0000));
-    newGameBtn.on('pointerout', () => newGameBtn.setFillStyle(0xaa0000));
-    newGameBtn.on('pointerdown', () => {
-        // Confirm before clearing
-        if (confirm('Start a new game? All progress will be lost!')) {
-            localStorage.removeItem('rpg_savegame');
-            localStorage.removeItem('pfaustino_rpg_settings');
-            localStorage.removeItem('rpg_unlocked_lore');
-
-            // Clear legacy lore keys (lore_read_* format)
-            const keysToRemove = [];
-            for (let i = 0; i < localStorage.length; i++) {
-                const key = localStorage.key(i);
-                if (key && key.startsWith('lore_read_')) {
-                    keysToRemove.push(key);
-                }
-            }
-            keysToRemove.forEach(key => localStorage.removeItem(key));
-
-            console.log('🗑️ Save data and lore cleared - reloading...');
-            location.reload();
-        }
-    });
-
-    settingsPanel.elements.push(newGameBtn, newGameText);
-    settingY += settingSpacing;
-
-    // Music label
-    const musicLabel = scene.add.text(centerX - 100, settingY, 'Music:', {
-        fontSize: '20px',
-        fill: '#ffffff'
-    }).setScrollFactor(0).setDepth(301).setOrigin(0, 0.5);
-
-    // Music toggle button
-    const toggleWidth = 100;
-    const toggleHeight = 40;
-    const toggleX = centerX + 50;
-
-    const toggleBg = scene.add.rectangle(toggleX, settingY, toggleWidth, toggleHeight, musicEnabled ? 0x00aa00 : 0x666666, 1)
-        .setScrollFactor(0).setDepth(301).setStrokeStyle(2, 0xffffff)
-        .setInteractive({ useHandCursor: true });
-
-    const toggleText = scene.add.text(toggleX, settingY, musicEnabled ? 'ON' : 'OFF', {
-        fontSize: '18px',
-        fill: '#ffffff',
-        fontStyle: 'bold'
-    }).setScrollFactor(0).setDepth(302).setOrigin(0.5);
-
-    // Toggle button click handler
-    toggleBg.on('pointerdown', () => {
-        musicEnabled = !musicEnabled;
-
-        // Save to persistent storage
-        saveSettings();
-
-        // Update button appearance
-        toggleBg.setFillStyle(musicEnabled ? 0x00aa00 : 0x666666);
-        toggleText.setText(musicEnabled ? 'ON' : 'OFF');
-
-        // Apply music setting immediately
-        if (musicEnabled) {
-            // Start appropriate music for current map
-            if (scene.sound) {
-                let musicKey = null;
-                let musicName = '';
-
-                if (MapManager.currentMap === 'town' && scene.cache.audio.exists('village_music')) {
-                    musicKey = 'village_music';
-                    musicName = 'village';
-                } else if (MapManager.currentMap === 'wilderness' && scene.cache.audio.exists('wilderness_music')) {
-                    musicKey = 'wilderness_music';
-                    musicName = 'wilderness';
-                } else if (MapManager.currentMap === 'dungeon' && scene.cache.audio.exists('dungeon_music')) {
-                    musicKey = 'dungeon_music';
-                    musicName = 'dungeon';
-                }
-
-                if (musicKey) {
-                    try {
-                        // Stop any currently playing music
-                        if (villageMusic && villageMusic.isPlaying) {
-                            villageMusic.stop();
-                            villageMusic.destroy();
-                            villageMusic = null;
-                        }
-                        if (wildernessMusic && wildernessMusic.isPlaying) {
-                            wildernessMusic.stop();
-                            wildernessMusic.destroy();
-                            wildernessMusic = null;
-                        }
-                        if (dungeonMusic && dungeonMusic.isPlaying) {
-                            dungeonMusic.stop();
-                            dungeonMusic.destroy();
-                            dungeonMusic = null;
-                        }
-
-                        // Start appropriate music
-                        const music = scene.sound.add(musicKey, {
-                            volume: 0.5,
-                            loop: true,
-                            seek: 0
-                        });
-
-                        if (MapManager.currentMap === 'town') {
-                            villageMusic = music;
-                        } else if (MapManager.currentMap === 'wilderness') {
-                            wildernessMusic = music;
-                        } else if (MapManager.currentMap === 'dungeon') {
-                            dungeonMusic = music;
-                        }
-
-                        music.play();
-                        console.log(`🎵 Music enabled - started ${musicName} music`);
-                    } catch (e) {
-                        console.error('❌ Error starting music:', e);
-                    }
-                }
-            }
-        } else {
-            // Stop all music if playing
-            if (villageMusic && villageMusic.isPlaying) {
-                villageMusic.stop();
-                villageMusic.destroy();
-                villageMusic = null;
-            }
-            if (wildernessMusic && wildernessMusic.isPlaying) {
-                wildernessMusic.stop();
-                wildernessMusic.destroy();
-                wildernessMusic = null;
-            }
-            if (dungeonMusic && dungeonMusic.isPlaying) {
-                dungeonMusic.stop();
-                dungeonMusic.destroy();
-                dungeonMusic = null;
-            }
-            console.log('🎵 Music disabled - stopped all music');
-        }
-    });
-
-    // Hover effects
-    toggleBg.on('pointerover', () => {
-        toggleBg.setStrokeStyle(2, 0xffff00);
-    });
-    toggleBg.on('pointerout', () => {
-        toggleBg.setStrokeStyle(2, 0xffffff);
-    });
-
-    // About Button
-    settingY += settingSpacing;
-    const aboutBtn = scene.add.rectangle(centerX, settingY, 200, 45, 0x444444, 1)
-        .setScrollFactor(0).setDepth(301).setStrokeStyle(2, 0xffffff)
-        .setInteractive({ useHandCursor: true });
-
-    const aboutText = scene.add.text(centerX, settingY, 'About', {
-        fontSize: '18px',
-        fill: '#ffffff',
-        fontStyle: 'bold'
-    }).setScrollFactor(0).setDepth(302).setOrigin(0.5);
-
-    aboutBtn.on('pointerover', () => aboutBtn.setFillStyle(0x666666));
-    aboutBtn.on('pointerout', () => aboutBtn.setFillStyle(0x444444));
-    aboutBtn.on('pointerdown', () => {
-        createAboutWindow();
-    });
-
-    // Discord Button
-    settingY += settingSpacing;
-    const discordBtn = scene.add.rectangle(centerX, settingY, 200, 45, 0x5865F2, 1) // Discord Blurple
-        .setScrollFactor(0).setDepth(301).setStrokeStyle(2, 0xffffff)
-        .setInteractive({ useHandCursor: true });
-
-    const discordText = scene.add.text(centerX, settingY, 'Discord', {
-        fontSize: '18px',
-        fill: '#ffffff',
-        fontStyle: 'bold'
-    }).setScrollFactor(0).setDepth(302).setOrigin(0.5);
-
-    discordBtn.on('pointerover', () => discordBtn.setFillStyle(0x7983F5));
-    discordBtn.on('pointerout', () => discordBtn.setFillStyle(0x5865F2));
-    discordBtn.on('pointerdown', () => {
-        window.open('https://discord.gg/p67Wp6hzqG', '_blank');
-    });
-
-    settingsPanel.elements.push(musicLabel, toggleBg, toggleText, aboutBtn, aboutText, discordBtn, discordText);
-}
-
-/**
- * Destroy settings UI panel
- */
-function destroySettingsUI() {
-    if (!settingsPanel) return;
-
-    const scene = game.scene.scenes[0];
-
-    // Destroy all elements
-    if (settingsPanel.bg) settingsPanel.bg.destroy();
-    if (settingsPanel.title) settingsPanel.title.destroy();
-    if (settingsPanel.closeText) settingsPanel.closeText.destroy();
-
-    settingsPanel.elements.forEach(element => {
-        if (element && element.active) {
-            element.destroy();
-        }
-    });
-
-    settingsPanel = null;
-}
 
 /**
  * Save settings to localStorage
@@ -12096,12 +11922,14 @@ function saveGame() {
 
     try {
         localStorage.setItem('rpg_savegame', JSON.stringify(saveData));
-        showDamageNumber(player.x, player.y - 40, 'Game Saved!', 0x00ffff);
+
+        if (typeof addChatMessage === 'function') addChatMessage('Game Saved!', 0x00ffff, '💾');
         console.log('✅ Game saved to localStorage');
         return true;
     } catch (e) {
         console.error('Failed to save game:', e);
-        showDamageNumber(player.x, player.y - 40, 'Save Failed!', 0xff0000);
+
+        if (typeof addChatMessage === 'function') addChatMessage('Save Failed!', 0xff0000, '❌');
         return false;
     }
 }
@@ -12245,26 +12073,27 @@ function loadGame() {
                                     npc.name = def.name;
                                     npc.dialogId = def.dialogId;
                                     // Update visual name if it exists
-                                    if (npc.nameText) {
-                                        npc.nameText.setText(def.name);
-                                    }
+                                    if (npc.nameText) npc.nameText.setText(npc.name);
                                 }
                             }
                         });
                     }
-                } catch (err) {
-                    console.error('[Fix] Failed to refresh NPCs:', err);
-                }
-            }
-
-            // For wilderness, spawn monsters
-            if (savedMap === 'wilderness') {
-                const scene = game.scene.scenes[0];
-                if (scene && scene.mapWidth && scene.mapHeight && scene.tileSize) {
-                    spawnInitialMonsters.call(scene, scene.mapWidth * scene.tileSize, scene.mapHeight * scene.tileSize);
+                } catch (e) {
+                    console.error('Error refreshing NPCs:', e);
                 }
             }
         }
+
+
+
+        // For wilderness, spawn monsters
+        if (savedMap === 'wilderness') {
+            const scene = game.scene.scenes[0];
+            if (scene && scene.mapWidth && scene.mapHeight && scene.tileSize) {
+                spawnInitialMonsters.call(scene, scene.mapWidth * scene.tileSize, scene.mapHeight * scene.tileSize);
+            }
+        }
+
 
         // Update player stats (recalculate attack/defense from equipment)
         updatePlayerStats();
@@ -12281,8 +12110,15 @@ function loadGame() {
         // Update weapon sprite to show equipped weapon
         updateWeaponSprite();
 
-        showDamageNumber(player.x, player.y - 40, 'Game Loaded!', 0x00ff00);
+        if (typeof addChatMessage === 'function') addChatMessage('Game Loaded!', 0x00ff00, '📂');
         console.log('✅ Game loaded from localStorage');
+
+        // Force UI refresh after a slight delay to ensure everything settles
+        setTimeout(() => {
+            try {
+                if (typeof addChatMessage === 'function') addChatMessage('Game Ready', 0x00ff00, '✅');
+            } catch (e) { console.error('Delayed load notification error', e); }
+        }, 500);
 
         // Expose debug tool
         window.debugFixNPCs = function () {
@@ -12326,7 +12162,8 @@ function loadGame() {
         return true;
     } catch (e) {
         console.error('Failed to load game:', e);
-        showDamageNumber(player.x, player.y - 40, 'Load Failed!', 0xff0000);
+
+        if (typeof addChatMessage === 'function') addChatMessage('Load Failed! Check Console.', 0xff0000, '❌');
         return false;
     }
 }
@@ -15398,7 +15235,7 @@ function updateQuestTrackerHUD() {
     if (!scene) return;
 
     const screenWidth = scene.cameras.main.width;
-    const startX = screenWidth - 300;
+    const startX = screenWidth - 250;
     let startY = 120;
 
     // Get active quests from UQE
@@ -16363,6 +16200,7 @@ function clearAllQuestMarkers() {
     });
     questMarkers.clear();
 }
+window.clearAllQuestMarkers = clearAllQuestMarkers;
 
 /**
  * Update quest markers - called from update loop (throttled)
@@ -16486,3 +16324,5 @@ window.enableHoverEffect = function (gameObject, scene) {
         }
     });
 };
+
+

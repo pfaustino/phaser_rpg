@@ -282,15 +282,28 @@ window.UIManager = {
 
         const inventoryStartY = centerY - panelHeight / 2 + 80;
         const inventoryVisibleHeight = panelHeight - 120;
-        const inventoryContainer = scene.add.container(centerX, inventoryStartY);
-        inventoryContainer.setScrollFactor(0).setDepth(301);
+        const inventoryContainer = null; // scene.add.container(centerX, inventoryStartY);
+        // inventoryContainer.setScrollFactor(0).setDepth(301);
 
         const inventoryMask = scene.make.graphics();
         inventoryMask.fillStyle(0xffffff);
         inventoryMask.fillRect(centerX - panelWidth / 2, inventoryStartY, panelWidth, inventoryVisibleHeight);
         inventoryMask.setScrollFactor(0);
         const maskGeometry = inventoryMask.createGeometryMask();
-        inventoryContainer.setMask(maskGeometry);
+
+        // Scrollbar Callback
+        const onScroll = (scrollValue) => {
+            if (this.inventoryPanel && this.inventoryPanel.items) {
+                this.inventoryPanel.items.forEach(itemObj => {
+                    if (itemObj.baseY !== undefined) {
+                        const newY = itemObj.baseY - scrollValue;
+                        if (itemObj.sprite) itemObj.sprite.y = newY;
+                        if (itemObj.text) itemObj.text.y = newY + 30 + 5; // slotSize/2 + 5
+                        if (itemObj.borderRect) itemObj.borderRect.y = newY;
+                    }
+                });
+            }
+        };
 
         const scrollbar = this.setupScrollbar({
             scene,
@@ -300,14 +313,13 @@ window.UIManager = {
             depth: 303,
             minScroll: 0,
             initialScroll: 0,
-            container: inventoryContainer,
-            containerStartY: inventoryStartY,
-            containerOffset: 0,
+            onScroll: onScroll,
+            // container: inventoryContainer, // Removed Container link
+            // containerStartY: inventoryStartY,
             wheelHitArea: this.inventoryPanel.bg,
             visibleHeight: inventoryVisibleHeight
         });
 
-        this.inventoryPanel.container = inventoryContainer;
         this.inventoryPanel.mask = inventoryMask;
         this.inventoryPanel.maskGeometry = maskGeometry;
         this.inventoryPanel.scrollbar = scrollbar;
@@ -320,6 +332,8 @@ window.UIManager = {
     updateInventoryItems: function () {
         const scene = game.scene.scenes[0];
         if (!this.inventoryPanel) return;
+
+        const centerX = scene.cameras.main.width / 2;
 
         // Hide tooltip
         this.hideTooltip(true);
@@ -336,14 +350,19 @@ window.UIManager = {
 
         // Calculate grid
         const gridWidth = slotsPerRow * slotSize + (slotsPerRow - 1) * spacing;
-        const startX = -gridWidth / 2 + slotSize / 2;
-        const startY = 40;
+        const startX = centerX - gridWidth / 2 + slotSize / 2; // GLOBAL X
+        const startY = this.inventoryPanel.startY + 40;        // GLOBAL Y BASE
+
+        const currentScroll = this.inventoryPanel.scrollbar ? this.inventoryPanel.scrollbar.getScroll() : 0;
 
         playerStats.inventory.forEach((item, index) => {
             const row = Math.floor(index / slotsPerRow);
             const col = index % slotsPerRow;
-            const x = startX + col * (slotSize + spacing);
-            const y = startY + row * (slotSize + spacing);
+
+            // Global Positioning
+            const globalX = startX + col * (slotSize + spacing);
+            const globalBaseY = startY + row * (slotSize + spacing);
+            const globalY = globalBaseY - currentScroll;
 
             let spriteKey = 'item_weapon';
             if (item.type === 'weapon') {
@@ -365,32 +384,41 @@ window.UIManager = {
                 else spriteKey = 'item_consumable';
             }
 
-            const itemSprite = scene.add.sprite(x, y, spriteKey);
-            itemSprite.setScrollFactor(0).setDepth(302).setScale(0.8);
+            const itemSprite = scene.add.sprite(globalX, globalY, spriteKey);
+            itemSprite.setDepth(302).setScale(0.8).setScrollFactor(0);
+            itemSprite.setMask(this.inventoryPanel.maskGeometry); // Apply Mask
 
             const qualityColor = window.QUALITY_COLORS ? (window.QUALITY_COLORS[item.quality] || window.QUALITY_COLORS['Common']) : 0xffffff;
             const borderWidth = 2;
             const spriteSize = slotSize * 0.8;
-            const borderRect = scene.add.rectangle(x, y, spriteSize + borderWidth * 2, spriteSize + borderWidth * 2, qualityColor, 0)
+            const borderRect = scene.add.rectangle(globalX, globalY, spriteSize + borderWidth * 2, spriteSize + borderWidth * 2, qualityColor, 0)
                 .setStrokeStyle(borderWidth, qualityColor)
-                .setScrollFactor(0)
-                .setDepth(300.5);
+                .setDepth(300.5).setScrollFactor(0);
+            borderRect.setMask(this.inventoryPanel.maskGeometry); // Apply Mask
 
             const displayName = (item.quantity && item.quantity > 1) ? `${item.name} x${item.quantity}` : item.name;
-            const itemText = scene.add.text(x, y + slotSize / 2 + 5, displayName, {
+            const itemText = scene.add.text(globalX, globalY + slotSize / 2 + 5, displayName, {
                 fontSize: '10px',
                 fill: '#ffffff',
                 wordWrap: { width: slotSize }
-            }).setScrollFactor(0).setDepth(302).setOrigin(0.5, 0);
+            }).setDepth(302).setOrigin(0.5, 0).setScrollFactor(0);
+            itemText.setMask(this.inventoryPanel.maskGeometry); // Apply Mask
 
             itemSprite.setInteractive({ useHandCursor: true });
 
-            const onPointerOver = () => this.showTooltip(item, x, y, 'inventory');
+            const onPointerOver = () => {
+                this.showTooltip(item, globalX, globalY, 'inventory');
+            };
             const onPointerOut = () => this.hideTooltip();
 
             itemSprite.on('pointerover', onPointerOver);
             itemSprite.on('pointerout', onPointerOut);
             itemSprite._tooltipHandlers = { onPointerOver, onPointerOut };
+
+            // DEBUG: Visual Input Debug
+            // scene.input.enableDebug(itemSprite, 0xffff00);
+
+            // Removed Debug Control Item
 
             const equippableTypes = ['weapon', 'armor', 'helmet', 'ring', 'amulet', 'boots', 'gloves', 'belt'];
             if (equippableTypes.includes(item.type)) {
@@ -405,13 +433,15 @@ window.UIManager = {
                 });
             }
 
-            this.inventoryPanel.container.add([borderRect, itemSprite, itemText]);
+            // Direct add to scene, but push to items array to track them
+            // this.inventoryPanel.container.add([borderRect, itemSprite, itemText]);
 
             this.inventoryPanel.items.push({
                 sprite: itemSprite,
                 text: itemText,
                 borderRect: borderRect,
-                item: item
+                item: item,
+                baseY: globalBaseY // Store base Y for scroll calculation
             });
         });
 
@@ -429,7 +459,9 @@ window.UIManager = {
                 align: 'center',
                 fontStyle: 'italic'
             }).setScrollFactor(0).setDepth(302).setOrigin(0.5, 0);
-            this.inventoryPanel.container.add(emptyText);
+            // Manually position empty text centrally
+            emptyText.x = centerX;
+            emptyText.y = inventoryStartY + 50;
             this.inventoryPanel.items.push({ text: emptyText });
         }
     },
@@ -450,6 +482,14 @@ window.UIManager = {
             // However, since they are added to `this.inventoryPanel.container`, `container.removeAll(true)` should handle it.
             // If `itemElements` was intended, it's not defined in the original structure.
             // Sticking to the original `items` array and assuming container handles destruction.
+            // Manually destroy items since they are no longer in the container
+            if (this.inventoryPanel.items) {
+                this.inventoryPanel.items.forEach(itemObj => {
+                    if (itemObj.sprite) itemObj.sprite.destroy();
+                    if (itemObj.text) itemObj.text.destroy();
+                    if (itemObj.borderRect) itemObj.borderRect.destroy();
+                });
+            }
             this.inventoryPanel.items = [];
 
             this.inventoryPanel = null;

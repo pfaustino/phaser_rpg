@@ -2676,7 +2676,7 @@ function create() {
     }).setScrollFactor(0).setDepth(100);
 
     // Controls text (toggleable) - default to short version
-    const fullControlsText = 'WASD: Move | SPACE: Attack/Pickup | 1-3: Abilities | I: Inventory | E: Equipment \nQ: Quests | F: Interact | F5: Save | F9: Load | H: Help | CTRL+A: Assets';
+    const fullControlsText = 'WASD: Move | SPACE: Attack/Pickup | 1-3: Abilities | E: Equipment \nQ: Quests | F: Interact | F5: Save | F9: Load | H: Help | CTRL+A: Assets';
     const shortControlsText = 'H: Help';
 
     let controlsText = this.add.text(barX, barY + barSpacing + 70, shortControlsText, {
@@ -2732,8 +2732,8 @@ function create() {
     // Add Spacebar for attack
     spaceKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
 
-    // Add 'I' key for inventory
-    inventoryKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.I);
+    // Add 'I' key for inventory - REMOVED
+    // inventoryKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.I);
 
     // Add 'E' key for equipment
     equipmentKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.E);
@@ -2839,7 +2839,7 @@ function create() {
         if (gameObject.depth > 1000) return;
 
         // Block interaction if any UI window is open
-        if (isAnyWindowOpen()) {
+        if (typeof isAnyWindowOpen === 'function' && isAnyWindowOpen()) {
             console.log('⛔ Interaction blocked by open window');
             return;
         }
@@ -4005,10 +4005,10 @@ function update(time, delta) {
     // Update ability cooldowns
     updateAbilityCooldowns(time);
 
-    // Toggle inventory (I key)
-    if (Phaser.Input.Keyboard.JustDown(inventoryKey)) {
-        toggleInventory();
-    }
+    // Toggle inventory (I key) - REMOVED
+    // if (Phaser.Input.Keyboard.JustDown(inventoryKey)) {
+    //     toggleInventory();
+    // }
 
     // Toggle equipment (E key) - always check, even when panel is open
     if (equipmentKey && Phaser.Input.Keyboard.JustDown(equipmentKey)) {
@@ -15599,5 +15599,17 @@ window.resetGame = function () {
     // Force reload
     window.location.reload();
 };
+
+
+// ============================================
+// CRITICAL FIX: Ensure isAnyWindowOpen delegates to UIManager
+// ============================================
+window.isAnyWindowOpen = function () {
+    if (typeof UIManager !== 'undefined' && UIManager.isAnyWindowOpen) {
+        return UIManager.isAnyWindowOpen();
+    }
+    return false;
+};
+
 
 

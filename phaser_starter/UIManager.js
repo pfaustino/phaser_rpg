@@ -433,22 +433,30 @@ window.UIManager = {
     },
 
     destroyInventoryUI: function () {
-        const scene = game.scene.scenes[0];
-
+        this.inventoryVisible = false;
         this.hideTooltip(true);
 
         if (this.inventoryPanel) {
             if (this.inventoryPanel.bg) this.inventoryPanel.bg.destroy();
             if (this.inventoryPanel.title) this.inventoryPanel.title.destroy();
             if (this.inventoryPanel.closeText) this.inventoryPanel.closeText.destroy();
-            if (this.inventoryPanel.scrollbar) this.inventoryPanel.scrollbar.destroy();
             if (this.inventoryPanel.container) this.inventoryPanel.container.destroy();
+            if (this.inventoryPanel.scrollbar) this.inventoryPanel.scrollbar.destroy();
 
+            // Assuming `items` array holds references to display objects that need to be destroyed
+            // The original code just cleared the array, but if the objects are not in the container, they need explicit destruction.
+            // However, since they are added to `this.inventoryPanel.container`, `container.removeAll(true)` should handle it.
+            // If `itemElements` was intended, it's not defined in the original structure.
+            // Sticking to the original `items` array and assuming container handles destruction.
             this.inventoryPanel.items = [];
+
             this.inventoryPanel = null;
         }
+    },
 
-        this.inventoryVisible = false;
+    // Alias for backward compatibility / fixing user crash
+    updateInventory: function () {
+        this.updateInventoryItems();
     },
 
     // ============================================
@@ -864,243 +872,267 @@ window.UIManager = {
             return;
         }
 
-        if (this.questPanel.container) this.questPanel.container.removeAll(true);
-        this.questPanel.questListElements = [];
+        try {
+            if (this.questPanel.container) this.questPanel.container.removeAll(true);
+            this.questPanel.questListElements = [];
 
-        this.questPanel.questDetailElements.forEach(el => {
-            if (el) el.destroy();
-        });
-        this.questPanel.questDetailElements = [];
+            this.questPanel.questDetailElements.forEach(el => {
+                if (el) el.destroy();
+            });
+            this.questPanel.questDetailElements = [];
 
-        const centerX = this.questPanel.bg.x;
-        const panelWidth = this.questPanel.bg.width;
+            const centerX = this.questPanel.bg.x;
+            const panelWidth = this.questPanel.bg.width;
 
-        const listWidth = this.questPanel.listWidth;
-        const listHeight = this.questPanel.listHeight;
-        const listStartY = this.questPanel.listStartY;
-        const dividerX = centerX - panelWidth / 2 + 350;
+            const listWidth = this.questPanel.listWidth;
+            const listHeight = this.questPanel.listHeight;
+            const listStartY = this.questPanel.listStartY;
+            const dividerX = centerX - panelWidth / 2 + 350;
 
-        const detailStartX = dividerX + 20;
-        const detailStartY = listStartY;
-        const detailWidth = panelWidth - (detailStartX - (centerX - panelWidth / 2)) - 20;
+            const detailStartX = dividerX + 20;
+            const detailStartY = this.questPanel.listStartY || (centerY - panelHeight / 2 + 100);
 
-        let quests = [];
-        // Retrieve quests based on tab (using UQE or legacy if needed)
-        // Note: Accessing uqe from window scope
-        if (this.questLogTab === 'main') {
-            if (window.uqe && window.uqe.activeQuests) {
-                window.uqe.activeQuests.forEach(q => {
-                    const def = window.uqe.allDefinitions[q.id];
-                    if (def && def.step) {
+            // DEBUG: Temporarily disable mask to rule out masking issues
+            // if (this.questPanel.maskGeometry) this.questPanel.container.setMask(this.questPanel.maskGeometry);
+            if (this.questPanel.container) this.questPanel.container.clearMask();
+
+            const detailWidth = panelWidth - (detailStartX - (centerX - panelWidth / 2)) - 20;
+
+            let quests = [];
+            // Retrieve quests based on tab (using UQE or legacy if needed)
+            if (this.questLogTab === 'main') {
+                if (window.uqe && window.uqe.activeQuests) {
+                    window.uqe.activeQuests.forEach(q => {
+                        const def = window.uqe.allDefinitions[q.id];
+                        if (def && def.step) {
+                            const totalProgress = q.objectives.reduce((sum, obj) => sum + obj.progress, 0);
+                            const totalTarget = q.objectives.reduce((sum, obj) => sum + obj.target, 0);
+                            quests.push({ ...q, progress: totalProgress, target: totalTarget, rewards: q.rewards || {} });
+                        }
+                    });
+                }
+            } else if (this.questLogTab === 'current') {
+                if (window.uqe && window.uqe.activeQuests) {
+                    window.uqe.activeQuests.forEach(q => {
                         const totalProgress = q.objectives.reduce((sum, obj) => sum + obj.progress, 0);
                         const totalTarget = q.objectives.reduce((sum, obj) => sum + obj.target, 0);
                         quests.push({ ...q, progress: totalProgress, target: totalTarget, rewards: q.rewards || {} });
-                    }
-                });
-            }
-        } else if (this.questLogTab === 'current') {
-            if (window.uqe && window.uqe.activeQuests) {
-                window.uqe.activeQuests.forEach(q => {
-                    const totalProgress = q.objectives.reduce((sum, obj) => sum + obj.progress, 0);
-                    const totalTarget = q.objectives.reduce((sum, obj) => sum + obj.target, 0);
-                    quests.push({ ...q, progress: totalProgress, target: totalTarget, rewards: q.rewards || {} });
-                });
-            }
-        } else if (this.questLogTab === 'available') {
-            if (window.uqe && window.uqe.allDefinitions) {
-                const uqeCompletedIds = window.uqe.completedQuests.map(q => q.id);
-                const uqeActiveIds = window.uqe.activeQuests.map(q => q.id);
-                Object.values(window.uqe.allDefinitions).forEach(questDef => {
-                    const isActive = uqeActiveIds.includes(questDef.id);
-                    const isCompleted = uqeCompletedIds.includes(questDef.id);
-                    let prereqMet = true;
-                    if (questDef.requires) prereqMet = uqeCompletedIds.includes(questDef.requires);
-
-                    if (!isActive && !isCompleted && prereqMet) {
-                        const totalTarget = questDef.objectives.reduce((sum, obj) => sum + (obj.target || 1), 0);
-                        quests.push({
-                            ...questDef,
-                            isUQE: true,
-                            progress: 0,
-                            target: totalTarget,
-                            rewards: questDef.rewards || {}
-                        });
-                    }
-                });
-            }
-        } else { // completed
-            if (window.uqe && window.uqe.completedQuests) {
-                window.uqe.completedQuests.forEach(q => {
-                    const totalTarget = q.objectives.reduce((sum, obj) => sum + obj.target, 0);
-                    quests.push({
-                        ...q,
-                        completed: true,
-                        progress: totalTarget,
-                        target: totalTarget,
-                        rewards: q.rewards || {}
                     });
-                });
+                }
+            } else if (this.questLogTab === 'available') {
+                if (window.uqe && window.uqe.allDefinitions) {
+                    const uqeCompletedIds = window.uqe.completedQuests.map(q => q.id);
+                    const uqeActiveIds = window.uqe.activeQuests.map(q => q.id);
+                    Object.values(window.uqe.allDefinitions).forEach(questDef => {
+                        const isActive = uqeActiveIds.includes(questDef.id);
+                        const isCompleted = uqeCompletedIds.includes(questDef.id);
+                        let prereqMet = true;
+                        if (questDef.requires) prereqMet = uqeCompletedIds.includes(questDef.requires);
+
+                        if (!isActive && !isCompleted && prereqMet) {
+                            const totalTarget = questDef.objectives.reduce((sum, obj) => sum + (obj.target || 1), 0);
+                            quests.push({
+                                ...questDef,
+                                isUQE: true,
+                                progress: 0,
+                                target: totalTarget,
+                                rewards: questDef.rewards || {}
+                            });
+                        }
+                    });
+                }
+            } else { // completed
+                if (window.uqe && window.uqe.completedQuests) {
+                    window.uqe.completedQuests.forEach(q => {
+                        const totalTarget = q.objectives.reduce((sum, obj) => sum + obj.target, 0);
+                        quests.push({
+                            ...q,
+                            completed: true,
+                            progress: totalTarget,
+                            target: totalTarget,
+                            rewards: q.rewards || {}
+                        });
+                    });
+                }
             }
-        }
 
-        if (this.selectedQuestIndex >= quests.length) this.selectedQuestIndex = Math.max(0, quests.length - 1);
-        if (quests.length === 0) this.selectedQuestIndex = -1;
+            if (this.selectedQuestIndex >= quests.length) this.selectedQuestIndex = Math.max(0, quests.length - 1);
+            if (quests.length === 0) this.selectedQuestIndex = -1;
 
-        // Render List
-        if (quests.length === 0) {
-            let msg = 'No quests found';
-            if (this.questLogTab === 'main') msg = 'No active story quests';
-            else if (this.questLogTab === 'available') msg = 'No available quests';
-            else if (this.questLogTab === 'completed') msg = 'No completed quests';
+            // Render List
+            if (quests.length === 0) {
+                let msg = 'No quests found';
+                if (this.questLogTab === 'main') msg = 'No active story quests';
+                else if (this.questLogTab === 'available') msg = 'No available quests';
+                else if (this.questLogTab === 'completed') msg = 'No completed quests';
 
-            const noQuestsText = scene.add.text(listWidth / 2, listHeight / 2, msg, {
-                fontSize: '16px', fill: '#888888', fontStyle: 'italic'
-            }).setOrigin(0.5, 0.5);
-            this.questPanel.container.add(noQuestsText);
+                const noQuestsText = scene.add.text(listWidth / 2, listHeight / 2, msg, {
+                    fontSize: '16px', fill: '#888888', fontStyle: 'italic'
+                }).setOrigin(0.5, 0.5);
+                this.questPanel.container.add(noQuestsText);
 
-            if (this.questPanel.scrollbar) {
-                this.questPanel.scrollbar.updateMaxScroll(0, listHeight);
-                this.questPanel.scrollbar.setVisible(false);
-            }
-        } else {
-            const questItemHeight = 50;
-            const totalContentHeight = quests.length * questItemHeight;
+                if (this.questPanel.scrollbar) {
+                    this.questPanel.scrollbar.updateMaxScroll(0, listHeight);
+                    this.questPanel.scrollbar.setVisible(false);
+                }
+            } else {
+                const questItemHeight = 50;
+                const totalContentHeight = quests.length * questItemHeight;
 
-            if (this.questPanel.scrollbar) {
-                const maxScroll = Math.max(0, totalContentHeight - listHeight);
-                this.questPanel.scrollbar.updateMaxScroll(maxScroll, totalContentHeight);
-            }
-
-            const scrollY = this.questPanel.scrollbar ? this.questPanel.scrollbar.getScroll() : 0;
-            const startIndex = Math.floor(scrollY / questItemHeight);
-            const endIndex = Math.min(quests.length, Math.ceil((scrollY + listHeight) / questItemHeight));
-
-            for (let i = startIndex; i < endIndex; i++) {
-                const quest = quests[i];
-                const isSelected = (i === this.selectedQuestIndex);
-                const itemY = i * questItemHeight + questItemHeight / 2;
-
-                const itemBg = scene.add.rectangle(listWidth / 2, itemY, listWidth - 10, questItemHeight - 5,
-                    isSelected ? 0x444444 : 0x2a2a2a, 0.9)
-                    .setStrokeStyle(2, isSelected ? 0x00aaff : 0x555555)
-                    .setScrollFactor(0).setDepth(302).setInteractive({ useHandCursor: true });
-
-                const titleText = scene.add.text(10, itemY, quest.title, {
-                    fontSize: '16px',
-                    fill: isSelected ? '#ffffff' : '#cccccc',
-                    fontStyle: 'bold'
-                }).setScrollFactor(0).setDepth(302).setOrigin(0, 0.5);
-
-                this.questPanel.container.add([itemBg, titleText]);
-
-                if ((this.questLogTab === 'current' || this.questLogTab === 'main') && quest.target) {
-                    const progressPercent = Math.min(quest.progress / quest.target, 1);
-                    const progressText = scene.add.text(listWidth - 15, itemY, `${Math.round(progressPercent * 100)}%`, {
-                        fontSize: '12px', fill: '#00ff00'
-                    }).setScrollFactor(0).setDepth(302).setOrigin(1, 0.5);
-                    this.questPanel.container.add(progressText);
-                } else if (this.questLogTab === 'completed') {
-                    const icon = scene.add.text(listWidth - 15, itemY, '✓', {
-                        fontSize: '20px', fill: '#00ff00'
-                    }).setScrollFactor(0).setDepth(302).setOrigin(1, 0.5);
-                    this.questPanel.container.add(icon);
+                if (this.questPanel.scrollbar) {
+                    const maxScroll = Math.max(0, totalContentHeight - listHeight);
+                    this.questPanel.scrollbar.updateMaxScroll(maxScroll, totalContentHeight);
                 }
 
-                itemBg.on('pointerdown', () => {
-                    this.selectedQuestIndex = i;
-                    this.updateQuestLogItems();
-                });
+                const scrollY = this.questPanel.scrollbar ? this.questPanel.scrollbar.getScroll() : 0;
+                const startIndex = Math.floor(scrollY / questItemHeight);
+                const endIndex = Math.min(quests.length, Math.ceil((scrollY + listHeight) / questItemHeight));
+
+                for (let i = startIndex; i < endIndex; i++) {
+                    const quest = quests[i];
+                    const isSelected = (i === this.selectedQuestIndex);
+                    const itemY = i * questItemHeight + questItemHeight / 2;
+
+                    const itemBg = scene.add.rectangle(listWidth / 2, itemY, listWidth - 10, questItemHeight - 5,
+                        isSelected ? 0x444444 : 0x2a2a2a, 0.9)
+                        .setStrokeStyle(2, isSelected ? 0x00aaff : 0x555555)
+                        .setScrollFactor(0).setDepth(302)
+                        .setName(`quest_bg_${i}`) // Debug Name
+                        .setInteractive({ useHandCursor: true });
+
+                    const titleText = scene.add.text(10, itemY, quest.title, {
+                        fontSize: '16px',
+                        fill: isSelected ? '#ffffff' : '#cccccc',
+                        fontStyle: 'bold'
+                    }).setScrollFactor(0).setDepth(305).setOrigin(0, 0.5)
+                        .setName(`quest_text_${i}`) // Debug Name
+                        .setInteractive({ useHandCursor: true });
+
+                    const onClick = () => {
+                        console.log('Quest Clicked:', i, quest.title);
+                        this.selectedQuestIndex = i;
+                        this.updateQuestLogItems();
+                    };
+
+                    // Try both pointerdown and pointerup
+                    itemBg.on('pointerdown', onClick);
+                    itemBg.on('pointerup', onClick);
+
+                    titleText.on('pointerdown', onClick);
+                    titleText.on('pointerup', onClick);
+
+                    // Add debug logs directly
+                    itemBg.on('pointerdown', () => console.log(`DEBUG: pointerdown on bg ${i}`));
+                    titleText.on('pointerdown', () => console.log(`DEBUG: pointerdown on text ${i}`));
+
+                    this.questPanel.container.add([itemBg, titleText]);
+
+                    if ((this.questLogTab === 'current' || this.questLogTab === 'main') && quest.target) {
+                        const progressPercent = Math.min(quest.progress / quest.target, 1);
+                        const progressText = scene.add.text(listWidth - 15, itemY, `${Math.round(progressPercent * 100)}%`, {
+                            fontSize: '12px', fill: '#00ff00'
+                        }).setScrollFactor(0).setDepth(302).setOrigin(1, 0.5);
+                        this.questPanel.container.add(progressText);
+                    } else if (this.questLogTab === 'completed') {
+                        const icon = scene.add.text(listWidth - 15, itemY, '✓', {
+                            fontSize: '20px', fill: '#00ff00'
+                        }).setScrollFactor(0).setDepth(302).setOrigin(1, 0.5);
+                        this.questPanel.container.add(icon);
+                    }
+                }
             }
-        }
 
-        // Render Details
-        if (quests.length > 0 && this.selectedQuestIndex >= 0 && this.selectedQuestIndex < quests.length) {
-            const quest = quests[this.selectedQuestIndex];
-            let detailY = detailStartY;
+            // Render Details
+            if (quests.length > 0 && this.selectedQuestIndex >= 0 && this.selectedQuestIndex < quests.length) {
+                const quest = quests[this.selectedQuestIndex];
+                let detailY = detailStartY;
 
-            const detailTitle = scene.add.text(detailStartX, detailY, quest.title, {
-                fontSize: '24px', fill: '#ffffff', fontStyle: 'bold', wordWrap: { width: detailWidth - 20 }
-            }).setScrollFactor(0).setDepth(302).setOrigin(0, 0);
-            this.questPanel.questDetailElements.push(detailTitle);
-            detailY += 35;
-
-            const detailDesc = scene.add.text(detailStartX, detailY, quest.description, {
-                fontSize: '16px', fill: '#cccccc', wordWrap: { width: detailWidth - 20 }
-            }).setScrollFactor(0).setDepth(302).setOrigin(0, 0);
-            this.questPanel.questDetailElements.push(detailDesc);
-            detailY += 50;
-
-            if (quest.objectives) {
-                const objLabel = scene.add.text(detailStartX, detailY, 'Objectives:', {
-                    fontSize: '18px', fill: '#ffffff', fontStyle: 'bold'
+                const detailTitle = scene.add.text(detailStartX, detailY, quest.title, {
+                    fontSize: '24px', fill: '#ffffff', fontStyle: 'bold', wordWrap: { width: detailWidth - 20 }
                 }).setScrollFactor(0).setDepth(302).setOrigin(0, 0);
-                this.questPanel.questDetailElements.push(objLabel);
+                this.questPanel.questDetailElements.push(detailTitle);
+                detailY += 35;
+
+                const detailDesc = scene.add.text(detailStartX, detailY, quest.description, {
+                    fontSize: '16px', fill: '#cccccc', wordWrap: { width: detailWidth - 20 }
+                }).setScrollFactor(0).setDepth(302).setOrigin(0, 0);
+                this.questPanel.questDetailElements.push(detailDesc);
+                detailY += 50;
+
+                if (quest.objectives) {
+                    const objLabel = scene.add.text(detailStartX, detailY, 'Objectives:', {
+                        fontSize: '18px', fill: '#ffffff', fontStyle: 'bold'
+                    }).setScrollFactor(0).setDepth(302).setOrigin(0, 0);
+                    this.questPanel.questDetailElements.push(objLabel);
+                    detailY += 30;
+
+                    quest.objectives.forEach(obj => {
+                        const statusStr = obj.completed ? '✅' : '⏳';
+                        const objProgress = obj.progress !== undefined ? obj.progress : 0;
+
+                        let textXOffset = 20;
+                        if (obj.icon) {
+                            const iconSprite = scene.add.sprite(detailStartX + 20, detailY + 10, obj.icon)
+                                .setScrollFactor(0).setDepth(302).setScale(0.6);
+                            this.questPanel.questDetailElements.push(iconSprite);
+                            textXOffset += 25;
+                        }
+
+                        const objText = scene.add.text(detailStartX + textXOffset, detailY, `${statusStr} ${obj.label}: ${objProgress}/${obj.target}`, {
+                            fontSize: '14px', fill: obj.completed ? '#00ff00' : '#cccccc'
+                        }).setScrollFactor(0).setDepth(302).setOrigin(0, 0);
+                        this.questPanel.questDetailElements.push(objText);
+                        detailY += 25;
+                    });
+                    detailY += 15;
+                }
+
+                // Rewards
+                detailY += 10;
+                const rewardsLabel = scene.add.text(detailStartX, detailY, 'Rewards:', {
+                    fontSize: '18px', fill: '#ffd700', fontStyle: 'bold'
+                }).setScrollFactor(0).setDepth(302).setOrigin(0, 0);
+                this.questPanel.questDetailElements.push(rewardsLabel);
                 detailY += 30;
 
-                quest.objectives.forEach(obj => {
-                    const statusStr = obj.completed ? '✅' : '⏳';
-                    const objProgress = obj.progress !== undefined ? obj.progress : 0;
+                let rewardsText = '';
+                if (quest.rewards.xp) rewardsText += `+${quest.rewards.xp} XP`;
+                if (quest.rewards.gold) {
+                    if (rewardsText) rewardsText += '\n';
+                    rewardsText += `+${quest.rewards.gold} Gold`;
+                }
+                const rewards = scene.add.text(detailStartX, detailY, rewardsText, {
+                    fontSize: '16px', fill: '#ffd700'
+                }).setScrollFactor(0).setDepth(302).setOrigin(0, 0);
+                this.questPanel.questDetailElements.push(rewards);
 
-                    let textXOffset = 20;
-                    if (obj.icon) {
-                        const iconSprite = scene.add.sprite(detailStartX + 20, detailY + 10, obj.icon)
-                            .setScrollFactor(0).setDepth(302).setScale(0.6);
-                        this.questPanel.questDetailElements.push(iconSprite);
-                        textXOffset += 25;
-                    }
+                // Accept Button
+                if (this.questLogTab === 'available') {
+                    detailY += 60;
+                    const acceptBtn = scene.add.rectangle(detailStartX + (detailWidth - 20) / 2, detailY, 200, 40, 0x00aa00, 0.9)
+                        .setScrollFactor(0).setDepth(301).setStrokeStyle(2, 0x00ff00).setInteractive({ useHandCursor: true });
+                    const acceptBtnText = scene.add.text(detailStartX + (detailWidth - 20) / 2, detailY, 'Accept Quest', {
+                        fontSize: '18px', fill: '#ffffff', fontStyle: 'bold'
+                    }).setScrollFactor(0).setDepth(302).setOrigin(0.5, 0.5);
 
-                    const objText = scene.add.text(detailStartX + textXOffset, detailY, `${statusStr} ${obj.label}: ${objProgress}/${obj.target}`, {
-                        fontSize: '14px', fill: obj.completed ? '#00ff00' : '#cccccc'
-                    }).setScrollFactor(0).setDepth(302).setOrigin(0, 0);
-                    this.questPanel.questDetailElements.push(objText);
-                    detailY += 25;
-                });
-                detailY += 15;
+                    const acceptQuest = () => {
+                        if (window.uqe && quest.isUQE) {
+                            window.uqe.acceptQuest(quest.id);
+                        }
+                        this.updateQuestLogItems();
+                        if (typeof playSound === 'function') playSound('item_pickup');
+                    };
+
+                    acceptBtn.on('pointerdown', acceptQuest);
+                    acceptBtnText.setInteractive({ useHandCursor: true }).on('pointerdown', acceptQuest);
+                    this.questPanel.questDetailElements.push(acceptBtn, acceptBtnText);
+                }
             }
-
-            // Rewards
-            detailY += 10;
-            const rewardsLabel = scene.add.text(detailStartX, detailY, 'Rewards:', {
-                fontSize: '18px', fill: '#ffd700', fontStyle: 'bold'
-            }).setScrollFactor(0).setDepth(302).setOrigin(0, 0);
-            this.questPanel.questDetailElements.push(rewardsLabel);
-            detailY += 30;
-
-            let rewardsText = '';
-            if (quest.rewards.xp) rewardsText += `+${quest.rewards.xp} XP`;
-            if (quest.rewards.gold) {
-                if (rewardsText) rewardsText += '\n';
-                rewardsText += `+${quest.rewards.gold} Gold`;
-            }
-            const rewards = scene.add.text(detailStartX, detailY, rewardsText, {
-                fontSize: '16px', fill: '#ffd700'
-            }).setScrollFactor(0).setDepth(302).setOrigin(0, 0);
-            this.questPanel.questDetailElements.push(rewards);
-
-            // Accept Button
-            if (this.questLogTab === 'available') {
-                detailY += 60;
-                const acceptBtn = scene.add.rectangle(detailStartX + (detailWidth - 20) / 2, detailY, 200, 40, 0x00aa00, 0.9)
-                    .setScrollFactor(0).setDepth(301).setStrokeStyle(2, 0x00ff00).setInteractive({ useHandCursor: true });
-                const acceptBtnText = scene.add.text(detailStartX + (detailWidth - 20) / 2, detailY, 'Accept Quest', {
-                    fontSize: '18px', fill: '#ffffff', fontStyle: 'bold'
-                }).setScrollFactor(0).setDepth(302).setOrigin(0.5, 0.5);
-
-                const acceptQuest = () => {
-                    if (window.uqe && quest.isUQE) {
-                        window.uqe.acceptQuest(quest.id);
-                    }
-                    this.updateQuestLogItems();
-                    if (typeof playSound === 'function') playSound('item_pickup');
-                };
-
-                acceptBtn.on('pointerdown', acceptQuest);
-                acceptBtnText.setInteractive({ useHandCursor: true }).on('pointerdown', acceptQuest);
-                this.questPanel.questDetailElements.push(acceptBtn, acceptBtnText);
-            }
+        } catch (e) {
+            console.error("Error updating quest log items:", e);
+        } finally {
+            this.isUpdatingQuestLog = false;
         }
-
-        this.isUpdatingQuestLog = false;
     },
 
     destroyQuestLogUI: function () {

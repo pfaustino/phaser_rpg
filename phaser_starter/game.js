@@ -157,30 +157,30 @@ let dungeonMusic = null;
  * Toggle music track muting
  * @param {boolean} enabled - Whether music should be enabled
  */
-window.toggleMusic = function(enabled) {
+window.toggleMusic = function (enabled) {
     console.log(`🎵 Toggling music: ${enabled ? 'ON' : 'OFF'}`);
-    
+
     // Toggle specific music tracks only (leave SFX alone)
-    if (villageMusic) { 
+    if (villageMusic) {
         if (enabled && !villageMusic.isPlaying) villageMusic.play();
-        villageMusic.setMute(!enabled); 
+        villageMusic.setMute(!enabled);
     }
-    
-    if (wildernessMusic) { 
+
+    if (wildernessMusic) {
         if (enabled && !wildernessMusic.isPlaying) wildernessMusic.play();
-        wildernessMusic.setMute(!enabled); 
+        wildernessMusic.setMute(!enabled);
     }
-    
-    if (dungeonMusic) { 
+
+    if (dungeonMusic) {
         if (enabled && !dungeonMusic.isPlaying) dungeonMusic.play();
-        dungeonMusic.setMute(!enabled); 
+        dungeonMusic.setMute(!enabled);
     }
-    
+
     // Also handle transition logic - if we are supposed to be playing something but it's stopped/muted
     // Re-trigger music check for current map
     if (enabled && typeof playBackgroundMusic === 'function' && typeof MapManager !== 'undefined') {
         playBackgroundMusic(MapManager.currentMap); // Ensure the correct track is playing
-        
+
         // Also ensure scene isn't globally muted from previous fallback
         const scene = game.scene.scenes[0];
         if (scene && scene.sound) {
@@ -193,14 +193,14 @@ window.toggleMusic = function(enabled) {
  * Play background music based on map type
  * @param {string} mapType - 'town', 'wilderness', 'dungeon'
  */
-window.playBackgroundMusic = function(mapType) {
+window.playBackgroundMusic = function (mapType) {
     if (!window.musicEnabled) return;
-    
+
     // Stop all current music to ensure clean transitions
     if (villageMusic && villageMusic.isPlaying) villageMusic.stop();
     if (wildernessMusic && wildernessMusic.isPlaying) wildernessMusic.stop();
     if (dungeonMusic && dungeonMusic.isPlaying) dungeonMusic.stop();
-    
+
     const scene = game.scene.scenes[0];
     if (!scene || !scene.sound) return;
 
@@ -560,7 +560,7 @@ function preload() {
     this.load.image('character-fallen', 'assets/images/character-fallen.png');
     // item_fragment and item_crystal are now loaded dynamically from quests_v2.json
     this.load.audio('bell_toll', 'assets/audio/bell-toll-407826.mp3');
-    
+
     // Background Music
     this.load.audio('village_music', 'assets/audio/music/Village_Hearth_FULL_SONG_MusicGPT.mp3');
     this.load.audio('wilderness_music', 'assets/audio/music/Wilderness_of_Arcana_FULL_SONG_MusicGPT.mp3');
@@ -582,6 +582,9 @@ function preload() {
     this.load.image('monster_orc_north', 'assets/animations/monster_orc_north.png');
     this.load.image('monster_orc_east', 'assets/animations/monster_orc_east.png');
     this.load.image('monster_orc_west', 'assets/animations/monster_orc_west.png');
+
+    // Victory Images
+    this.load.image('victory_tower', 'assets/images/tower.png');
 
     // Skeleton
     this.load.image('monster_skeleton_south', 'assets/animations/monster_skeleton_south.png');
@@ -1776,15 +1779,30 @@ function spawnBossMonster(x, y, level) {
     let shouldSpawn = true;
 
     // Data-driven Check
-    if (dungeonDef && dungeonDef.boss) {
-        // Only spawn if this is the correct level
-        if (dungeonDef.boss.level && dungeonDef.boss.level !== level) {
+    if (dungeonDef) {
+        if (dungeonDef.bosses) {
+            // Find boss for this level
+            const levelBoss = dungeonDef.bosses.find(b => b.level === level);
+            if (levelBoss) {
+                if (levelBoss.monsterId) {
+                    bossId = levelBoss.monsterId;
+                    bossName = bossId.replace('_', ' ').toUpperCase();
+                }
+            } else {
+                shouldSpawn = false;
+            }
+        } else if (dungeonDef.boss) {
+            // Legacy single boss
+            if (dungeonDef.boss.level && dungeonDef.boss.level !== level) {
+                shouldSpawn = false;
+            }
+            if (dungeonDef.boss.monsterId) {
+                bossId = dungeonDef.boss.monsterId;
+                bossName = bossId.replace('_', ' ').toUpperCase();
+            }
+        } else {
+            // No boss defined at all
             shouldSpawn = false;
-        }
-        // Override boss ID
-        if (dungeonDef.boss.monsterId) {
-            bossId = dungeonDef.boss.monsterId;
-            bossName = bossId.replace('_', ' ').toUpperCase();
         }
     }
 
@@ -1827,25 +1845,266 @@ function spawnBossMonster(x, y, level) {
  * Handle boss defeat - mark dungeon as completed and reset it
  */
 function onBossDefeated(level, x, y) {
-    const dungeonKey = `level_${level}`;
+    // Get Dungeon Info for Victory Check
+    const dungeonId = MapManager.currentDungeon ? MapManager.currentDungeon.id : 'tower_dungeon';
+    const dungeonKey = `${dungeonId}_level_${level}`;
+    const scene = game.scene.scenes[0];
 
     // Mark dungeon as completed
     MapManager.dungeonCompletions[dungeonKey] = true;
+    // Also mark legacy key for finding compatibility if referenced elsewhere
+    MapManager.dungeonCompletions[`level_${level}`] = true;
 
-    // Clear dungeon from cache (force regeneration on next entry)
-    delete MapManager.dungeonCache[dungeonKey];
-    MapManager.currentDungeon = null;
+    // Remove boss health bar if it exists (cleanup)
+    // (Handled by checking active monsters in loop, but good to ensure UI clears)
+    if (window.bossHpBar) {
+        window.bossHpBar.destroy();
+        window.bossHpBar = null;
+    }
+
+    // Get dungeon data again for validation (using the already declared dungeonId)
+    // const dungeonId = ... (Already declared at top of function)
+    const dungeonData = scene.cache.json.get('dungeonData');
+    const dungeonDef = dungeonData && dungeonData.dungeons ? dungeonData.dungeons[dungeonId] : null;
+    const maxLevels = dungeonDef ? (dungeonDef.levels || 3) : 3;
 
     // Drop boss loot
     dropBossLoot(x, y, level);
 
-    // Show completion message
-    showDamageNumber(player.x, player.y - 40, 'Dungeon Cleared!', 0x00ffff);
-    addChatMessage(`Dungeon Level ${level} Cleared!`, 0x00ffff, '🏆');
-    console.log(`✅ Dungeon level ${level} completed - will reset on next entry`);
+    console.log(`✅ Dungeon level ${level} completed (Max: ${maxLevels})`);
+
+    if (level >= maxLevels) {
+        // FINAL VICTORY
+        const victoryImage = (dungeonDef && dungeonDef.victory_image) ? dungeonDef.victory_image : null;
+        const loreText = (dungeonDef && dungeonDef.storyline_lore) ? dungeonDef.storyline_lore :
+            "The ancient evil has been vanquished. The air feels lighter, and the corruption begins to recede.";
+
+        // Show Cinematic after short delay
+        scene.time.delayedCall(1500, () => {
+            showVictoryCinematic(scene, victoryImage, loreText);
+        });
+
+        // Spawn Exit Portal
+        spawnDungeonExit(scene, x, y - 80);
+
+        // Show completion message
+        showDamageNumber(player.x, player.y - 40, 'DUNGEON CONQUERED!', 0xffd700);
+        addChatMessage(`🏆 FINAL BOSS DEFEATED! ${dungeonDef ? dungeonDef.name : 'Dungeon'} Cleared!`, 0xffd700);
+    } else {
+        // Normal completion
+        showDamageNumber(player.x, player.y - 40, 'Level Cleared!', 0x00ffff);
+        addChatMessage(`Dungeon Level ${level} Cleared! Proceed deeper...`, 0x00ffff, '✨');
+    }
+
+    // Clear dungeon from cache (force regeneration on next entry)
+    // We do this AFTER checking data so we don't lose the ID refs
+    const cacheKey = `${dungeonId}_level_${level}`;
+    if (MapManager.dungeonCache[cacheKey]) delete MapManager.dungeonCache[cacheKey];
+
+    // Note: Do NOT nullify MapManager.currentDungeon immediately if we want to stay in the level
+    // But original code did it to prevent re-triggering? 
+    // Restoring original behavior but doing safely
+    // MapManager.currentDungeon = null; 
 
     // Auto-save
     saveGame();
+}
+
+
+
+/**
+ * Show Victory Cinematic Overlay
+ */
+function showVictoryCinematic(scene, imageKey, loreText) {
+    // Determine screen dimensions (use scale manager for consistent UI coords)
+    const width = scene.scale.width;
+    const height = scene.scale.height;
+
+    // Container for UI (fixed to camera)
+    // When ScrollFactor is 0, position 0,0 is Top-Left of SCREEN.
+    const container = scene.add.container(0, 0).setDepth(30000).setScrollFactor(0);
+
+    // Dark Background (Click blocker)
+    const bg = scene.add.rectangle(width / 2, height / 2, width, height, 0x000000, 0.0)
+        .setOrigin(0.5).setInteractive(); // Block clicks below
+    container.add(bg);
+
+    // Fade in bg
+    scene.tweens.add({
+        targets: bg,
+        fillAlpha: 0.9,
+        duration: 1500
+    });
+
+    // Victory Title
+    const title = scene.add.text(width / 2, 100, "VICTORY", {
+        fontSize: '64px', fontFamily: 'Arial', fill: '#ffd700', stroke: '#000000', strokeThickness: 8,
+        shadow: { offsetX: 2, offsetY: 2, color: '#000', blur: 10, stroke: true, fill: true }
+    }).setOrigin(0.5).setAlpha(0).setScale(0.5);
+    container.add(title);
+
+    // Title Animation
+    scene.tweens.add({
+        targets: title,
+        alpha: 1, scale: 1,
+        duration: 1500,
+        ease: 'Back.out'
+    });
+
+    // Image (if provided)
+    if (imageKey && scene.textures.exists(imageKey)) {
+        const img = scene.add.image(width / 2, height / 2 - 40, imageKey)
+            .setOrigin(0.5).setAlpha(0).setDisplaySize(400, 300);
+        // Add subtle border
+        const border = scene.add.rectangle(width / 2, height / 2 - 40, 410, 310, 0xffffff, 0)
+            .setStrokeStyle(4, 0x444444).setOrigin(0.5).setAlpha(0);
+
+        container.add(border);
+        container.add(img);
+
+        scene.tweens.add({
+            targets: [img, border],
+            alpha: 1,
+            delay: 500,
+            duration: 1000
+        });
+    }
+
+    // Lore Text
+    const lore = scene.add.text(width / 2, height / 2 + 160, loreText, {
+        fontSize: '20px', fontFamily: 'Arial', fill: '#ffffff', align: 'center',
+        wordWrap: { width: 600 }
+    }).setOrigin(0.5).setAlpha(0);
+    container.add(lore);
+
+    scene.tweens.add({
+        targets: lore,
+        alpha: 1,
+        y: height / 2 + 140, // slide up slightly
+        delay: 1000,
+        duration: 1000
+    });
+
+    // Continue Button (Add directly to scene to avoid Container input bugs)
+    const btnY = height - 100;
+    const btn = scene.add.rectangle(width / 2, btnY, 200, 50, 0x008800, 1)
+        .setStrokeStyle(2, 0x00ff00)
+        .setScrollFactor(0)
+        .setDepth(30001)
+        .setInteractive({ useHandCursor: true })
+        .setAlpha(0);
+
+    const btnText = scene.add.text(width / 2, btnY, "CONTINUE", {
+        fontSize: '24px', fontFamily: 'Arial', fill: '#ffffff', fontStyle: 'bold'
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(30001).setAlpha(0);
+
+    // No longer adding them to container
+    // container.add(btn);
+    // container.add(btnText);
+
+    // Button Fade In
+    scene.tweens.add({
+        targets: [btn, btnText],
+        alpha: 1,
+        delay: 2000,
+        duration: 500,
+        onComplete: () => {
+            // Pulse effect
+            scene.tweens.add({
+                targets: btn,
+                scaleX: 1.05, scaleY: 1.05,
+                yoyo: true, repeat: -1, duration: 800
+            });
+        }
+    });
+
+    // Button Interactions
+    btn.on('pointerover', () => {
+        btn.setFillStyle(0x00dd00); // Lighter green
+        btn.scale = 1.1;
+    });
+
+    btn.on('pointerout', () => {
+        btn.setFillStyle(0x008800); // Normal
+        btn.scale = 1.0;
+    });
+
+    const closeCinematic = () => {
+        console.log('🎬 Closing Victory Cinematic');
+        // Disable button immediately
+        btn.disableInteractive();
+
+        // Fade out UI
+        scene.tweens.add({
+            targets: [container, btn, btnText],
+            alpha: 0,
+            duration: 500,
+            onComplete: () => {
+                container.destroy();
+                btn.destroy();
+                btnText.destroy();
+            }
+        });
+    };
+
+    btn.on('pointerdown', () => {
+        console.log('🖱️ Continue Button Clicked!');
+        closeCinematic();
+    });
+    btnText.setInteractive({ useHandCursor: true }).on('pointerdown', () => {
+        console.log('🖱️ Continue Text Clicked!');
+        closeCinematic();
+    });
+
+    // Debug Hit Area NOT ENABLED by default for user, but useful if needed:
+    // scene.input.enableDebug(btn);
+
+    // Expose for debugging
+    window.testVictory = () => {
+        showVictoryCinematic(scene, 'victory_tower', 'Debug Lore Text: The castle is safe... for now.');
+    };
+}
+
+// Global debug helper
+window.debugVictory = () => {
+    const scene = game.scene.scenes[0];
+    if (scene) {
+        showVictoryCinematic(scene, 'victory_tower', 'TESTING VICTORY SCREEN\n(Used command: debugVictory())');
+    }
+};
+
+/**
+ * Spawn a magical exit portal after boss defeat
+ */
+function spawnDungeonExit(scene, x, y) {
+    // Create visual portal
+    const portal = scene.add.circle(x, y, 40, 0x00ffff, 0.4).setDepth(5);
+    const inner = scene.add.circle(x, y, 20, 0xffffff, 0.8).setDepth(6);
+
+    scene.tweens.add({
+        targets: portal,
+        scale: 1.2, alpha: 0.2,
+        duration: 1500, yoyo: true, repeat: -1
+    });
+    scene.tweens.add({
+        targets: inner,
+        scale: 0.8, alpha: 1,
+        duration: 1000, yoyo: true, repeat: -1
+    });
+
+    const label = scene.add.text(x, y - 50, "EXIT DUNGEON\n(Return to Wilderness)", {
+        fontSize: '14px', fill: '#00ffff', align: 'center', stroke: '#000000', strokeThickness: 3
+    }).setOrigin(0.5).setDepth(20);
+
+    // Register with MapManager
+    MapManager.transitionMarkers.push({
+        x: x, y: y,
+        radius: 40,
+        targetMap: 'wilderness', // Or 'town' if preferred, but usually wilderness
+        marker: portal, // Visual reference
+        text: label,
+        isExit: true
+    });
 }
 
 /**
@@ -1985,6 +2244,51 @@ function dropBossLoot(x, y, level) {
     }
 
     console.log(`💰 Boss dropped ${numItems} items (quality: ${quality})`);
+
+    // SPECIAL: Quest Item Drops
+    const dungeonId = MapManager.currentDungeon ? MapManager.currentDungeon.id : null;
+
+    // Temple Ruins: Drop Artifact Fragment (Quest: main_02_003)
+    // Always drop it if we are in the Temple Ruins and kill the boss
+    if (dungeonId === 'temple_ruins') {
+        const fragment = {
+            type: 'quest_item',
+            itemId: 'artifact_fragment',
+            name: 'Artifact Fragment',
+            description: 'A pulsating shard of ancient energy.',
+            sprite: null, // Will be assigned
+            x: x,
+            y: y + 30 // Drop slightly below boss
+        };
+
+        let spriteKey = 'item_fragment';
+        if (!scene.textures.exists(spriteKey)) spriteKey = 'item_gold'; // Fallback
+
+        const fSprite = scene.add.sprite(fragment.x, fragment.y, spriteKey);
+        fSprite.setDepth(10);
+        fSprite.setInteractive();
+        fSprite.isItem = true;
+        fSprite.itemId = fragment.itemId;
+        fSprite.itemData = fragment;
+
+        // Hover Effect
+        if (typeof window.enableHoverEffect === 'function') {
+            window.enableHoverEffect(fSprite, scene);
+        }
+
+        // Pulse effect
+        scene.tweens.add({
+            targets: fSprite,
+            alpha: 0.5,
+            duration: 800,
+            yoyo: true,
+            repeat: -1
+        });
+
+        // Add to items list so it can be picked up
+        items.push(fragment);
+        console.log('✨ Quest Item Dropped: Artifact Fragment');
+    }
 }
 
 /**
@@ -2644,15 +2948,34 @@ function triggerWorldInteraction() {
         if (distance <= marker.radius) {
             const targetLevel = marker.dungeonLevel || 1;
 
-            // Check if trying to go to next level - require previous level boss to be defeated
+            // Check if trying to go to next level - require previous level boss to be defeated IF there was a boss
             if (marker.targetMap === 'dungeon' && targetLevel > 1) {
                 const previousLevel = targetLevel - 1;
                 const previousLevelKey = `level_${previousLevel}`;
                 const previousLevelCompleted = MapManager.dungeonCompletions[previousLevelKey] || false;
 
-                if (!previousLevelCompleted) {
+                // Check if previous level actually HAD a boss
+                const scene = game.scene.scenes[0];
+                const dungeonId = MapManager.currentDungeon ? MapManager.currentDungeon.id : (marker.dungeonId || 'tower_dungeon');
+                const dungeonData = scene.cache.json.get('dungeonData');
+                const dungeonDef = dungeonData && dungeonData.dungeons ? dungeonData.dungeons[dungeonId] : null;
+
+                let levelHasBoss = false;
+                if (dungeonDef) {
+                    if (dungeonDef.bosses) {
+                        // Check array of bosses
+                        levelHasBoss = dungeonDef.bosses.some(b => b.level === previousLevel);
+                    } else if (dungeonDef.boss && dungeonDef.boss.level === previousLevel) {
+                        // Legacy single boss
+                        levelHasBoss = true;
+                    }
+                }
+
+                // Only block if level HAS a boss and it wasn't defeated
+                if (levelHasBoss && !previousLevelCompleted) {
                     showDamageNumber(player.x, player.y - 40, `Defeat Level ${previousLevel} Boss First!`, 0xff0000);
                     console.log(`❌ Cannot go to level ${targetLevel} - level ${previousLevel} boss not defeated`);
+                    addChatMessage(`Cannot go to level ${targetLevel} - level ${previousLevel} boss not defeated`, 0xff0000);
                     return true;
                 }
 
@@ -2661,6 +2984,7 @@ function triggerWorldInteraction() {
                 if (livingMonsters.length > 0) {
                     showDamageNumber(player.x, player.y - 40, `Defeat All Monsters! (${livingMonsters.length} Left)`, 0xff0000);
                     console.log(`❌ Cannot go to level ${targetLevel} - ${livingMonsters.length} monsters remaining`);
+                    addChatMessage(`Cannot go to level ${targetLevel} - ${livingMonsters.length} monsters remaining`, 0xff0000);
                     return true;
                 }
             }
@@ -2728,8 +3052,8 @@ function triggerItemPickup() {
             item.sprite.x, item.sprite.y
         );
 
-        // Pick up item if player is close (within 30 pixels)
-        if (distance < 30) {
+        // Pick up item if player is close (increased radius)
+        if (distance < 75) {
             pickupItem(item, index);
             itemPickedUp = true;
         }
@@ -8699,7 +9023,7 @@ function updateDialogUI(node) {
     /*
     const scene = game.scene.scenes[0];
     if (!dialogPanel) return;
-
+ 
     // Clear previous dialog text and choices
     if (dialogPanel.dialogText) {
         dialogPanel.dialogText.destroy();
@@ -8709,12 +9033,12 @@ function updateDialogUI(node) {
         if (btn.text) btn.text.destroy();
     });
     dialogPanel.choiceButtons = [];
-
+ 
     const panelWidth = 700;
     const buttonHeight = 40;
     const buttonSpacing = 10;
     const portraitHeight = dialogPanel.portraitHeight || 0;
-
+ 
     // Count visible choices first
     let visibleChoices = 0;
     node.choices.forEach(choice => {
@@ -8735,7 +9059,7 @@ function updateDialogUI(node) {
             }
         }
     });
-
+ 
     // Calculate dynamic panel height
     const headerHeight = portraitHeight + 50; // Portrait + NPC name area
     // Improve text height estimation: count lines (approx 24px per line) and length
@@ -8745,14 +9069,14 @@ function updateDialogUI(node) {
     const textHeight = Math.max(80, Math.min(600, Math.max(estHeightByLines, estHeightByLength))); // Increased max from 150 to 600
     const choicesHeight = visibleChoices * (buttonHeight + buttonSpacing) + 20;
     const dynamicPanelHeight = headerHeight + textHeight + choicesHeight + 20;
-
+ 
     // Update panel size and position
     const centerX = scene.cameras.main.width / 2;
     const centerY = scene.cameras.main.height / 2 + 50;
-
+ 
     dialogPanel.bg.setPosition(centerX, centerY);
     dialogPanel.bg.setSize(panelWidth, dynamicPanelHeight);
-
+ 
     // Reposition portrait at top (full width, centered)
     if (dialogPanel.portraitImage) {
         dialogPanel.portraitImage.setPosition(
@@ -8760,13 +9084,13 @@ function updateDialogUI(node) {
             centerY - dynamicPanelHeight / 2 + portraitHeight / 2 + 10
         );
     }
-
+ 
     // Reposition NPC name below portrait
     dialogPanel.npcNameText.setPosition(
         centerX - panelWidth / 2 + 20,
         centerY - dynamicPanelHeight / 2 + portraitHeight + 15
     );
-
+ 
     // Dialog text (positioned after NPC name)
     const textX = centerX - panelWidth / 2 + 20;
     const textY = centerY - dynamicPanelHeight / 2 + portraitHeight + 45;
@@ -8780,10 +9104,10 @@ function updateDialogUI(node) {
             wordWrap: { width: panelWidth - 40 }
         }
     ).setScrollFactor(0).setDepth(401).setOrigin(0, 0);
-
+ 
     // Choice buttons - start after the text area
     const startY = centerY - dynamicPanelHeight / 2 + headerHeight + textHeight;
-
+ 
     let visibleChoiceCount = 0;
     node.choices.forEach((choice) => {
         // Skip choices that don't meet their condition
@@ -8803,11 +9127,11 @@ function updateDialogUI(node) {
                 return; // Hide on error for safety
             }
         }
-
+ 
         const buttonY = startY + visibleChoiceCount * (buttonHeight + buttonSpacing);
         visibleChoiceCount++;
         const buttonWidth = panelWidth - 40;
-
+ 
         // Button background
         const buttonBg = scene.add.rectangle(
             centerX,
@@ -8819,11 +9143,11 @@ function updateDialogUI(node) {
         ).setScrollFactor(0).setDepth(401)
             .setStrokeStyle(2, 0x666666)
             .setInteractive({ useHandCursor: true });
-
+ 
         // Button text with indicators
         const isQuest = choice.isQuest;
         const isLore = choice.action === 'unlock_lore' && choice.loreId;
-
+ 
         // Check if lore is already unlocked
         let loreAlreadyUnlocked = false;
         if (isLore) {
@@ -8832,7 +9156,7 @@ function updateDialogUI(node) {
                 loreAlreadyUnlocked = unlockedLore.includes(choice.loreId);
             } catch (e) { }
         }
-
+ 
         // Build display text with appropriate prefix
         let displayText = choice.text;
         if (isQuest) {
@@ -8840,7 +9164,7 @@ function updateDialogUI(node) {
         } else if (isLore) {
             displayText = loreAlreadyUnlocked ? `✓ ${choice.text}` : `○ ${choice.text}`;
         }
-
+ 
         const buttonText = scene.add.text(
             centerX,
             buttonY,
@@ -8850,14 +9174,14 @@ function updateDialogUI(node) {
                 fill: '#ffffff'
             }
         ).setScrollFactor(0).setDepth(402).setOrigin(0.5, 0.5);
-
+ 
         // Apply colors based on type
         if (isQuest) {
             buttonText.setFill('#ffff00'); // Yellow for quests
         } else if (isLore) {
             buttonText.setFill(loreAlreadyUnlocked ? '#88ff88' : '#9370DB'); // Green if read, purple if new
         }
-
+ 
         // Button hover effects
         buttonBg.on('pointerover', () => {
             buttonBg.setFillStyle(0x444444);
@@ -8865,16 +9189,16 @@ function updateDialogUI(node) {
         buttonBg.on('pointerout', () => {
             buttonBg.setFillStyle(0x333333);
         });
-
+ 
         // Button click handler
         buttonBg.on('pointerdown', (pointer) => {
             if (pointer && pointer.event) {
                 pointer.event.stopPropagation();
             }
-
+ 
             const questId = choice.questId;
             const action = choice.action;
-
+ 
             // Handle lore unlock action
             if (action === 'unlock_lore' && choice.loreId) {
                 if (window.loreManager && typeof window.loreManager.unlock === 'function') {
@@ -8895,7 +9219,7 @@ function updateDialogUI(node) {
                     }
                 }
             }
-
+ 
             if (action === 'open_shop') {
                 openShop(currentShopNPC);
             } else if (action === 'choose_class') {
@@ -8915,18 +9239,18 @@ function updateDialogUI(node) {
                             // Check if this completes the whole quest
                             quest.checkCompletion();
                             window.uqe.update();
-
+ 
                             addChatMessage(`Objective updated: ${obj.description || choice.objectiveId}`, 0x00ff00);
                         }
                     }
                 }
                 if (choice.next) showDialogNode(choice.next);
                 else closeDialog();
-
+ 
             } else if (action === 'quest_complete' || action === 'quest_turnin' || action === 'complete_quest') {
                 // Handle quest completion via dialog
                 console.log('✅ Action was quest completion - closing dialog to unblock queue');
-
+ 
                 // Complete the quest via UQE
                 if (window.uqe && choice.questId) {
                     window.uqe.completeQuest(choice.questId); // Assuming completeQuest helper exists in UQE wrapper or use uqe.activeQuests logic
@@ -8946,7 +9270,7 @@ function updateDialogUI(node) {
                     // It has `update` which calls `checkCompletion`.
                     // If we want to FORCE completion, we might need to find the quest and set `completed = true`?
                     // OR set the remaining 'talk' objective to complete.
-
+ 
                     const quest = window.uqe.activeQuests.find(q => q.id === choice.questId);
                     if (quest) {
                         // Mark all objectives as complete?
@@ -8957,37 +9281,37 @@ function updateDialogUI(node) {
                         window.uqe.update(); // This moves it to completedQuests
                     }
                 }
-
+ 
                 closeDialog();
             } else if (action === 'quest_advance' || action === 'quest_accept' || action === 'quest_accept_side' || action === 'quest_accept_v2' || action === 'quest_accept_main') {
                 // UNIFIED UQE BRIDGE REDIRECT with PREVIEW MODAL
                 const questEngine = window.uqe;
                 if (questId && typeof questEngine !== 'undefined' && questEngine.allDefinitions[questId]) {
                     console.log(`🔗 [UQE Bridge] Showing preview for quest: ${questId}`);
-
+ 
                     // Store current NPC for reopening dialog after accept/decline
                     const currentNPC = currentShopNPC;
-
+ 
                     // Close dialog first
                     closeDialog();
-
+ 
                     // Show quest preview modal
                     showQuestPreviewModalEnhanced(questId,
                         // On Accept - accept quest then reopen dialog
                         () => {
                             questEngine.acceptQuest(questId);
-
+ 
                             // Sync: Remove from legacy lists if it exists there
                             playerStats.quests.main = playerStats.quests.main.filter(q => q.id !== questId);
                             playerStats.quests.active = playerStats.quests.active.filter(q => q.id !== questId);
                             playerStats.quests.available = playerStats.quests.available.filter(q => q.id !== questId);
-
+ 
                             showDamageNumber(player.x, player.y - 40, "Quest Accepted!", 0x00ff00);
                             playSound('item_pickup');
-
+ 
                             // Update the quest tracker HUD to show the new quest
                             updateQuestTrackerHUD();
-
+ 
                             // Reopen dialog with NPC so player can continue talking
                             console.log('📋 [Dialog] Accept callback - reopening dialog with:', currentNPC?.name);
                             if (currentNPC) {
@@ -9025,7 +9349,7 @@ function updateDialogUI(node) {
                 closeDialog();
             }
         });
-
+ 
         dialogPanel.choiceButtons.push({
             bg: buttonBg,
             text: buttonText,

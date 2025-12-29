@@ -379,7 +379,7 @@ const MapManager = {
             const dungeonKey = `${dungeonId}_level_${level}`;
             let dungeon;
 
-            if (this.dungeonCache[dungeonKey]) {
+            if (this.dungeonCache[dungeonKey] && this.dungeonCache[dungeonKey].mapData) {
                 dungeon = this.dungeonCache[dungeonKey];
             } else {
                 // Use generation parameters from definition
@@ -390,14 +390,20 @@ const MapManager = {
                     corridorWidth: 1
                 };
 
+                // Check if we have a seed in the cache (from loadGame)
+                const seed = (this.dungeonCache[dungeonKey] && this.dungeonCache[dungeonKey].seed)
+                    ? this.dungeonCache[dungeonKey].seed
+                    : null;
+
                 // Parse min/max if needed or pass raw
-                dungeon = this.generateDungeon(level, gen, dungeonDef.tileset);
+                dungeon = this.generateDungeon(level, gen, dungeonDef.tileset, seed);
                 dungeon.id = dungeonId; // Store ID
                 if (dungeon) this.dungeonCache[dungeonKey] = dungeon;
             }
 
             if (!dungeon) throw new Error("Failed to generate dungeon");
             this.currentDungeon = dungeon;
+            this.dungeonLevel = level;
 
             // Clear walls
             this.dungeonWalls = [];
@@ -460,7 +466,7 @@ const MapManager = {
                 }).setDepth(4).setOrigin(0.5);
 
                 this.transitionMarkers.push({
-                    x: ex, y: ey, radius: tileSize * 1.5, targetMap: (level === 1 && this.lastMap) ? this.lastMap : 'wilderness',
+                    x: ex, y: ey, radius: tileSize * 1.5, targetMap: (level === 1) ? (this.lastMap || 'wilderness') : 'dungeon',
                     dungeonId: dungeonId, // Persist ID
                     dungeonLevel: level === 1 ? null : level - 1,
                     marker: exitMarker, text: exitText
@@ -517,11 +523,14 @@ const MapManager = {
     /**
      * Generate Procedural Dungeon Data
      */
-    generateDungeon(level, config, tileset) {
+    /**
+     * Generate Procedural Dungeon Data
+     */
+    generateDungeon(level, config, tileset, seedOverride = null) {
         // config has width, height, roomCount {min, max}, roomSize {min, max}, corridorWidth
         const width = config.width || 50;
         const height = config.height || 50;
-        const seed = Date.now(); // We could allow seed passing too
+        const seed = seedOverride !== null ? seedOverride : Date.now();
 
         let seedValue = seed;
         const random = () => {
@@ -648,6 +657,34 @@ const MapManager = {
             level = config.dungeonLevel || 1;
             dungeonId = config.dungeonId || null;
             console.log('[MapManager] Adapted object argument to params', { level, dungeonId });
+        }
+
+        // RESET LOGIC: If checking into Level 1 from Wilderness/Town, reset the specific dungeon
+        // This makes the dungeon REPEATABLE and ensures boss respawns.
+        if (targetMap === 'dungeon' && level === 1 && this.currentMap !== 'dungeon') {
+            const idToReset = dungeonId || 'tower_dungeon';
+            console.log(`♻️ Resetting dungeon state for ${idToReset}...`);
+
+            // Clear cache for this dungeon
+            Object.keys(this.dungeonCache).forEach(key => {
+                if (key.startsWith(idToReset)) {
+                    delete this.dungeonCache[key];
+                }
+            });
+
+            // Clear completion flags for this dungeon
+            Object.keys(this.dungeonCompletions).forEach(key => {
+                // Check if key is just 'level_X' (legacy) or 'id_level_X'
+                if (key.startsWith(idToReset) || key.startsWith('level_')) {
+                    // Be careful with legacy 'level_' keys if we have multiple dungeons. 
+                    // ideally we migrate to prefixed keys.
+                    // For now, if we are entering THIS dungeon, we assume legacy keys might belong to it 
+                    // or we just clear them to be safe (since we only have one active dungeon usually).
+                    delete this.dungeonCompletions[key];
+                }
+            });
+
+            this.currentDungeon = null;
         }
 
         // SAVE STATE: When entering dungeon from non-dungeon

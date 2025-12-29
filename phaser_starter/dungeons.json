@@ -32,10 +32,22 @@
                     "chance": 0.3
                 }
             ],
-            "boss": {
-                "level": 3,
-                "monsterId": "echo_beholder"
-            }
+            "bosses": [
+                {
+                    "level": 1,
+                    "monsterId": "corrupted_guardian"
+                },
+                {
+                    "level": 2,
+                    "monsterId": "corrupted_guardian"
+                },
+                {
+                    "level": 3,
+                    "monsterId": "echo_beholder"
+                }
+            ],
+            "victory_image": "victory_tower",
+            "storyline_lore": "You have defeated the Echo Beholder and cleansed the Watchtower. The corruption recedes, and the light of the sun returns to the valley. But deeper shadows stir elsewhere..."
         },
         "temple_ruins": {
             "id": "temple_ruins",
@@ -62,6 +74,16 @@
                 {
                     "id": "corrupted_guardian",
                     "chance": 0.4
+                }
+            ],
+            "bosses": [
+                {
+                    "level": 1,
+                    "monsterId": "corrupted_guardian"
+                },
+                {
+                    "level": 2,
+                    "monsterId": "corrupted_guardian"
                 }
             ]
         }

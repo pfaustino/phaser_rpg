@@ -53,11 +53,13 @@ class UqeObjective {
     constructor(data, eventBus) {
         this.eventBus = eventBus;
         this.id = data.id || Math.random().toString(36).substr(2, 9);
+        this.definition = data; // Store full definition for access to custom props (ambientSound, etc)
         this.type = data.type;
         this.label = data.label || '';
         this.completed = false;
         this.progress = 0;
         this.target = data.target || 1;
+        this.npcId = data.npcId; // Store npcId if present (for generic objectives like class_selection)
         this.cleanupFns = [];
     }
 
@@ -183,14 +185,12 @@ class ExploreObjective extends UqeObjective {
 class ExploreLocationObjective extends UqeObjective {
     constructor(data, eventBus) {
         super(data, eventBus);
-        // data.id matches the zone ID (e.g., 'explore_square')
-        // OR we can match based on the objective ID directly if we emit that.
-        // Let's assume the event emits { id: 'explore_square' } and we match against our objective's id OR target?
-        // In quests_v2.json: id: "explore_square". 
-        // So we match event.id === this.id
+        this.zoneId = data.zoneId; // Optional specific zone ID
 
         this.subscribe(UQE_EVENTS.LOCATION_EXPLORED, (data) => {
-            if (data.id === this.id) {
+            // Match against zoneId if specified, otherwise fall back to objective ID
+            const targetId = this.zoneId || this.id;
+            if (data.id === targetId) {
                 this.updateProgress(1);
             }
         });

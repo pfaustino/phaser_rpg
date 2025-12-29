@@ -409,6 +409,23 @@
                 "text": "The town is safe for now, but I remain vigilant. How can I help you, citizen?",
                 "choices": [
                     {
+                        "text": "What was that shockwave?",
+                        "next": "mq_01_briefing",
+                        "condition": "quest_objective_active:mq_01_disturbance:talk_thorne_dist",
+                        "isQuest": true,
+                        "action": "complete_objective",
+                        "questId": "mq_01_disturbance",
+                        "objectiveId": "talk_thorne_dist"
+                    },
+                    {
+                        "text": "I investigated the square. The energy is unstable!",
+                        "next": "mq_01_debrief",
+                        "condition": "quest_objective_active:mq_01_disturbance:return_thorne_dist",
+                        "isQuest": true,
+                        "action": "complete_quest",
+                        "questId": "mq_01_disturbance"
+                    },
+                    {
                         "text": "Tell me about the monsters",
                         "next": "help"
                     },
@@ -466,6 +483,24 @@
                         "isQuest": true,
                         "action": "quest_accept_main",
                         "questId": "main_02_004"
+                    }
+                ]
+            },
+            "mq_01_briefing": {
+                "text": "You felt it too? It knocked the birds from the sky. The center of the disturbance seems to be the Town Square fountain. Go check it out - scan for any Strange Energy residuals.",
+                "choices": [
+                    {
+                        "text": "I'm on it.",
+                        "next": "end"
+                    }
+                ]
+            },
+            "mq_01_debrief": {
+                "text": "Unstable energy? Just like the archives described... This is no natural earthquake. Keep your eyes open, this might be just the beginning.",
+                "choices": [
+                    {
+                        "text": "I will.",
+                        "next": "end"
                     }
                 ]
             },

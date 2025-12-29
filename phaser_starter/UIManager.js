@@ -198,7 +198,9 @@ window.UIManager = {
         }).setScrollFactor(0).setDepth(10002).setOrigin(0.5);
 
         newGameBtnBg.on('pointerdown', () => {
-            if (confirm("Are you sure? This will DELETE your save file!")) {
+            if (typeof window.resetGame === 'function') {
+                window.resetGame();
+            } else if (confirm("Are you sure? This will DELETE your save file!")) {
                 localStorage.clear();
                 location.reload();
             }

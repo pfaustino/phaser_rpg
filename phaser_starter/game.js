@@ -296,6 +296,8 @@ function preload() {
     // Load quest data
     this.load.json('questData', 'quests.json');
     this.load.json('questDataV2', 'quests_v2.json');
+    this.load.json('mainQuestData', 'main_quests.json');
+    this.load.audio('wind_effect', 'assets/audio/wind-sound-effect.mp3');
 
     // Load Method 2 monster data
     this.load.json('monsterData', 'monsters.json');
@@ -585,6 +587,7 @@ function preload() {
 
     // Victory Images
     this.load.image('victory_tower', 'assets/images/tower.png');
+    this.load.image('item_fragment', 'assets/images/artifact-fragment.png');
 
     // Skeleton
     this.load.image('monster_skeleton_south', 'assets/animations/monster_skeleton_south.png');
@@ -1456,6 +1459,8 @@ function createManaFluxes() {
 function checkManaFluxInteraction() {
     // Only allow if quest "Mana Instability" (main_01_007) is active
     // We check via UQE or legacy
+    updateAmbientZoneAudio();
+
     let questActive = false;
     if (window.uqe) {
         // Check if quest is in active list
@@ -2212,26 +2217,9 @@ function dropBossLoot(x, y, level) {
         if (typeof window.enableHoverEffect === 'function') {
             window.enableHoverEffect(itemSprite, scene);
         }
-        // Store item data (match structure used by dropItemsFromMonster)
-        item.sprite = itemSprite;
-        item.x = itemSprite.x;
-        item.y = itemSprite.y;
-
-        items.push(item);
-
-        // Pulsing animation (more noticeable for boss loot)
-        scene.tweens.add({
-            targets: itemSprite,
-            scaleX: 1.3,
-            scaleY: 1.3,
-            duration: 500,
-            yoyo: true,
-            repeat: -1,
-            ease: 'Sine.easeInOut'
-        });
-
-        items.push(item);
     }
+
+
 
     // Also drop gold
     const goldAmount = 50 + (level * 25);
@@ -2370,7 +2358,12 @@ function create() {
     // Initialize Unified Quest Engine (V2)
     if (this.cache.json.exists('questDataV2')) {
         const v2Data = this.cache.json.get('questDataV2');
-        uqe.init(v2Data.quests || {});
+        const mainQuestData = this.cache.json.exists('mainQuestData') ? this.cache.json.get('mainQuestData') : { quests: {} };
+
+        // Merge quests from both sources
+        const allQuests = { ...v2Data.quests };
+
+        uqe.init(allQuests);
 
         // Handle V2 Quest Completion
         uqe.eventBus.on(UQE_EVENTS.QUEST_COMPLETED, (quest) => {
@@ -2427,7 +2420,7 @@ function create() {
             if (uqe.activeQuests.length === 0 && uqe.completedQuests.length === 0) {
                 console.log('🎮 [UQE Bridge] New game detected - initializing starter quest');
                 uqe.initializeStarterQuests([
-                    'main_01_001' // Tremors in the Earth (talk to Elder Malik) - starts main story
+                    'main_01_001' // Tremors in the Earth (Elder Malik) - Main Quest Start
                 ]);
                 updateQuestTrackerHUD();
             } else {
@@ -2591,6 +2584,11 @@ function create() {
 
     // Initialize player stats on sprite
     player.stats = playerStats;
+
+    // Setup Quest Interactions (now that player exists)
+    if (typeof MapManager !== 'undefined') {
+        MapManager.setupQuestInteractions(this, player);
+    }
 
     // Create player HP bar above sprite
     const playerHpBarWidth = 40;
@@ -2837,6 +2835,9 @@ function create() {
 
         console.log('👉 GameObject Down:', gameObject.type, 'Key:', gameObject.texture ? gameObject.texture.key : 'no-texture', 'Depth:', gameObject.depth, 'isItem:', gameObject.isItem);
 
+        // Ignore UI elements (high depth)
+        if (gameObject.depth > 1000) return;
+
         // Block interaction if any UI window is open
         if (isAnyWindowOpen()) {
             console.log('⛔ Interaction blocked by open window');
@@ -2979,14 +2980,9 @@ function triggerWorldInteraction() {
                     return true;
                 }
 
-                // Also require all monsters to be defeated
-                const livingMonsters = monsters.filter(m => m.active && !m.isDead);
-                if (livingMonsters.length > 0) {
-                    showDamageNumber(player.x, player.y - 40, `Defeat All Monsters! (${livingMonsters.length} Left)`, 0xff0000);
-                    console.log(`❌ Cannot go to level ${targetLevel} - ${livingMonsters.length} monsters remaining`);
-                    addChatMessage(`Cannot go to level ${targetLevel} - ${livingMonsters.length} monsters remaining`, 0xff0000);
-                    return true;
-                }
+                // (restriction removed) - Allow proceeding without killing all monsters
+                // const livingMonsters = monsters.filter(m => m.active && !m.isDead);
+                // if (livingMonsters.length > 0) { ... }
             }
 
             console.log(`🚪 Transitioning to ${marker.targetMap} level ${targetLevel}`);
@@ -3089,6 +3085,11 @@ function update(time, delta) {
     // Check for Zone Interactions
     if (typeof checkZoneInteraction === 'function') {
         checkZoneInteraction();
+    }
+
+    // Update Ambient Zone Audio
+    if (typeof updateAmbientZoneAudio === 'function') {
+        updateAmbientZoneAudio();
     }
 
     // Handle gamepad/controller input
@@ -5990,6 +5991,22 @@ function dropItemsFromMonster(x, y) {
         itemSprite.itemId = item.type + '_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
         itemSprite.itemData = item;
 
+        // Add to items group if exists
+        if (scene.items) {
+            scene.items.push(itemSprite);
+        }
+
+        // Add tween to float up and down
+        scene.tweens.add({
+            targets: itemSprite,
+            y: y - 5,
+            duration: 1000,
+            yoyo: true,
+            repeat: -1
+        });
+
+        console.log(`Dropped item: ${item.name} at ${x},${y}`);
+
         // Add Hover Effect
         if (typeof window.enableHoverEffect === 'function') {
             window.enableHoverEffect(itemSprite, scene);
@@ -6012,6 +6029,134 @@ function dropItemsFromMonster(x, y) {
         }[item.quality] || 0xcccccc;
         addChatMessage(`Loot: ${item.name} (${item.quality})`, qualityColor, '💎');
     }
+}
+
+
+/**
+ * Update ambient zone audio based on player position and active quests
+ */
+function updateAmbientZoneAudio() {
+    if (typeof uqe === 'undefined' || !uqe.activeQuests) return;
+    if (typeof MapManager === 'undefined' || !MapManager.questZones) return;
+    if (!player) return;
+
+
+
+    // Track which sounds SHOULD be playing
+    const activeSounds = new Set();
+
+    // Iterate all active quest objectives
+    uqe.activeQuests.forEach(quest => {
+        quest.objectives.forEach(obj => {
+            // Check if objective has ambientSound
+            // We allow completed objectives to play sound as long as the quest is still active
+            if (obj.definition && obj.definition.ambientSound && obj.type === 'explore_location') {
+                const zoneId = obj.zoneId;
+                const zone = MapManager.questZones[zoneId];
+
+                if (zone && zone.active) {
+                    const pX = player.x;
+                    const pY = player.y;
+                    let inZone = false;
+
+                    if (zone.body) {
+                        const zX = zone.body.center.x;
+                        const zY = zone.body.center.y;
+                        const zHalfW = zone.body.width / 2;
+                        const zHalfH = zone.body.height / 2;
+
+                        if (pX >= zX - zHalfW && pX <= zX + zHalfW &&
+                            pY >= zY - zHalfH && pY <= zY + zHalfH) {
+                            inZone = true;
+                        }
+                    } else {
+                        const halfW = zone.width / 2;
+                        const halfH = zone.height / 2;
+                        if (pX >= zone.x - halfW && pX <= zone.x + halfW &&
+                            pY >= zone.y - halfH && pY <= zone.y + halfH) {
+                            inZone = true;
+                        }
+                    }
+
+                    if (inZone) {
+                        activeSounds.add(obj.definition.ambientSound);
+                    }
+                }
+            }
+        });
+    });
+
+    const scene = game.scene.scenes[0];
+    if (!scene || !scene.sound) return;
+
+    // Manage audio states
+    // 1. Play new sounds OR check existing sounds
+    activeSounds.forEach(soundKey => {
+        if (!soundEffects[soundKey]) {
+            // New sound to start
+            if (scene.sound.getAll(soundKey).length === 0) {
+                try {
+                    soundEffects[soundKey] = scene.sound.add(soundKey, { loop: true, volume: 0 });
+                    soundEffects[soundKey].play();
+
+                    // Fade in
+                    soundEffects[soundKey].isFadingIn = true;
+                    scene.tweens.add({
+                        targets: soundEffects[soundKey],
+                        volume: 0.5,
+                        duration: 1000,
+                        onComplete: () => {
+                            if (soundEffects[soundKey]) soundEffects[soundKey].isFadingIn = false;
+                        }
+                    });
+                } catch (e) {
+                    console.warn(`Failed to play ambient sound ${soundKey}:`, e);
+                }
+            } else {
+                soundEffects[soundKey] = scene.sound.getAll(soundKey)[0];
+                if (!soundEffects[soundKey].isPlaying) soundEffects[soundKey].play();
+            }
+        } else {
+            // Existing sound - HEALTH CHECK
+            const sound = soundEffects[soundKey];
+
+            // Self-healing: Restart if stopped
+            if (!sound.isPlaying) {
+                sound.play();
+            }
+            // Self-healing: Unmute/Volume up if silent (and not fading out)
+            if (sound.volume < 0.05 && !sound.isFadingOut && !sound.isFadingIn) {
+                sound.isFadingIn = true;
+                scene.tweens.add({
+                    targets: sound,
+                    volume: 0.5,
+                    duration: 1000,
+                    onComplete: () => { sound.isFadingIn = false; }
+                });
+            }
+        }
+    });
+
+    // 2. Stop sounds that shouldn't be playing
+    Object.keys(soundEffects).forEach(key => {
+        if (!activeSounds.has(key)) {
+            const sound = soundEffects[key];
+            if (sound && sound.isPlaying && !sound.isFadingOut) {
+                sound.isFadingOut = true;
+                // Fade out
+                scene.tweens.add({
+                    targets: sound,
+                    volume: 0,
+                    duration: 1000,
+                    onComplete: () => {
+                        sound.stop();
+                        sound.isFadingOut = false;
+                        delete soundEffects[key];
+                    }
+                });
+            }
+        }
+    });
 }
 
 /**
@@ -8482,8 +8627,8 @@ function updateNPCIndicators() {
                 }
 
                 if (hasActiveObjective) {
-                    iconText = '?';
-                    iconColor = '#ffffff'; // White ? for interaction
+                    iconText = '▼';
+                    iconColor = '#ffff00'; // Yellow arrow for active objective target
                 } else {
                     iconText = '💬'; // No available quests, just chat
                     iconColor = '#ffffff';
@@ -8501,15 +8646,15 @@ function updateNPCIndicators() {
             }
 
             if (hasActiveObjective) {
-                iconText = '?';
-                iconColor = '#ffffff';
+                iconText = '▼';
+                iconColor = '#ffff00';
             } else {
                 iconText = '💬'; // Regular NPC info
                 iconColor = '#ffffff';
             }
         }
 
-        const shouldShow = inRange || iconText === '!';
+        const shouldShow = inRange || iconText === '!' || iconText === '▼';
 
         if (shouldShow) {
             if (!npc.showIndicator) {
@@ -8564,6 +8709,71 @@ function updateNPCIndicators() {
             npc.interactionIndicator.y = (npc.y - 45) - camera.scrollY;
         }
     });
+
+    // Also check generic Quest Zones (Non-NPC objectives)
+    if (typeof MapManager !== 'undefined' && MapManager.questZones) {
+        // Iterate through stored quest zones (e.g. { 'strange_energy_zone': zoneObj })
+        Object.entries(MapManager.questZones).forEach(([zoneId, zoneObj]) => {
+            if (!zoneObj || !zoneObj.active) return; // Skip if inactive
+
+            // Check if this Zone is a target for an ACTIVE quest objective
+            let hasActiveObjective = false;
+
+            if (typeof uqe !== 'undefined' && uqe.activeQuests) {
+                hasActiveObjective = uqe.activeQuests.some(q => {
+                    return q.objectives.some(obj => {
+                        // Check if objective is incomplete and targets this ZoneId
+                        // explore_location type usually has 'zoneId' property
+                        const match = !obj.completed && obj.type === 'explore_location' && (obj.zoneId === zoneId);
+                        return match;
+                    });
+                });
+            }
+
+            if (hasActiveObjective) {
+                // Determine screen position
+                const camera = scene.cameras.main;
+                // Since this runs every update, simple calculation is fine. 
+                // Ensure zoneObj.x/y are correct world coordinates.
+                const screenX = zoneObj.x - camera.scrollX;
+                const screenY = (zoneObj.y - 50) - camera.scrollY; // -50 to float above
+
+                if (!zoneObj.interactionIndicator) {
+                    console.log(`✨ [Indicator] Creating indicator for zone: ${zoneId} at screen (${screenX.toFixed(0)}, ${screenY.toFixed(0)})`);
+                    // Create indicator
+                    zoneObj.interactionIndicator = scene.add.text(screenX, screenY, '▼', {
+                        fontSize: '24px',
+                        fill: '#ffff00', // Yellow Arrow
+                        stroke: '#000000',
+                        strokeThickness: 3,
+                        fontStyle: 'bold'
+                    }).setOrigin(0.5, 0.5).setDepth(100).setScrollFactor(0); // High depth
+
+                    // Add pulsing animation
+                    scene.tweens.add({
+                        targets: zoneObj.interactionIndicator,
+                        scaleX: 1.3,
+                        scaleY: 1.3,
+                        duration: 500,
+                        yoyo: true,
+                        repeat: -1,
+                        ease: 'Sine.easeInOut'
+                    });
+                } else {
+                    // Update position
+                    zoneObj.interactionIndicator.x = screenX;
+                    zoneObj.interactionIndicator.y = screenY;
+                    zoneObj.interactionIndicator.setVisible(true);
+                }
+            } else {
+                // If checking false, remove indicator if it exists
+                if (zoneObj.interactionIndicator) {
+                    zoneObj.interactionIndicator.destroy();
+                    zoneObj.interactionIndicator = null;
+                }
+            }
+        });
+    }
 }
 
 /**
@@ -10887,6 +11097,25 @@ function createTavernUI() {
 // SAVE/LOAD SYSTEM
 // ============================================
 
+// Global reset function
+window.resetGame = function () {
+    if (confirm('Are you sure you want to RESET the game? All progress will be lost!')) {
+        console.log('🔄 Resetting Game State...');
+        localStorage.removeItem('rpg_savegame');
+        localStorage.removeItem('rpg_unlocked_lore');
+        localStorage.removeItem('rpg_dialog_unlocks');
+        localStorage.removeItem('pfaustino_rpg_settings');
+        window.location.reload();
+    }
+};
+
+// Add F4 key binding for reset
+window.addEventListener('keydown', (e) => {
+    if (e.key === 'F4') {
+        window.resetGame();
+    }
+});
+
 /**
  * Save game to localStorage
  */
@@ -10923,6 +11152,7 @@ function saveGame() {
         },
         currentMap: MapManager.currentMap,
         dungeonLevel: MapManager.dungeonLevel,
+        dungeonId: MapManager.currentDungeon ? MapManager.currentDungeon.id : null,
         dungeonSeeds: dungeonSeeds,
         dungeonCompletions: MapManager.dungeonCompletions,
         uqeQuests: uqe.getSaveData(),
@@ -11010,9 +11240,17 @@ function loadGame() {
             // Rebuild cache from seeds (lazy - only store seeds, regenerate when needed)
             Object.keys(saveData.dungeonSeeds).forEach(key => {
                 const seed = saveData.dungeonSeeds[key];
-                const level = parseInt(key.replace('level_', ''));
-                MapManager.dungeonCache[key] = { seed: seed, level: level };
-                console.log(`  - ${key}: seed=${seed}, level=${level}`);
+                // Handle both legacy "level_1" and new "tower_dungeon_level_1" keys
+                const parts = key.split('_');
+                const levelStr = parts[parts.length - 1]; // Assume last part is level number
+                const level = parseInt(levelStr);
+
+                if (!isNaN(level)) {
+                    MapManager.dungeonCache[key] = { seed: seed, level: level };
+                    console.log(`  - ${key}: seed=${seed}, level=${level}`);
+                } else {
+                    console.warn(`  ⚠️ Could not parse level from key: ${key}`);
+                }
             });
             console.log('📦 Dungeon cache after restore:', Object.keys(MapManager.dungeonCache));
         } else {
@@ -11037,12 +11275,22 @@ function loadGame() {
 
             // IMPORTANT: For dungeons, ensure cache is properly set up before transition
             if (savedMap === 'dungeon' && saveData.dungeonSeeds) {
-                const dungeonKey = `level_${savedLevel}`;
-                // Double-check that the seed is in cache before transitioning
-                if (saveData.dungeonSeeds[dungeonKey] && (!MapManager.dungeonCache[dungeonKey] || !MapManager.dungeonCache[dungeonKey].seed)) {
-                    console.log(`🔧 Ensuring seed is in cache for ${dungeonKey} before transition...`);
-                    MapManager.dungeonCache[dungeonKey] = {
-                        seed: saveData.dungeonSeeds[dungeonKey],
+                const savedDungeonId = saveData.dungeonId || 'tower_dungeon';
+                // Try both new and legacy key formats
+                const newKey = `${savedDungeonId}_level_${savedLevel}`;
+                const legacyKey = `level_${savedLevel}`;
+
+                let seedToUse = null;
+                if (saveData.dungeonSeeds[newKey]) seedToUse = saveData.dungeonSeeds[newKey];
+                else if (saveData.dungeonSeeds[legacyKey]) seedToUse = saveData.dungeonSeeds[legacyKey];
+
+                const targetKey = newKey; // We want to establish the cache with the CORRECT key format
+
+                // Ensure cache is populated
+                if (seedToUse && (!MapManager.dungeonCache[targetKey] || !MapManager.dungeonCache[targetKey].seed)) {
+                    console.log(`🔧 Ensuring seed is in cache for ${targetKey} before transition...`);
+                    MapManager.dungeonCache[targetKey] = {
+                        seed: seedToUse,
                         level: savedLevel
                     };
                 }
@@ -11055,7 +11303,8 @@ function loadGame() {
             } : null;
 
             // Transition to the saved map (this will clean up everything)
-            MapManager.transitionToMap(savedMap, savedLevel);
+            const savedDungeonId = saveData.dungeonId || 'tower_dungeon';
+            MapManager.transitionToMap(savedMap, savedLevel, savedDungeonId);
 
             // Restore player position after map transition
             if (savedPlayerPos) {
@@ -14509,7 +14758,7 @@ function showQuestCompletedPopupEnhanced(quest) {
     elements.push(title);
 
     // Quest Title
-    const questTitle = scene.add.text(contentStartX, centerY - 110, quest.title, {
+    const questTitle = scene.add.text(contentStartX, centerY - 125, quest.title, {
         fontSize: '26px',
         fill: '#ffffff',
         fontStyle: 'bold',
@@ -14518,7 +14767,7 @@ function showQuestCompletedPopupEnhanced(quest) {
     elements.push(questTitle);
 
     // Quest Description
-    const descText = scene.add.text(contentStartX, centerY - 70, quest.description || "You have completed this quest.", {
+    const descText = scene.add.text(contentStartX, centerY - 85, quest.description || "You have completed this quest.", {
         fontSize: '16px',
         fill: '#cccccc',
         wordWrap: { width: 340 },
@@ -14527,7 +14776,8 @@ function showQuestCompletedPopupEnhanced(quest) {
     elements.push(descText);
 
     // Objectives List
-    let objY = centerY;
+    // Start lower to avoid overlap with description
+    let objY = centerY + 20;
     if (quest.objectives && quest.objectives.length > 0) {
         quest.objectives.forEach(obj => {
             const objText = scene.add.text(contentStartX, objY, `✓ ${obj.label || 'Objective Complete'}`, {
@@ -14546,7 +14796,7 @@ function showQuestCompletedPopupEnhanced(quest) {
         if (quest.rewards.gold) rewardTextStr += `${quest.rewards.gold} Gold`;
     }
 
-    const rewardText = scene.add.text(centerX, centerY + 130, rewardTextStr, {
+    const rewardText = scene.add.text(centerX, centerY + 140, rewardTextStr, {
         fontSize: '22px',
         fill: '#00ff00',
         fontStyle: 'bold'
@@ -15332,6 +15582,22 @@ window.enableHoverEffect = function (gameObject, scene) {
             gameObject.postFX.remove(glowFx);
         }
     });
+};
+
+// ============================================
+// GLOBAL GAME RESET
+// ============================================
+window.resetGame = function () {
+    console.log('🔄 resetting game state...');
+
+    // Clear LocalStorage
+    localStorage.removeItem('rpg_savegame');
+    localStorage.removeItem('rpg_unlocked_lore');
+    localStorage.removeItem('pfaustino_rpg_dialog_unlocks');
+    localStorage.removeItem('pfaustino_rpg_settings');
+
+    // Force reload
+    window.location.reload();
 };
 
 

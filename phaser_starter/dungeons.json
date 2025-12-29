@@ -54,8 +54,8 @@
             "name": "The Sunken Temple",
             "levels": 2,
             "tileset": {
-                "floor": "temple_floor",
-                "wall": "temple_wall"
+                "floor": "dungeon_floor",
+                "wall": "dungeon_wall"
             },
             "generation": {
                 "width": 60,

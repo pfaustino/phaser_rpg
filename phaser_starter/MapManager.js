@@ -9,6 +9,7 @@ const MapManager = {
     dungeonWalls: [],
     wallGroup: null, // Phaser StaticGroup
     transitionMarkers: [],
+    questZones: {}, // Store quest interaction zones
     currentMap: 'town',
 
     // History State for Dungeon Returns
@@ -252,6 +253,93 @@ const MapManager = {
         // Create Mana Fluxes (assuming global or we move it later)
         if (typeof createManaFluxes === 'function') createManaFluxes();
 
+        // Strange Energy (MQ-01) - Visual & Trigger
+        // MOVED to (22, 18) to be clearly visible in the square, away from the Shop (13-20)
+
+        // CHECK QUEST STATE: Only show if 'main_02_001' (Mysterious Arrival) is active
+        // This quest deals with the strange energy in the town square.
+        const energyQuestId = 'main_02_001';
+        const showEnergy = window.isQuestActive(energyQuestId);
+
+        if (showEnergy) {
+            const energyX = 22 * tileSize + 16;
+            const energyY = 18 * tileSize + 16;
+
+            // Particle Effect for Strange Energy
+            // 1. Ensure a texture exists for particles (using a simple generated graphic)
+            if (!scene.textures.exists('energy_particle')) {
+                const graphics = scene.make.graphics({ x: 0, y: 0, add: false });
+                graphics.fillStyle(0x00ffff, 1);
+                graphics.fillCircle(4, 4, 4); // 8x8 circle
+                graphics.generateTexture('energy_particle', 8, 8);
+            }
+
+            // 2. Create Emitter
+            const particles = scene.add.particles(energyX, energyY, 'energy_particle', {
+                speed: { min: 20, max: 60 },
+                angle: { min: 0, max: 360 },
+                scale: { start: 1.5, end: 0 }, // Larger particles
+                alpha: { start: 1, end: 0 },
+                lifespan: 1200,
+                frequency: 80, // More frequent
+                blendMode: 'ADD'
+            });
+            particles.setDepth(5); // Higher depth to sit above ground debris
+
+            // Inner core (Static anchor) - Larger and pulsing
+            const core = scene.add.circle(energyX, energyY, 10, 0x00ffff, 0.8).setDepth(6);
+            scene.tweens.add({
+                targets: core,
+                scaleX: 1.2,
+                scaleY: 1.2,
+                alpha: 0.5,
+                duration: 1000,
+                yoyo: true,
+                repeat: -1
+            });
+
+            // Interactive Zone trigger
+            const energyZone = scene.add.zone(energyX, energyY, 64, 64); // Larger zone
+            scene.physics.add.existing(energyZone, true);
+
+            // Store for later interaction setup and indicators
+            this.questZones['strange_energy_zone'] = energyZone;
+        }
+    },
+
+    /**
+     * Setup physics interactions for quest zones (Called after player creation)
+     * @param {Phaser.Scene} scene - The main scene
+     * @param {Phaser.GameObjects.Sprite} player - The player sprite
+     */
+    setupQuestInteractions(scene, player) {
+        console.log('🔧 [MapManager] setupQuestInteractions called');
+        if (!player) {
+            console.warn('⚠️ [MapManager] setupQuestInteractions called without player');
+            return;
+        }
+
+        // Strange Energy (MQ-01)
+        const energyZone = this.questZones['strange_energy_zone'];
+        if (energyZone) {
+            console.log('🔹 [MapManager] Found strange_energy_zone. Active:', energyZone.active);
+            if (energyZone.body) console.log(`   Zone Body: x=${energyZone.body.x}, y=${energyZone.body.y}, w=${energyZone.body.width}, h=${energyZone.body.height}`);
+            else console.warn('⚠️ [MapManager] strange_energy_zone has NO physics body');
+
+            scene.physics.add.overlap(player, energyZone, () => {
+                console.log('⚡ [MapManager] Player overlapped strange energy!');
+                // Emit exploration event
+                if (window.uqe && window.uqe.eventBus) {
+                    const eventName = (typeof UQE_EVENTS !== 'undefined') ? UQE_EVENTS.LOCATION_EXPLORED : 'location_explored';
+                    console.log(`📡 [MapManager] Emitting ${eventName} for strange_energy_zone`);
+                    window.uqe.eventBus.emit(eventName, { id: 'strange_energy_zone', zoneId: 'strange_energy_zone' });
+                }
+            });
+            console.log('✅ [MapManager] Strange Energy interaction setup complete');
+        } else {
+            console.warn('⚠️ [MapManager] strange_energy_zone NOT FOUND in questZones');
+        }
+
         // Play Town Music
         if (typeof playBackgroundMusic === 'function') playBackgroundMusic('town');
     },
@@ -312,29 +400,53 @@ const MapManager = {
             x: exitX, y: exitY, radius: tileSize * 1.5, targetMap: 'town', marker: exitMarker, text: returnText
         });
 
-        // Dungeon Entrances
-        const numDungeons = Phaser.Math.Between(2, 3);
+        const numDungeons = 2; // Fixed to 2 for now (Tower + Temple)
+
         for (let i = 0; i < numDungeons; i++) {
             const bx = Phaser.Math.Between(5, mapWidth - 6);
             const by = Phaser.Math.Between(5, mapHeight - 6);
             const dx = bx * tileSize;
             const dy = by * tileSize;
 
-            let dMarker;
-            if (scene.textures.exists('dungeon_entrance')) {
-                dMarker = scene.add.image(dx, dy, 'dungeon_entrance').setDepth(3).setDisplaySize(tileSize * 2, tileSize * 2);
-            } else {
-                dMarker = scene.add.rectangle(dx, dy, tileSize * 2, tileSize * 2, 0x444444, 0.8).setDepth(3);
+            // Watchtower (Level 8+)
+            // Requirement: 'main_01_008' active or completed
+            if (i === 0) {
+                const towerReq = 'main_01_008';
+                const showTower = window.isQuestActive(towerReq) || window.isQuestCompleted(towerReq);
+
+                if (showTower) {
+                    const dMarker = scene.add.rectangle(dx, dy, tileSize * 2, tileSize * 2, 0x444444, 0.8)
+                        .setDepth(3).setStrokeStyle(2, 0xffffff);
+                    const dText = scene.add.text(dx, dy, 'WATCH\nTOWER', { fontSize: '11px', fill: '#ffffff', align: 'center', stroke: '#000000', strokeThickness: 3 })
+                        .setDepth(4).setOrigin(0.5);
+
+                    this.transitionMarkers.push({
+                        x: dx, y: dy, radius: tileSize * 1.5, targetMap: 'dungeon',
+                        dungeonId: 'tower_dungeon',
+                        dungeonLevel: 1, marker: dMarker, text: dText
+                    });
+                }
             }
 
-            const dText = scene.add.text(dx, dy, 'DUNGEON\nENTRANCE', { fontSize: '12px', fill: '#ffffff', align: 'center' })
-                .setDepth(4).setOrigin(0.5);
+            // Temple Ruins (Level 12+)
+            // Requirement: 'main_02_003' active or completed
+            if (i === 1) {
+                const templeReq = 'main_02_003';
+                const showTemple = window.isQuestActive(templeReq) || window.isQuestCompleted(templeReq);
 
-            this.transitionMarkers.push({
-                x: dx, y: dy, radius: tileSize * 1.5, targetMap: 'dungeon',
-                dungeonId: i === 0 ? 'tower_dungeon' : 'temple_ruins', // Assign specific dungeons
-                dungeonLevel: 1, marker: dMarker, text: dText
-            });
+                if (showTemple) {
+                    const dMarker = scene.add.rectangle(dx, dy, tileSize * 2, tileSize * 2, 0x0088ff, 0.8)
+                        .setDepth(3).setStrokeStyle(2, 0xffffff);
+                    const dText = scene.add.text(dx, dy, 'TEMPLE\nRUINS', { fontSize: '11px', fill: '#ffffff', align: 'center', stroke: '#000000', strokeThickness: 3 })
+                        .setDepth(4).setOrigin(0.5);
+
+                    this.transitionMarkers.push({
+                        x: dx, y: dy, radius: tileSize * 1.5, targetMap: 'dungeon',
+                        dungeonId: 'temple_ruins',
+                        dungeonLevel: 1, marker: dMarker, text: dText
+                    });
+                }
+            }
         }
 
         scene.mapWidth = mapWidth;

@@ -40,6 +40,95 @@ const MapManager = {
     },
 
     /**
+     * Find a valid spawn position. If the given position is inside a wall,
+     * search outward (BFS) to find the nearest floor tile.
+     * @param {number} pixelX - Desired X position in pixels
+     * @param {number} pixelY - Desired Y position in pixels
+     * @param {number} tileSize - Size of each tile (default 32)
+     * @returns {{x: number, y: number}} - Valid spawn position in pixels
+     */
+    findValidSpawnPosition(pixelX, pixelY, tileSize = 32) {
+        // Only works for dungeons with mapData
+        if (!this.currentDungeon || !this.currentDungeon.mapData) {
+            console.log('[MapManager] findValidSpawnPosition: No dungeon mapData, returning original position');
+            return { x: pixelX, y: pixelY };
+        }
+
+        const mapData = this.currentDungeon.mapData;
+        const mapHeight = mapData.length;
+        const mapWidth = mapData[0] ? mapData[0].length : 0;
+
+        // Convert pixel to tile coordinates
+        const tileX = Math.floor(pixelX / tileSize);
+        const tileY = Math.floor(pixelY / tileSize);
+
+        // Check if current position is valid (floor = 1)
+        if (tileY >= 0 && tileY < mapHeight && tileX >= 0 && tileX < mapWidth) {
+            if (mapData[tileY][tileX] === 1) {
+                console.log(`[MapManager] Position (${tileX}, ${tileY}) is valid floor tile`);
+                return { x: pixelX, y: pixelY };
+            }
+        }
+
+        console.warn(`[MapManager] Position (${tileX}, ${tileY}) is WALL! Searching for nearest floor tile...`);
+
+        // BFS to find nearest floor tile
+        const visited = new Set();
+        const queue = [{ x: tileX, y: tileY, dist: 0 }];
+        visited.add(`${tileX},${tileY}`);
+
+        // Directions: 8-directional search
+        const directions = [
+            { dx: 0, dy: -1 }, { dx: 0, dy: 1 }, { dx: -1, dy: 0 }, { dx: 1, dy: 0 },
+            { dx: -1, dy: -1 }, { dx: 1, dy: -1 }, { dx: -1, dy: 1 }, { dx: 1, dy: 1 }
+        ];
+
+        while (queue.length > 0) {
+            const current = queue.shift();
+
+            for (const dir of directions) {
+                const nx = current.x + dir.dx;
+                const ny = current.y + dir.dy;
+                const key = `${nx},${ny}`;
+
+                if (visited.has(key)) continue;
+                visited.add(key);
+
+                // Bounds check
+                if (nx < 0 || nx >= mapWidth || ny < 0 || ny >= mapHeight) continue;
+
+                // Check if this is a floor tile
+                if (mapData[ny][nx] === 1) {
+                    const validX = nx * tileSize + tileSize / 2;
+                    const validY = ny * tileSize + tileSize / 2;
+                    console.log(`[MapManager] Found valid floor at (${nx}, ${ny}), moving player to (${validX.toFixed(0)}, ${validY.toFixed(0)})`);
+                    return { x: validX, y: validY };
+                }
+
+                // Add to queue for further search
+                queue.push({ x: nx, y: ny, dist: current.dist + 1 });
+            }
+
+            // Safety limit to prevent infinite loops in edge cases
+            if (visited.size > 5000) {
+                console.error('[MapManager] findValidSpawnPosition: Search exceeded 5000 tiles, aborting');
+                break;
+            }
+        }
+
+        // Fallback: Use entrance if available
+        if (this.currentDungeon.entrance) {
+            const entranceX = this.currentDungeon.entrance.x * tileSize + tileSize / 2;
+            const entranceY = this.currentDungeon.entrance.y * tileSize + tileSize / 2;
+            console.warn(`[MapManager] No floor found nearby, using dungeon entrance (${entranceX}, ${entranceY})`);
+            return { x: entranceX, y: entranceY };
+        }
+
+        console.error('[MapManager] findValidSpawnPosition: Failed to find any valid position!');
+        return { x: pixelX, y: pixelY };
+    },
+
+    /**
      * Create town map with streets, buildings, and NPCs
      */
     createTownMap() {

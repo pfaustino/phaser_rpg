@@ -11561,8 +11561,16 @@ function loadGame() {
 
             // Restore player position after map transition
             if (savedPlayerPos) {
-                player.x = savedPlayerPos.x;
-                player.y = savedPlayerPos.y;
+                // For dungeons, validate the position is walkable (not inside a wall)
+                if (savedMap === 'dungeon' && MapManager.findValidSpawnPosition) {
+                    const validPos = MapManager.findValidSpawnPosition(savedPlayerPos.x, savedPlayerPos.y);
+                    player.x = validPos.x;
+                    player.y = validPos.y;
+                    console.log(`[loadGame] Validated spawn position: (${validPos.x.toFixed(0)}, ${validPos.y.toFixed(0)})`);
+                } else {
+                    player.x = savedPlayerPos.x;
+                    player.y = savedPlayerPos.y;
+                }
             }
 
             // For town, also ensure NPCs are initialized

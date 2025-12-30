@@ -20,6 +20,25 @@
                 "gold": 20
             }
         },
+        "side_01_001": {
+            "id": "side_01_001",
+            "title": "The Echo's Whisper",
+            "description": "Blacksmith Brond has noticed strange vibrations coming from the wilderness. Investigate the area and gather Echo Shards from the crystalline growths.",
+            "giver": "Blacksmith Brond",
+            "objectives": [
+                {
+                    "id": "collect_echo_shards",
+                    "type": "collect",
+                    "itemId": "echo_shard",
+                    "label": "Collect Echo Shards",
+                    "target": 3
+                }
+            ],
+            "rewards": {
+                "xp": 150,
+                "gold": 75
+            }
+        },
         "main_01_002": {
             "id": "main_01_002",
             "title": "Echoes from Below",

@@ -141,6 +141,8 @@ window.UIManager = {
         musicBtnBg.on('pointerdown', () => {
             if (typeof window.musicEnabled !== 'undefined') {
                 window.musicEnabled = !window.musicEnabled;
+                // Persist music preference to localStorage
+                localStorage.setItem('musicEnabled', window.musicEnabled ? 'true' : 'false');
                 musicBtnText.setText(`Music: ${window.musicEnabled ? 'ON' : 'OFF'}`);
                 musicBtnText.setColor(window.musicEnabled ? '#00ff00' : '#ff0000');
 

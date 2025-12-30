@@ -37,6 +37,21 @@ const MapManager = {
     init(scene) {
         this.scene = scene;
         this.wallGroup = scene.physics.add.staticGroup();
+
+        // Debug function accessible from console
+        window.debugMapManager = () => {
+            console.log('=== MapManager Debug ===');
+            console.log('Current map:', this.currentMap);
+            console.log('Dungeon walls count:', this.dungeonWalls.length);
+            console.log('Buildings count:', this.buildings.length);
+            console.log('Scene mapWidth:', scene.mapWidth);
+            console.log('Scene mapHeight:', scene.mapHeight);
+            console.log('World bounds:', scene.physics.world.bounds);
+            if (this.dungeonWalls.length > 0) {
+                console.log('First wall:', this.dungeonWalls[0]);
+                console.log('Last wall:', this.dungeonWalls[this.dungeonWalls.length - 1]);
+            }
+        };
     },
 
     /**
@@ -171,7 +186,9 @@ const MapManager = {
                 const scaleFactor = 32 / 96;
                 let tile;
                 if (useFrames) {
-                    const frameIndex = Math.floor(Math.random() * grassFrameCount);
+                    // Subtract 1 to avoid the __BASE frame if frameTotal > 1
+                    const maxFrame = grassFrameCount > 1 ? grassFrameCount - 1 : 1;
+                    const frameIndex = Math.floor(Math.random() * maxFrame);
                     tile = scene.add.image(x * tileSize, y * tileSize, 'grass', frameIndex).setOrigin(0);
                 } else {
                     tile = scene.add.image(x * tileSize, y * tileSize, 'grass').setOrigin(0);
@@ -336,11 +353,6 @@ const MapManager = {
 
         // Create Mana Fluxes (assuming global or we move it later)
         if (typeof createManaFluxes === 'function') createManaFluxes();
-        // Initialize NPCs (assuming global function)
-        if (typeof initializeNPCs === 'function') initializeNPCs();
-
-        // Create Mana Fluxes (assuming global or we move it later)
-        if (typeof createManaFluxes === 'function') createManaFluxes();
 
         // Strange Energy (MQ-01) - Visual & Trigger
         // MOVED to (22, 18) to be clearly visible in the square, away from the Shop (13-20)
@@ -442,6 +454,148 @@ const MapManager = {
         const mapWidth = 50;
         const mapHeight = 50;
 
+        /**
+         * Local helper to draw a procedural flower using Graphics
+         * Draws 4-6 petals with a center and slight randomization
+         */
+        const drawProceduralFlower = (scene, x, y) => {
+            const colors = [0xff5555, 0x5555ff, 0xffff55, 0xff88ff, 0xffffff, 0xffaa00]; // Red, Blue, Yellow, Pink, White, Orange
+            const color = Phaser.Utils.Array.GetRandom(colors);
+            const petalCount = Phaser.Math.Between(4, 6);
+            const size = Phaser.Math.Between(2, 4);
+            const offsetX = Phaser.Math.Between(-8, 8);
+            const offsetY = Phaser.Math.Between(-8, 8);
+
+            const flowerGraphics = scene.add.graphics({ x: x + offsetX + 16, y: y + offsetY + 16 });
+            flowerGraphics.setDepth(1);
+
+            // Draw petals
+            flowerGraphics.fillStyle(color, 1);
+            for (let i = 0; i < petalCount; i++) {
+                const angle = (i / petalCount) * Math.PI * 2;
+                const px = Math.cos(angle) * size;
+                const py = Math.sin(angle) * size;
+                flowerGraphics.fillCircle(px, py, size * 0.8);
+            }
+
+            // Draw center
+            flowerGraphics.fillStyle(0xffdb19, 1); // Yellow center
+            flowerGraphics.fillCircle(0, 0, size * 0.5);
+
+            // Add a subtle stem/leaf dot
+            flowerGraphics.fillStyle(0x2d5a27, 1);
+            flowerGraphics.fillCircle(-size, size, 1.5);
+
+            return flowerGraphics;
+        };
+
+        /**
+         * Local helper to draw an Echo Crystal using Graphics
+         * Draws a geometric shard (diamond shape) with a pulsing violet/magenta aesthetic
+         */
+        const drawEchoCrystal = (scene, x, y) => {
+            const crystalGraphics = scene.add.graphics({ x: x + 16, y: y + 16 });
+            crystalGraphics.setDepth(2);
+
+            // Draw a geometric shard-like shape (Diamond/Octagon)
+            const points = [
+                { x: 0, y: -14 },  // Top
+                { x: 10, y: -4 },  // Upper Right
+                { x: 10, y: 4 },   // Lower Right
+                { x: 0, y: 14 },   // Bottom
+                { x: -10, y: 4 },  // Lower Left
+                { x: -10, y: -4 }  // Upper Left
+            ];
+
+            // Primary crystal body (Violet/Magenta)
+            crystalGraphics.fillStyle(0x9d00ff, 0.8);
+            crystalGraphics.beginPath();
+            crystalGraphics.moveTo(points[0].x, points[0].y);
+            for (let i = 1; i < points.length; i++) {
+                crystalGraphics.lineTo(points[i].x, points[i].y);
+            }
+            crystalGraphics.closePath();
+            crystalGraphics.fillPath();
+
+            // Inner core/glow
+            crystalGraphics.fillStyle(0xff00ff, 0.6);
+            crystalGraphics.fillCircle(0, 0, 6);
+
+            // Shimmer/Edge
+            crystalGraphics.lineStyle(2, 0xffffff, 0.5);
+            crystalGraphics.strokePath();
+
+            // Simple pulsing tween
+            scene.tweens.add({
+                targets: crystalGraphics,
+                alpha: 0.5,
+                scale: 1.1,
+                duration: 2000 + Math.random() * 1000,
+                yoyo: true,
+                repeat: -1,
+                ease: 'Sine.easeInOut'
+            });
+
+            // Add a point light if possible (Phaser 3.50+)
+            if (scene.lights && scene.lights.enabled) {
+                scene.lights.addLight(x + 16, y + 16, 100, 0xae00ff, 1);
+            }
+
+            // Make crystal interactive
+            crystalGraphics.setInteractive(new Phaser.Geom.Circle(0, 0, 20), Phaser.Geom.Circle.Contains);
+            crystalGraphics.useHandCursor = true;
+
+            crystalGraphics.on('pointerdown', (pointer) => {
+                // Play harvest sound
+                if (typeof playSound === 'function') playSound('item_pickup');
+
+                // Show floating text
+                if (typeof showDamageNumber === 'function') {
+                    showDamageNumber(x + 16, y, 'Resonating...', 0x9d00ff, false, 'magic');
+                }
+
+                // Chance to drop shard (100% if quest active, 20% otherwise)
+                const questActive = window.isQuestActive && (window.isQuestActive('side_01_001') || window.isQuestActive('main_01_004'));
+                if (questActive || Math.random() < 0.2) {
+                    if (typeof dropItemsFromMonster === 'function') {
+                        // We use a manual drop for fixed quest item
+                        const shard = {
+                            id: 'echo_shard',
+                            type: 'quest_item',
+                            name: 'Echo Shard',
+                            quality: 'Uncommon',
+                            amount: 1
+                        };
+                        // Call global drop system or custom drop
+                        if (typeof spawnQuestItem === 'function') {
+                            spawnQuestItem(x + 16, y + 16, shard);
+                        } else {
+                            // Fallback: dropItemsFromMonster often has quest logic, but we want guaranteed drop
+                            // For now let's hope it handles it or we'll need to expose a better drop function
+                            console.log("💎 Echo Crystal harvested!");
+                            // If we can't find spawnQuestItem, we'll use a hack or just emit the event
+                            if (window.uqe) {
+                                window.uqe.eventBus.emit('UQE_EVENTS.ITEM_PICKUP', { id: 'echo_shard', type: 'quest_item', amount: 1 });
+                            }
+                        }
+                    }
+                }
+
+                // Chance to spawn an Echo Mite nearby
+                if (Math.random() < 0.4 && typeof spawnMonster === 'function') {
+                    const scene = crystalGraphics.scene;
+                    const offsetX = Phaser.Math.Between(-50, 50);
+                    const offsetY = Phaser.Math.Between(-50, 50);
+                    spawnMonster.call(scene, x + 16 + offsetX, y + 16 + offsetY, 'echo_mite');
+                }
+
+                // Destroy crystal
+                crystalGraphics.destroy();
+            });
+
+            return crystalGraphics;
+        };
+
         this.buildings = [];
         this.transitionMarkers = [];
 
@@ -455,10 +609,14 @@ const MapManager = {
             }
         }
 
+        // Clear dungeon walls (reusing for wilderness edge collision)
+        this.dungeonWalls = [];
+
         for (let y = 0; y < mapHeight; y++) {
             for (let x = 0; x < mapWidth; x++) {
                 let tileType = 'grass';
-                if (x === 0 || x === mapWidth - 1 || y === 0 || y === mapHeight - 1) tileType = 'wall';
+                const isEdge = x === 0 || x === mapWidth - 1 || y === 0 || y === mapHeight - 1;
+                if (isEdge) tileType = 'wall';
                 else if (Math.random() < 0.1) tileType = 'dirt';
                 else if (Math.random() < 0.15) tileType = 'stone';
 
@@ -467,11 +625,46 @@ const MapManager = {
 
                 const scale = 32 / 96;
                 if (tileType === 'grass' && useFrames) {
-                    scene.add.image(x * tileSize, y * tileSize, 'grass', Math.floor(Math.random() * grassFrameCount))
+                    // Subtract 1 to avoid the __BASE frame if frameTotal > 1
+                    const maxFrame = grassFrameCount > 1 ? grassFrameCount - 1 : 1;
+                    const frameIndex = Math.floor(Math.random() * maxFrame);
+                    scene.add.image(x * tileSize, y * tileSize, 'grass', frameIndex)
                         .setOrigin(0).setScale(scale).setDepth(0);
                 } else {
                     const t = scene.add.image(x * tileSize, y * tileSize, tileType).setOrigin(0).setDepth(0);
                     if (tileType === 'grass') t.setScale(scale);
+                }
+
+                // Chance to add a procedural flower on grass tiles
+                if (tileType === 'grass' && !isEdge && Math.random() < 0.12) {
+                    drawProceduralFlower(scene, x * tileSize, y * tileSize);
+                }
+
+                // Chance to add an Echo Crystal on stone or dirt tiles
+                // More common if quest "The Echo's Whisper" is active or completed
+                const echoQuestActive = window.isQuestActive && (window.isQuestActive('echo_shard_intro') || window.isQuestActive('main_01_004'));
+                const crystalChance = echoQuestActive ? 0.05 : 0.01;
+
+                if ((tileType === 'stone' || tileType === 'dirt') && !isEdge && Math.random() < crystalChance) {
+                    drawEchoCrystal(scene, x * tileSize, y * tileSize);
+                }
+
+                // Add collision for edge walls
+                if (isEdge) {
+                    this.dungeonWalls.push({
+                        x: x * tileSize,
+                        y: y * tileSize,
+                        width: tileSize,
+                        height: tileSize
+                    });
+
+                    // Add to physics group for collision
+                    if (this.wallGroup) {
+                        const pWall = this.wallGroup.create(x * tileSize + tileSize / 2, y * tileSize + tileSize / 2, null);
+                        pWall.setSize(tileSize, tileSize);
+                        pWall.setVisible(false); // Invisible physics body
+                        pWall.setImmovable(true);
+                    }
                 }
             }
         }
@@ -492,8 +685,13 @@ const MapManager = {
         const numDungeons = 2; // Fixed to 2 for now (Tower + Temple)
 
         for (let i = 0; i < numDungeons; i++) {
+            // Split map into sectors to ensure spacing
+            // Tower (i=0) in northern half, Temple (i=1) in southern half
+            const minY = i === 0 ? 5 : Math.floor(mapHeight / 2) + 5;
+            const maxY = i === 0 ? Math.floor(mapHeight / 2) - 5 : mapHeight - 6;
+
             const bx = Phaser.Math.Between(5, mapWidth - 6);
-            const by = Phaser.Math.Between(5, mapHeight - 6);
+            const by = Phaser.Math.Between(minY, maxY);
             const dx = bx * tileSize;
             const dy = by * tileSize;
 
@@ -501,9 +699,8 @@ const MapManager = {
             // Requirement: 'main_01_008' active or completed
             if (i === 0) {
                 const towerReq = 'main_01_008';
-                // Check both legacy and UQE
+                // Check both legacy and UQE via global helper
                 let showTower = window.isQuestActive(towerReq) || window.isQuestCompleted(towerReq);
-                if (window.uqe && window.uqe.isQuestActive('main_01_008')) showTower = true;
 
                 if (showTower) {
                     const dMarker = scene.add.rectangle(dx, dy, tileSize * 2, tileSize * 2, 0x444444, 0.8)
@@ -563,12 +760,9 @@ const MapManager = {
         }
 
         console.log('✅ Wilderness map created');
-        if (typeof player !== 'undefined') {
-            player.x = exitX;
-            player.y = exitY + 50;
-        }
-
-        console.log('✅ Wilderness map created');
+        console.log(`   Map Dimensions: ${scene.mapWidth}x${scene.mapHeight} tiles (${mapWidth * tileSize}x${mapHeight * tileSize} px)`);
+        console.log(`   Edge walls added to physics: ${this.dungeonWalls.length}`);
+        console.log(`   World bounds set to: 0, 0, ${mapWidth * tileSize}, ${mapHeight * tileSize}`);
 
         // Play Wilderness Music
         if (typeof playBackgroundMusic === 'function') playBackgroundMusic('wilderness');

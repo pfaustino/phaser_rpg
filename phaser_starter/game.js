@@ -167,7 +167,8 @@ let inventoryKey;
 let equipmentKey;
 let settingsKey;
 let settingsKey2; // Was not there but safe
-window.musicEnabled = true;
+// Load music preference from localStorage; default to true (ON)
+window.musicEnabled = localStorage.getItem('musicEnabled') !== 'false';
 
 // Background music
 let villageMusic = null;
@@ -1429,11 +1430,19 @@ function preload() {
  */
 function createManaFluxes() {
     const scene = game.scene.scenes[0];
-    const locations = [
-        { x: 10, y: 15 }, // Near top-left
-        { x: 30, y: 10 }, // Near top-right
-        { x: 20, y: 30 }  // Near bottom center
-    ];
+    const width = scene.mapWidth || 40;
+    const height = scene.mapHeight || 40;
+
+    // Create 3-5 fluxes at random locations
+    const numFluxes = Phaser.Math.Between(3, 5);
+    const locations = [];
+
+    for (let i = 0; i < numFluxes; i++) {
+        locations.push({
+            x: Phaser.Math.Between(5, width - 5),
+            y: Phaser.Math.Between(5, height - 5)
+        });
+    }
 
     locations.forEach((loc, index) => {
         const x = loc.x * 32;
@@ -2817,7 +2826,7 @@ function create() {
     }).setScrollFactor(0).setDepth(100);
 
     // Controls text (toggleable) - default to short version
-    const fullControlsText = 'WASD: Move | SPACE: Attack/Pickup | 1-3: Abilities | E: Equipment \nQ: Quests | F: Interact | F5: Save | F9: Load | H: Help';
+    const fullControlsText = 'WASD: Move | SPACE: Attack/Pickup | 1-3: Abilities | E: Equipment \\nQ: Quests | F: Interact | F6: Save | F9: Load | H: Help';
     const shortControlsText = 'H: Help';
 
     let controlsText = this.add.text(barX, barY + barSpacing + 70, shortControlsText, {
@@ -2892,7 +2901,7 @@ function create() {
     settingsKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ESC);
 
     // Add save/load keys
-    this.saveKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.F5);
+    this.saveKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.F6);
     this.loadKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.F9);
 
     // Add 'H' key for help/controls toggle
@@ -3842,8 +3851,9 @@ function update(time, delta) {
         }
     }
 
-    // Check dungeon wall collisions - allow sliding along walls
-    if (MapManager.currentMap === 'dungeon' && MapManager.dungeonWalls.length > 0) {
+    // Check dungeon/wilderness wall collisions - allow sliding along walls
+    // (wilderness reuses dungeonWalls array for edge tiles)
+    if ((MapManager.currentMap === 'dungeon' || MapManager.currentMap === 'wilderness') && MapManager.dungeonWalls.length > 0) {
         const playerSize = 12; // Smaller collision box for easier navigation (was 16)
         const deltaTime = delta / 1000;
 
@@ -4552,6 +4562,12 @@ function update(time, delta) {
             monster.hpBar.x = monster.x - (monster.hpBarBg.width / 2) + 1;
             monster.hpBar.y = monster.y + offsetY;
 
+            // Update level label position
+            if (monster.levelLabel) {
+                monster.levelLabel.x = monster.x - (monster.hpBarBg.width / 2) - 2;
+                monster.levelLabel.y = monster.y + offsetY;
+            }
+
             // Update monster HP bar width
             const hpPercent = Math.max(0, Math.min(1, monster.hp / monster.maxHp));
             monster.hpBar.width = (monster.hpBarBg.width - 2) * hpPercent;
@@ -4564,6 +4580,7 @@ function update(time, delta) {
             const showBar = monster.hp < monster.maxHp || distanceToPlayer < 150;
             monster.hpBarBg.setVisible(showBar);
             monster.hpBar.setVisible(showBar);
+            if (monster.levelLabel) monster.levelLabel.setVisible(showBar);
         }
 
         // Remove dead monsters
@@ -4630,9 +4647,10 @@ function handleMonsterDeath(monster) {
         onBossDefeated(MapManager.dungeonLevel, monster.x, monster.y);
     }
 
-    // Destroy HP bars
+    // Destroy HP bars and level label
     if (monster.hpBarBg) monster.hpBarBg.destroy();
     if (monster.hpBar) monster.hpBar.destroy();
+    if (monster.levelLabel) monster.levelLabel.destroy();
 
     // Play death animation & particles
     playMonsterDeathAnimation(monster);
@@ -5959,14 +5977,16 @@ function updateAttackSpeedIndicator() {
  */
 /**
  * Calculate total XP needed to reach the NEXT level
- * Curve: 100 * Level + 25 * Level^2 (Proposal B - Quadratic)
+ * Curve: 200 * Level + 50 * Level^2 (Steepened - was 100*L + 25*L²)
  * Example:
- * Lvl 1->2: 125 XP (Total 125)
- * Lvl 2->3: 300 XP (Total 300)
- * Lvl 3->4: 525 XP (Total 525)
+ * Lvl 1->2: 250 XP (Total 250)
+ * Lvl 2->3: 600 XP (Total 850)
+ * Lvl 3->4: 1050 XP (Total 1900)
+ * Lvl 4->5: 1600 XP (Total 3500)
+ * Lvl 5->6: 2250 XP (Total 5750)
  */
 function getXPNeededForLevel(level) {
-    return 100 * level + 25 * Math.pow(level, 2);
+    return 200 * level + 50 * Math.pow(level, 2);
 }
 
 /**
@@ -6108,6 +6128,69 @@ function checkLevelUp() {
 
 
 /**
+ * Spawn a specific quest item at a location
+ * @param {number} x - X coordinate
+ * @param {number} y - Y coordinate
+ * @param {object} itemData - Item data object
+ */
+function spawnQuestItem(x, y, itemData) {
+    const scene = game.scene.scenes[0];
+    const item = itemData;
+
+    // Determine sprite key
+    let spriteKey = 'item_consumable';
+    if (item.id === 'crystal_shard' || item.id === 'echo_shard') spriteKey = 'item_crystal';
+    else if (item.id === 'artifact_fragment') spriteKey = 'item_fragment';
+
+    const itemSprite = scene.add.sprite(x, y, spriteKey);
+    itemSprite.setDepth(8);
+
+    // Initial setup
+    itemSprite.setInteractive();
+    itemSprite.isItem = true;
+    itemSprite.itemId = (item.id || 'quest') + '_' + Date.now();
+    itemSprite.itemData = item;
+
+    // Add to scenes item list
+    if (scene.items) scene.items.push(itemSprite);
+
+    // Pulsing animation
+    scene.tweens.add({
+        targets: itemSprite,
+        scaleX: 1.2,
+        scaleY: 1.2,
+        duration: 500,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut'
+    });
+
+    // Float animation
+    scene.tweens.add({
+        targets: itemSprite,
+        y: y - 5,
+        duration: 1000,
+        yoyo: true,
+        repeat: -1
+    });
+
+    // Add Hover Effect
+    if (typeof window.enableHoverEffect === 'function') {
+        window.enableHoverEffect(itemSprite, scene);
+    }
+
+    // Store in global items array
+    item.sprite = itemSprite;
+    item.x = itemSprite.x;
+    item.y = itemSprite.y;
+    items.push(item);
+
+    console.log(`[Spawn] Quest item spawned: ${item.name} at ${x}, ${y}`);
+}
+// Expose globally
+window.spawnQuestItem = spawnQuestItem;
+
+/**
  * Drop items from a killed monster
  */
 function dropItemsFromMonster(x, y) {
@@ -6169,6 +6252,7 @@ function dropItemsFromMonster(x, y) {
             // Use specific sprite for quest items based on ID
             // Map item ID to sprite key: crystal_shard -> item_crystal
             if (item.id === 'crystal_shard') spriteKey = 'item_crystal';
+            else if (item.id === 'echo_shard') spriteKey = 'item_crystal';
             else if (item.id === 'artifact_fragment') spriteKey = 'item_fragment';
             else spriteKey = 'item_consumable'; // Fallback
         }
@@ -13660,6 +13744,20 @@ function spawnMonster(x, y, type, hpOverride, attackOverride, xpOverride, isBoss
             .setDepth(6).setOrigin(0.5, 0.5).setScrollFactor(1);
         monster.hpBar = scene.add.rectangle(0, 0, monsterHpBarWidth - 2, monsterHpBarHeight - 2, 0xff0000)
             .setDepth(7).setOrigin(0, 0.5).setScrollFactor(1);
+
+        // Create level label (calculate level from XP reward using sqrt for balanced progression)
+        // This formula accounts for players doing side quests + main quests
+        // Results: 5xp→Lv2, 10xp→Lv3, 15xp→Lv3, 20xp→Lv4, 40xp→Lv6
+        const monsterLevel = Math.max(1, Math.ceil(Math.sqrt((monster.xpReward || 10) * 2)));
+        monster.level = monsterLevel;
+        monster.levelLabel = scene.add.text(0, 0, `Lv${monsterLevel}`, {
+            fontSize: '8px',
+            fill: '#ffff00',
+            fontFamily: 'Arial',
+            fontStyle: 'bold',
+            stroke: '#000000',
+            strokeThickness: 2
+        }).setDepth(8).setOrigin(1, 0.5).setScrollFactor(1).setVisible(false);
 
         monster.isDead = false;
 

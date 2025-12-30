@@ -12,10 +12,10 @@ window.Constants = {
     // ============================================
     // MONSTER SPAWN SETTINGS
     // ============================================
-    MAX_MONSTERS: 24,
+    MAX_MONSTERS: 40,
     MONSTER_AGGRO_RADIUS: 200,      // Pixels - monsters start chasing within this distance
     MONSTER_DEAGGRO_RADIUS: 400,    // Pixels - monsters stop chasing beyond this distance
-    MONSTER_RESPAWN_THRESHOLD: 12,  // MAX_MONSTERS / 2
+    MONSTER_RESPAWN_THRESHOLD: 20,  // MAX_MONSTERS / 2
 
     // ============================================
     // UI & VISUAL SETTINGS

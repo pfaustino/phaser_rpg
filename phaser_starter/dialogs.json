@@ -29,7 +29,7 @@
                 ]
             },
             "controls_tutorial": {
-                "text": "Ah, a wise question! Let me share the essential knowledge:\n\n⚔️ MOVEMENT: WASD or Arrow Keys\n🗡️ ATTACK: Spacebar (attack nearby enemies)\n✨ SPECIAL ATTACKS: 1-9 (use learned abilities)\n📜 QUEST LOG: Q (view your active quests)\n🎒 INVENTORY: I (manage your items)\n💾 SAVE GAME: F5\n📂 LOAD GAME: F9\n❓ HELP: H (quick controls reminder)\n\nRemember: Talk to villagers for quests, and defeat monsters to grow stronger!",
+                "text": "Ah, a wise question! Let me share the essential knowledge:\n\n⚔️ MOVEMENT: WASD or Arrow Keys\n🗡️ ATTACK: Spacebar (attack nearby enemies)\n✨ SPECIAL ATTACKS: 1-9 (use learned abilities)\n📜 QUEST LOG: Q (view your active quests)\n🎒 INVENTORY: I (manage your items)\n💾 SAVE GAME: F6\n📂 LOAD GAME: F9\n❓ HELP: H (quick controls reminder)\n\nRemember: Talk to villagers for quests, and defeat monsters to grow stronger!",
                 "choices": [
                     {
                         "text": "Tell me more about this place",
@@ -143,17 +143,17 @@
                 ]
             },
             "how_to_help": {
-                "text": "Speak with the villagers. Guard Thorne can direct you to fight the creatures. Merchant Lysa may have supplies. And when you're ready... the Undermines await. That's where the corruption is strongest.",
+                "text": "Speak with the villagers. Blacksmith Brond was asking about those strange Echo Crystals in the wilderness—he might have a task for you. Guard Thorne can direct you to fight the creatures. And when you're ready... the Undermines await.",
                 "action": "unlock_lore",
                 "loreId": "lore_ch1_undermines",
                 "choices": [
                     {
-                        "text": "← Back",
-                        "next": "start"
+                        "text": "I'll talk to Brond about the crystals",
+                        "next": "end"
                     },
                     {
-                        "text": "I'll do what I can",
-                        "next": "end"
+                        "text": "← Back",
+                        "next": "start"
                     }
                 ]
             },
@@ -356,6 +356,19 @@
                 "text": "Hail, traveler. Need something forged? Or perhaps you come bearing those strange shards the Elder mentioned?",
                 "choices": [
                     {
+                        "text": "Tell me about the vibrations you've noticed.",
+                        "next": "echo_whisper_intro",
+                        "condition": "quest_available:side_01_001"
+                    },
+                    {
+                        "text": "I have the echo shards you requested.",
+                        "next": "echo_whisper_turnin",
+                        "condition": "quest_objective_complete:side_01_001:collect_echo_shards",
+                        "isQuest": true,
+                        "action": "complete_quest",
+                        "questId": "side_01_001"
+                    },
+                    {
                         "text": "I have the crystal shards from Elder Malik",
                         "next": "receive_shards",
                         "condition": "quest_active:main_01_004",
@@ -369,6 +382,40 @@
                     },
                     {
                         "text": "Goodbye",
+                        "next": "end"
+                    }
+                ]
+            },
+            "echo_whisper_intro": {
+                "text": "Ah, you have a keen ear! The earth is humming, traveler. Not like the quakes the Elder talks about—this is different. A high-pitched resonance, coming from those strange crystals in the wilderness. I need samples to study if I'm to forge anything that can withstand it.",
+                "choices": [
+                    {
+                        "text": "I can help gather samples.",
+                        "next": "echo_whisper_accept"
+                    },
+                    {
+                        "text": "Sounds dangerous. Maybe later.",
+                        "next": "start"
+                    }
+                ]
+            },
+            "echo_whisper_accept": {
+                "text": "Good. Bring me 3 Echo Shards. You can find them by breaking those violet crystals out in the wilderness, or sometimes the creatures that linger near them carry shards on their own. Be careful—the sound they make... it gets inside your head.",
+                "choices": [
+                    {
+                        "text": "I'll be back with the shards.",
+                        "next": "end",
+                        "isQuest": true,
+                        "action": "quest_accept_side",
+                        "questId": "side_01_001"
+                    }
+                ]
+            },
+            "echo_whisper_turnin": {
+                "text": "You have them? Let me see... *he takes the shards and strikes them with a tuning fork* Yes, this is the frequency. It's... it's beautiful, in a terrifying way. Here, take this for your trouble. I'll get to work on that resonance dampener.",
+                "choices": [
+                    {
+                        "text": "Glad to help.",
                         "next": "end"
                     }
                 ]

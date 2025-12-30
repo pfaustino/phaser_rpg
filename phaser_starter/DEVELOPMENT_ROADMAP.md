@@ -44,7 +44,7 @@
   - ✅ NPC system (spawn NPCs, interaction indicators, press 'F')
   - ✅ Dialog system (dialog UI, text display, choice selection)
   - ✅ Shop system (NPC merchants, buy items with gold, scrollable inventory)
-  - ✅ Save/Load system (localStorage, F5 to save, F9 to load)
+  - ✅ Save/Load system (localStorage, F6 to save, F9 to load)
   - ✅ Multiple monster types (Goblin, Orc, Skeleton with different stats)
   - ✅ Consumable items (health potions) with use functionality
 - ✅ **Phase 7: Quick Wins (COMPLETE!)**

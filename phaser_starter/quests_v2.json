@@ -31,7 +31,7 @@
                 {
                     "id": "kill_mites",
                     "type": "kill",
-                    "monsterId": "mite",
+                    "monsterId": "procedural_echo_mite",
                     "label": "Defeat Mites",
                     "target": 3
                 }
@@ -89,7 +89,13 @@
             "rewards": {
                 "xp": 50,
                 "gold": 25
-            }
+            },
+            "removeItems": [
+                {
+                    "itemId": "crystal_shard",
+                    "amount": "all"
+                }
+            ]
         },
         "main_01_005": {
             "id": "main_01_005",
@@ -151,7 +157,13 @@
             "rewards": {
                 "xp": 150,
                 "gold": 50
-            }
+            },
+            "removeItems": [
+                {
+                    "itemId": "stabilized_flux",
+                    "amount": "all"
+                }
+            ]
         },
         "main_01_008": {
             "id": "main_01_008",
@@ -162,11 +174,13 @@
             "requires": "main_01_007",
             "objectives": [
                 {
-                    "id": "enter_dungeon",
-                    "type": "collect",
-                    "itemId": "dungeon_entry_token",
-                    "label": "Enter the Watchtower Dungeon",
-                    "target": 1
+                    "id": "find_watchtower",
+                    "type": "explore_location",
+                    "label": "Locate the Watchtower",
+                    "target": 1,
+                    "targetX": 0,
+                    "targetY": 0,
+                    "locationId": "watchtower"
                 }
             ],
             "rewards": {
@@ -186,8 +200,8 @@
                 {
                     "id": "kill_rats",
                     "type": "kill",
-                    "monsterId": "echo_rat",
-                    "label": "Kill Echo Rats",
+                    "monsterId": "procedural_echo_mite",
+                    "label": "Kill Echo Creatures",
                     "target": 10
                 }
             ],
@@ -217,13 +231,238 @@
                 "gold": 100
             }
         },
+        "main_01_011": {
+            "id": "main_01_011",
+            "title": "Solidified Corruption",
+            "description": "The corruption is forming hard crystalline structures. Mine 10 Echo Crystals from the lower depths.",
+            "giver": "Blacksmith Brond",
+            "requires": "main_01_010",
+            "objectives": [
+                {
+                    "id": "collect_echo_crystal",
+                    "type": "collect",
+                    "itemId": "echo_crystal",
+                    "label": "Mine Echo Crystals",
+                    "target": 10
+                }
+            ],
+            "rewards": {
+                "xp": 300,
+                "gold": 150
+            },
+            "assets": [
+                {
+                    "type": "image",
+                    "key": "item_echo_crystal",
+                    "path": "assets/images/crystal-shard.png"
+                }
+            ]
+        },
+        "main_01_012": {
+            "id": "main_01_012",
+            "title": "The First Fragment",
+            "description": "A massive creature has nested near the breach. Defeat the Echo Beholder to reach the first fragment of the Aegis.",
+            "giver": "Elder Malik",
+            "step": 12,
+            "requires": "main_01_011",
+            "objectives": [
+                {
+                    "id": "kill_echo_beholder",
+                    "type": "kill",
+                    "monsterId": "procedural_beholder",
+                    "label": "Defeat Echo Beholder",
+                    "target": 1
+                }
+            ],
+            "rewards": {
+                "xp": 500,
+                "gold": 250
+            }
+        },
+        "main_01_013": {
+            "id": "main_01_013",
+            "title": "Claiming the Shard",
+            "description": "The Beholder is slain. Recover the Shard of Resonance from its nest.",
+            "giver": "Elder Malik",
+            "step": 13,
+            "requires": "main_01_012",
+            "autoAccept": true,
+            "objectives": [
+                {
+                    "id": "collect_shard_resonance",
+                    "type": "collect",
+                    "itemId": "shard_resonance",
+                    "label": "Recover Shard of Resonance",
+                    "target": 1
+                }
+            ],
+            "rewards": {
+                "xp": 100,
+                "gold": 50
+            },
+            "assets": [
+                {
+                    "type": "image",
+                    "key": "item_shard_resonance",
+                    "path": "assets/images/crystal-shard.png"
+                }
+            ]
+        },
+        "main_01_014": {
+            "id": "main_01_014",
+            "title": "Elder's Wisdom",
+            "description": "Return to the surface and present the Shard of Resonance to Elder Malik.",
+            "giver": "Elder Malik",
+            "step": 14,
+            "requires": "main_01_013",
+            "autoAccept": true,
+            "objectives": [
+                {
+                    "id": "talk_malik_shard",
+                    "type": "talk",
+                    "npcId": "Elder Malik",
+                    "label": "Present Shard to Elder Malik",
+                    "target": 1
+                }
+            ],
+            "rewards": {
+                "xp": 150,
+                "gold": 75
+            }
+        },
+        "main_01_015": {
+            "id": "main_01_015",
+            "title": "Strengthening the Aegis",
+            "description": "Take the shard to the Ancient Obelisk at the town center and restore its power.",
+            "giver": "Elder Malik",
+            "step": 15,
+            "requires": "main_01_014",
+            "objectives": [
+                {
+                    "id": "interact_obelisk",
+                    "type": "explore_location",
+                    "label": "Interact with Obelisk (Center)",
+                    "targetX": 20,
+                    "targetY": 20,
+                    "target": 1
+                }
+            ],
+            "rewards": {
+                "xp": 200,
+                "gold": 100
+            }
+        },
+        "main_01_016": {
+            "id": "main_01_016",
+            "title": "Unexpected Feedback",
+            "description": "The restoration triggered a massive release of energy! Survive the intense Obelisk backlash.",
+            "giver": "Elder Malik",
+            "step": 16,
+            "requires": "main_01_015",
+            "autoAccept": true,
+            "objectives": [
+                {
+                    "id": "survive_backlash",
+                    "type": "survive",
+                    "label": "Survive Backlash",
+                    "target": 120
+                }
+            ],
+            "rewards": {
+                "xp": 300,
+                "gold": 150
+            }
+        },
+        "main_01_017": {
+            "id": "main_01_017",
+            "title": "The Echo's Warning",
+            "description": "Constructs have emerged from the light. Defeat 20 Backlash constructs to stabilize the ritual.",
+            "giver": "Elder Malik",
+            "step": 17,
+            "requires": "main_01_016",
+            "autoAccept": true,
+            "objectives": [
+                {
+                    "id": "kill_backlash",
+                    "type": "kill",
+                    "monsterId": "procedural_backlash",
+                    "label": "Defeat Backlash Constructs",
+                    "target": 20
+                }
+            ],
+            "rewards": {
+                "xp": 400,
+                "gold": 200
+            }
+        },
+        "main_01_018": {
+            "id": "main_01_018",
+            "title": "Deep Scan",
+            "description": "The Aegis needs data on the world's status. Travel across the wilderness to calibrate the sensors.",
+            "giver": "Elder Malik",
+            "step": 18,
+            "requires": "main_01_017",
+            "objectives": [
+                {
+                    "id": "explore_calib",
+                    "type": "explore",
+                    "label": "Travel Tiles",
+                    "target": 2000
+                }
+            ],
+            "rewards": {
+                "xp": 500,
+                "gold": 250
+            }
+        },
+        "main_01_019": {
+            "id": "main_01_019",
+            "title": "Resonance Established",
+            "description": "Your connection with the Aegis is growing. Reach Level 5 to finalize your attunement.",
+            "giver": "Elder Malik",
+            "step": 19,
+            "requires": "main_01_018",
+            "objectives": [
+                {
+                    "id": "reach_level_5",
+                    "type": "level",
+                    "label": "Reach Level 5",
+                    "target": 5
+                }
+            ],
+            "rewards": {
+                "xp": 600,
+                "gold": 300
+            }
+        },
+        "main_01_020": {
+            "id": "main_01_020",
+            "title": "Chapter Final",
+            "description": "Chapter 1 is complete. Prepare yourself for the journey to the next corrupted region.",
+            "giver": "Elder Malik",
+            "step": 20,
+            "requires": "main_01_019",
+            "objectives": [
+                {
+                    "id": "talk_malik_final",
+                    "type": "talk",
+                    "npcId": "Elder Malik",
+                    "label": "Speak with Elder Malik",
+                    "target": 1
+                }
+            ],
+            "rewards": {
+                "xp": 1000,
+                "gold": 500
+            }
+        },
         "main_02_001": {
             "id": "main_02_001",
             "title": "Mysterious Arrival",
             "description": "The tremors have ceased, but a strange energy lingers in the town square. Captain Thorne needs your help to investigate.",
             "giver": "Captain Thorne",
             "step": 1,
-            "requires": "main_01_010",
+            "requires": "main_01_020",
             "objectives": [
                 {
                     "id": "talk_thorne_intro",
@@ -310,6 +549,12 @@
                 "xp": 400,
                 "gold": 200
             },
+            "removeItems": [
+                {
+                    "itemId": "artifact_fragment",
+                    "amount": "all"
+                }
+            ],
             "assets": [
                 {
                     "type": "image",
@@ -358,6 +603,89 @@
             "rewards": {
                 "xp": 500,
                 "gold": 250
+            }
+        },
+        "main_02_005": {
+            "id": "main_02_005",
+            "title": "The Traitor's Trail",
+            "description": "Evidence points to a traitor seeking to harness the corruption. Track them down in the wilderness before they can escape.",
+            "giver": "Captain Thorne",
+            "step": 5,
+            "requires": "main_02_004",
+            "objectives": [
+                {
+                    "id": "find_traitor_trail",
+                    "type": "explore_location",
+                    "label": "Find Traitor's Camp",
+                    "targetX": 40,
+                    "targetY": 10,
+                    "target": 1
+                }
+            ],
+            "rewards": {
+                "xp": 550,
+                "gold": 275
+            }
+        },
+        "main_02_006": {
+            "id": "main_02_006",
+            "title": "Confrontation",
+            "description": "The traitor's mercenaries are blocking the path! Defeat them to clear the way.",
+            "giver": "Captain Thorne",
+            "step": 6,
+            "requires": "main_02_005",
+            "objectives": [
+                {
+                    "id": "defeat_mercenaries",
+                    "type": "kill",
+                    "monsterId": "monster_orc",
+                    "label": "Defeat Mercenaries",
+                    "target": 5
+                }
+            ],
+            "rewards": {
+                "xp": 600,
+                "gold": 300
+            }
+        },
+        "main_03_001": {
+            "id": "main_03_001",
+            "title": "The Dark Seal",
+            "description": "The traitor was seeking the Void Key. Speak to Elder Malik to secure the key before the enemy can regroup.",
+            "giver": "Elder Malik",
+            "step": 1,
+            "requires": "main_02_006",
+            "objectives": [
+                {
+                    "id": "talk_malik_key",
+                    "type": "talk",
+                    "npcId": "Elder Malik",
+                    "label": "Retrieve Void Key",
+                    "target": 1
+                }
+            ],
+            "rewards": {
+                "xp": 650,
+                "gold": 325
+            }
+        },
+        "quest_001": {
+            "id": "quest_001",
+            "title": "First Steps",
+            "description": "Kill 5 monsters to prove your worth.",
+            "giver": "Guard Thorne",
+            "objectives": [
+                {
+                    "id": "kill_any_starter",
+                    "type": "kill",
+                    "monsterId": "any",
+                    "label": "Defeat Monsters",
+                    "target": 5
+                }
+            ],
+            "rewards": {
+                "xp": 50,
+                "gold": 25
             }
         },
         "quest_002": {

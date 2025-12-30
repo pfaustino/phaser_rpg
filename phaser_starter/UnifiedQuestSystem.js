@@ -500,6 +500,30 @@ class UqeEngine {
             this.checkNewQuests();
         }
     }
+    // Debug/Console Helper: Start a quest by ID
+    startQuest(questId) {
+        return this.acceptQuest(questId);
+    }
+
+    // Debug/Console Helper: Force complete a quest by ID
+    completeQuest(questId) {
+        const quest = this.activeQuests.find(q => q.id === questId);
+        if (quest) {
+            // Force all objectives to complete
+            quest.objectives.forEach(obj => {
+                obj.progress = obj.target;
+                obj.completed = true;
+            });
+            quest.completed = true;
+            quest.isTurnedIn = true; // Skip turn-in requirement
+
+            // Trigger completion logic immediately
+            this.update();
+            console.log(`✅ [UQE] Force completed quest: ${questId}`);
+        } else {
+            console.warn(`⚠️ [UQE] Cannot complete quest ${questId} - not active.`);
+        }
+    }
 }
 
 // Global instance

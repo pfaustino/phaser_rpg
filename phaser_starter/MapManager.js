@@ -412,7 +412,9 @@ const MapManager = {
             // Requirement: 'main_01_008' active or completed
             if (i === 0) {
                 const towerReq = 'main_01_008';
-                const showTower = window.isQuestActive(towerReq) || window.isQuestCompleted(towerReq);
+                // Check both legacy and UQE
+                let showTower = window.isQuestActive(towerReq) || window.isQuestCompleted(towerReq);
+                if (window.uqe && window.uqe.isQuestActive('main_01_008')) showTower = true;
 
                 if (showTower) {
                     const dMarker = scene.add.rectangle(dx, dy, tileSize * 2, tileSize * 2, 0x444444, 0.8)
@@ -424,6 +426,18 @@ const MapManager = {
                         x: dx, y: dy, radius: tileSize * 1.5, targetMap: 'dungeon',
                         dungeonId: 'tower_dungeon',
                         dungeonLevel: 1, marker: dMarker, text: dText
+                    });
+
+                    // Emit exploration event if this is the active objective
+                    // Logic: If player is near marker, emit 'location_explored'
+                    // We'll add a separate checking loop or just assume finding it is enough?
+                    // Better: Add a zone or check in update loop. For now, add a zone.
+                    const towerZone = scene.add.zone(dx, dy, tileSize * 4, tileSize * 4);
+                    scene.physics.add.existing(towerZone, true);
+                    scene.physics.add.overlap(scene.player, towerZone, () => {
+                        if (window.uqe && window.uqe.eventBus) {
+                            window.uqe.eventBus.emit('location_explored', { id: 'watchtower' });
+                        }
                     });
                 }
             }

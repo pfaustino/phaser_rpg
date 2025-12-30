@@ -27,6 +27,10 @@
                     "chance": 0.5
                 },
                 {
+                    "id": "procedural_echo_mite",
+                    "chance": 0.4
+                },
+                {
                     "id": "skeleton_miner",
                     "minLevel": 2,
                     "chance": 0.3

@@ -1,4 +1,7 @@
 {
+  "_DEPRECATED": "⚠️ THIS FILE IS DEPRECATED - Use quests_v2.json instead",
+  "_MIGRATION_DATE": "2025-12-29",
+  "_NOTE": "All quests have been migrated to the Unified Quest Engine (UQE) format in quests_v2.json. This file is kept for reference only and is no longer loaded by the game.",
   "questTypes": {
     "kill": {
       "label": "Kill Monsters",

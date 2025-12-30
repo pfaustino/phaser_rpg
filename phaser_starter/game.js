@@ -47,6 +47,15 @@ let map;
 let spaceKey;
 
 let questMarkers = new Map(); // Quest objective markers (key: targetId, value: {sprite, tween})
+let defenseSpawnerState = {
+    active: false,
+    spawnedMonsters: [],
+    lastSpawnTime: 0,
+    waveInterval: 5000,
+    maxMonsters: 10,
+    monstersPerWave: 3
+};
+
 let lastQuestMarkerUpdate = 0; // Throttle marker updates
 let specialZones = []; // Populated from zones.json
 
@@ -294,9 +303,10 @@ function preload() {
     console.trace('PRELOAD CALL STACK');
 
     // Load quest data
-    this.load.json('questData', 'quests.json');
-    this.load.json('questDataV2', 'quests_v2.json');
-    this.load.json('mainQuestData', 'main_quests.json');
+    // DEPRECATED: Legacy quest system - kept for reference only
+    // this.load.json('questData', 'quests.json');
+    this.load.json('questDataV2', 'quests_v2.json'); // UQE - Primary quest system
+    // this.load.json('mainQuestData', 'main_quests.json'); // No longer used
     this.load.audio('wind_effect', 'assets/audio/wind-sound-effect.mp3');
 
     // Load Method 2 monster data
@@ -1683,6 +1693,7 @@ function spawnDungeonMonsters() {
                     // LEGACY MAPPING (Temporary until full data-driven monsters)
                     let baseStats = {};
                     if (mDef.id === 'echo_rat') baseStats = { name: 'Echo Rat', textureKey: 'monster_echo_mite', hp: 20, attack: 4, speed: 70, xp: 8, monsterType: 'echo_rat' };
+                    else if (mDef.id === 'procedural_echo_mite') baseStats = { name: 'Echo Mite', textureKey: 'procedural_echo_mite', hp: 15, attack: 3, speed: 80, xp: 6, monsterType: 'procedural_echo_mite', isProcedural: true };
                     else if (mDef.id === 'skeleton_miner') baseStats = { name: 'Skeleton Miner', textureKey: 'monster_skeleton', hp: 25, attack: 6, speed: 60, xp: 15 };
                     else if (mDef.id === 'corrupted_guardian') baseStats = { name: 'Corrupted Guardian', textureKey: 'monster_orc', hp: 50, attack: 8, speed: 40, xp: 20 };
                     else {
@@ -2212,6 +2223,11 @@ function dropBossLoot(x, y, level) {
         itemSprite.isItem = true;
         itemSprite.itemId = item.type + '_' + Date.now() + '_' + i;
         itemSprite.itemData = item;
+        item.sprite = itemSprite; // Verify linkage for pickupItem
+
+        // Add to global items list
+        items.push(item);
+        console.log(`✨ Added boss loot to items list: ${item.name}`);
 
         // Add Hover Effect
         if (typeof window.enableHoverEffect === 'function') {
@@ -2258,6 +2274,11 @@ function dropBossLoot(x, y, level) {
         fSprite.isItem = true;
         fSprite.itemId = fragment.itemId;
         fSprite.itemData = fragment;
+        fragment.sprite = fSprite; // Link sprite
+
+        // Add to global items
+        items.push(fragment);
+        console.log('✨ Quest Item Dropped: Artifact Fragment (Added to items list)');
 
         // Hover Effect
         if (typeof window.enableHoverEffect === 'function') {
@@ -2400,8 +2421,108 @@ function create() {
         uqe.eventBus.on(UQE_EVENTS.QUEST_ACCEPTED, (quest) => {
             console.log(`📋 [UQE Bridge] Quest Accepted: ${quest.title}`);
             addChatMessage(`Quest Started: ${quest.title}`, 0x00ffff, '📜');
+
+            // Special Handler: Resonant Frequencies (main_01_005)
+            if (quest.id === 'main_01_005') {
+                if (typeof startResonantFrequenciesEvent === 'function') {
+                    startResonantFrequenciesEvent();
+                }
+            }
+
             updateQuestTrackerHUD();
             if (questVisible) updateQuestLogItems();
+        });
+
+        // Handle Quest Completed - Rewards and Item Cleanup
+        uqe.eventBus.on(UQE_EVENTS.QUEST_COMPLETED, (quest) => {
+            console.log(`🏆 [UQE Bridge] Quest Completed: ${quest.title}`);
+            addChatMessage(`Quest Completed: ${quest.title}`, 0xffd700, '🏆');
+
+            // Special Handler: Stop Resonant Frequencies
+            if (quest.id === 'main_01_005') {
+                if (typeof stopResonantFrequenciesEvent === 'function') {
+                    stopResonantFrequenciesEvent();
+                }
+            }
+
+            // 1. Grant Rewards (XP and Gold)
+            if (quest.rewards) {
+                if (quest.rewards.xp) {
+                    addXp(quest.rewards.xp);
+                    console.log(`   + Awarded ${quest.rewards.xp} XP`);
+                }
+                if (quest.rewards.gold) {
+                    playerStats.gold += quest.rewards.gold;
+                    addChatMessage(`Received ${quest.rewards.gold} Gold`, 0xffd700, '💰');
+                    if (typeof goldText !== 'undefined') goldText.setText(`Gold: ${playerStats.gold}`);
+                }
+                // Future: Handle item rewards here
+            }
+
+            // 2. Remove Items (cleanup)
+            const def = window.uqe.allDefinitions[quest.id];
+            if (def && def.removeItems) {
+                def.removeItems.forEach(itemCost => {
+                    const itemId = itemCost.itemId;
+                    let amountToRemove = itemCost.amount || 1;
+
+                    // Support removing all items of a type
+                    if (amountToRemove === 'all') {
+                        amountToRemove = 0;
+                        playerStats.inventory.forEach(i => {
+                            if (i.id === itemId || i.itemId === itemId) {
+                                amountToRemove += (i.quantity || 1);
+                            }
+                        });
+                        console.log(`   - 'all' specified, calculated total to remove: ${amountToRemove}`);
+                    }
+
+                    console.log(`   - Attempting to remove ${amountToRemove}x ${itemId}`);
+
+                    // Iterate backwards through inventory to safely remove items
+                    for (let i = playerStats.inventory.length - 1; i >= 0; i--) {
+                        if (amountToRemove <= 0) break;
+
+                        const item = playerStats.inventory[i];
+                        // Check for matching ID (handling potential variations if needed, but strict check first)
+                        if (item.id === itemId || item.itemId === itemId) {
+
+                            // Check if item has quantity (stackable)
+                            if (item.quantity && item.quantity > 0) {
+                                const take = Math.min(item.quantity, amountToRemove);
+                                item.quantity -= take;
+                                amountToRemove -= take;
+
+                                // Remove if quantity depleted
+                                if (item.quantity <= 0) {
+                                    playerStats.inventory.splice(i, 1);
+                                }
+                            } else {
+                                // Single item (non-stackable or quantity=1)
+                                playerStats.inventory.splice(i, 1);
+                                amountToRemove--;
+                            }
+                        }
+                    }
+
+                    if (amountToRemove > 0) {
+                        console.warn(`Could not remove all required items. Remaining: ${amountToRemove}`);
+                    } else {
+                        // Display original requested amount if 'all', or specific number
+                        const displayAmount = itemCost.amount === 'all' ? 'All' : itemCost.amount;
+                        addChatMessage(`Removed ${displayAmount} ${itemId}`, 0xffa500, '➖');
+                        console.log(`   - Successfully removed items`);
+                    }
+                });
+
+
+                // Refresh inventory UI if open
+                if (window.inventoryVisible) updateInventoryItems();
+            }
+
+            updateQuestTrackerHUD();
+            if (questVisible) updateQuestLogItems();
+            playSound('level_up');
         });
 
         // Handle Quest Available - show notification for chain quests
@@ -2425,6 +2546,14 @@ function create() {
                 updateQuestTrackerHUD();
             } else {
                 console.log(`✅ [UQE Bridge] Existing save - ${uqe.activeQuests.length} active, ${uqe.completedQuests.length} completed`);
+
+                // Resume Resonant Frequencies if active
+                if (window.isQuestActive && window.isQuestActive('main_01_005')) {
+                    console.log('🛡️ Resuming active defense quest...');
+                    if (typeof startResonantFrequenciesEvent === 'function') {
+                        startResonantFrequenciesEvent();
+                    }
+                }
             }
         }, 100);
     }
@@ -4169,7 +4298,13 @@ function update(time, delta) {
     // Removed duplicate emission to prevent double counting
 
     // Check quest progress
+    // Check quest progress (Legacy)
     checkQuestProgress();
+
+    // Update Unified Quest Engine
+    if (typeof uqe !== 'undefined') {
+        uqe.update();
+    }
 
     // Monster respawn system - only in wilderness
     if (MapManager.currentMap === 'wilderness' && monsters.length < MONSTER_RESPAWN_THRESHOLD) {
@@ -4187,7 +4322,7 @@ function update(time, delta) {
             { name: 'Slime', textureKey: 'monster_slime', hp: 15, attack: 3, speed: 30, xp: 5, isProcedural: false, spawnAmount: [2, 4] },
             { name: 'Wolf', textureKey: 'monster_wolf', hp: 40, attack: 7, speed: 65, xp: 18, isProcedural: false, spawnAmount: [2, 3] },
             { name: 'Dragon', textureKey: 'monster_dragon', hp: 80, attack: 12, speed: 35, xp: 40, isProcedural: false, spawnAmount: [1, 1] },
-            { name: 'Echo_Mite', textureKey: 'monster_echo_mite', hp: 15, attack: 3, speed: 60, xp: 5, isProcedural: false, spawnAmount: [2, 4] },
+            { name: 'Echo Mite', id: 'procedural_echo_mite', textureKey: 'monster_echo_mite', hp: 15, attack: 3, speed: 60, xp: 5, isProcedural: false, spawnAmount: [2, 4] },
             { name: 'Ghost', textureKey: 'monster_ghost', hp: 35, attack: 6, speed: 55, xp: 12, isProcedural: false, spawnAmount: [1, 2] }
         ];
 
@@ -4218,16 +4353,44 @@ function update(time, delta) {
 
             // Find spawn point away from player
             do {
-                spawnX = Phaser.Math.Between(50, mapWidth - 50);
-                spawnY = Phaser.Math.Between(50, mapHeight - 50);
+                // Bias for 'Echoes from Below' quest (main_01_002) - Spawn near Watchtower
+                if (typeof isQuestActive === 'function' && isQuestActive('main_01_002') && Math.random() < 0.4) {
+                    const wt = MapManager.transitionMarkers.find(m => m.dungeonId === 'tower_dungeon');
+                    if (wt) {
+                        // Spawn within 250px of Watchtower
+                        const angle = Math.random() * Math.PI * 2;
+                        const dist = Math.random() * 250;
+                        spawnX = wt.x + Math.cos(angle) * dist;
+                        spawnY = wt.y + Math.sin(angle) * dist;
+                    } else {
+                        spawnX = Phaser.Math.Between(50, mapWidth - 50);
+                        spawnY = Phaser.Math.Between(50, mapHeight - 50);
+                    }
+                } else {
+                    spawnX = Phaser.Math.Between(50, mapWidth - 50);
+                    spawnY = Phaser.Math.Between(50, mapHeight - 50);
+                }
                 attempts++;
             } while (
                 attempts < maxAttempts &&
                 Phaser.Math.Distance.Between(spawnX, spawnY, player.x, player.y) < MONSTER_AGGRO_RADIUS
             );
 
-            const typeIndex = Math.floor(Math.random() * monsterTypes.length);
-            const type = monsterTypes[typeIndex];
+            // Determine monster type
+            let type;
+            // Bias type selection for active quests
+            if (typeof isQuestActive === 'function' && isQuestActive('main_01_002') && Math.random() < 0.5) {
+                // 50% chance to force Echo Mite if quest is active
+                type = monsterTypes.find(t => t.id === 'procedural_echo_mite');
+                if (!type) {
+                    // Fallback
+                    const typeIndex = Math.floor(Math.random() * monsterTypes.length);
+                    type = monsterTypes[typeIndex];
+                }
+            } else {
+                const typeIndex = Math.floor(Math.random() * monsterTypes.length);
+                type = monsterTypes[typeIndex];
+            }
 
             // Determine pack size based on spawnAmount
             const spawnAmount = type.spawnAmount || [1, 1];
@@ -5863,6 +6026,29 @@ function updateUI() {
 }
 
 /**
+ * Add XP to player and check for level up
+ * @param {number} amount - Amount of XP to add
+ */
+function addXp(amount) {
+    if (!amount || amount <= 0) return;
+
+    playerStats.xp += amount;
+    // Track total if needed (optional)
+    // playerStats.questStats.xpEarned = (playerStats.questStats.xpEarned || 0) + amount; 
+
+    // Visual feedback
+    showDamageNumber(player.x, player.y - 50, `+${amount} XP`, 0xb478ff, false, 'xp');
+
+    // Check for level up immediately
+    checkLevelUp();
+
+    // Update UI
+    updateUI();
+}
+// Expose globally
+window.addXp = addXp;
+
+/**
  * Check for level up
  */
 function checkLevelUp() {
@@ -6177,7 +6363,9 @@ function pickupItem(item, index) {
         // Add gold directly
         playerStats.gold += item.amount;
         playerStats.questStats.goldEarned += item.amount;
-        showDamageNumber(item.sprite.x, item.sprite.y, `+${item.amount} Gold`, 0xffd700);
+        const goldX = item.sprite ? item.sprite.x : (item.x || player.x);
+        const goldY = item.sprite ? item.sprite.y : (item.y || player.y);
+        showDamageNumber(goldX, goldY, `+${item.amount} Gold`, 0xffd700);
         updatePlayerStats(); // Update gold display
 
         // Play sound
@@ -6217,7 +6405,9 @@ function pickupItem(item, index) {
         console.log(`   After: ${playerStats.inventory.length} items`);
         console.log(`   Inventory contents:`, playerStats.inventory.map(i => `${i.name}${i.quantity ? ' x' + i.quantity : ''}`));
         playerStats.questStats.itemsCollected++;
-        showDamageNumber(item.sprite.x, item.sprite.y, `Picked up ${item.name}`, 0x00ff00);
+        const itemX = item.sprite ? item.sprite.x : (item.x || player.x);
+        const itemY = item.sprite ? item.sprite.y : (item.y || player.y);
+        showDamageNumber(itemX, itemY, `Picked up ${item.name}`, 0x00ff00);
         playSound('item_pickup');
         console.log(`Picked up: ${item.name} (Inventory: ${playerStats.inventory.length} items)`);
 
@@ -7612,6 +7802,13 @@ function acceptSideQuest(questId) {
  */
 function completeQuest(quest, index) {
     quest.completed = true;
+
+    // EVENT SPECIFIC CLEANUP (Legacy Bridge)
+    if (quest.id === 'main_01_005') {
+        if (typeof stopResonantFrequenciesEvent === 'function') {
+            stopResonantFrequenciesEvent();
+        }
+    }
 
     // Give rewards
     if (quest.rewards.xp) {
@@ -15669,3 +15866,97 @@ window.isAnyWindowOpen = function () {
 
 
 
+
+// ============================================
+// QUEST LOGIC: Resonant Frequencies (main_01_005)
+// ============================================
+
+let resonantFrequenciesTimer = null;
+
+function startResonantFrequenciesEvent() {
+    console.log('🛡️ STARTING Event: Resonant Frequencies Defense');
+    const scene = game.scene.scenes[0];
+    if (!scene) return;
+
+    // Safety check: Remove existing timer if any
+    if (resonantFrequenciesTimer) {
+        resonantFrequenciesTimer.remove();
+        resonantFrequenciesTimer = null;
+    }
+
+    // Timer: Runs every 1 second
+    resonantFrequenciesTimer = scene.time.addEvent({
+        delay: 1000,
+        loop: true,
+        callback: () => {
+            // 1. Emit Survival Time (Progress Objective)
+            if (window.uqe && window.uqe.eventBus) {
+                // Ensure UQE_EVENTS is available, or use string literal
+                const eventName = (typeof UQE_EVENTS !== 'undefined') ? UQE_EVENTS.TIME_SURVIVED : 'time_survived';
+                window.uqe.eventBus.emit(eventName, { seconds: 1 });
+            }
+
+            // Failsafe: Check if quest is still active
+            // If the quest completed but the event didn't stop for some reason, stop it here.
+            if (!window.isQuestActive('main_01_005')) {
+                console.warn('⚠️ Resonant Frequencies Timer running but quest not active! stopping...');
+                stopResonantFrequenciesEvent();
+                return;
+            }
+
+            // 2. Spawn Logic (Echo Mites near Blacksmith)
+            // Blacksmith is at ~24, 13 (from MapManager.js) -> ~768, 416
+            // We verify player is in Town first
+            if (MapManager.currentMap !== 'town') return;
+
+            const blacksmithX = 24 * 32;
+            const blacksmithY = 13 * 32;
+
+            // Only spawn if player is nearby (active defense)
+            if (player && Phaser.Math.Distance.Between(player.x, player.y, blacksmithX, blacksmithY) < 600) {
+                // 40% chance per second to spawn a monster
+                if (Math.random() < 0.4) {
+                    const spawnX = blacksmithX + Phaser.Math.Between(-150, 150);
+                    const spawnY = blacksmithY + Phaser.Math.Between(-100, 150);
+
+                    // Echo Mite stats
+                    const miteType = {
+                        name: 'Echo Mite',
+                        textureKey: 'monster_echo_mite',
+                        hp: 35,
+                        attack: 7,
+                        speed: 80,
+                        xp: 15,
+                        spawnAmount: [1, 1]
+                    };
+
+                    spawnMonster(spawnX, spawnY, miteType, miteType.hp, miteType.attack, miteType.xp);
+
+                    // Optional: Visual effect
+                    if (scene.add) {
+                        const burst = scene.add.circle(spawnX, spawnY, 20, 0x00ffff, 0.5);
+                        scene.tweens.add({
+                            targets: burst, scale: 2, alpha: 0, duration: 500, onComplete: () => burst.destroy()
+                        });
+                    }
+                }
+            }
+        }
+    });
+
+    addChatMessage("Protect the Blacksmith! Echoes are drawn to the sound!", 0xffa500);
+}
+
+function stopResonantFrequenciesEvent() {
+    console.log('✅ ENDING Event: Resonant Frequencies Defense');
+    if (resonantFrequenciesTimer) {
+        resonantFrequenciesTimer.remove();
+        resonantFrequenciesTimer = null;
+    }
+
+    addChatMessage("The resonance acts fade... The swarm retreats.", 0x00ff00);
+}
+
+// Expose globally
+window.startResonantFrequenciesEvent = startResonantFrequenciesEvent;
+window.stopResonantFrequenciesEvent = stopResonantFrequenciesEvent;

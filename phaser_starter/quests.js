@@ -1,5 +1,9 @@
 /**
- * QuestManager Module
+ * @deprecated This module is DEPRECATED as of 2025-12-29.
+ * All quest logic has been migrated to the Unified Quest Engine (UQE).
+ * Use UnifiedQuestSystem.js and quests_v2.json instead.
+ * 
+ * QuestManager Module (LEGACY)
  * Handles loading and managing quest data from quests.json
  */
 class QuestManager {

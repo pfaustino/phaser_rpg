@@ -1152,21 +1152,34 @@ window.UIManager = {
                 if (this.questLogTab === 'available') {
                     detailY += 60;
                     const acceptBtn = scene.add.rectangle(detailStartX + (detailWidth - 20) / 2, detailY, 200, 40, 0x00aa00, 0.9)
-                        .setScrollFactor(0).setDepth(301).setStrokeStyle(2, 0x00ff00).setInteractive({ useHandCursor: true });
+                        .setScrollFactor(0).setDepth(301).setStrokeStyle(2, 0x00ff00)
+                        .setInteractive({ useHandCursor: true })
+                        .setName('AcceptQuestButton');
                     const acceptBtnText = scene.add.text(detailStartX + (detailWidth - 20) / 2, detailY, 'Accept Quest', {
                         fontSize: '18px', fill: '#ffffff', fontStyle: 'bold'
                     }).setScrollFactor(0).setDepth(302).setOrigin(0.5, 0.5);
 
                     const acceptQuest = () => {
+                        console.log(`[QuestLog] Clicking Accept for quest: ${quest.id}`);
                         if (window.uqe && quest.isUQE) {
                             window.uqe.acceptQuest(quest.id);
+                            console.log(`[QuestLog] Quest ${quest.id} accepted via UQE.`);
                         }
                         this.updateQuestLogItems();
                         if (typeof playSound === 'function') playSound('item_pickup');
                     };
 
+                    // Add hover effects and click listeners
+                    acceptBtn.on('pointerover', () => acceptBtn.setFillStyle(0x00cc00));
+                    acceptBtn.on('pointerout', () => acceptBtn.setFillStyle(0x00aa00));
                     acceptBtn.on('pointerdown', acceptQuest);
-                    acceptBtnText.setInteractive({ useHandCursor: true }).on('pointerdown', acceptQuest);
+
+                    // Ensure text is also interactive and triggers the button logic
+                    acceptBtnText.setInteractive({ useHandCursor: true })
+                        .on('pointerdown', acceptQuest)
+                        .on('pointerover', () => acceptBtn.setFillStyle(0x00cc00))
+                        .on('pointerout', () => acceptBtn.setFillStyle(0x00aa00));
+
                     this.questPanel.questDetailElements.push(acceptBtn, acceptBtnText);
                 }
             }
@@ -1341,17 +1354,42 @@ window.UIManager = {
                 .setScrollFactor(0).setDepth(401).setStrokeStyle(2, 0x666666).setInteractive({ useHandCursor: true });
 
             let displayText = choice.text;
-            if (choice.isQuest) displayText = `(!) ${choice.text}`;
-            else if (choice.action === 'unlock_lore' && choice.loreId) {
-                displayText = `○ ${choice.text}`;
+            let textColor = '#ffffff';
+
+            if (choice.isQuest) {
+                const state = choice.questState || 'available';
+                if (state === 'available') {
+                    displayText = `(!) ${choice.text}`;
+                    textColor = '#ffff00';
+                } else if (state === 'active') {
+                    displayText = `(?) ${choice.text}`;
+                    textColor = '#ffffff';
+                } else if (state === 'turnin') {
+                    displayText = `(?) ${choice.text}`;
+                    textColor = '#ffff00';
+                }
+            } else if (choice.action === 'unlock_lore' && choice.loreId) {
+                // Simple Lore Check
+                let isUnlocked = false;
+                try {
+                    const unlocked = JSON.parse(localStorage.getItem('rpg_unlocked_lore') || '[]');
+                    isUnlocked = unlocked.includes(choice.loreId);
+                } catch (e) { }
+                displayText = isUnlocked ? `✓ ${choice.text}` : `○ ${choice.text}`;
+                textColor = isUnlocked ? '#88ff88' : '#9370DB';
             }
 
-            const buttonText = scene.add.text(centerX, buttonY, displayText, {
-                fontSize: '16px', fill: '#ffffff'
-            }).setScrollFactor(0).setDepth(402).setOrigin(0.5, 0.5);
+            const buttonText = scene.add.text(
+                centerX,
+                buttonY,
+                displayText,
+                {
+                    fontSize: '16px',
+                    fill: textColor
+                }
+            ).setScrollFactor(0).setDepth(402).setOrigin(0.5, 0.5);
 
-            if (choice.isQuest) buttonText.setFill('#ffff00');
-
+            // Button hover effects
             buttonBg.on('pointerover', () => buttonBg.setFillStyle(0x444444));
             buttonBg.on('pointerout', () => buttonBg.setFillStyle(0x333333));
 

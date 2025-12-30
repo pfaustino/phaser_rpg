@@ -255,8 +255,10 @@ class Quest {
         this.id = data.id;
         this.title = data.title;
         this.description = data.description;
+        this.giver = data.giver; // Store giver
         this.objectives = this.createObjectives(data.objectives, eventBus);
         this.completed = false;
+        this.isTurnedIn = false; // Track manual turn-in
         this.rewards = data.rewards || {};
         this.requires = data.requires;
     }
@@ -284,14 +286,32 @@ class Quest {
         });
     }
 
+    // Check if objectives are met (for UI feedback)
+    canComplete() {
+        return this.objectives.every(o => o.isComplete());
+    }
+
+    // Signal manual turn-in
+    complete() {
+        this.isTurnedIn = true;
+        return this.checkCompletion();
+    }
+
     checkCompletion() {
         if (this.completed) return true;
+
         const allDone = this.objectives.every(o => o.isComplete());
+
         if (allDone) {
+            // If quest has a giver, require manual turn-in
+            if (this.giver && !this.isTurnedIn) {
+                return false; // Wait for dialog interaction
+            }
+
             this.completed = true;
             // console.log(`🏆 [UQE] QUEST COMPLETE: ${this.title}`);
         }
-        return allDone;
+        return this.completed; // Return actual completed state
     }
 
     getSaveData() {

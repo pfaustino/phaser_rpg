@@ -3241,7 +3241,7 @@ function update(time, delta) {
             if (debugHitTest.length > 0) {
                 console.log('🖱️ Pointer Down Hit Test Results:', debugHitTest.length, 'objects');
                 debugHitTest.forEach((obj, idx) => {
-                    console.log(`   [${idx}] Type: ${obj.type}, Depth: ${obj.depth}, Item: ${obj.isItem}, Monster: ${obj.monsterId}, NPC: ${obj.npcId}, Name: ${obj.name}`);
+                    console.log(`   [${idx}] Type: ${obj.type}, Depth: ${obj.depth}, Interactive: ${obj.input ? obj.input.enabled : 'N/A'}, Name: ${obj.name}`);
                 });
             } else {
                 console.log('🖱️ Pointer Down: No objects detected under cursor');
@@ -3251,7 +3251,15 @@ function update(time, delta) {
             const hitObjects = this.input.hitTestPointer(pointer);
             const isOverUI = hitObjects.some(obj => {
                 const isUI = obj.depth > 100 && !obj.monsterId && !obj.npcId;
-                if (isUI) console.log('🛑 Blocking UI Object:', obj.type, 'Depth:', obj.depth, 'Name:', obj.name);
+
+                // FIX: Force-fire click for AcceptQuestButton if input system is failing
+                if (obj.name === 'AcceptQuestButton' && isUI) {
+                    const now = this.time.now;
+                    if (now - (obj._lastForceClick || 0) > 500) {
+                        obj.emit('pointerdown', pointer);
+                        obj._lastForceClick = now;
+                    }
+                }
                 return isUI;
             });
 
@@ -8567,117 +8575,129 @@ function updateNPCIndicators() {
         if (!npc || !npc.active) return;
 
         // Ensure NPC has required properties
-        if (npc.interactionRadius === undefined) {
-            npc.interactionRadius = 50;
-        }
-        if (npc.showIndicator === undefined) {
-            npc.showIndicator = false;
-        }
+        if (npc.interactionRadius === undefined) npc.interactionRadius = 50;
+        if (npc.showIndicator === undefined) npc.showIndicator = false;
 
         // Check distance to player
-        const distance = Phaser.Math.Distance.Between(
-            player.x, player.y,
-            npc.x, npc.y
-        );
-
+        const distance = Phaser.Math.Distance.Between(player.x, player.y, npc.x, npc.y);
         const inRange = distance <= npc.interactionRadius;
 
-        // Show/hide interaction indicator
-        let iconText = '!';
-        let iconColor = '#ffff00'; // Yellow for quests
+        // Determine Indicator State
+        // Priority:
+        // 1. Ready to Turn In (Yellow ?) - Active 'talk' objective targeting this NPC
+        // 2. Available (Yellow !) - Quest Giver has new quest
+        // 3. Active (White ?) - Quest Giver has pending quest (unfinished)
+        // 4. Interaction (Values based on range)
 
-        if (npc.questGiver) {
-            const npcName = npc.name || npc.title;
+        let iconText = null;
+        let iconColor = '#ffffff';
+        let showAlways = false; // If true, show even if out of interaction range
 
-            // Check UQE for available quests for this NPC
-            let hasQuestAvailable = false;
-            if (typeof uqe !== 'undefined' && uqe.allDefinitions) {
-                const uqeCompletedIds = uqe.completedQuests.map(q => q.id);
-                const uqeActiveIds = uqe.activeQuests.map(q => q.id);
+        const npcName = npc.name || npc.title;
 
-                // Get quests for this NPC that are available (not active, not completed, prereqs met)
+        // Check UQE State
+        if (typeof uqe !== 'undefined' && uqe.allDefinitions) {
+            const uqeCompletedIds = uqe.completedQuests.map(q => q.id);
+            const uqeActiveIds = uqe.activeQuests.map(q => q.id);
+
+            // 1. Check for Active 'Talk' Objectives OR Ready for Turn-in
+            // This applies to ANY NPC (Talk) or the Giver (Turn-in)
+            let isTalkTarget = false;
+            let isTurnInTarget = false;
+
+            if (uqe.activeQuests) {
+                // Check Talk Objectives
+                isTalkTarget = uqe.activeQuests.some(q => {
+                    return q.objectives.some(obj => {
+                        // Check if objective is incomplete and is a talk objective for this NPC
+                        return !obj.completed && obj.type === 'talk' && obj.npcId === npcName;
+                    });
+                });
+
+                // Check Ready for Turn-in (All objectives complete, return to giver)
+                isTurnInTarget = uqe.activeQuests.some(q => {
+                    const def = uqe.allDefinitions[q.id];
+                    // Only the giver can complete the quest
+                    if (!def || def.giver !== npcName) return false;
+                    // All objectives must be complete
+                    return q.objectives.every(o => o.completed);
+                });
+            }
+
+            if (isTalkTarget || isTurnInTarget) {
+                iconText = '?';
+                iconColor = '#ffff00'; // Yellow ?
+                showAlways = true;
+            }
+
+            // 2. Check for Available Quests (Only if no turn-in pending)
+            if (!iconText && npc.questGiver) {
                 const npcQuests = Object.values(uqe.allDefinitions).filter(q => q.giver === npcName);
-
-                hasQuestAvailable = npcQuests.some(questDef => {
+                const hasAvailable = npcQuests.some(questDef => {
                     const isActive = uqeActiveIds.includes(questDef.id);
                     const isCompleted = uqeCompletedIds.includes(questDef.id);
                     let prereqMet = true;
                     if (questDef.requires) {
                         prereqMet = uqeCompletedIds.includes(questDef.requires);
                     }
-
                     return !isActive && !isCompleted && prereqMet;
                 });
-            }
 
-            if (!hasQuestAvailable) {
-                // Check if this NPC is a target for an ACTIVE quest objective (e.g. "Talk to X")
-                let hasActiveObjective = false;
-                if (typeof uqe !== 'undefined' && uqe.activeQuests) {
-                    hasActiveObjective = uqe.activeQuests.some(q => {
-                        // Check incomplete objectives
-                        // Quest object might have 'objectives' array of UqeObjective instances
-                        // We check their definition data or properties
-                        return q.objectives.some(obj => {
-                            // Check if objective is incomplete and targets this NPC
-                            // Matches 'npcId' field in objective definition
-                            return !obj.completed && obj.npcId === npcName;
-                        });
-                    });
-                }
-
-                if (hasActiveObjective) {
-                    iconText = '▼';
-                    iconColor = '#ffff00'; // Yellow arrow for active objective target
-                } else {
-                    iconText = '💬'; // No available quests, just chat
-                    iconColor = '#ffffff';
+                if (hasAvailable) {
+                    iconText = '!';
+                    iconColor = '#ffff00'; // Yellow !
+                    showAlways = true;
                 }
             }
-        } else {
-            // Check non-quest-givers too (e.g. just targets)
-            let hasActiveObjective = false;
-            if (typeof uqe !== 'undefined' && uqe.activeQuests) {
-                hasActiveObjective = uqe.activeQuests.some(q => {
-                    return q.objectives.some(obj => {
-                        return !obj.completed && obj.npcId === npc.name;
-                    });
+
+            // 3. Check for Active Quest Giver (White ?)
+            if (!iconText && npc.questGiver) {
+                // Check if any active quest was given by this NPC
+                const hasActiveGiven = uqe.activeQuests.some(q => {
+                    // Get definition to check giver
+                    const def = uqe.allDefinitions[q.id];
+                    return def && def.giver === npcName;
                 });
-            }
 
-            if (hasActiveObjective) {
-                iconText = '▼';
-                iconColor = '#ffff00';
-            } else {
-                iconText = '💬'; // Regular NPC info
+                if (hasActiveGiven) {
+                    iconText = '?';
+                    iconColor = '#ffffff'; // White ?
+                    showAlways = true;
+                }
+            }
+        }
+
+        // If no quest state, check range for generic interaction
+        if (!iconText) {
+            if (inRange) {
+                iconText = '💬';
                 iconColor = '#ffffff';
             }
         }
 
-        const shouldShow = inRange || iconText === '!' || iconText === '▼';
+        const shouldShow = iconText !== null && (inRange || showAlways);
 
         if (shouldShow) {
             if (!npc.showIndicator) {
-                // Convert NPC world position to screen coordinates
+                // Create indicator
                 const camera = scene.cameras.main;
                 const screenX = npc.x - camera.scrollX;
                 const screenY = (npc.y - 45) - camera.scrollY;
 
-                // Create indicator
                 npc.interactionIndicator = scene.add.text(screenX, screenY, iconText, {
                     fontSize: '24px',
                     fill: iconColor,
                     stroke: '#000000',
-                    strokeThickness: 3,
+                    strokeThickness: 4,
                     fontStyle: 'bold'
-                }).setOrigin(0.5, 0.5).setDepth(20).setScrollFactor(0);
+                }).setOrigin(0.5, 0.5).setDepth(100).setScrollFactor(0);
 
                 // Add pulsing animation
                 scene.tweens.add({
                     targets: npc.interactionIndicator,
-                    scaleX: 1.3,
-                    scaleY: 1.3,
-                    duration: 500,
+                    scaleX: 1.2,
+                    scaleY: 1.2,
+                    duration: 600,
                     yoyo: true,
                     repeat: -1,
                     ease: 'Sine.easeInOut'
@@ -8685,14 +8705,12 @@ function updateNPCIndicators() {
 
                 npc.showIndicator = true;
             } else if (npc.interactionIndicator) {
-                // REAL-TIME UPDATE: Check if icon should change
-                // (e.g. from ! to 💬 if quest accepted, which might then hide it if out of range)
-                if (npc.interactionIndicator.text !== iconText) {
-                    npc.interactionIndicator.setText(iconText);
-                    npc.interactionIndicator.setFill(iconColor);
-                }
+                // Update existing
+                if (npc.interactionIndicator.text !== iconText) npc.interactionIndicator.setText(iconText);
+                if (npc.interactionIndicator.style.color !== iconColor) npc.interactionIndicator.setFill(iconColor);
             }
         } else if (npc.showIndicator) {
+            // Destroy
             if (npc.interactionIndicator) {
                 npc.interactionIndicator.destroy();
                 npc.interactionIndicator = null;
@@ -8700,10 +8718,8 @@ function updateNPCIndicators() {
             npc.showIndicator = false;
         }
 
-        // Update indicator position to follow NPC (convert world to screen coordinates)
+        // Update position
         if (npc.interactionIndicator && npc.interactionIndicator.active && npc.active) {
-            // For objects with setScrollFactor(0), calculate screen position from world position
-            // When camera follows player, screen position = world position - camera scroll
             const camera = scene.cameras.main;
             npc.interactionIndicator.x = npc.x - camera.scrollX;
             npc.interactionIndicator.y = (npc.y - 45) - camera.scrollY;
@@ -8712,61 +8728,39 @@ function updateNPCIndicators() {
 
     // Also check generic Quest Zones (Non-NPC objectives)
     if (typeof MapManager !== 'undefined' && MapManager.questZones) {
-        // Iterate through stored quest zones (e.g. { 'strange_energy_zone': zoneObj })
         Object.entries(MapManager.questZones).forEach(([zoneId, zoneObj]) => {
-            if (!zoneObj || !zoneObj.active) return; // Skip if inactive
+            if (!zoneObj || !zoneObj.active) return;
 
-            // Check if this Zone is a target for an ACTIVE quest objective
             let hasActiveObjective = false;
-
             if (typeof uqe !== 'undefined' && uqe.activeQuests) {
                 hasActiveObjective = uqe.activeQuests.some(q => {
                     return q.objectives.some(obj => {
                         // Check if objective is incomplete and targets this ZoneId
-                        // explore_location type usually has 'zoneId' property
-                        const match = !obj.completed && obj.type === 'explore_location' && (obj.zoneId === zoneId);
-                        return match;
+                        return !obj.completed && obj.type === 'explore_location' && (obj.zoneId === zoneId || obj.id === zoneId);
                     });
                 });
             }
 
             if (hasActiveObjective) {
-                // Determine screen position
                 const camera = scene.cameras.main;
-                // Since this runs every update, simple calculation is fine. 
-                // Ensure zoneObj.x/y are correct world coordinates.
                 const screenX = zoneObj.x - camera.scrollX;
-                const screenY = (zoneObj.y - 50) - camera.scrollY; // -50 to float above
+                const screenY = (zoneObj.y - 50) - camera.scrollY;
 
                 if (!zoneObj.interactionIndicator) {
-                    console.log(`✨ [Indicator] Creating indicator for zone: ${zoneId} at screen (${screenX.toFixed(0)}, ${screenY.toFixed(0)})`);
-                    // Create indicator
                     zoneObj.interactionIndicator = scene.add.text(screenX, screenY, '▼', {
-                        fontSize: '24px',
-                        fill: '#ffff00', // Yellow Arrow
-                        stroke: '#000000',
-                        strokeThickness: 3,
-                        fontStyle: 'bold'
-                    }).setOrigin(0.5, 0.5).setDepth(100).setScrollFactor(0); // High depth
+                        fontSize: '24px', fill: '#ffff00', stroke: '#000000', strokeThickness: 3, fontStyle: 'bold'
+                    }).setOrigin(0.5, 0.5).setDepth(100).setScrollFactor(0);
 
-                    // Add pulsing animation
                     scene.tweens.add({
                         targets: zoneObj.interactionIndicator,
-                        scaleX: 1.3,
-                        scaleY: 1.3,
-                        duration: 500,
-                        yoyo: true,
-                        repeat: -1,
-                        ease: 'Sine.easeInOut'
+                        scaleX: 1.3, scaleY: 1.3, duration: 500, yoyo: true, repeat: -1, ease: 'Sine.easeInOut'
                     });
                 } else {
-                    // Update position
                     zoneObj.interactionIndicator.x = screenX;
                     zoneObj.interactionIndicator.y = screenY;
                     zoneObj.interactionIndicator.setVisible(true);
                 }
             } else {
-                // If checking false, remove indicator if it exists
                 if (zoneObj.interactionIndicator) {
                     zoneObj.interactionIndicator.destroy();
                     zoneObj.interactionIndicator = null;
@@ -9162,29 +9156,91 @@ function startDialog(npc) {
             q.giver === npc.name && npc.name !== 'Merchant Lysa'
         );
 
-        // Inject available quests (not active, not completed, prerequisites met)
+        // 1. Inject STATUS requests for ACTIVE quests given by this NPC
+        // "Active/In-Progress" dialog option
+        uqe.activeQuests.forEach(quest => {
+            const def = uqe.allDefinitions[quest.id];
+
+            // A. Check if this NPC is the GIVER
+            if (def && def.giver === npc.name) {
+                // Check if ready for turn-in (all objectives complete)
+                const isReadyForTurnIn = quest.objectives.every(o => o.completed);
+
+                if (isReadyForTurnIn) {
+                    activeDialog.nodes.start.choices.unshift({
+                        text: `[Complete] ${quest.title}`,
+                        // next: null, // DialogManager closes if next is undefined
+                        isQuest: true,
+                        questState: 'turnin',
+                        action: 'complete_quest',
+                        questId: quest.id // Required for action handler
+                    });
+                } else {
+                    activeDialog.nodes.start.choices.unshift({
+                        text: `About ${quest.title}...`,
+                        next: `quest_status_${quest.id}`,
+                        isQuest: true,
+                        questState: 'active'
+                    });
+
+                    // Create status node
+                    activeDialog.nodes[`quest_status_${quest.id}`] = {
+                        text: `How goes the task? Remember: ${quest.description}`,
+                        choices: [{ text: 'I\'m working on it.', next: 'start' }]
+                    };
+                }
+            }
+
+            // B. Check if this NPC is a target for a TALK objective (even if not giver)
+            const talkObjective = quest.objectives.find(o =>
+                !o.completed && o.type === 'talk' && o.npcId === npc.name
+            );
+
+            if (talkObjective) {
+                // Add a priority choice to advance the quest
+                // Use 'turnin' state for Yellow ? to match overhead
+                activeDialog.nodes.start.choices.unshift({
+                    text: `[Quest] ${quest.title}`,
+                    next: `quest_talk_${quest.id}_${talkObjective.id}`,
+                    isQuest: true,
+                    questState: 'turnin',
+                    action: 'complete_objective', // Helper action to ensure completion
+                    questId: quest.id,
+                    objectiveId: talkObjective.id
+                });
+
+                // Create a generic response node if not exists
+                //Ideally this would come from dialogs.json, but we provide a fallback
+                if (!activeDialog.nodes[`quest_talk_${quest.id}_${talkObjective.id}`]) {
+                    activeDialog.nodes[`quest_talk_${quest.id}_${talkObjective.id}`] = {
+                        text: "Ah, good. Let us proceed.",
+                        choices: [{ text: "Continue", next: "start" }]
+                    };
+                }
+            }
+        });
+
+        // 2. Inject Available Quests
+        // Only show quest if: not active, not completed, and prereqs met
         npcQuests.forEach(questDef => {
             const isActive = uqeActiveIds.includes(questDef.id);
             const isCompleted = uqeCompletedIds.includes(questDef.id);
-
-            // Check if prerequisites are met (requires field)
             let prereqMet = true;
             if (questDef.requires) {
                 prereqMet = uqeCompletedIds.includes(questDef.requires);
             }
 
-            // Only show quest if: not active, not completed, and prereqs met
             if (!isActive && !isCompleted && prereqMet) {
                 activeDialog.nodes.start.choices.unshift({
                     text: questDef.title,
                     isQuest: true,
+                    questState: 'available',
                     action: 'quest_accept_v2',
                     questId: questDef.id,
                     next: 'quest_accepted',
                     condition: (stats) => !isQuestActive(questDef.id) && !isQuestCompleted(questDef.id)
                 });
 
-                // Create the acceptance node if not already present
                 if (!activeDialog.nodes.quest_accepted) {
                     activeDialog.nodes.quest_accepted = {
                         text: `Excellent. Here's what I need you to do: ${questDef.description}`,

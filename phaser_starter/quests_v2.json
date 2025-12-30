@@ -221,7 +221,7 @@
                 {
                     "id": "kill_skeletons",
                     "type": "kill",
-                    "monsterId": "skeleton_miner",
+                    "monsterId": "procedural_skeleton",
                     "label": "Defeat Skeleton Miners",
                     "target": 5
                 }
@@ -638,7 +638,7 @@
                 {
                     "id": "defeat_mercenaries",
                     "type": "kill",
-                    "monsterId": "monster_orc",
+                    "monsterId": "procedural_orc",
                     "label": "Defeat Mercenaries",
                     "target": 5
                 }

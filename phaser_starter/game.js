@@ -8,10 +8,22 @@
 // Game configuration
 const config = {
     type: Phaser.AUTO,
-    width: 1024,
-    height: 768,
+    width: 1280,
+    height: 720,
     parent: 'game-container',
     backgroundColor: '#2c3e50',
+    scale: {
+        mode: Phaser.Scale.FIT,
+        autoCenter: Phaser.Scale.CENTER_BOTH,
+        min: {
+            width: 960,
+            height: 540
+        },
+        max: {
+            width: 1920,
+            height: 1440
+        }
+    },
     physics: {
         default: 'arcade',
         arcade: {
@@ -2805,7 +2817,7 @@ function create() {
     }).setScrollFactor(0).setDepth(100);
 
     // Controls text (toggleable) - default to short version
-    const fullControlsText = 'WASD: Move | SPACE: Attack/Pickup | 1-3: Abilities | E: Equipment \nQ: Quests | F: Interact | F5: Save | F9: Load | H: Help | CTRL+A: Assets';
+    const fullControlsText = 'WASD: Move | SPACE: Attack/Pickup | 1-3: Abilities | E: Equipment \nQ: Quests | F: Interact | F5: Save | F9: Load | H: Help';
     const shortControlsText = 'H: Help';
 
     let controlsText = this.add.text(barX, barY + barSpacing + 70, shortControlsText, {
@@ -5584,12 +5596,13 @@ function shakeCamera(duration = 200, intensity = 0.01) {
  */
 function createSystemChatBox() {
     const scene = game.scene.scenes[0];
-    const gameWidth = 1024;
-    const gameHeight = 768;
+    const gameWidth = 1280;
+    const gameHeight = 720;
+    const bottomMargin = 15; // Shared bottom margin with ability bar
     const chatWidth = Math.floor(gameWidth / 3); // One third of map width
     const chatHeight = 120;
     const chatX = 10; // Left margin
-    const chatY = gameHeight - chatHeight - 10; // Bottom margin
+    const chatY = gameHeight - chatHeight - bottomMargin; // Bottom margin
 
     // Create background panel
     const bg = scene.add.rectangle(chatX + chatWidth / 2, chatY + chatHeight / 2, chatWidth, chatHeight, 0x000000, 0.85)
@@ -12036,7 +12049,8 @@ function createAbilityBar() {
 
     console.log('Creating ability bar...');
 
-    const abilityBarY = screenHeight - 80;
+    const bottomMargin = 15; // Shared bottom margin with chat box
+    const abilityBarY = screenHeight - bottomMargin - 30; // 30 = half the button height (60/2)
     const abilitySpacing = 80;
     const startX = screenWidth / 2 - (Object.keys(ABILITY_DEFINITIONS).length - 1) * abilitySpacing / 2;
 

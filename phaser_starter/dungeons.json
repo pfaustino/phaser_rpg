@@ -23,7 +23,7 @@
             },
             "monsters": [
                 {
-                    "id": "echo_rat",
+                    "id": "procedural_echo_mite",
                     "chance": 0.5
                 },
                 {
@@ -31,7 +31,7 @@
                     "chance": 0.4
                 },
                 {
-                    "id": "skeleton_miner",
+                    "id": "procedural_skeleton",
                     "minLevel": 2,
                     "chance": 0.3
                 }

@@ -380,6 +380,12 @@ class UqeEngine {
             this.activeQuests.push(quest);
             // console.log(`✅ [UQE Engine] Quest Accepted: ${quest.title} (ID: ${quest.id})`);
             // console.log(`📊 [UQE Engine] Active quests now: ${this.activeQuests.length}`);
+
+            // Play quest accept sound
+            if (typeof playSound === 'function') {
+                playSound('quest_accept');
+            }
+
             // Emit quest accepted event so UI can update
             this.eventBus.emit(UQE_EVENTS.QUEST_ACCEPTED, quest);
         } else {

@@ -1402,6 +1402,8 @@ function preload() {
     this.load.audio('monster_die', 'assets/audio/monster_die.mp3');
     this.load.audio('new_quest', 'assets/audio/new-quest.mp3');
     this.load.audio('quest_complete', 'assets/audio/quest-completed.mp3');
+    this.load.audio('quest_accept', 'assets/audio/accepter.mp3');
+    this.load.audio('quest_decline', 'assets/audio/quick-beep-high-to-low.mp3');
     this.load.audio('gold_pickup', 'assets/audio/gold-pickup.mp3');
 
     // Verify loading
@@ -3433,6 +3435,50 @@ function update(time, delta) {
                         return;
                     }
 
+                    // PRIORITY CHECK: Check for clickable entities (monsters, NPCs, items) under the pointer
+                    // Monsters take absolute priority over click-to-move
+                    const clickedMonster = hitObjects.find(obj => obj.monsterId && !obj.isDead);
+                    const clickedNPC = hitObjects.find(obj => obj.npcId);
+                    const clickedItem = hitObjects.find(obj => obj.isItem);
+                    const clickedPlayer = hitObjects.find(obj => obj === player);
+
+                    // If clicking directly on the player, ignore (no need to move to where you are)
+                    if (clickedPlayer && !clickedMonster && !clickedNPC && !clickedItem) {
+                        console.log('🛑 Ignoring click on player (already here)');
+                        return;
+                    }
+
+                    // Monster click priority - set target entity and move to attack
+                    if (clickedMonster) {
+                        console.log('⚔️ Monster clicked:', clickedMonster.name || clickedMonster.monsterId);
+                        this.clickTargetEntity = clickedMonster;
+                        this.clickMoveTarget = { x: clickedMonster.x, y: clickedMonster.y };
+                        this.isMovingToClick = true;
+                        this.lastEntityClickTime = this.time.now;
+                        return;
+                    }
+
+                    // NPC click priority
+                    if (clickedNPC) {
+                        console.log('💬 NPC clicked:', clickedNPC.name || clickedNPC.npcId);
+                        this.clickTargetEntity = clickedNPC;
+                        this.clickMoveTarget = { x: clickedNPC.x, y: clickedNPC.y };
+                        this.isMovingToClick = true;
+                        this.lastEntityClickTime = this.time.now;
+                        return;
+                    }
+
+                    // Item click priority
+                    if (clickedItem) {
+                        console.log('🎒 Item clicked:', clickedItem.itemData ? clickedItem.itemData.name : 'Unknown');
+                        this.clickTargetEntity = clickedItem;
+                        this.clickMoveTarget = { x: clickedItem.x, y: clickedItem.y };
+                        this.isMovingToClick = true;
+                        this.lastEntityClickTime = this.time.now;
+                        return;
+                    }
+
+                    // No entity clicked - process as click-to-move
                     console.log('Movement Triggered. WindowsOpen:', isAnyWindowOpen(), 'LastCloseDelta:', this.time.now - (this.lastWindowCloseTime || 0));
 
                     // Set target position
@@ -4666,8 +4712,11 @@ function handleMonsterDeath(monster) {
         ease: 'Power2'
     });
 
-    // Give XP (based on monster type)
-    const xpGain = monster.xpReward || 10;
+    // Give XP (based on monster type, scaled by difficulty)
+    const baseXpGain = monster.xpReward || 10;
+    const difficulty = window.GameState?.currentDifficulty || 'normal';
+    const diffSettings = window.Constants?.DIFFICULTY?.[difficulty] || { xpMult: 1 };
+    const xpGain = Math.floor(baseXpGain * diffSettings.xpMult);
     playerStats.xp += xpGain;
     showDamageNumber(monster.x, monster.y, `+${xpGain} XP`, 0xffd700, false, 'xp');
     addChatMessage(`Gained ${xpGain} XP`, 0xffd700, '✨');
@@ -4680,7 +4729,7 @@ function handleMonsterDeath(monster) {
 
     // Check level up & Drop items
     checkLevelUp();
-    dropItemsFromMonster(monster.x, monster.y);
+    dropItemsFromMonster(monster.x, monster.y, monster.xpReward || 10);
 
     // Play death sound
     playSound('monster_die');
@@ -4883,10 +4932,11 @@ function monsterAttackPlayer(monster, time) {
     // Play attack animation
     playMonsterAttackAnimation(monster);
 
-    // Calculate damage
+    // Calculate damage using % mitigation formula
     const baseDamage = monster.attack;
     const defense = playerStats.defense;
-    const actualDamage = Math.max(1, baseDamage - Math.floor(defense / 2));
+    // % mitigation: damage = attack * (100 / (100 + defense))
+    const actualDamage = Math.max(1, Math.floor(baseDamage * (100 / (100 + defense))));
 
     // Apply damage to player
     playerStats.hp -= actualDamage;
@@ -5977,16 +6027,16 @@ function updateAttackSpeedIndicator() {
  */
 /**
  * Calculate total XP needed to reach the NEXT level
- * Curve: 200 * Level + 50 * Level^2 (Steepened - was 100*L + 25*L²)
+ * Curve: 400 * Level + 100 * Level^2 (Steepened to slow down leveling)
  * Example:
- * Lvl 1->2: 250 XP (Total 250)
- * Lvl 2->3: 600 XP (Total 850)
- * Lvl 3->4: 1050 XP (Total 1900)
- * Lvl 4->5: 1600 XP (Total 3500)
- * Lvl 5->6: 2250 XP (Total 5750)
+ * Lvl 1->2: 500 XP
+ * Lvl 2->3: 1200 XP (Total 1700)
+ * Lvl 3->4: 2100 XP (Total 3800)
+ * Lvl 4->5: 3200 XP (Total 7000)
+ * Lvl 5->6: 4500 XP (Total 11500)
  */
 function getXPNeededForLevel(level) {
-    return 200 * level + 50 * Math.pow(level, 2);
+    return 400 * level + 100 * Math.pow(level, 2);
 }
 
 /**
@@ -6192,14 +6242,20 @@ window.spawnQuestItem = spawnQuestItem;
 
 /**
  * Drop items from a killed monster
+ * @param {number} x - X position for drop
+ * @param {number} y - Y position for drop
+ * @param {number} monsterXP - XP reward of the monster (used to derive level for item scaling)
  */
-function dropItemsFromMonster(x, y) {
+function dropItemsFromMonster(x, y, monsterXP = 10) {
     const scene = game.scene.scenes[0];
+
+    // Derive monster level from XP reward (level = floor(xp / 5), minimum 1)
+    const monsterLevel = Math.max(1, Math.floor(monsterXP / 5));
 
     // 70% chance to drop random loot
     let droppedItem = null;
     if (Math.random() < 0.7) {
-        droppedItem = generateRandomItem();
+        droppedItem = generateRandomItem(monsterLevel);
     }
 
     // NEW: Quest-specific loot logic
@@ -8567,6 +8623,9 @@ function showQuestPreviewModal(questId, onAccept, onDecline) {
     // Decline handler  
     const declineHandler = () => {
         console.log('❌ Quest Preview: Decline Clicked');
+        if (typeof playSound === 'function') {
+            playSound('quest_decline');
+        }
         hideQuestPreviewModal();
         if (onDecline) onDecline();
     };
@@ -9379,6 +9438,27 @@ function evaluateDialogCondition(conditionStr, stats) {
                     if (quest) {
                         const obj = quest.objectives.find(o => o.id === oId);
                         return obj && !obj.isComplete();
+                    }
+                }
+                return false;
+            }
+
+        case 'quest_objective_complete':
+            // Check if a specific objective is complete
+            // Param format: QUEST_ID:OBJECTIVE_ID
+            {
+                const parts = conditionStr.split(':');
+                if (parts.length < 3) return false;
+                const qId = parts[1];
+                const oId = parts[2];
+
+                // Quest must be active
+                if (!isQuestActive(qId)) return false;
+                if (window.uqe) {
+                    const quest = window.uqe.activeQuests.find(q => q.id === qId);
+                    if (quest) {
+                        const obj = quest.objectives.find(o => o.id === oId);
+                        return obj && obj.isComplete();
                     }
                 }
                 return false;
@@ -13689,15 +13769,31 @@ function spawnMonster(x, y, type, hpOverride, attackOverride, xpOverride, isBoss
     }
 
     if (monster) {
-        // Shared properties for ALL monsters (Method 1 & 2)
         monster.name = type.name;
         monster.monsterId = type.id || type.monsterType || type.name.toLowerCase();
         monster.monsterType = type.monsterType || type.name.toLowerCase();
-        monster.hp = hpOverride !== undefined ? hpOverride : type.hp;
+
+        // Get difficulty settings for HP and attack scaling
+        const difficulty = window.GameState?.currentDifficulty || 'normal';
+        const diffSettings = window.Constants?.DIFFICULTY?.[difficulty] || { hpMult: 1, dmgMult: 1 };
+        const monsterScaling = window.Constants?.MONSTER_SCALING || { hpPerLevel: 0.15, attackPerLevel: 0.10 };
+
+        // Calculate monster level from XP reward (level = floor(xp / 5), minimum 1)
+        const xpReward = xpOverride !== undefined ? xpOverride : (type.xp || 10);
+        const monsterLvl = Math.max(1, Math.floor(xpReward / 5));
+
+        // Apply level-based scaling: +hpPerLevel% HP and +attackPerLevel% attack per level
+        const levelHpMult = 1 + (monsterLvl - 1) * monsterScaling.hpPerLevel;
+        const levelAtkMult = 1 + (monsterLvl - 1) * monsterScaling.attackPerLevel;
+
+        // Apply both level scaling and difficulty multipliers to HP and attack
+        const baseHp = hpOverride !== undefined ? hpOverride : type.hp;
+        const baseAttack = attackOverride !== undefined ? attackOverride : type.attack;
+        monster.hp = Math.floor(baseHp * levelHpMult * diffSettings.hpMult);
         monster.maxHp = monster.hp;
-        monster.attack = attackOverride !== undefined ? attackOverride : type.attack;
+        monster.attack = Math.floor(baseAttack * levelAtkMult * diffSettings.dmgMult);
         monster.speed = type.speed;
-        monster.xpReward = xpOverride !== undefined ? xpOverride : (type.xp || 10);
+        monster.xpReward = xpReward;
         monster.lastAttackTime = 0;
         monster.attackCooldown = isBoss ? 1500 : 1000;
         monster.attackRange = isBoss ? 70 : 50;
@@ -15503,6 +15599,11 @@ function showQuestPreviewModalEnhanced(questId, onAccept, onDecline) {
     const declineHandler = () => {
         elements.forEach(e => e.destroy());
         questPreviewModal = null;
+
+        // Play decline sound
+        if (typeof playSound === 'function') {
+            playSound('quest_decline');
+        }
 
         // Record closure time
         if (game.scene.scenes[0]) {

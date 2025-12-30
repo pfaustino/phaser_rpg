@@ -31,7 +31,7 @@
                     "type": "collect",
                     "itemId": "echo_shard",
                     "label": "Collect Echo Shards",
-                    "target": 3
+                    "target": 8
                 }
             ],
             "rewards": {
@@ -52,7 +52,7 @@
                     "type": "kill",
                     "monsterId": "procedural_echo_mite",
                     "label": "Defeat Mites",
-                    "target": 3
+                    "target": 8
                 }
             ],
             "rewards": {
@@ -74,7 +74,7 @@
                     "itemId": "crystal_shard",
                     "icon": "item_crystal",
                     "label": "Gather Shards from Monsters",
-                    "target": 5
+                    "target": 12
                 }
             ],
             "rewards": {
@@ -221,7 +221,7 @@
                     "type": "kill",
                     "monsterId": "procedural_echo_mite",
                     "label": "Kill Echo Creatures",
-                    "target": 10
+                    "target": 20
                 }
             ],
             "rewards": {
@@ -242,7 +242,7 @@
                     "type": "kill",
                     "monsterId": "procedural_skeleton",
                     "label": "Defeat Skeleton Miners",
-                    "target": 5
+                    "target": 12
                 }
             ],
             "rewards": {
@@ -262,7 +262,7 @@
                     "type": "collect",
                     "itemId": "echo_crystal",
                     "label": "Mine Echo Crystals",
-                    "target": 10
+                    "target": 20
                 }
             ],
             "rewards": {
@@ -691,7 +691,7 @@
         "quest_001": {
             "id": "quest_001",
             "title": "First Steps",
-            "description": "Kill 5 monsters to prove your worth.",
+            "description": "Kill 15 monsters to prove your worth.",
             "giver": "Guard Thorne",
             "objectives": [
                 {
@@ -699,7 +699,7 @@
                     "type": "kill",
                     "monsterId": "any",
                     "label": "Defeat Monsters",
-                    "target": 5
+                    "target": 15
                 }
             ],
             "rewards": {
@@ -718,7 +718,7 @@
                     "type": "collect",
                     "itemId": "any",
                     "label": "Collect Items",
-                    "target": 3
+                    "target": 10
                 }
             ],
             "rewards": {
@@ -747,14 +747,14 @@
         "quest_004": {
             "id": "quest_004",
             "title": "Gold Rush",
-            "description": "Earn 25 gold from monster drops.",
+            "description": "Earn 75 gold from monster drops.",
             "giver": "Merchant Lysa",
             "objectives": [
                 {
                     "id": "earn_gold",
                     "type": "gold",
                     "label": "Earn Gold",
-                    "target": 25
+                    "target": 75
                 }
             ],
             "rewards": {
@@ -765,14 +765,14 @@
         "quest_005": {
             "id": "quest_005",
             "title": "Explorer",
-            "description": "Travel 500 tiles across the map.",
+            "description": "Travel 1500 tiles across the map.",
             "giver": "Elder Malik",
             "objectives": [
                 {
                     "id": "travel_tiles",
                     "type": "explore",
                     "label": "Travel Tiles",
-                    "target": 500
+                    "target": 1500
                 }
             ],
             "rewards": {
@@ -801,7 +801,7 @@
         "quest_007": {
             "id": "quest_007",
             "title": "Monster Hunter",
-            "description": "Defeat 5 monsters to earn the title of Hunter.",
+            "description": "Defeat 15 monsters to earn the title of Hunter.",
             "giver": "Captain Thorne",
             "objectives": [
                 {
@@ -809,7 +809,7 @@
                     "type": "kill",
                     "monsterId": "any",
                     "label": "Defeat Monsters",
-                    "target": 5
+                    "target": 15
                 }
             ],
             "rewards": {

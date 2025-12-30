@@ -102,7 +102,7 @@ window.UIManager = {
         const centerX = scene.cameras.main.width / 2;
         const centerY = scene.cameras.main.height / 2;
         const panelWidth = 400;
-        const panelHeight = 460;
+        const panelHeight = 550;
 
         // Background
         const bg = scene.add.rectangle(centerX, centerY, panelWidth, panelHeight, 0x1a1a1a, 0.95)
@@ -156,6 +156,73 @@ window.UIManager = {
         });
 
         this.settingsPanel.elements.push(musicBtnBg, musicBtnText);
+        currentY += spacing;
+
+        // --- Difficulty Selector ---
+        const diffLabel = scene.add.text(centerX, currentY, 'Difficulty:', {
+            fontSize: '18px', fill: '#ffffff'
+        }).setScrollFactor(0).setDepth(10002).setOrigin(0.5);
+        this.settingsPanel.elements.push(diffLabel);
+        currentY += 25;
+
+        const difficulties = ['casual', 'easy', 'normal', 'hard', 'nightmare'];
+        const diffColors = {
+            casual: 0x4CAF50,
+            easy: 0x8BC34A,
+            normal: 0x2196F3,
+            hard: 0xFF9800,
+            nightmare: 0xF44336
+        };
+        const currentDiff = window.GameState?.currentDifficulty || 'normal';
+        const diffBtnWidth = 70;
+        const diffBtnSpacing = 5;
+        const totalDiffWidth = (diffBtnWidth * 5) + (diffBtnSpacing * 4);
+        const diffStartX = centerX - totalDiffWidth / 2 + diffBtnWidth / 2;
+
+        difficulties.forEach((diff, index) => {
+            const btnX = diffStartX + index * (diffBtnWidth + diffBtnSpacing);
+            const isSelected = (diff === currentDiff);
+            const btnColor = isSelected ? diffColors[diff] : 0x333333;
+            const textColor = isSelected ? '#ffffff' : '#888888';
+
+            const btn = scene.add.rectangle(btnX, currentY, diffBtnWidth, 30, btnColor)
+                .setScrollFactor(0).setDepth(10001).setInteractive({ useHandCursor: true })
+                .setStrokeStyle(isSelected ? 2 : 1, isSelected ? 0xffffff : 0x666666);
+
+            const diffName = diff.charAt(0).toUpperCase() + diff.slice(1);
+            const btnText = scene.add.text(btnX, currentY, diffName.substring(0, 6), {
+                fontSize: '11px', fill: textColor
+            }).setScrollFactor(0).setDepth(10002).setOrigin(0.5);
+
+            btn.diffKey = diff;
+            btn.btnText = btnText;
+
+            btn.on('pointerdown', () => {
+                // Update game state and persist
+                window.GameState.currentDifficulty = diff;
+                localStorage.setItem('gameDifficulty', diff);
+
+                // Update button visuals
+                this.settingsPanel.elements.forEach(el => {
+                    if (el.diffKey !== undefined) {
+                        const isNowSelected = (el.diffKey === diff);
+                        el.setFillStyle(isNowSelected ? diffColors[el.diffKey] : 0x333333);
+                        el.setStrokeStyle(isNowSelected ? 2 : 1, isNowSelected ? 0xffffff : 0x666666);
+                        if (el.btnText) {
+                            el.btnText.setColor(isNowSelected ? '#ffffff' : '#888888');
+                        }
+                    }
+                });
+
+                if (typeof playSound === 'function') playSound('menu_select');
+                if (typeof addChatMessage === 'function') {
+                    addChatMessage(`Difficulty set to ${diffName}`, 0xffd700, '⚙️');
+                }
+            });
+
+            this.settingsPanel.elements.push(btn, btnText);
+        });
+
         currentY += spacing;
 
         // --- Save Game ---

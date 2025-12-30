@@ -91,6 +91,10 @@ window.GameState = {
     // ============================================
     isGamePaused: false,
 
+    // Difficulty setting (casual, easy, normal, hard, nightmare)
+    // Loaded from localStorage, defaults to 'normal'
+    currentDifficulty: localStorage.getItem('gameDifficulty') || 'normal',
+
     // Trackers
     questTrackerEntries: [],
     lastPlayerX: 0,

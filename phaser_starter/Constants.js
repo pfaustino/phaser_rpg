@@ -26,6 +26,50 @@ window.Constants = {
         'Rare': 0x0070dd,      // Blue
         'Epic': 0xa335ee,      // Purple
         'Legendary': 0xff8000  // Orange
+    },
+
+    // ============================================
+    // DIFFICULTY SETTINGS
+    // ============================================
+    DIFFICULTY: {
+        casual: { name: 'Casual', hpMult: 0.6, dmgMult: 0.5, qualityBonus: 0, xpMult: 1.25 },
+        easy: { name: 'Easy', hpMult: 0.8, dmgMult: 0.75, qualityBonus: 0, xpMult: 1.10 },
+        normal: { name: 'Normal', hpMult: 1.0, dmgMult: 1.0, qualityBonus: 0, xpMult: 1.00 },
+        hard: { name: 'Hard', hpMult: 1.3, dmgMult: 1.25, qualityBonus: 0.10, xpMult: 0.90 },
+        nightmare: { name: 'Nightmare', hpMult: 1.6, dmgMult: 1.5, qualityBonus: 0.25, xpMult: 0.75 }
+    },
+
+    // ============================================
+    // ITEM SCALING FORMULAS
+    // ============================================
+    ITEM_SCALING: {
+        weapon: { base: 3, perLevel: 1.5 },
+        armor: { base: 2, perLevel: 1.0 },
+        helmet: { base: 1, perLevel: 0.7 },
+        boots: { base: 1, perLevel: 0.5 },
+        gloves: { base: 1, perLevel: 0.5 },
+        belt: { base: 1, perLevel: 0.5 },
+        ring: { base: 1, perLevel: 0.4 },
+        amulet: { base: 1, perLevel: 0.4 }
+    },
+
+    // ============================================
+    // QUALITY MULTIPLIERS
+    // ============================================
+    QUALITY_MULTIPLIERS: {
+        'Common': 1.0,
+        'Uncommon': 1.15,
+        'Rare': 1.30,
+        'Epic': 1.50,
+        'Legendary': 1.75
+    },
+
+    // ============================================
+    // MONSTER SCALING
+    // ============================================
+    MONSTER_SCALING: {
+        hpPerLevel: 0.15,      // +15% HP per monster level
+        attackPerLevel: 0.10   // +10% attack per monster level
     }
 };
 

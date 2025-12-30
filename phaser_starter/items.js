@@ -211,6 +211,88 @@ function getItemSet(setName) {
 }
 
 // ============================================
+// ITEM LEVEL SCALING (New System)
+// ============================================
+
+/**
+ * Calculate base stat for an item based on its item level
+ * @param {string} itemType - Type of item (weapon, armor, helmet, etc.)
+ * @param {number} itemLevel - Item level (derived from source monster/player)
+ * @returns {number} Base stat value before quality modifier
+ */
+function calculateBaseStatForItemLevel(itemType, itemLevel) {
+    const scaling = window.Constants?.ITEM_SCALING?.[itemType] || { base: 1, perLevel: 0.5 };
+    return Math.floor(scaling.base + itemLevel * scaling.perLevel);
+}
+
+/**
+ * Get quality multiplier for stat calculation
+ * @param {string} quality - Item quality (Common, Uncommon, etc.)
+ * @returns {number} Multiplier value
+ */
+function getQualityMultiplier(quality) {
+    return window.Constants?.QUALITY_MULTIPLIERS?.[quality] || 1.0;
+}
+
+/**
+ * Get current difficulty settings
+ * @returns {object} Difficulty modifiers
+ */
+function getDifficultySettings() {
+    const difficulty = window.GameState?.currentDifficulty || 'normal';
+    return window.Constants?.DIFFICULTY?.[difficulty] || { hpMult: 1, dmgMult: 1, qualityBonus: 0, xpMult: 1 };
+}
+
+/**
+ * Roll item quality with difficulty bonus applied
+ * @returns {string} Quality tier
+ */
+function rollItemQuality() {
+    const diffSettings = getDifficultySettings();
+    const qualityBonus = diffSettings.qualityBonus || 0;
+
+    // Base quality chances + difficulty bonus shifts toward rarer items
+    const roll = Math.random() - qualityBonus;
+
+    if (roll < 0.01) return 'Legendary';      // 1% base
+    if (roll < 0.05) return 'Epic';           // 4% base
+    if (roll < 0.15) return 'Rare';           // 10% base
+    if (roll < 0.40) return 'Uncommon';       // 25% base
+    return 'Common';                          // 60% base
+}
+
+/**
+ * Generate scaled item stats based on item level and quality
+ * @param {string} itemType - Type of item
+ * @param {number} itemLevel - Item level
+ * @param {string} quality - Item quality
+ * @returns {object} Calculated stats
+ */
+function generateScaledStats(itemType, itemLevel, quality) {
+    const baseStat = calculateBaseStatForItemLevel(itemType, itemLevel);
+    const qualityMult = getQualityMultiplier(quality);
+    const scaledStat = Math.floor(baseStat * qualityMult);
+
+    // Different items have different primary stats
+    switch (itemType) {
+        case 'weapon':
+            return { attackPower: scaledStat, itemLevel };
+        case 'armor':
+        case 'helmet':
+        case 'boots':
+        case 'gloves':
+        case 'belt':
+            return { defense: scaledStat, itemLevel };
+        case 'ring':
+            return { attackPower: Math.floor(scaledStat * 0.7), defense: Math.floor(scaledStat * 0.5), itemLevel };
+        case 'amulet':
+            return { defense: scaledStat, maxHp: Math.floor(scaledStat * 2), itemLevel };
+        default:
+            return { itemLevel };
+    }
+}
+
+// ============================================
 // ITEM GENERATION LOGIC (Moved from game.js)
 // ============================================
 
@@ -410,8 +492,12 @@ function calculateItemStats(baseItem, quality) {
 
 /**
  * Generate a random item drop
+ * @param {number} sourceLevel - Optional level of the source (monster level or player level). Defaults to 1.
  */
-function generateRandomItem() {
+function generateRandomItem(sourceLevel = 1) {
+    // Ensure sourceLevel is at least 1
+    const itemLevel = Math.max(1, Math.floor(sourceLevel));
+
     const rand = Math.random();
 
     // Drop rates in order (highest to lowest):
@@ -456,11 +542,10 @@ function generateRandomItem() {
         }
     }
     else if (rand < 0.60) {
-        // 15% - Armor
-        const qualities = ['Common', 'Uncommon'];
-        const quality = Phaser.Math.RND.pick(qualities);
+        // 15% - Armor (now uses iLvl scaling)
+        const quality = rollItemQuality();
         const material = getMaterialForQuality(quality);
-        const baseDefense = quality === 'Common' ? Phaser.Math.Between(3, 6) : Phaser.Math.Between(6, 10);
+        const scaledStats = generateScaledStats('armor', itemLevel, quality);
 
         const prefix = getPrefixForQuality(quality);
         const suffix = getSuffixForQuality(quality);
@@ -471,7 +556,8 @@ function generateRandomItem() {
             material: material,
             prefix: prefix,
             suffix: suffix,
-            defense: baseDefense
+            itemLevel: itemLevel,
+            defense: scaledStats.defense
         };
 
         const specialProps = generateSpecialProperties(item, quality);
@@ -484,26 +570,44 @@ function generateRandomItem() {
         return item;
     }
     else if (rand < 0.72) {
-        // 12% - Gloves
-        const qualities = ['Common', 'Uncommon'];
-        const quality = Phaser.Math.RND.pick(qualities);
-        const defense = quality === 'Common' ? Phaser.Math.Between(1, 3) : Phaser.Math.Between(3, 5);
-        const attackBonus = quality === 'Common' ? Phaser.Math.Between(1, 2) : Phaser.Math.Between(2, 4);
-        return {
+        // 12% - Gloves (now uses iLvl scaling)
+        const quality = rollItemQuality();
+        const material = getMaterialForQuality(quality);
+        const scaledStats = generateScaledStats('gloves', itemLevel, quality);
+        // Gloves give defense + small attack bonus
+        const attackBonus = Math.max(1, Math.floor(scaledStats.defense * 0.5));
+
+        const prefix = getPrefixForQuality(quality);
+        const suffix = getSuffixForQuality(quality);
+
+        const item = {
             type: 'gloves',
-            name: `${quality} Gloves`,
             quality: quality,
-            defense: defense,
+            material: material,
+            prefix: prefix,
+            suffix: suffix,
+            itemLevel: itemLevel,
+            defense: scaledStats.defense,
             attackPower: attackBonus
         };
+
+        const specialProps = generateSpecialProperties(item, quality);
+        Object.assign(item, specialProps);
+        item.set = assignItemSet(item, quality);
+        item.name = buildItemName(item);
+        const finalStats = calculateItemStats(item, quality);
+        Object.assign(item, finalStats);
+
+        return item;
     }
     else if (rand < 0.82) {
-        // 10% - Boots
-        const qualities = ['Common', 'Uncommon'];
-        const quality = Phaser.Math.RND.pick(qualities);
+        // 10% - Boots (now uses iLvl scaling)
+        const quality = rollItemQuality();
         const material = getMaterialForQuality(quality);
-        const baseDefense = quality === 'Common' ? Phaser.Math.Between(1, 3) : Phaser.Math.Between(3, 5);
-        const baseSpeed = quality === 'Common' ? 5 : 10;
+        const scaledStats = generateScaledStats('boots', itemLevel, quality);
+        // Speed bonus scales with quality
+        const qualityLevels = { 'Common': 1, 'Uncommon': 2, 'Rare': 3, 'Epic': 4, 'Legendary': 5 };
+        const baseSpeed = 3 + (qualityLevels[quality] || 1) * 2;
 
         const prefix = getPrefixForQuality(quality);
         const suffix = getSuffixForQuality(quality);
@@ -514,7 +618,8 @@ function generateRandomItem() {
             material: material,
             prefix: prefix,
             suffix: suffix,
-            defense: baseDefense,
+            itemLevel: itemLevel,
+            defense: scaledStats.defense,
             speed: baseSpeed
         };
 
@@ -528,22 +633,19 @@ function generateRandomItem() {
         return item;
     }
     else if (rand < 0.95) {
-        // 5% - Weapon
-        const qualities = ['Common', 'Uncommon', 'Rare'];
-        const quality = Phaser.Math.RND.pick(qualities);
+        // 5% - Weapon (now uses iLvl scaling)
+        const quality = rollItemQuality();
 
         // Get weapon type and material
         const weaponType = getWeaponTypeForQuality(quality);
         const material = getMaterialForQuality(quality);
         const weaponData = getWeaponTypes()[weaponType];
 
-        // Base attack power based on quality
-        const baseAttack = quality === 'Common' ? Phaser.Math.Between(5, 10) :
-            quality === 'Uncommon' ? Phaser.Math.Between(10, 15) :
-                Phaser.Math.Between(15, 20);
+        // Get scaled attack power from iLvl system
+        const scaledStats = generateScaledStats('weapon', itemLevel, quality);
 
         // Apply weapon type modifier
-        let attackPower = Math.floor(baseAttack * weaponData.baseAttack);
+        let attackPower = Math.floor(scaledStats.attackPower * weaponData.baseAttack);
         let critChance = weaponData.critChance;
 
         // Get prefix and suffix
@@ -558,6 +660,7 @@ function generateRandomItem() {
             material: material,
             prefix: prefix,
             suffix: suffix,
+            itemLevel: itemLevel,
             attackPower: attackPower,
             critChance: critChance,
             speed: weaponData.speed
@@ -578,12 +681,12 @@ function generateRandomItem() {
         return item;
     }
     else if (rand < 0.98) {
-        // 3% - Belt
-        const qualities = ['Common', 'Uncommon'];
-        const quality = Phaser.Math.RND.pick(qualities);
+        // 3% - Belt (now uses iLvl scaling)
+        const quality = rollItemQuality();
         const material = getMaterialForQuality(quality);
-        const baseDefense = quality === 'Common' ? Phaser.Math.Between(2, 4) : Phaser.Math.Between(4, 6);
-        const baseHp = quality === 'Common' ? 10 : 15;
+        const scaledStats = generateScaledStats('belt', itemLevel, quality);
+        // Belts also give HP bonus based on defense
+        const baseHp = Math.max(5, scaledStats.defense * 3);
 
         const prefix = getPrefixForQuality(quality);
         const suffix = getSuffixForQuality(quality);
@@ -594,7 +697,8 @@ function generateRandomItem() {
             material: material,
             prefix: prefix,
             suffix: suffix,
-            defense: baseDefense,
+            itemLevel: itemLevel,
+            defense: scaledStats.defense,
             maxHp: baseHp
         };
 
@@ -608,29 +712,39 @@ function generateRandomItem() {
         return item;
     }
     else if (rand < 0.995) {
-        // 1.5% - Ring
-        const qualities = ['Common', 'Uncommon', 'Rare'];
-        const quality = Phaser.Math.RND.pick(qualities);
-        const attackBonus = quality === 'Common' ? Phaser.Math.Between(1, 3) :
-            quality === 'Uncommon' ? Phaser.Math.Between(3, 5) :
-                Phaser.Math.Between(5, 8);
-        return {
+        // 1.5% - Ring (now uses iLvl scaling)
+        const quality = rollItemQuality();
+        const material = getMaterialForQuality(quality);
+        const scaledStats = generateScaledStats('ring', itemLevel, quality);
+
+        const prefix = getPrefixForQuality(quality);
+        const suffix = getSuffixForQuality(quality);
+
+        const item = {
             type: 'ring',
-            name: `${quality} Ring`,
             quality: quality,
-            attackPower: attackBonus,
-            defense: Math.floor(attackBonus / 2) // Rings give both attack and defense
+            material: material,
+            prefix: prefix,
+            suffix: suffix,
+            itemLevel: itemLevel,
+            attackPower: scaledStats.attackPower || 1,
+            defense: scaledStats.defense || 0
         };
+
+        const specialProps = generateSpecialProperties(item, quality);
+        Object.assign(item, specialProps);
+        item.set = assignItemSet(item, quality);
+        item.name = buildItemName(item);
+        const finalStats = calculateItemStats(item, quality);
+        Object.assign(item, finalStats);
+
+        return item;
     }
     else {
-        // 0.5% - Amulet (rarest)
-        const qualities = ['Common', 'Uncommon', 'Rare'];
-        const quality = Phaser.Math.RND.pick(qualities);
+        // 0.5% - Amulet (rarest, now uses iLvl scaling)
+        const quality = rollItemQuality();
         const material = getMaterialForQuality(quality);
-        const baseDefense = quality === 'Common' ? Phaser.Math.Between(2, 4) :
-            quality === 'Uncommon' ? Phaser.Math.Between(4, 6) :
-                Phaser.Math.Between(6, 10);
-        const baseHp = quality === 'Common' ? 10 : quality === 'Uncommon' ? 20 : 30;
+        const scaledStats = generateScaledStats('amulet', itemLevel, quality);
 
         const prefix = getPrefixForQuality(quality);
         const suffix = getSuffixForQuality(quality);
@@ -641,8 +755,9 @@ function generateRandomItem() {
             material: material,
             prefix: prefix,
             suffix: suffix,
-            defense: baseDefense,
-            maxHp: baseHp
+            itemLevel: itemLevel,
+            defense: scaledStats.defense,
+            maxHp: scaledStats.maxHp || 0
         };
 
         const specialProps = generateSpecialProperties(item, quality);

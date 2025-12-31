@@ -169,43 +169,90 @@ let settingsKey;
 let settingsKey2; // Was not there but safe
 // Load music preference from localStorage; default to true (ON)
 window.musicEnabled = localStorage.getItem('musicEnabled') !== 'false';
+window.musicVolume = parseFloat(localStorage.getItem('musicVolume') || '0.5');
+window.sfxVolume = parseFloat(localStorage.getItem('sfxVolume') || '0.7');
 
-// Background music
-let villageMusic = null;
-let wildernessMusic = null;
-let dungeonMusic = null;
+// Background music (tracks)
+window.villageMusic = null;
+window.wildernessMusic = null;
+window.dungeonMusic = null;
+
+/**
+ * Update global music volume
+ * @param {number} volume - 0.0 to 1.0
+ */
+window.updateMusicVolume = function (volume) {
+    console.log(`🔊 Updating Music Volume: ${volume.toFixed(2)}`);
+    window.musicVolume = volume;
+    localStorage.setItem('musicVolume', volume.toString());
+
+    // Update active tracks immediately
+    if (window.villageMusic) window.villageMusic.setVolume(volume);
+    if (window.wildernessMusic) window.wildernessMusic.setVolume(volume);
+    if (window.dungeonMusic) window.dungeonMusic.setVolume(volume);
+
+    // If volume > 0, ensure it's unmuted. 
+    if (volume > 0 && !window.musicEnabled) {
+        window.toggleMusic(true);
+    } else if (volume === 0 && window.musicEnabled) {
+        window.toggleMusic(false);
+    }
+};
+
+/**
+ * Update global SFX volume
+ * @param {number} volume - 0.0 to 1.0
+ */
+window.updateSFXVolume = function (volume) {
+    window.sfxVolume = volume;
+    localStorage.setItem('sfxVolume', volume.toString());
+};
 
 /**
  * Toggle music track muting
  * @param {boolean} enabled - Whether music should be enabled
  */
 window.toggleMusic = function (enabled) {
-    console.log(`🎵 Toggling music: ${enabled ? 'ON' : 'OFF'}`);
+    console.log(`🎵 Toggling music: ${enabled ? 'ON' : 'OFF'} (Global Volume: ${window.musicVolume})`);
 
-    // Toggle specific music tracks only (leave SFX alone)
-    if (villageMusic) {
-        if (enabled && !villageMusic.isPlaying) villageMusic.play();
-        villageMusic.setMute(!enabled);
+    window.musicEnabled = enabled;
+    localStorage.setItem('musicEnabled', enabled.toString());
+
+    // Update specific music tracks
+    if (window.villageMusic) {
+        if (enabled && !window.villageMusic.isPlaying) {
+            console.log('🎵 Resuming Village Music from toggleMusic');
+            window.villageMusic.play();
+        }
+        window.villageMusic.setMute(!enabled);
+        window.villageMusic.setVolume(window.musicVolume);
     }
 
-    if (wildernessMusic) {
-        if (enabled && !wildernessMusic.isPlaying) wildernessMusic.play();
-        wildernessMusic.setMute(!enabled);
+    if (window.wildernessMusic) {
+        if (enabled && !window.wildernessMusic.isPlaying) {
+            console.log('🎵 Resuming Wilderness Music from toggleMusic');
+            window.wildernessMusic.play();
+        }
+        window.wildernessMusic.setMute(!enabled);
+        window.wildernessMusic.setVolume(window.musicVolume);
     }
 
-    if (dungeonMusic) {
-        if (enabled && !dungeonMusic.isPlaying) dungeonMusic.play();
-        dungeonMusic.setMute(!enabled);
+    if (window.dungeonMusic) {
+        if (enabled && !window.dungeonMusic.isPlaying) {
+            console.log('🎵 Resuming Dungeon Music from toggleMusic');
+            window.dungeonMusic.play();
+        }
+        window.dungeonMusic.setMute(!enabled);
+        window.dungeonMusic.setVolume(window.musicVolume);
     }
 
-    // Also handle transition logic - if we are supposed to be playing something but it's stopped/muted
-    // Re-trigger music check for current map
-    if (enabled && typeof playBackgroundMusic === 'function' && typeof MapManager !== 'undefined') {
-        playBackgroundMusic(MapManager.currentMap); // Ensure the correct track is playing
+    // Refresh current track if enabled but nothing is assigned yet
+    if (enabled && typeof window.playBackgroundMusic === 'function' && typeof MapManager !== 'undefined') {
+        window.playBackgroundMusic(MapManager.currentMap);
 
-        // Also ensure scene isn't globally muted from previous fallback
         const scene = game.scene.scenes[0];
         if (scene && scene.sound) {
+            console.log('🔊 Ensuring main sound manager is unmuted');
             scene.sound.mute = false;
         }
     }
@@ -216,32 +263,58 @@ window.toggleMusic = function (enabled) {
  * @param {string} mapType - 'town', 'wilderness', 'dungeon'
  */
 window.playBackgroundMusic = function (mapType) {
-    if (!window.musicEnabled) return;
+    if (!window.musicEnabled) {
+        console.log('🎵 Music disabled, skipping playBackgroundMusic');
+        return;
+    }
 
-    // Stop all current music to ensure clean transitions
-    if (villageMusic && villageMusic.isPlaying) villageMusic.stop();
-    if (wildernessMusic && wildernessMusic.isPlaying) wildernessMusic.stop();
-    if (dungeonMusic && dungeonMusic.isPlaying) dungeonMusic.stop();
+    console.log(`🎵 playBackgroundMusic: ${mapType} (Vol: ${window.musicVolume})`);
+    if (typeof MapManager !== 'undefined') {
+        console.log(`🗺️ Current MapManager.currentMap: ${MapManager.currentMap}`);
+    }
+
+    // Stop other tracks
+    if (window.villageMusic && window.villageMusic.isPlaying && mapType !== 'town') window.villageMusic.stop();
+    if (window.wildernessMusic && window.wildernessMusic.isPlaying && mapType !== 'wilderness') window.wildernessMusic.stop();
+    if (window.dungeonMusic && window.dungeonMusic.isPlaying && !(['dungeon', 'tower_dungeon', 'temple_ruins'].includes(mapType))) window.dungeonMusic.stop();
 
     const scene = game.scene.scenes[0];
-    if (!scene || !scene.sound) return;
+    if (!scene || !scene.sound) {
+        console.warn('⚠️ playBackgroundMusic: No scene/sound manager');
+        return;
+    }
 
     try {
         if (mapType === 'town') {
-            if (!villageMusic) villageMusic = scene.sound.add('village_music', { loop: true, volume: 0.5 });
-            if (!villageMusic.isPlaying) villageMusic.play();
-            console.log('🎵 Playing Village Music');
+            if (!window.villageMusic) {
+                window.villageMusic = scene.sound.add('village_music', { loop: true, volume: window.musicVolume });
+                console.log('🎵 Added Village Music instance');
+            }
+            if (!window.villageMusic.isPlaying) {
+                window.villageMusic.play();
+                console.log('🎵 Playing Village Music');
+            }
         } else if (mapType === 'wilderness') {
-            if (!wildernessMusic) wildernessMusic = scene.sound.add('wilderness_music', { loop: true, volume: 0.4 });
-            if (!wildernessMusic.isPlaying) wildernessMusic.play();
-            console.log('🎵 Playing Wilderness Music');
+            if (!window.wildernessMusic) {
+                window.wildernessMusic = scene.sound.add('wilderness_music', { loop: true, volume: window.musicVolume });
+                console.log('🎵 Added Wilderness Music instance');
+            }
+            if (!window.wildernessMusic.isPlaying) {
+                window.wildernessMusic.play();
+                console.log('🎵 Playing Wilderness Music');
+            }
         } else if (mapType === 'dungeon' || mapType === 'tower_dungeon' || mapType === 'temple_ruins') {
-            if (!dungeonMusic) dungeonMusic = scene.sound.add('dungeon_music', { loop: true, volume: 0.5 });
-            if (!dungeonMusic.isPlaying) dungeonMusic.play();
-            console.log('🎵 Playing Dungeon Music');
+            if (!window.dungeonMusic) {
+                window.dungeonMusic = scene.sound.add('dungeon_music', { loop: true, volume: window.musicVolume });
+                console.log('🎵 Added Dungeon Music instance');
+            }
+            if (!window.dungeonMusic.isPlaying) {
+                window.dungeonMusic.play();
+                console.log('🎵 Playing Dungeon Music');
+            }
         }
     } catch (e) {
-        console.warn('❌ Error playing music:', e);
+        console.error('❌ playBackgroundMusic Error:', e);
     }
 };
 
@@ -1605,10 +1678,30 @@ function checkZoneInteraction() {
                             window.uqe.eventBus.emit(UQE_EVENTS[action.eventName], action.data || { id: zone.id });
                             if (action.feedback) showDamageNumber(player.x, player.y - 60, action.feedback, 0x00ffff);
                         } else if (action.type === 'give_item') {
-                            if (playerStats.inventory) {
-                                if (!playerStats.inventory[action.itemId]) playerStats.inventory[action.itemId] = 0;
-                                playerStats.inventory[action.itemId] += action.amount;
+                            if (Array.isArray(playerStats.inventory)) {
+                                const amount = action.amount || 1;
+                                // Create a basic item object for quest items (since they aren't in items.json)
+                                const newItem = {
+                                    id: action.itemId,
+                                    name: action.itemId.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' '),
+                                    type: 'quest_item',
+                                    quality: 'Rare',
+                                    amount: amount,
+                                    quantity: amount // For stacking support if needed
+                                };
+                                playerStats.inventory.push(newItem);
+
+                                // UQE Bridge Event for collection objectives
+                                if (window.uqe) {
+                                    window.uqe.eventBus.emit(UQE_EVENTS.ITEM_PICKUP, {
+                                        id: action.itemId,
+                                        type: 'quest_item',
+                                        amount: amount
+                                    });
+                                }
+
                                 if (action.feedback) showDamageNumber(player.x, player.y - 80, action.feedback, 0xffd700);
+                                if (typeof refreshInventory === 'function') refreshInventory();
                             }
                         } else if (action.type === 'composite') {
                             if (action.actions) {
@@ -2438,12 +2531,29 @@ function create() {
         // Handle Objective Progress HUD - WoW-style persistent tracker
         uqe.eventBus.on(UQE_EVENTS.OBJECTIVE_UPDATED, (data) => {
             handleObjectiveUpdate(data);
+
+            // Show Toast Notification for meaningful progress
+            const obj = data.objective;
+            const questTitle = obj.parentQuest ? obj.parentQuest.title : "Quest Update";
+
+            // Filter out high-frequency spam (Explorer/Survivor) from toasts
+            if (obj.type !== 'explore' && obj.type !== 'survive') {
+                if (window.UIManager && typeof window.UIManager.showQuestToast === 'function') {
+                    const progressMsg = `${obj.label}: ${obj.progress}/${obj.target}`;
+                    window.UIManager.showQuestToast(questTitle, progressMsg, obj.completed);
+                }
+            }
         });
 
         // Handle Quest Accepted - update tracker HUD for auto-accepted quests
         uqe.eventBus.on(UQE_EVENTS.QUEST_ACCEPTED, (quest) => {
             console.log(`📋 [UQE Bridge] Quest Accepted: ${quest.title}`);
             addChatMessage(`Quest Started: ${quest.title}`, 0x00ffff, '📜');
+
+            // Show Toast
+            if (window.UIManager && typeof window.UIManager.showQuestToast === 'function') {
+                window.UIManager.showQuestToast(quest.title, "Quest Accepted", false);
+            }
 
             // Special Handler: Resonant Frequencies (main_01_005)
             if (quest.id === 'main_01_005') {
@@ -2460,6 +2570,11 @@ function create() {
         uqe.eventBus.on(UQE_EVENTS.QUEST_COMPLETED, (quest) => {
             console.log(`🏆 [UQE Bridge] Quest Completed: ${quest.title}`);
             addChatMessage(`Quest Completed: ${quest.title}`, 0xffd700, '🏆');
+
+            // Show Toast
+            if (window.UIManager && typeof window.UIManager.showQuestToast === 'function') {
+                window.UIManager.showQuestToast(quest.title, "Quest Completed!", true);
+            }
 
             // Special Handler: Stop Resonant Frequencies
             if (quest.id === 'main_01_005') {
@@ -2962,17 +3077,21 @@ function create() {
     // Initialize sounds after assets load
     initializeSounds();
 
-    // Unlock audio on first user interaction (browser requirement)
+    // Unlock on any key press or click
     const unlockAudio = () => {
         if (!audioUnlocked && this.sound) {
             this.sound.play('fireball_cast', { volume: 0 }); // Silent play to unlock
             this.sound.stopByKey('fireball_cast');
             audioUnlocked = true;
             console.log('🔓 Audio context unlocked');
+
+            // Trigger music if it should be playing
+            if (window.musicEnabled && typeof MapManager !== 'undefined') {
+                playBackgroundMusic(MapManager.currentMap);
+            }
         }
     };
 
-    // Unlock on any key press or click
     this.input.keyboard.on('keydown', unlockAudio);
     this.input.on('pointerdown', unlockAudio);
 
@@ -3222,6 +3341,13 @@ function update(time, delta) {
 
     // If game is paused (e.g. death dialog), stop all game logic
     if (typeof isGamePaused !== 'undefined' && isGamePaused) {
+        return;
+    }
+
+    // Centralized Player Death Check
+    // This ensures death triggers even from hazards or edge cases not caught in specific functions
+    if (typeof playerStats !== 'undefined' && playerStats.hp <= 0) {
+        showFallenDialog();
         return;
     }
     // Update Unified Quest Engine
@@ -4702,15 +4828,34 @@ function handleMonsterDeath(monster) {
     playMonsterDeathAnimation(monster);
     createDeathEffects(monster.x, monster.y);
 
-    // Death animation - fade out and rotate (enhanced)
+    // Enhanced Death effect - Dissolve, rise, and fade
     scene.tweens.add({
         targets: monster,
         alpha: 0,
-        angle: 360,
-        scale: 0,
-        duration: 500,
-        ease: 'Power2'
+        y: monster.y - 50, // "Ghostly" rise
+        scale: 1.5, // Expand as it fades
+        duration: 800,
+        ease: 'Cubic.out',
+        onComplete: () => {
+            // Ensure cleanup
+            if (monster && monster.active) {
+                monster.destroy();
+            }
+        }
     });
+
+    // If it's a sprite, we can add a second "dissolve" layer with a tween on the frame or tint
+    if (monster.setTintFill) {
+        monster.setTintFill(0xffffff);
+        scene.tweens.add({
+            targets: monster,
+            alpha: 0,
+            duration: 400,
+            onComplete: () => {
+                if (monster.clearTint) monster.clearTint();
+            }
+        });
+    }
 
     // Give XP (based on monster type, scaled by difficulty)
     const baseXpGain = monster.xpReward || 10;
@@ -4887,22 +5032,21 @@ function playerAttack(time) {
         console.log(`🔊 Weapon hit: type=${weaponType}, sound=${hitSound}`);
         playSound(hitSound);
 
-        // Enhanced visual feedback - flash monster with color
-        if (closestMonster.setTint) {
-            const flashColor = isCritical ? 0xff6666 : 0xffffff; // Red tint for critical
-            closestMonster.setTint(flashColor);
-            scene.time.delayedCall(100, () => {
+        // Enhanced visual feedback - professional hit flash
+        if (closestMonster.setTintFill) {
+            // White flash is the industry standard for "hit" feedback
+            closestMonster.setTintFill(0xffffff);
+            scene.time.delayedCall(80, () => {
                 if (closestMonster && closestMonster.active && closestMonster.clearTint) {
                     closestMonster.clearTint();
                 }
             });
-        } else {
-            // Fallback for Containers (Method 2)
-            const originalAlpha = closestMonster.alpha || 1;
-            closestMonster.setAlpha(0.5);
+        } else if (closestMonster.setTint) {
+            // Fallback for objects that don't support TintFill
+            closestMonster.setTint(isCritical ? 0xff0000 : 0xffffff);
             scene.time.delayedCall(100, () => {
-                if (closestMonster && closestMonster.active) {
-                    closestMonster.setAlpha(originalAlpha);
+                if (closestMonster && closestMonster.active && closestMonster.clearTint) {
+                    closestMonster.clearTint();
                 }
             });
         }
@@ -4913,6 +5057,11 @@ function playerAttack(time) {
  * Monster attack player
  */
 function monsterAttackPlayer(monster, time) {
+    // 0. Safety/Pause Check
+    if ((typeof isGamePaused !== 'undefined' && isGamePaused) || !monster || !monster.active) {
+        return;
+    }
+
     // Check cooldown
     if (time - monster.lastAttackTime < monster.attackCooldown) {
         return;
@@ -4933,19 +5082,21 @@ function monsterAttackPlayer(monster, time) {
     playMonsterAttackAnimation(monster);
 
     // Calculate damage using % mitigation formula
-    const baseDamage = monster.attack;
-    const defense = playerStats.defense;
+    const baseDamage = Number(monster.attack) || 0;
+    const defense = Number(playerStats.defense) || 0;
+
     // % mitigation: damage = attack * (100 / (100 + defense))
-    const actualDamage = Math.max(1, Math.floor(baseDamage * (100 / (100 + defense))));
+    let actualDamage = Math.max(1, Math.floor(baseDamage * (100 / (100 + defense))));
+
+    // Final NaN check
+    if (isNaN(actualDamage)) {
+        console.warn('⚠️ actualDamage is NaN! base:', baseDamage, 'def:', defense);
+        actualDamage = 1;
+    }
 
     // Apply damage to player
     playerStats.hp -= actualDamage;
     playerStats.hp = Math.max(0, playerStats.hp);
-
-    // Check for player death
-    if (playerStats.hp <= 0) {
-        showFallenDialog();
-    }
 
     // Create hit effects on player (red particles - physical damage)
     createHitEffects(player.x, player.y, false, 'physical');
@@ -4961,17 +5112,27 @@ function monsterAttackPlayer(monster, time) {
     const monsterName = monster.monsterType || 'Monster';
     addChatMessage(`Took ${actualDamage} damage from ${monsterName}`, 0xff6b6b, '🛡️');
 
-    // Enhanced visual feedback - flash player red
-    player.setTint(0xff0000);
-    game.scene.scenes[0].time.delayedCall(100, () => {
-        if (player && player.active) {
-            player.clearTint();
-        }
-    });
+    // Enhanced visual feedback - flash player white (then clear)
+    if (player.setTintFill) {
+        player.setTintFill(0xffffff);
+        game.scene.scenes[0].time.delayedCall(80, () => {
+            if (player && player.active) {
+                player.clearTint();
+            }
+        });
+    } else {
+        player.setTint(0xff0000);
+        game.scene.scenes[0].time.delayedCall(100, () => {
+            if (player && player.active) {
+                player.clearTint();
+            }
+        });
+    }
 
-    // Check if player is dead
+    // Check if player died (The update() loop will also catch this, but doing it here 
+    // provides immediate feedback and prevents further attack logic in this frame)
     if (playerStats.hp <= 0) {
-        console.log('Player died!');
+        console.log('💀 Player health reached zero.');
         showFallenDialog();
     }
 }
@@ -5616,35 +5777,13 @@ function createDeathEffects(x, y) {
 /**
  * Shake camera for impact feedback
  */
-let cameraShakeTween = null;
 function shakeCamera(duration = 200, intensity = 0.01) {
     const scene = game.scene.scenes[0];
-    const camera = scene.cameras.main;
+    if (!scene || !scene.cameras || !scene.cameras.main) return;
 
-    // Cancel existing shake if any
-    if (cameraShakeTween) {
-        cameraShakeTween.stop();
-        camera.setScroll(0, 0);
-    }
-
-    const originalX = camera.scrollX;
-    const originalY = camera.scrollY;
-    let elapsed = 0;
-
-    const shake = () => {
-        if (elapsed < duration) {
-            const offsetX = (Math.random() - 0.5) * intensity * camera.width;
-            const offsetY = (Math.random() - 0.5) * intensity * camera.height;
-            camera.setScroll(originalX + offsetX, originalY + offsetY);
-            elapsed += 16; // ~60fps
-            scene.time.delayedCall(16, shake);
-        } else {
-            camera.setScroll(originalX, originalY);
-            cameraShakeTween = null;
-        }
-    };
-
-    shake();
+    // Use Phaser's built-in shake for a more professional feel
+    // Multiply intensity for better impact (built-in shake usually needs a bit more)
+    scene.cameras.main.shake(duration, intensity * 0.5);
 }
 
 /**
@@ -6090,7 +6229,8 @@ function updateUI() {
         xpBar.width = maxBarWidth * xpPercent;
 
         // Update stats text
-        statsText.setText(`Level ${stats.level} | HP: ${Math.ceil(stats.hp)}/${stats.maxHp} | XP: ${Math.floor(xpInCurrentLevel)}/${xpRequiredForCurrentLevel}`);
+        const displayHp = Math.max(0, Math.ceil(stats.hp));
+        statsText.setText(`Level ${stats.level} | HP: ${displayHp}/${stats.maxHp} | XP: ${Math.floor(xpInCurrentLevel)}/${xpRequiredForCurrentLevel}`);
 
         // Update gold text
         if (goldText) {
@@ -13522,7 +13662,7 @@ function playSound(soundName) {
         // Check if sound exists in cache
         if (scene.cache.audio.exists(soundName)) {
             // Play sound with volume - creates a new instance each time
-            scene.sound.play(soundName, { volume: 0.7 });
+            scene.sound.play(soundName, { volume: window.sfxVolume || 0.7 });
             console.log(`🔊 Playing: ${soundName}`); // Debug logging
         } else {
             // Sound not in cache
@@ -13555,7 +13695,7 @@ function initializeSounds() {
             // Check if audio is in cache (loaded successfully)
             if (scene.cache.audio.exists(soundName)) {
                 // Create sound object for later use
-                soundEffects[soundName] = scene.sound.add(soundName, { volume: 0.7 });
+                soundEffects[soundName] = scene.sound.add(soundName, { volume: window.sfxVolume || 0.7 });
                 console.log(`  ✅ Loaded: ${soundName}`);
             } else {
                 console.log(`  ⚠️ Not in cache: ${soundName}`);

@@ -1,0 +1,41 @@
+{
+    "milestones": [
+        {
+            "id": "ms_survive_1min",
+            "name": "Survivor I",
+            "description": "Survive for 1 minute.",
+            "trigger": {
+                "type": "survive_time",
+                "target": 60
+            },
+            "rewards": {
+                "loreUnlock": "lore_tremors",
+                "xp": 50
+            }
+        },
+        {
+            "id": "ms_kill_5_monsters",
+            "name": "Hunter I",
+            "description": "Kill 5 monsters.",
+            "trigger": {
+                "type": "stat_change",
+                "stat": "monsters_killed",
+                "target": 5
+            },
+            "rewards": {
+                "loreUnlock": "lore_creatures"
+            }
+        },
+        {
+            "id": "ms_game_start",
+            "name": "Awakening",
+            "description": "Begin your journey.",
+            "trigger": {
+                "type": "game_start"
+            },
+            "rewards": {
+                "loreUnlock": "lore_ch1_intro"
+            }
+        }
+    ]
+}

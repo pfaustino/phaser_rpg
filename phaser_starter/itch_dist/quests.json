@@ -1,0 +1,585 @@
+{
+  "_DEPRECATED": "⚠️ THIS FILE IS DEPRECATED - Use quests_v2.json instead",
+  "_MIGRATION_DATE": "2025-12-29",
+  "_NOTE": "All quests have been migrated to the Unified Quest Engine (UQE) format in quests_v2.json. This file is kept for reference only and is no longer loaded by the game.",
+  "questTypes": {
+    "kill": {
+      "label": "Kill Monsters",
+      "desc": "Defeat enemy units."
+    },
+    "collect": {
+      "label": "Collect Items",
+      "desc": "Gather items from the world."
+    },
+    "level": {
+      "label": "Level Up",
+      "desc": "Reach a target level."
+    },
+    "gold": {
+      "label": "Earn Gold",
+      "desc": "Accumulate gold."
+    },
+    "explore": {
+      "label": "Explore",
+      "desc": "Travel across tiles."
+    },
+    "survive": {
+      "label": "Survive",
+      "desc": "Stay alive for duration."
+    },
+    "ui_tab": {
+      "label": "Interface",
+      "desc": "Interact with UI tabs."
+    },
+    "story": {
+      "label": "Main Quest",
+      "desc": "Advance the world's story."
+    }
+  },
+  "starterQuests": [
+    {
+      "id": "quest_001",
+      "title": "(old) First Steps",
+      "description": "Kill 5 monsters to prove your worth.",
+      "type": "kill",
+      "target": 5,
+      "rewards": {
+        "xp": 50,
+        "gold": 25
+      },
+      "chainId": "beginner_chain",
+      "chainStep": 1,
+      "giver": "Guard Thorne"
+    },
+    {
+      "id": "quest_002",
+      "title": "(old) Treasure Hunter",
+      "description": "Collect 3 items from defeated monsters.",
+      "type": "collect",
+      "target": 3,
+      "rewards": {
+        "xp": 30,
+        "gold": 15
+      },
+      "giver": "Merchant Lysa"
+    }
+  ],
+  "availableQuests": [
+    {
+      "id": "quest_004",
+      "title": "(old) Gold Rush",
+      "description": "Earn 100 gold from monster drops.",
+      "type": "gold",
+      "target": 100,
+      "rewards": {
+        "xp": 40,
+        "gold": 20
+      },
+      "giver": "Merchant Lysa"
+    },
+    {
+      "id": "quest_005",
+      "title": "(old) Explorer",
+      "description": "Travel 500 tiles across the map.",
+      "type": "explore",
+      "target": 500,
+      "rewards": {
+        "xp": 60,
+        "gold": 30
+      }
+    },
+    {
+      "id": "quest_006",
+      "title": "(old) Survivor",
+      "description": "Survive for 2 minutes without dying.",
+      "type": "survive",
+      "target": 120,
+      "rewards": {
+        "xp": 80,
+        "gold": 40
+      }
+    },
+    {
+      "id": "quest_007",
+      "title": "(old) Monster Hunter III",
+      "description": "Defeat 20 monsters to earn the title of Hunter.",
+      "type": "kill",
+      "target": 20,
+      "rewards": {
+        "xp": 150,
+        "gold": 80
+      }
+    },
+    {
+      "id": "quest_008",
+      "title": "(old) Item Collector",
+      "description": "Gather 10 items from your adventures.",
+      "type": "collect",
+      "target": 10,
+      "rewards": {
+        "xp": 80,
+        "gold": 40
+      }
+    },
+    {
+      "id": "quest_009",
+      "title": "(old) Level Up",
+      "description": "Reach level 3 and grow stronger.",
+      "type": "level",
+      "target": 3,
+      "rewards": {
+        "xp": 150,
+        "gold": 75
+      }
+    },
+    {
+      "id": "quest_010",
+      "title": "(old) Wealth Accumulator",
+      "description": "Amass 250 gold through your efforts.",
+      "type": "gold",
+      "target": 250,
+      "rewards": {
+        "xp": 100,
+        "gold": 50
+      }
+    },
+    {
+      "id": "quest_011",
+      "title": "(old) Wanderer",
+      "description": "Explore 1000 tiles of the world.",
+      "type": "explore",
+      "target": 1000,
+      "rewards": {
+        "xp": 150,
+        "gold": 75
+      }
+    },
+    {
+      "id": "quest_012",
+      "title": "(old) Endurance Test",
+      "description": "Survive for 5 minutes in the dangerous world.",
+      "type": "survive",
+      "target": 300,
+      "rewards": {
+        "xp": 200,
+        "gold": 100
+      }
+    },
+    {
+      "id": "quest_013",
+      "title": "(old) Exterminator",
+      "description": "Eliminate 25 monsters from the land.",
+      "type": "kill",
+      "target": 25,
+      "rewards": {
+        "xp": 180,
+        "gold": 90
+      }
+    },
+    {
+      "id": "quest_014",
+      "title": "(old) Hoarder",
+      "description": "Collect 20 items for your inventory.",
+      "type": "collect",
+      "target": 20,
+      "rewards": {
+        "xp": 140,
+        "gold": 70
+      }
+    },
+    {
+      "id": "quest_015",
+      "title": "(old) Power Seeker",
+      "description": "Achieve level 5 through experience.",
+      "type": "level",
+      "target": 5,
+      "rewards": {
+        "xp": 250,
+        "gold": 125
+      }
+    },
+    {
+      "id": "quest_016",
+      "title": "(old) Rich Beyond Measure",
+      "description": "Accumulate 500 gold pieces.",
+      "type": "gold",
+      "target": 500,
+      "rewards": {
+        "xp": 200,
+        "gold": 100
+      }
+    },
+    {
+      "id": "quest_017",
+      "title": "(old) World Traveler",
+      "description": "Journey across 2000 tiles of terrain.",
+      "type": "explore",
+      "target": 2000,
+      "rewards": {
+        "xp": 250,
+        "gold": 125
+      }
+    },
+    {
+      "id": "quest_018",
+      "title": "(old) Unstoppable",
+      "description": "Survive for 10 minutes without falling.",
+      "type": "survive",
+      "target": 600,
+      "rewards": {
+        "xp": 300,
+        "gold": 150
+      }
+    },
+    {
+      "id": "quest_019",
+      "title": "(old) Massacre",
+      "description": "Slay 50 monsters in your path.",
+      "type": "kill",
+      "target": 50,
+      "rewards": {
+        "xp": 300,
+        "gold": 150
+      }
+    },
+    {
+      "id": "quest_020",
+      "title": "(old) Master Collector",
+      "description": "Gather 30 items for your collection.",
+      "type": "collect",
+      "target": 30,
+      "rewards": {
+        "xp": 220,
+        "gold": 110
+      }
+    }
+  ],
+  "questChains": {
+    "beginner_chain": [
+      {
+        "step": 2,
+        "id": "quest_003",
+        "title": "(old) Rising Power",
+        "description": "Reach level 2 to unlock new abilities.",
+        "type": "level",
+        "target": 2,
+        "rewards": {
+          "xp": 100,
+          "gold": 50
+        },
+        "chainId": "beginner_chain",
+        "chainStep": 2
+      },
+      {
+        "step": 3,
+        "id": "quest_chain_001",
+        "title": "(old) Advanced Training",
+        "description": "Kill 15 monsters to advance your skills.",
+        "type": "kill",
+        "target": 15,
+        "rewards": {
+          "xp": 150,
+          "gold": 75
+        },
+        "chainId": "beginner_chain",
+        "chainStep": 3
+      },
+      {
+        "step": 4,
+        "id": "quest_chain_002",
+        "title": "(old) Master Warrior",
+        "description": "Reach level 5 and become a true warrior.",
+        "type": "level",
+        "target": 5,
+        "rewards": {
+          "xp": 300,
+          "gold": 150
+        },
+        "chainId": "beginner_chain",
+        "chainStep": 4
+      }
+    ]
+  },
+  "mainQuests": [
+    {
+      "id": "main_01_001",
+      "title": "(old) Tremors in the Earth",
+      "description": "The ground shakes beneath our feet. Speak with the Town Elder to understand these strange quakes.",
+      "type": "story",
+      "target": 1,
+      "rewards": {
+        "xp": 50,
+        "gold": 20
+      },
+      "chapter": 1,
+      "step": 1,
+      "giver": "Elder Malik"
+    },
+    {
+      "id": "main_01_002",
+      "title": "(old) Echoes from Below",
+      "description": "Corruption is seeping from the Watchtower basement. Clear out the Echo Mites gathered there.",
+      "type": "kill",
+      "target": 3,
+      "rewards": {
+        "xp": 100,
+        "gold": 50
+      },
+      "chapter": 1,
+      "step": 2,
+      "giver": "Elder Malik"
+    },
+    {
+      "id": "main_01_003",
+      "title": "(old) Crystalline Seepage",
+      "description": "Gather shards of the crystalline corruption for the town's blacksmith to study.",
+      "type": "collect",
+      "target": 5,
+      "rewards": {
+        "xp": 80,
+        "gold": 40
+      },
+      "chapter": 1,
+      "step": 3,
+      "giver": "Elder Malik"
+    },
+    {
+      "id": "main_01_004",
+      "title": "(old) The Elder's Request",
+      "description": "Deliver the gathered shards to the Blacksmith so he can determine their frequency.",
+      "type": "story",
+      "target": 1,
+      "rewards": {
+        "xp": 50,
+        "gold": 25
+      },
+      "chapter": 1,
+      "step": 4,
+      "giver": "Elder Malik"
+    },
+    {
+      "id": "main_01_005",
+      "title": "(old) Resonant Frequencies",
+      "description": "The blacksmith is sounding the shards. Stay nearby and defend the shop from drawn Echo creatures.",
+      "type": "survive",
+      "target": 60,
+      "rewards": {
+        "xp": 120,
+        "gold": 60
+      },
+      "chapter": 1,
+      "step": 5,
+      "giver": "Elder Malik"
+    },
+    {
+      "id": "main_01_006",
+      "title": "(old) A Warrior's Path",
+      "description": "Your actions have drawn attention. Prove your combat readiness to the Captain of the Guard.",
+      "type": "story",
+      "target": 1,
+      "rewards": {
+        "xp": 100,
+        "gold": 40
+      },
+      "chapter": 1,
+      "step": 6,
+      "giver": "Captain Kael"
+    },
+    {
+      "id": "main_01_007",
+      "title": "(old) Mana Leak",
+      "description": "The instability is disrupting the town's wards. Help the local Mage stabilize 3 mana fluxes.",
+      "type": "kill",
+      "target": 3,
+      "rewards": {
+        "xp": 150,
+        "gold": 60
+      },
+      "chapter": 1,
+      "step": 7,
+      "giver": "Mage Elara"
+    },
+    {
+      "id": "main_01_008",
+      "title": "(old) The Subterranean Breach",
+      "description": "The tremors are originating from deep within the old Watchtower. Find the entrance to the first subterranean floor.",
+      "type": "story",
+      "target": 1,
+      "rewards": {
+        "xp": 100,
+        "gold": 50
+      },
+      "chapter": 1,
+      "step": 8,
+      "giver": "Elder Malik"
+    },
+    {
+      "id": "main_01_009",
+      "title": "(old) Infested Veins",
+      "description": "The mines are crawling with rats corrupted by the Echo. Clear out 15 of them to secure the area.",
+      "type": "kill",
+      "target": 15,
+      "rewards": {
+        "xp": 200,
+        "gold": 80
+      },
+      "chapter": 1,
+      "step": 9,
+      "giver": "Elder Malik"
+    },
+    {
+      "id": "main_01_010",
+      "title": "(old) Forgotten Miners",
+      "description": "Search the deep tunnels for any miners who might have been trapped during the first tremor.",
+      "type": "explore",
+      "target": 1000,
+      "rewards": {
+        "xp": 250,
+        "gold": 100
+      },
+      "chapter": 1,
+      "step": 10,
+      "giver": "Elder Malik"
+    },
+    {
+      "id": "main_01_011",
+      "title": "(old) Solidified Corruption",
+      "description": "The corruption is forming hard crystalline structures. Mine 10 Echo Crystals from the lower depths.",
+      "type": "collect",
+      "target": 10,
+      "rewards": {
+        "xp": 300,
+        "gold": 150
+      },
+      "chapter": 1,
+      "step": 11,
+      "giver": "Blacksmith Brond"
+    },
+    {
+      "id": "main_01_012",
+      "title": "(old) The First Fragment",
+      "description": "A massive creature has nested near the breach. Defeat the Echo Beholder to reach the first fragment of the Aegis.",
+      "type": "kill",
+      "target": 1,
+      "rewards": {
+        "xp": 500,
+        "gold": 250
+      },
+      "chapter": 1,
+      "step": 12,
+      "giver": "Elder Malik"
+    },
+    {
+      "id": "main_01_013",
+      "title": "(old) Claiming the Shard",
+      "description": "The Beholder is slain. Recover the Shard of Resonance from its nest.",
+      "type": "story",
+      "target": 1,
+      "rewards": {
+        "xp": 100,
+        "gold": 50
+      },
+      "chapter": 1,
+      "step": 13,
+      "giver": "Elder Malik"
+    },
+    {
+      "id": "main_01_014",
+      "title": "(old) Elder's Wisdom",
+      "description": "Return to the surface and present the Shard of Resonance to Elder Malik.",
+      "type": "story",
+      "target": 1,
+      "rewards": {
+        "xp": 150,
+        "gold": 75
+      },
+      "chapter": 1,
+      "step": 14,
+      "giver": "Elder Malik"
+    },
+    {
+      "id": "main_01_015",
+      "title": "(old) Strengthening the Aegis",
+      "description": "Take the shard to the Ancient Obelisk at the town center and restore its power.",
+      "type": "story",
+      "target": 1,
+      "rewards": {
+        "xp": 200,
+        "gold": 100
+      },
+      "chapter": 1,
+      "step": 15,
+      "giver": "Elder Malik"
+    },
+    {
+      "id": "main_01_016",
+      "title": "(old) Unexpected Feedback",
+      "description": "The restoration triggered a massive release of energy! Survive the intense Obelisk backlash.",
+      "type": "survive",
+      "target": 120,
+      "rewards": {
+        "xp": 300,
+        "gold": 150
+      },
+      "chapter": 1,
+      "step": 16,
+      "giver": "Elder Malik"
+    },
+    {
+      "id": "main_01_017",
+      "title": "(old) The Echo's Warning",
+      "description": "Constructs have emerged from the light. Defeat 20 Backlash constructs to stabilize the ritual.",
+      "type": "kill",
+      "target": 20,
+      "rewards": {
+        "xp": 400,
+        "gold": 200
+      },
+      "chapter": 1,
+      "step": 17,
+      "giver": "Elder Malik"
+    },
+    {
+      "id": "main_01_018",
+      "title": "(old) Deep Scan",
+      "description": "The Aegis needs data on the world's status. Travel across the wilderness to calibrate the sensors.",
+      "type": "explore",
+      "target": 2000,
+      "rewards": {
+        "xp": 500,
+        "gold": 250
+      },
+      "chapter": 1,
+      "step": 18,
+      "giver": "Elder Malik"
+    },
+    {
+      "id": "main_01_019",
+      "title": "(old) Resonance Established",
+      "description": "Your connection with the Aegis is growing. Reach Level 5 to finalize your attunement.",
+      "type": "level",
+      "target": 5,
+      "rewards": {
+        "xp": 600,
+        "gold": 300
+      },
+      "chapter": 1,
+      "step": 19,
+      "giver": "Elder Malik"
+    },
+    {
+      "id": "main_01_020",
+      "title": "(old) Chapter Final",
+      "description": "Chapter 1 is complete. Prepare yourself for the journey to the next corrupted region.",
+      "type": "story",
+      "target": 1,
+      "rewards": {
+        "xp": 1000,
+        "gold": 500
+      },
+      "chapter": 1,
+      "step": 20,
+      "giver": "Elder Malik"
+    }
+  ]
+}

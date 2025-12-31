@@ -1,0 +1,69 @@
+{
+    "quests": {
+        "mq_01_disturbance": {
+            "id": "mq_01_disturbance",
+            "title": "The Sudden Disturbance",
+            "description": "A sudden shockwave has rippled through the village. Captain Thorne noticed you arrive just as it happened and wants you to investigate the Strange Energy in the Town Square.",
+            "giver": "Captain Thorne",
+            "step": 1,
+            "autoAccept": false,
+            "objectives": [
+                {
+                    "id": "talk_thorne_dist",
+                    "type": "talk",
+                    "npcId": "Captain Thorne",
+                    "label": "Speak with Captain Thorne",
+                    "target": 1
+                },
+                {
+                    "type": "explore_location",
+                    "label": "Inspect Strange Energy",
+                    "targetX": 22,
+                    "targetY": 18,
+                    "zoneId": "strange_energy_zone",
+                    "ambientSound": "wind_effect",
+                    "target": 1
+                },
+                {
+                    "id": "return_thorne_dist",
+                    "type": "talk",
+                    "npcId": "Captain Thorne",
+                    "label": "Report to Captain Thorne",
+                    "target": 1
+                }
+            ],
+            "rewards": {
+                "xp": 50,
+                "gold": 25
+            }
+        },
+        "mq_02_investigation": {
+            "id": "mq_02_investigation",
+            "title": "First Investigation",
+            "description": "Captain Thorne has detected a resonance signature matching the Strange Energy coming from the Old Temple Ruins. Travel there and retrieve an Artifact Fragment.",
+            "giver": "Captain Thorne",
+            "step": 2,
+            "requires": "mq_01_disturbance",
+            "objectives": [
+                {
+                    "id": "find_fragment",
+                    "type": "collect",
+                    "itemId": "artifact_fragment",
+                    "label": "Retrieve Artifact Fragment",
+                    "target": 1
+                },
+                {
+                    "id": "return_thorne_ruins",
+                    "type": "talk",
+                    "npcId": "Captain Thorne",
+                    "label": "Return to Captain Thorne",
+                    "target": 1
+                }
+            ],
+            "rewards": {
+                "xp": 150,
+                "gold": 50
+            }
+        }
+    }
+}

@@ -27,6 +27,11 @@ window.UIManager = {
     assetsPanel: null,
     grassDebugPanel: null,
 
+    // Toast / Notification State
+    activeToasts: [],
+    toastQueue: [],
+    isToastProcessing: false,
+
     // Tooltip State
     currentTooltip: null,
     tooltipHideTimer: null,
@@ -102,7 +107,7 @@ window.UIManager = {
         const centerX = scene.cameras.main.width / 2;
         const centerY = scene.cameras.main.height / 2;
         const panelWidth = 400;
-        const panelHeight = 550;
+        const panelHeight = 620;
 
         // Background
         const bg = scene.add.rectangle(centerX, centerY, panelWidth, panelHeight, 0x1a1a1a, 0.95)
@@ -121,42 +126,63 @@ window.UIManager = {
             elements: []
         };
 
-        let currentY = centerY - 100;
-        const spacing = 60;
+        let currentY = centerY - 150;
+        const spacing = 55;
 
-        // --- Music Toggle ---
-        // Access global musicEnabled if it exists, otherwise assume true
-        const musicOn = (typeof window.musicEnabled !== 'undefined') ? window.musicEnabled : true;
+        // --- Volume Sliders Helper ---
+        const createSlider = (y, label, initialValue, onUpdate) => {
+            const trackWidth = 250;
+            const trackHeight = 10;
+            const thumbSize = 20;
 
-        const musicStatus = musicOn ? 'ON' : 'OFF';
-        const musicColor = musicOn ? '#00ff00' : '#ff0000';
+            // Label
+            const labelText = scene.add.text(centerX, y - 25, `${label}: ${Math.round(initialValue * 100)}%`, {
+                fontSize: '18px', fill: '#ffffff'
+            }).setScrollFactor(0).setDepth(10002).setOrigin(0.5);
 
-        const musicBtnBg = scene.add.rectangle(centerX, currentY, 200, 50, 0x333333)
-            .setScrollFactor(0).setDepth(10001).setInteractive({ useHandCursor: true });
+            // Track
+            const track = scene.add.rectangle(centerX, y, trackWidth, trackHeight, 0x333333)
+                .setScrollFactor(0).setDepth(10001).setInteractive({ useHandCursor: true });
 
-        const musicBtnText = scene.add.text(centerX, currentY, `Music: ${musicStatus}`, {
-            fontSize: '20px', fill: musicColor
-        }).setScrollFactor(0).setDepth(10002).setOrigin(0.5);
+            // Thumb
+            const thumbX = centerX - (trackWidth / 2) + (initialValue * trackWidth);
+            const thumb = scene.add.rectangle(thumbX, y, thumbSize, thumbSize, 0xffffff)
+                .setScrollFactor(0).setDepth(10002).setInteractive({ useHandCursor: true });
 
-        musicBtnBg.on('pointerdown', () => {
-            if (typeof window.musicEnabled !== 'undefined') {
-                window.musicEnabled = !window.musicEnabled;
-                // Persist music preference to localStorage
-                localStorage.setItem('musicEnabled', window.musicEnabled ? 'true' : 'false');
-                musicBtnText.setText(`Music: ${window.musicEnabled ? 'ON' : 'OFF'}`);
-                musicBtnText.setColor(window.musicEnabled ? '#00ff00' : '#ff0000');
+            const updateSlider = (pointerX) => {
+                const relativeX = Phaser.Math.Clamp(pointerX - (centerX - trackWidth / 2), 0, trackWidth);
+                const value = relativeX / trackWidth;
 
-                if (typeof toggleMusic === 'function') {
-                    toggleMusic(window.musicEnabled);
-                } else if (scene.sound) {
-                    scene.sound.mute = !window.musicEnabled;
-                }
+                thumb.x = (centerX - trackWidth / 2) + relativeX;
+                labelText.setText(`${label}: ${Math.round(value * 100)}%`);
+                onUpdate(value);
+            };
+
+            track.on('pointerdown', (pointer) => updateSlider(pointer.x));
+
+            scene.input.setDraggable(thumb);
+            thumb.on('drag', (pointer) => updateSlider(pointer.x));
+
+            this.settingsPanel.elements.push(labelText, track, thumb);
+        };
+
+        // --- Music Slider ---
+        const musicVolume = (typeof window.musicVolume !== 'undefined') ? window.musicVolume : 0.5;
+        createSlider(currentY, 'Music Volume', musicVolume, (val) => {
+            if (typeof window.updateMusicVolume === 'function') {
+                window.updateMusicVolume(val);
             }
-            if (typeof playSound === 'function') playSound('menu_select');
         });
+        currentY += spacing + 20;
 
-        this.settingsPanel.elements.push(musicBtnBg, musicBtnText);
-        currentY += spacing;
+        // --- SFX Slider ---
+        const sfxVolume = (typeof window.sfxVolume !== 'undefined') ? window.sfxVolume : 0.7;
+        createSlider(currentY, 'SFX Volume', sfxVolume, (val) => {
+            if (typeof window.updateSFXVolume === 'function') {
+                window.updateSFXVolume(val);
+            }
+        });
+        currentY += spacing + 10;
 
         // --- Difficulty Selector ---
         const diffLabel = scene.add.text(centerX, currentY, 'Difficulty:', {
@@ -447,7 +473,7 @@ window.UIManager = {
             else if (item.type === 'belt') spriteKey = 'item_belt';
             else if (item.type === 'consumable') spriteKey = (item.name === 'Mana Potion') ? 'mana_potion' : 'item_consumable';
             else if (item.type === 'gold') spriteKey = 'item_gold';
-            else if (item.type === 'quest_item') {
+            else if (item.type === 'quest_item' || item.type === 'quest') {
                 if (item.id === 'crystal_shard') spriteKey = 'item_crystal';
                 else if (item.id === 'artifact_fragment') spriteKey = 'item_fragment';
                 else spriteKey = 'item_consumable';
@@ -1290,6 +1316,108 @@ window.UIManager = {
         if (this.questVisible && this.questPanel) {
             this.updateQuestLogItems();
         }
+    },
+
+
+    // ============================================
+    // TOAST / NOTIFICATION SYSTEM
+    // ============================================
+
+    /**
+     * Show a sliding toast notification
+     * @param {string} message - Text to display
+     * @param {string} type - 'info', 'success', 'warning', 'quest'
+     * @param {number} duration - ms to display
+     */
+    showToast(message, type = 'info', duration = 3000) {
+        if (!window.game || !window.game.scene || !window.game.scene.scenes[0]) return;
+        const scene = window.game.scene.scenes[0];
+
+        // Initialize queue if not present
+        if (!this.toastQueue) {
+            this.toastQueue = [];
+            this.isToastProcessing = false;
+        }
+
+        // Add to queue
+        this.toastQueue.push({ message, type, duration });
+
+        if (!this.isToastProcessing) {
+            this.processToastQueue();
+        }
+    },
+
+    processToastQueue() {
+        if (this.toastQueue.length === 0) {
+            this.isToastProcessing = false;
+            return;
+        }
+
+        this.isToastProcessing = true;
+        const scene = window.game.scene.scenes[0];
+        const toastData = this.toastQueue.shift();
+
+        const centerX = scene.cameras.main.width / 2;
+        const startY = -60;
+        const targetY = 80;
+
+        // Color mapping
+        const colors = {
+            info: { bg: 0x333333, text: '#ffffff', stroke: '#00ffff' },
+            success: { bg: 0x1a4a1a, text: '#ffffff', stroke: '#00ff00' },
+            warning: { bg: 0x4a1a1a, text: '#ffffff', stroke: '#ff0000' },
+            quest: { bg: 0x2a2a4a, text: '#ffd700', stroke: '#ffd700' }
+        };
+        const style = colors[toastData.type] || colors.info;
+
+        // Container for toast
+        const toastWidth = 400;
+        const toastHeight = 50;
+        const bg = scene.add.rectangle(centerX, startY, toastWidth, toastHeight, style.bg, 0.9)
+            .setScrollFactor(0).setDepth(10000).setStrokeStyle(2, style.bg === 0x333333 ? 0x888888 : 0xaaaaaa);
+
+        const text = scene.add.text(centerX, startY, toastData.message, {
+            fontSize: '18px',
+            fill: style.text,
+            fontFamily: 'Arial',
+            fontStyle: 'bold',
+            stroke: '#000000',
+            strokeThickness: 2
+        }).setOrigin(0.5).setScrollFactor(0).setDepth(10001);
+
+        // Slide in
+        scene.tweens.add({
+            targets: [bg, text],
+            y: (target) => (target === bg ? targetY : targetY),
+            duration: 500,
+            ease: 'Back.out'
+        });
+
+        // Stay and slide out
+        scene.time.delayedCall(toastData.duration, () => {
+            scene.tweens.add({
+                targets: [bg, text],
+                y: startY,
+                duration: 500,
+                ease: 'Back.in',
+                onComplete: () => {
+                    bg.destroy();
+                    text.destroy();
+                    // Process next in queue
+                    this.processToastQueue();
+                }
+            });
+        });
+    },
+
+    /**
+     * Specialized quest update toast
+     */
+    showQuestToast(title, progressMessage, isComplete = false) {
+        const type = isComplete ? 'success' : 'quest';
+        const icon = isComplete ? '✅' : '📜';
+        const message = `${icon} ${title}\n${progressMessage}`;
+        this.showToast(message, type, 4000);
     },
 
 

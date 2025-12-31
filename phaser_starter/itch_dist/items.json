@@ -1,0 +1,345 @@
+{
+    "weaponTypes": {
+        "Sword": {
+            "baseAttack": 1.0,
+            "speed": 1.0,
+            "critChance": 0.05,
+            "hitSound": "sword_hit"
+        },
+        "Axe": {
+            "baseAttack": 1.15,
+            "speed": 0.9,
+            "critChance": 0.08,
+            "hitSound": "axe_hit"
+        },
+        "Mace": {
+            "baseAttack": 1.1,
+            "speed": 0.85,
+            "critChance": 0.06,
+            "hitSound": "mace_hit"
+        },
+        "Dagger": {
+            "baseAttack": 0.85,
+            "speed": 1.2,
+            "critChance": 0.12,
+            "hitSound": "dagger_hit"
+        },
+        "Staff": {
+            "baseAttack": 0.9,
+            "speed": 1.1,
+            "critChance": 0.07,
+            "hitSound": "staff_hit"
+        },
+        "Bow": {
+            "baseAttack": 0.95,
+            "speed": 1.15,
+            "critChance": 0.10,
+            "hitSound": "bow_hit"
+        },
+        "Crossbow": {
+            "baseAttack": 1.05,
+            "speed": 0.95,
+            "critChance": 0.09,
+            "hitSound": "bow_hit"
+        }
+    },
+    "materials": {
+        "Iron": {
+            "multiplier": 1.0,
+            "tier": 1
+        },
+        "Steel": {
+            "multiplier": 1.2,
+            "tier": 2
+        },
+        "Silver": {
+            "multiplier": 1.4,
+            "tier": 3
+        },
+        "Gold": {
+            "multiplier": 1.6,
+            "tier": 4
+        },
+        "Mithril": {
+            "multiplier": 1.8,
+            "tier": 5
+        },
+        "Dragonbone": {
+            "multiplier": 2.0,
+            "tier": 6
+        }
+    },
+    "prefixes": {
+        "Sharp": {
+            "attackBonus": 0.15,
+            "quality": [
+                "Common",
+                "Uncommon"
+            ]
+        },
+        "Sturdy": {
+            "defenseBonus": 0.15,
+            "quality": [
+                "Common",
+                "Uncommon"
+            ]
+        },
+        "Balanced": {
+            "attackBonus": 0.1,
+            "defenseBonus": 0.1,
+            "quality": [
+                "Common",
+                "Uncommon"
+            ]
+        },
+        "Vicious": {
+            "attackBonus": 0.25,
+            "critBonus": 0.05,
+            "quality": [
+                "Uncommon",
+                "Rare"
+            ]
+        },
+        "Reinforced": {
+            "defenseBonus": 0.25,
+            "hpBonus": 0.1,
+            "quality": [
+                "Uncommon",
+                "Rare"
+            ]
+        },
+        "Precise": {
+            "critBonus": 0.1,
+            "attackBonus": 0.1,
+            "quality": [
+                "Uncommon",
+                "Rare"
+            ]
+        },
+        "Soulbound": {
+            "attackBonus": 0.2,
+            "defenseBonus": 0.2,
+            "lifesteal": 0.05,
+            "quality": [
+                "Rare",
+                "Epic"
+            ]
+        },
+        "Ethereal": {
+            "defenseBonus": 0.3,
+            "resistance": {
+                "magic": 0.1
+            },
+            "quality": [
+                "Rare",
+                "Epic"
+            ]
+        },
+        "Celestial": {
+            "attackBonus": 0.3,
+            "critBonus": 0.15,
+            "quality": [
+                "Epic",
+                "Legendary"
+            ]
+        },
+        "Demonic": {
+            "attackBonus": 0.35,
+            "lifesteal": 0.1,
+            "quality": [
+                "Epic",
+                "Legendary"
+            ]
+        },
+        "Divine": {
+            "attackBonus": 0.25,
+            "defenseBonus": 0.25,
+            "hpBonus": 0.2,
+            "quality": [
+                "Legendary"
+            ]
+        }
+    },
+    "suffixes": {
+        "of Power": {
+            "attackBonus": 0.2,
+            "quality": [
+                "Uncommon",
+                "Rare"
+            ]
+        },
+        "of Protection": {
+            "defenseBonus": 0.2,
+            "quality": [
+                "Uncommon",
+                "Rare"
+            ]
+        },
+        "of Swiftness": {
+            "speedBonus": 0.15,
+            "critBonus": 0.05,
+            "quality": [
+                "Uncommon",
+                "Rare"
+            ]
+        },
+        "of Vitality": {
+            "hpBonus": 0.25,
+            "quality": [
+                "Uncommon",
+                "Rare"
+            ]
+        },
+        "of the Bear": {
+            "hpBonus": 0.3,
+            "defenseBonus": 0.15,
+            "quality": [
+                "Rare",
+                "Epic"
+            ]
+        },
+        "of the Wolf": {
+            "attackBonus": 0.2,
+            "speedBonus": 0.2,
+            "quality": [
+                "Rare",
+                "Epic"
+            ]
+        },
+        "of the Eagle": {
+            "critBonus": 0.15,
+            "attackBonus": 0.15,
+            "quality": [
+                "Rare",
+                "Epic"
+            ]
+        },
+        "of Life": {
+            "lifesteal": 0.08,
+            "hpBonus": 0.2,
+            "quality": [
+                "Epic",
+                "Legendary"
+            ]
+        },
+        "of Death": {
+            "attackBonus": 0.3,
+            "critBonus": 0.2,
+            "quality": [
+                "Epic",
+                "Legendary"
+            ]
+        },
+        "of Eternity": {
+            "attackBonus": 0.25,
+            "defenseBonus": 0.25,
+            "hpBonus": 0.25,
+            "quality": [
+                "Legendary"
+            ]
+        }
+    },
+    "itemSets": {
+        "Warrior": {
+            "pieces": [
+                "weapon",
+                "armor",
+                "helmet",
+                "boots",
+                "gloves"
+            ],
+            "bonuses": {
+                "2": {
+                    "attackBonus": 0.1
+                },
+                "3": {
+                    "defenseBonus": 0.1
+                },
+                "4": {
+                    "hpBonus": 0.15
+                },
+                "5": {
+                    "attackBonus": 0.15,
+                    "defenseBonus": 0.15,
+                    "critBonus": 0.1
+                }
+            }
+        },
+        "Guardian": {
+            "pieces": [
+                "armor",
+                "helmet",
+                "boots",
+                "gloves",
+                "belt"
+            ],
+            "bonuses": {
+                "2": {
+                    "defenseBonus": 0.15
+                },
+                "3": {
+                    "hpBonus": 0.2
+                },
+                "4": {
+                    "resistance": {
+                        "physical": 0.1
+                    }
+                },
+                "5": {
+                    "defenseBonus": 0.25,
+                    "hpBonus": 0.3,
+                    "resistance": {
+                        "physical": 0.15
+                    }
+                }
+            }
+        },
+        "Assassin": {
+            "pieces": [
+                "weapon",
+                "helmet",
+                "boots",
+                "gloves",
+                "ring"
+            ],
+            "bonuses": {
+                "2": {
+                    "critBonus": 0.1
+                },
+                "3": {
+                    "speedBonus": 0.15
+                },
+                "4": {
+                    "attackBonus": 0.15
+                },
+                "5": {
+                    "critBonus": 0.2,
+                    "attackBonus": 0.2,
+                    "lifesteal": 0.1
+                }
+            }
+        }
+    },
+    "elementalTypes": [
+        "Fire",
+        "Ice",
+        "Lightning",
+        "Poison",
+        "Arcane"
+    ],
+    "qualityColors": {
+        "Common": "#9d9d9d",
+        "Uncommon": "#1eff00",
+        "Rare": "#0070dd",
+        "Epic": "#a335ee",
+        "Legendary": "#ff8000"
+    },
+    "audioFiles": {
+        "sword_hit": "assets/audio/sword-slice.mp3",
+        "axe_hit": "assets/audio/axe-slash.mp3",
+        "mace_hit": "assets/audio/mace-attack.mp3",
+        "dagger_hit": "assets/audio/dagger-hit.mp3",
+        "staff_hit": "assets/audio/staff-swing.mp3",
+        "bow_hit": "assets/audio/bow-release.mp3"
+    }
+}

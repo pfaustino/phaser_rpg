@@ -1,0 +1,704 @@
+{
+    "elder_intro": {
+        "npcName": "Elder Malik",
+        "npcTitle": "Village Elder",
+        "nodes": {
+            "start": {
+                "text": "Welcome, traveler! I am Elder Malik, the leader of this village. How may I assist you?",
+                "choices": [
+                    {
+                        "text": "How do I survive out there?",
+                        "next": "controls_tutorial"
+                    },
+                    {
+                        "text": "Tell me about this place",
+                        "next": "about_place",
+                        "action": "unlock_lore",
+                        "loreId": "lore_ch1_hearthwell"
+                    },
+                    {
+                        "text": "What are these tremors?",
+                        "next": "about_tremors",
+                        "action": "unlock_lore",
+                        "loreId": "lore_ch1_intro"
+                    },
+                    {
+                        "text": "Goodbye",
+                        "next": "end"
+                    }
+                ]
+            },
+            "controls_tutorial": {
+                "text": "Ah, a wise question! Let me share the essential knowledge:\n\n⚔️ MOVEMENT: WASD or Arrow Keys\n🗡️ ATTACK: Spacebar (attack nearby enemies)\n✨ SPECIAL ATTACKS: 1-9 (use learned abilities)\n📜 QUEST LOG: Q (view your active quests)\n🎒 INVENTORY: I (manage your items)\n💾 SAVE GAME: F6\n📂 LOAD GAME: F9\n❓ HELP: H (quick controls reminder)\n\nRemember: Talk to villagers for quests, and defeat monsters to grow stronger!",
+                "choices": [
+                    {
+                        "text": "Tell me more about this place",
+                        "next": "about_place",
+                        "action": "unlock_lore",
+                        "loreId": "lore_ch1_hearthwell"
+                    },
+                    {
+                        "text": "← Back",
+                        "next": "start"
+                    },
+                    {
+                        "text": "Thank you, Elder",
+                        "next": "end"
+                    }
+                ]
+            },
+            "about_place": {
+                "text": "Hearthwell was built around the ancient Watchtower, a relic from the time of the Resonance Keepers. We've prospered for generations from the mines below. But lately... the tremors have awakened something. Creatures emerge from the depths, and a strange corruption spreads.",
+                "choices": [
+                    {
+                        "text": "Tell me about the Resonance Keepers",
+                        "next": "about_keepers",
+                        "action": "unlock_lore",
+                        "loreId": "lore_ch1_resonance_keepers"
+                    },
+                    {
+                        "text": "What is this corruption?",
+                        "next": "about_echo",
+                        "action": "unlock_lore",
+                        "loreId": "lore_ch1_echo_corruption"
+                    },
+                    {
+                        "text": "← Back",
+                        "next": "start"
+                    },
+                    {
+                        "text": "Thank you",
+                        "next": "end"
+                    }
+                ]
+            },
+            "about_tremors": {
+                "text": "The Aegis—an ancient barrier that protects our world—is failing. The tremors are symptoms of its decay. Something called the Echo Primordial stirs in its prison, and its influence seeps through the cracks.",
+                "choices": [
+                    {
+                        "text": "What is the Aegis?",
+                        "next": "about_aegis",
+                        "action": "unlock_lore",
+                        "loreId": "lore_ch1_aegis_history"
+                    },
+                    {
+                        "text": "← Back",
+                        "next": "start"
+                    },
+                    {
+                        "text": "I understand",
+                        "next": "end"
+                    }
+                ]
+            },
+            "about_keepers": {
+                "text": "The Resonance Keepers were an ancient order of scholars and mages. They discovered the Echo Primordial's intrusion and created the Aegis to seal it away. They sacrificed their mortal existence to become eternal wardens.",
+                "choices": [
+                    {
+                        "text": "How can I help?",
+                        "next": "how_to_help"
+                    },
+                    {
+                        "text": "← Back",
+                        "next": "start"
+                    },
+                    {
+                        "text": "Thank you for the knowledge",
+                        "next": "end"
+                    }
+                ]
+            },
+            "about_echo": {
+                "text": "The Echo is a crystalline corruption that transforms organic matter. Those touched by it hear whispers in alien frequencies. Extended exposure leads to... changes. The creatures attacking our village are victims of this corruption.",
+                "choices": [
+                    {
+                        "text": "How do I fight it?",
+                        "next": "how_to_help"
+                    },
+                    {
+                        "text": "← Back",
+                        "next": "start"
+                    },
+                    {
+                        "text": "I'll be careful",
+                        "next": "end"
+                    }
+                ]
+            },
+            "about_aegis": {
+                "text": "Few know this truth: the Aegis was never meant to be permanent. The Keepers left behind shards as keys, hoping future generations would find a way to forge a new, permanent barrier. Perhaps... you are that hope.",
+                "choices": [
+                    {
+                        "text": "I will find these shards",
+                        "next": "how_to_help"
+                    },
+                    {
+                        "text": "← Back",
+                        "next": "start"
+                    },
+                    {
+                        "text": "This is a lot to take in",
+                        "next": "end"
+                    }
+                ]
+            },
+            "how_to_help": {
+                "text": "Speak with the villagers. Blacksmith Brond was asking about those strange Echo Crystals in the wilderness—he might have a task for you. Guard Thorne can direct you to fight the creatures. And when you're ready... the Undermines await.",
+                "action": "unlock_lore",
+                "loreId": "lore_ch1_undermines",
+                "choices": [
+                    {
+                        "text": "I'll talk to Brond about the crystals",
+                        "next": "end"
+                    },
+                    {
+                        "text": "← Back",
+                        "next": "start"
+                    }
+                ]
+            },
+            "end": {
+                "text": "Farewell, traveler. May your journey be safe. Press L to review the lore you've learned.",
+                "choices": []
+            }
+        }
+    },
+    "merchant_shop": {
+        "npcName": "Merchant Lysa",
+        "npcTitle": "Village Trader",
+        "nodes": {
+            "start": {
+                "text": "Welcome to my shop! I have the finest wares in the village. Are you looking to buy something, or perhaps you could help me with a business favor?",
+                "choices": [
+                    {
+                        "text": "I can gather items for you",
+                        "isQuest": true,
+                        "action": "quest_accept_side",
+                        "questId": "quest_002",
+                        "next": "start",
+                        "condition": "quest_available:quest_002"
+                    },
+                    {
+                        "text": "I can help you with gold",
+                        "isQuest": true,
+                        "action": "quest_accept_side",
+                        "questId": "quest_004",
+                        "next": "start",
+                        "condition": "quest_available:quest_004"
+                    },
+                    {
+                        "text": "I'd like to browse your wares",
+                        "next": "shop"
+                    },
+                    {
+                        "text": "Goodbye",
+                        "next": "end"
+                    }
+                ]
+            },
+            "shop": {
+                "text": "Here are my wares. What would you like to buy?",
+                "choices": [
+                    {
+                        "text": "Open Shop",
+                        "action": "open_shop"
+                    },
+                    {
+                        "text": "Nevermind",
+                        "next": "start"
+                    }
+                ]
+            },
+            "end": {
+                "text": "Come back anytime!",
+                "choices": []
+            }
+        }
+    },
+    "guard_info": {
+        "npcName": "Guard Thorne",
+        "npcTitle": "Guard Captain",
+        "nodes": {
+            "start": {
+                "text": "Halt! I am Captain Thorne, head of the village guard. State your business.",
+                "choices": [
+                    {
+                        "text": "Tell me about the monsters",
+                        "next": "help"
+                    },
+                    {
+                        "text": "Just passing through",
+                        "next": "end"
+                    }
+                ]
+            },
+            "help": {
+                "text": "The monsters have been getting bolder since the quakes started. They seem drawn to the tremors. Stay safe out there.",
+                "choices": [
+                    {
+                        "text": "I will",
+                        "next": "end"
+                    }
+                ]
+            },
+            "end": {
+                "text": "Stay vigilant!",
+                "choices": []
+            }
+        }
+    },
+    "generic_npc": {
+        "npcName": "NPC",
+        "npcTitle": "Villager",
+        "nodes": {
+            "start": {
+                "text": "Greetings. How can I help you?",
+                "choices": [
+                    {
+                        "text": "Goodbye",
+                        "next": "end"
+                    }
+                ]
+            },
+            "end": {
+                "text": "Farewell.",
+                "choices": []
+            }
+        }
+    },
+    "trainer_garen": {
+        "npcName": "Trainer Garen",
+        "npcTitle": "Class Trainer",
+        "nodes": {
+            "start": {
+                "text": "Greetings, recruit. The village needs defenders now more than ever. Are you ready to commit to a discipline?",
+                "choices": [
+                    {
+                        "text": "I am ready to choose my path.",
+                        "next": "choose_path",
+                        "isQuest": true,
+                        "condition": "quest_active:main_01_006"
+                    },
+                    {
+                        "text": "What are my options?",
+                        "next": "about_classes",
+                        "condition": "quest_active:main_01_006"
+                    },
+                    {
+                        "text": "Not yet.",
+                        "next": "end"
+                    }
+                ]
+            },
+            "about_classes": {
+                "text": "The Warrior stands as a bulwark against the darkness. The Rogue strikes fast and true. The Mage harnesses the volatile energies of the world. Each has a vital role.",
+                "choices": [
+                    {
+                        "text": "I'm ready to choose",
+                        "next": "choose_path"
+                    },
+                    {
+                        "text": "I need to think",
+                        "next": "end"
+                    }
+                ]
+            },
+            "choose_path": {
+                "text": "Excellent. Which path calls to you?\n\n🛡️ WARRIOR: High Health, Defense. Uses Swords & Heavy Armor.\n🗡️ ROGUE: High Speed, Crit. Uses Daggers & Light Armor.\n🔮 MAGE: High Mana, Spell Power. Uses Staves & Robes.",
+                "choices": [
+                    {
+                        "text": "I choose the way of the Warrior",
+                        "action": "choose_class",
+                        "className": "Warrior",
+                        "next": "end_warrior"
+                    },
+                    {
+                        "text": "I will walk the shadows as a Rogue",
+                        "action": "choose_class",
+                        "className": "Rogue",
+                        "next": "end_rogue"
+                    },
+                    {
+                        "text": "I seek the power of a Mage",
+                        "action": "choose_class",
+                        "className": "Mage",
+                        "next": "end_mage"
+                    },
+                    {
+                        "text": "I need more time to decide",
+                        "next": "start"
+                    }
+                ]
+            },
+            "end_warrior": {
+                "text": "Strength and honor! Here is your equipment. Go forth and defend Hearthwell!",
+                "choices": []
+            },
+            "end_rogue": {
+                "text": "Swift and silent. Take these tools and strike at the heart of the corruption.",
+                "choices": []
+            },
+            "end_mage": {
+                "text": "Wisdom and power. Use these artifacts to stabilize the chaos.",
+                "choices": []
+            },
+            "end": {
+                "text": "Return when you are ready.",
+                "choices": []
+            }
+        }
+    },
+    "blacksmith_brond": {
+        "npcName": "Blacksmith Brond",
+        "npcTitle": "Master Smith",
+        "nodes": {
+            "start": {
+                "text": "Hail, traveler. Need something forged? Or perhaps you come bearing those strange shards the Elder mentioned?",
+                "choices": [
+                    {
+                        "text": "Tell me about the vibrations you've noticed.",
+                        "next": "echo_whisper_intro",
+                        "condition": "quest_available:side_01_001"
+                    },
+                    {
+                        "text": "I have the echo shards you requested.",
+                        "next": "echo_whisper_turnin",
+                        "condition": "quest_objective_complete:side_01_001:collect_echo_shards",
+                        "isQuest": true,
+                        "action": "complete_quest",
+                        "questId": "side_01_001"
+                    },
+                    {
+                        "text": "I have the crystal shards from Elder Malik",
+                        "next": "receive_shards",
+                        "condition": "quest_active:main_01_004",
+                        "isQuest": true,
+                        "action": "complete_quest",
+                        "questId": "main_01_004"
+                    },
+                    {
+                        "text": "What can you tell me about your craft?",
+                        "next": "about_craft"
+                    },
+                    {
+                        "text": "Goodbye",
+                        "next": "end"
+                    }
+                ]
+            },
+            "echo_whisper_intro": {
+                "text": "Ah, you have a keen ear! The earth is humming, traveler. Not like the quakes the Elder talks about—this is different. A high-pitched resonance, coming from those strange crystals in the wilderness. I need samples to study if I'm to forge anything that can withstand it.",
+                "choices": [
+                    {
+                        "text": "I can help gather samples.",
+                        "next": "echo_whisper_accept"
+                    },
+                    {
+                        "text": "Sounds dangerous. Maybe later.",
+                        "next": "start"
+                    }
+                ]
+            },
+            "echo_whisper_accept": {
+                "text": "Good. Bring me 3 Echo Shards. You can find them by breaking those violet crystals out in the wilderness, or sometimes the creatures that linger near them carry shards on their own. Be careful—the sound they make... it gets inside your head.",
+                "choices": [
+                    {
+                        "text": "I'll be back with the shards.",
+                        "next": "end",
+                        "isQuest": true,
+                        "action": "quest_accept_side",
+                        "questId": "side_01_001"
+                    }
+                ]
+            },
+            "echo_whisper_turnin": {
+                "text": "You have them? Let me see... *he takes the shards and strikes them with a tuning fork* Yes, this is the frequency. It's... it's beautiful, in a terrifying way. Here, take this for your trouble. I'll get to work on that resonance dampener.",
+                "choices": [
+                    {
+                        "text": "Glad to help.",
+                        "next": "end"
+                    }
+                ]
+            },
+            "receive_shards": {
+                "text": "Ah, these crystals... *examines them carefully* I can feel their resonance. Give me a moment to sound them properly. You should stay close—when I strike these, they tend to attract... unwanted attention.",
+                "choices": [
+                    {
+                        "text": "I'll be ready to defend",
+                        "next": "end"
+                    }
+                ]
+            },
+            "about_craft": {
+                "text": "I forge weapons and armor from the ores of Hearthwell's mines. But lately, the corruption has tainted even the metal. Some pieces I forge now carry strange properties—echoes of the darkness below.",
+                "choices": [
+                    {
+                        "text": "← Back",
+                        "next": "start"
+                    },
+                    {
+                        "text": "Goodbye",
+                        "next": "end"
+                    }
+                ]
+            },
+            "end": {
+                "text": "Forge well, traveler.",
+                "choices": []
+            }
+        }
+    },
+    "captain_thorne": {
+        "npcName": "Captain Thorne",
+        "npcTitle": "Guard Captain",
+        "nodes": {
+            "start": {
+                "text": "The town is safe for now, but I remain vigilant. How can I help you, citizen?",
+                "choices": [
+                    {
+                        "text": "What was that shockwave?",
+                        "next": "mq_01_briefing",
+                        "condition": "quest_objective_active:mq_01_disturbance:talk_thorne_dist",
+                        "isQuest": true,
+                        "action": "complete_objective",
+                        "questId": "mq_01_disturbance",
+                        "objectiveId": "talk_thorne_dist"
+                    },
+                    {
+                        "text": "I investigated the square. The energy is unstable!",
+                        "next": "mq_01_debrief",
+                        "condition": "quest_objective_active:mq_01_disturbance:return_thorne_dist",
+                        "isQuest": true,
+                        "action": "complete_quest",
+                        "questId": "mq_01_disturbance"
+                    },
+                    {
+                        "text": "Tell me about the monsters",
+                        "next": "help"
+                    },
+                    {
+                        "text": "Goodbye",
+                        "next": "end"
+                    }
+                ]
+            },
+            "mysterious_arrival_start": {
+                "text": "It's strange. The tremors have stopped, but there's a... humming in the air near the Town Square fountain. The villagers are frightened. I need someone with your experience to take a closer look.",
+                "choices": [
+                    {
+                        "text": "I'll investigate it.",
+                        "next": "end"
+                    }
+                ]
+            },
+            "mysterious_arrival_complete": {
+                "text": "You're back. What did you find? ... A resonance? This is troubling. It matches the descriptions in the old archives. We must be cautious.",
+                "choices": [
+                    {
+                        "text": "What should we do?",
+                        "next": "arcane_insight_offer"
+                    }
+                ]
+            },
+            "arcane_insight_offer": {
+                "text": "Mage Elara would know more about this. She studies the arcane ley lines that run beneath the village. Take this report to her immediately.",
+                "choices": [
+                    {
+                        "text": "I'll speak with her.",
+                        "next": "end",
+                        "isQuest": true,
+                        "action": "quest_accept_main",
+                        "questId": "main_02_002"
+                    }
+                ]
+            },
+            "the_source_complete": {
+                "text": "This fragment... it's vibrating with the same energy as the square. It looks like... a seal piece. If the seal on the ruins is broken, something is trying to get out.",
+                "choices": [
+                    {
+                        "text": "Who would do this?",
+                        "next": "suspects_trail_offer"
+                    }
+                ]
+            },
+            "suspects_trail_offer": {
+                "text": "Only a few people have been near those ruins lately. Guard Bram, Scholar Seren, and... Merchant Lysa was seen trading nearby. Speak to them. Find out what they know.",
+                "choices": [
+                    {
+                        "text": "I'll interrogate them.",
+                        "next": "end",
+                        "isQuest": true,
+                        "action": "quest_accept_main",
+                        "questId": "main_02_004"
+                    }
+                ]
+            },
+            "mq_01_briefing": {
+                "text": "You felt it too? It knocked the birds from the sky. The center of the disturbance seems to be the Town Square fountain. Go check it out - scan for any Strange Energy residuals.",
+                "choices": [
+                    {
+                        "text": "I'm on it.",
+                        "next": "end"
+                    }
+                ]
+            },
+            "mq_01_debrief": {
+                "text": "Unstable energy? Just like the archives described... This is no natural earthquake. Keep your eyes open, this might be just the beginning.",
+                "choices": [
+                    {
+                        "text": "I will.",
+                        "next": "end"
+                    }
+                ]
+            },
+            "help": {
+                "text": "The monsters have been getting bolder since the quakes started. They seem drawn to the tremors. Stay safe out there.",
+                "choices": [
+                    {
+                        "text": "I will",
+                        "next": "end"
+                    }
+                ]
+            },
+            "end": {
+                "text": "Stay vigilant!",
+                "choices": []
+            }
+        }
+    },
+    "mage_elara": {
+        "npcName": "Mage Elara",
+        "npcTitle": "Village Mage",
+        "nodes": {
+            "start": {
+                "text": "The energies of this land are shifting... I can feel it in the air. Oh, hello there.",
+                "choices": [
+                    {
+                        "text": "Captain Thorne sent me (Arcane Insight)",
+                        "next": "arcane_insight_complete",
+                        "isQuest": true,
+                        "condition": "quest_active:main_02_002",
+                        "action": "complete_quest",
+                        "questId": "main_02_002"
+                    },
+                    {
+                        "text": "What do you do here?",
+                        "next": "about"
+                    },
+                    {
+                        "text": "Goodbye",
+                        "next": "end"
+                    }
+                ]
+            },
+            "arcane_insight_complete": {
+                "text": "Thorne sent you? Let me see that report... hmm. This is worse than I thought. The ley lines aren't just shifting; they're bleeding.",
+                "choices": [
+                    {
+                        "text": "Bleeding? From where?",
+                        "next": "the_source_offer"
+                    }
+                ]
+            },
+            "the_source_offer": {
+                "text": "I can trace the source to the old ruins in the wilderness, to the northeast. Something there is drawing the power. Go there, find what is causing this, and bring it back to Thorne properly.",
+                "choices": [
+                    {
+                        "text": "I'll go to the ruins.",
+                        "next": "end",
+                        "isQuest": true,
+                        "action": "quest_accept_main",
+                        "questId": "main_02_003"
+                    }
+                ]
+            },
+            "about": {
+                "text": "I study the magical currents of our world. Lately, they have been... disturbed.",
+                "choices": [
+                    {
+                        "text": "I see.",
+                        "next": "start"
+                    }
+                ]
+            },
+            "end": {
+                "text": "May the currents guide you.",
+                "choices": []
+            }
+        }
+    },
+    "bram_npc": {
+        "npcName": "Guard Bram",
+        "npcTitle": "City Guard",
+        "nodes": {
+            "start": {
+                "text": "Keep moving, citizen. The streets aren't safe.",
+                "choices": [
+                    {
+                        "text": "Captain Thorne sent me to ask about the ruins. (Interrogate)",
+                        "next": "interrogate",
+                        "isQuest": true,
+                        "condition": "quest_objective_active:main_02_004:talk_bram",
+                        "action": "complete_objective",
+                        "questId": "main_02_004",
+                        "objectiveId": "talk_bram"
+                    },
+                    {
+                        "text": "Goodbye",
+                        "next": "end"
+                    }
+                ]
+            },
+            "interrogate": {
+                "text": "The ruins? I... I haven't been there in weeks. Just patrol duty. Why would Thorne suspect me?",
+                "choices": [
+                    {
+                        "text": "Just answering questions.",
+                        "next": "end"
+                    }
+                ]
+            },
+            "end": {
+                "text": "Watch your back.",
+                "choices": []
+            }
+        }
+    },
+    "seren_npc": {
+        "npcName": "Scholar Seren",
+        "npcTitle": "Royal Scholar",
+        "nodes": {
+            "start": {
+                "text": "So much history lost...",
+                "choices": [
+                    {
+                        "text": "I'm investigating the corruption. (Interrogate)",
+                        "next": "interrogate",
+                        "isQuest": true,
+                        "condition": "quest_objective_active:main_02_004:talk_seren",
+                        "action": "complete_objective",
+                        "questId": "main_02_004",
+                        "objectiveId": "talk_seren"
+                    },
+                    {
+                        "text": "Goodbye",
+                        "next": "end"
+                    }
+                ]
+            },
+            "interrogate": {
+                "text": "Corruption? Yes, I've felt the disturbance. I was studying the old texts, but I assure you, my interest is purely academic.",
+                "choices": [
+                    {
+                        "text": "I'll note that down.",
+                        "next": "end"
+                    }
+                ]
+            },
+            "end": {
+                "text": "Knowledge is power.",
+                "choices": []
+            }
+        }
+    }
+}

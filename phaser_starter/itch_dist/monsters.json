@@ -1,0 +1,969 @@
+{
+    "monsters": [
+        {
+            "id": "procedural_slime",
+            "name": "Slime",
+            "stats": {
+                "hp": 20,
+                "speed": 30,
+                "spawnAmount": [
+                    2,
+                    4
+                ]
+            },
+            "appearance": {
+                "baseSize": 32,
+                "layers": [
+                    {
+                        "name": "body",
+                        "type": "shape",
+                        "shape": "ellipse",
+                        "width": 32,
+                        "height": 24,
+                        "color": "#00FF00",
+                        "alpha": 0.8,
+                        "z": 10
+                    },
+                    {
+                        "name": "eye_left",
+                        "type": "shape",
+                        "shape": "circle",
+                        "radius": 2,
+                        "color": "#FFFFFF",
+                        "offset": {
+                            "x": -6,
+                            "y": -4
+                        },
+                        "z": 20
+                    },
+                    {
+                        "name": "eye_right",
+                        "type": "shape",
+                        "shape": "circle",
+                        "radius": 2,
+                        "color": "#FFFFFF",
+                        "offset": {
+                            "x": 6,
+                            "y": -4
+                        },
+                        "z": 20
+                    },
+                    {
+                        "name": "pupil_left",
+                        "type": "shape",
+                        "shape": "circle",
+                        "radius": 1,
+                        "color": "#000000",
+                        "offset": {
+                            "x": -6,
+                            "y": -4
+                        },
+                        "z": 21
+                    }
+                ],
+                "animations": {
+                    "idle": {
+                        "type": "pulse",
+                        "property": "scaleY",
+                        "from": 1.0,
+                        "to": 0.8,
+                        "duration": 1000
+                    },
+                    "walk": {
+                        "type": "squash_and_stretch",
+                        "speed": 1.5
+                    },
+                    "attack": {
+                        "type": "lunge",
+                        "distance": 20,
+                        "duration": 300
+                    }
+                }
+            }
+        },
+        {
+            "id": "procedural_goblin",
+            "name": "Goblin",
+            "stats": {
+                "hp": 30,
+                "attack": 5,
+                "speed": 50,
+                "xp": 10,
+                "spawnAmount": [
+                    1,
+                    3
+                ]
+            },
+            "appearance": {
+                "baseSize": 24,
+                "layers": [
+                    {
+                        "name": "body",
+                        "type": "shape",
+                        "shape": "ellipse",
+                        "width": 24,
+                        "height": 28,
+                        "color": "#8B4513",
+                        "z": 10
+                    },
+                    {
+                        "name": "head",
+                        "type": "shape",
+                        "shape": "circle",
+                        "radius": 10,
+                        "color": "#8B4513",
+                        "offset": {
+                            "x": 0,
+                            "y": -12
+                        },
+                        "z": 20
+                    },
+                    {
+                        "name": "ear_left",
+                        "type": "shape",
+                        "shape": "triangle",
+                        "points": [
+                            0,
+                            0,
+                            -10,
+                            -5,
+                            0,
+                            -10
+                        ],
+                        "color": "#8B4513",
+                        "offset": {
+                            "x": -8,
+                            "y": -15
+                        },
+                        "z": 15
+                    },
+                    {
+                        "name": "ear_right",
+                        "type": "shape",
+                        "shape": "triangle",
+                        "points": [
+                            0,
+                            0,
+                            10,
+                            -5,
+                            0,
+                            -10
+                        ],
+                        "color": "#8B4513",
+                        "offset": {
+                            "x": 8,
+                            "y": -15
+                        },
+                        "z": 15
+                    },
+                    {
+                        "name": "eye_left",
+                        "type": "shape",
+                        "shape": "circle",
+                        "radius": 2,
+                        "color": "#FFFF00",
+                        "offset": {
+                            "x": -4,
+                            "y": -14
+                        },
+                        "z": 30
+                    },
+                    {
+                        "name": "eye_right",
+                        "type": "shape",
+                        "shape": "circle",
+                        "radius": 2,
+                        "color": "#FFFF00",
+                        "offset": {
+                            "x": 4,
+                            "y": -14
+                        },
+                        "z": 30
+                    }
+                ],
+                "animations": {
+                    "idle": {
+                        "type": "pulse",
+                        "property": "scaleY",
+                        "to": 0.9,
+                        "duration": 800
+                    },
+                    "walk": {
+                        "type": "hop",
+                        "speed": 1.2
+                    }
+                }
+            }
+        },
+        {
+            "id": "procedural_orc",
+            "name": "Orc",
+            "stats": {
+                "hp": 50,
+                "attack": 8,
+                "speed": 40,
+                "xp": 20,
+                "spawnAmount": [
+                    1,
+                    2
+                ]
+            },
+            "appearance": {
+                "baseSize": 40,
+                "layers": [
+                    {
+                        "name": "body",
+                        "type": "shape",
+                        "shape": "rect",
+                        "width": 36,
+                        "height": 40,
+                        "color": "#4A7023",
+                        "z": 10
+                    },
+                    {
+                        "name": "head",
+                        "type": "shape",
+                        "shape": "circle",
+                        "radius": 14,
+                        "color": "#4A7023",
+                        "offset": {
+                            "x": 0,
+                            "y": -22
+                        },
+                        "z": 20
+                    },
+                    {
+                        "name": "shoulder_left",
+                        "type": "shape",
+                        "shape": "circle",
+                        "radius": 10,
+                        "color": "#3A5013",
+                        "offset": {
+                            "x": -18,
+                            "y": -10
+                        },
+                        "z": 15
+                    },
+                    {
+                        "name": "shoulder_right",
+                        "type": "shape",
+                        "shape": "circle",
+                        "radius": 10,
+                        "color": "#3A5013",
+                        "offset": {
+                            "x": 18,
+                            "y": -10
+                        },
+                        "z": 15
+                    },
+                    {
+                        "name": "eye_left",
+                        "type": "shape",
+                        "shape": "circle",
+                        "radius": 3,
+                        "color": "#FF0000",
+                        "offset": {
+                            "x": -5,
+                            "y": -24
+                        },
+                        "z": 30
+                    },
+                    {
+                        "name": "eye_right",
+                        "type": "shape",
+                        "shape": "circle",
+                        "radius": 3,
+                        "color": "#FF0000",
+                        "offset": {
+                            "x": 5,
+                            "y": -24
+                        },
+                        "z": 30
+                    }
+                ],
+                "animations": {
+                    "idle": {
+                        "type": "pulse",
+                        "property": "scaleX",
+                        "to": 1.05,
+                        "duration": 1200
+                    },
+                    "walk": {
+                        "type": "slide",
+                        "speed": 0.8
+                    }
+                }
+            }
+        },
+        {
+            "id": "procedural_skeleton",
+            "name": "Skeleton",
+            "stats": {
+                "hp": 25,
+                "attack": 6,
+                "speed": 60,
+                "xp": 15,
+                "spawnAmount": [
+                    1,
+                    2
+                ]
+            },
+            "appearance": {
+                "baseSize": 28,
+                "layers": [
+                    {
+                        "name": "body",
+                        "type": "shape",
+                        "shape": "rect",
+                        "width": 8,
+                        "height": 30,
+                        "color": "#EEEEEE",
+                        "z": 10
+                    },
+                    {
+                        "name": "ribs",
+                        "type": "shape",
+                        "shape": "rect",
+                        "width": 20,
+                        "height": 4,
+                        "color": "#EEEEEE",
+                        "offset": {
+                            "x": 0,
+                            "y": -5
+                        },
+                        "z": 11
+                    },
+                    {
+                        "name": "head",
+                        "type": "shape",
+                        "shape": "circle",
+                        "radius": 10,
+                        "color": "#FFFFFF",
+                        "offset": {
+                            "x": 0,
+                            "y": -20
+                        },
+                        "z": 20
+                    },
+                    {
+                        "name": "eye_left",
+                        "type": "shape",
+                        "shape": "circle",
+                        "radius": 2,
+                        "color": "#00FFFF",
+                        "offset": {
+                            "x": -4,
+                            "y": -22
+                        },
+                        "z": 30
+                    },
+                    {
+                        "name": "eye_right",
+                        "type": "shape",
+                        "shape": "circle",
+                        "radius": 2,
+                        "color": "#00FFFF",
+                        "offset": {
+                            "x": 4,
+                            "y": -22
+                        },
+                        "z": 30
+                    }
+                ],
+                "animations": {
+                    "idle": {
+                        "type": "float",
+                        "range": 5,
+                        "duration": 1500
+                    },
+                    "walk": {
+                        "type": "slide",
+                        "speed": 1.5
+                    }
+                }
+            }
+        },
+        {
+            "id": "procedural_spider",
+            "name": "Spider",
+            "stats": {
+                "hp": 20,
+                "attack": 4,
+                "speed": 70,
+                "xp": 8,
+                "spawnAmount": [
+                    3,
+                    5
+                ]
+            },
+            "appearance": {
+                "baseSize": 32,
+                "layers": [
+                    {
+                        "name": "body",
+                        "type": "shape",
+                        "shape": "circle",
+                        "radius": 12,
+                        "color": "#222222",
+                        "z": 10
+                    },
+                    {
+                        "name": "head",
+                        "type": "shape",
+                        "shape": "circle",
+                        "radius": 6,
+                        "color": "#111111",
+                        "offset": {
+                            "x": 0,
+                            "y": -10
+                        },
+                        "z": 20
+                    },
+                    {
+                        "name": "eye_1",
+                        "type": "shape",
+                        "shape": "circle",
+                        "radius": 1.5,
+                        "color": "#FF0000",
+                        "offset": {
+                            "x": -3,
+                            "y": -12
+                        },
+                        "z": 30
+                    },
+                    {
+                        "name": "eye_2",
+                        "type": "shape",
+                        "shape": "circle",
+                        "radius": 1.5,
+                        "color": "#FF0000",
+                        "offset": {
+                            "x": 3,
+                            "y": -12
+                        },
+                        "z": 30
+                    },
+                    {
+                        "name": "eye_3",
+                        "type": "shape",
+                        "shape": "circle",
+                        "radius": 1,
+                        "color": "#FF0000",
+                        "offset": {
+                            "x": -5,
+                            "y": -9
+                        },
+                        "z": 30
+                    },
+                    {
+                        "name": "eye_4",
+                        "type": "shape",
+                        "shape": "circle",
+                        "radius": 1,
+                        "color": "#FF0000",
+                        "offset": {
+                            "x": 5,
+                            "y": -9
+                        },
+                        "z": 30
+                    }
+                ],
+                "animations": {
+                    "idle": {
+                        "type": "pulse",
+                        "property": "scale",
+                        "to": 1.1,
+                        "duration": 500
+                    },
+                    "walk": {
+                        "type": "jitter",
+                        "range": 2
+                    }
+                }
+            }
+        },
+        {
+            "id": "procedural_wolf",
+            "name": "Wolf",
+            "stats": {
+                "hp": 40,
+                "attack": 7,
+                "speed": 65,
+                "xp": 18,
+                "spawnAmount": [
+                    2,
+                    3
+                ]
+            },
+            "appearance": {
+                "baseSize": 32,
+                "layers": [
+                    {
+                        "name": "body",
+                        "type": "shape",
+                        "shape": "ellipse",
+                        "width": 40,
+                        "height": 20,
+                        "color": "#666666",
+                        "z": 10
+                    },
+                    {
+                        "name": "head",
+                        "type": "shape",
+                        "shape": "ellipse",
+                        "width": 16,
+                        "height": 12,
+                        "color": "#666666",
+                        "offset": {
+                            "x": 15,
+                            "y": -5
+                        },
+                        "z": 20
+                    },
+                    {
+                        "name": "ear_l",
+                        "type": "shape",
+                        "shape": "triangle",
+                        "points": [
+                            0,
+                            0,
+                            -5,
+                            -8,
+                            5,
+                            0
+                        ],
+                        "color": "#555555",
+                        "offset": {
+                            "x": 12,
+                            "y": -12
+                        },
+                        "z": 15
+                    },
+                    {
+                        "name": "ear_r",
+                        "type": "shape",
+                        "shape": "triangle",
+                        "points": [
+                            0,
+                            0,
+                            5,
+                            -8,
+                            -5,
+                            0
+                        ],
+                        "color": "#555555",
+                        "offset": {
+                            "x": 18,
+                            "y": -12
+                        },
+                        "z": 15
+                    }
+                ],
+                "animations": {
+                    "idle": {
+                        "type": "pulse",
+                        "property": "scaleX",
+                        "to": 1.05,
+                        "duration": 400
+                    },
+                    "walk": {
+                        "type": "slide",
+                        "speed": 1.8
+                    }
+                }
+            }
+        },
+        {
+            "id": "procedural_dragon",
+            "name": "Dragon",
+            "stats": {
+                "hp": 80,
+                "attack": 12,
+                "speed": 35,
+                "xp": 40,
+                "spawnAmount": [
+                    1,
+                    1
+                ]
+            },
+            "appearance": {
+                "baseSize": 64,
+                "layers": [
+                    {
+                        "name": "body",
+                        "type": "shape",
+                        "shape": "ellipse",
+                        "width": 60,
+                        "height": 40,
+                        "color": "#880000",
+                        "z": 10
+                    },
+                    {
+                        "name": "wing_l",
+                        "type": "shape",
+                        "shape": "ellipse",
+                        "width": 40,
+                        "height": 15,
+                        "color": "#aa2222",
+                        "offset": {
+                            "x": -20,
+                            "y": -10
+                        },
+                        "z": 5
+                    },
+                    {
+                        "name": "wing_r",
+                        "type": "shape",
+                        "shape": "ellipse",
+                        "width": 40,
+                        "height": 15,
+                        "color": "#aa2222",
+                        "offset": {
+                            "x": 20,
+                            "y": -10
+                        },
+                        "z": 5
+                    },
+                    {
+                        "name": "head",
+                        "type": "shape",
+                        "shape": "ellipse",
+                        "width": 25,
+                        "height": 20,
+                        "color": "#880000",
+                        "offset": {
+                            "x": 0,
+                            "y": -30
+                        },
+                        "z": 20
+                    }
+                ],
+                "animations": {
+                    "idle": {
+                        "type": "pulse",
+                        "property": "scale",
+                        "to": 1.05,
+                        "duration": 2000
+                    },
+                    "walk": {
+                        "type": "slide",
+                        "speed": 0.5
+                    }
+                }
+            }
+        },
+        {
+            "id": "procedural_ghost",
+            "name": "Ghost",
+            "stats": {
+                "hp": 35,
+                "attack": 6,
+                "speed": 55,
+                "xp": 12,
+                "spawnAmount": [
+                    1,
+                    2
+                ]
+            },
+            "appearance": {
+                "baseSize": 28,
+                "layers": [
+                    {
+                        "name": "body",
+                        "type": "shape",
+                        "shape": "ellipse",
+                        "width": 24,
+                        "height": 32,
+                        "color": "#ffffff",
+                        "alpha": 0.6,
+                        "z": 10
+                    },
+                    {
+                        "name": "eye_l",
+                        "type": "shape",
+                        "shape": "circle",
+                        "radius": 2,
+                        "color": "#000000",
+                        "offset": {
+                            "x": -5,
+                            "y": -10
+                        },
+                        "z": 20
+                    },
+                    {
+                        "name": "eye_r",
+                        "type": "shape",
+                        "shape": "circle",
+                        "radius": 2,
+                        "color": "#000000",
+                        "offset": {
+                            "x": 5,
+                            "y": -10
+                        },
+                        "z": 20
+                    }
+                ],
+                "animations": {
+                    "idle": {
+                        "type": "float",
+                        "range": 15,
+                        "duration": 1000
+                    },
+                    "walk": {
+                        "type": "slide",
+                        "speed": 1.2
+                    }
+                }
+            }
+        },
+        {
+            "id": "procedural_echo_mite",
+            "name": "Echo_Mite",
+            "stats": {
+                "hp": 15,
+                "attack": 3,
+                "speed": 60,
+                "xp": 5,
+                "spawnAmount": [
+                    2,
+                    4
+                ]
+            },
+            "appearance": {
+                "baseSize": 16,
+                "layers": [
+                    {
+                        "name": "body",
+                        "type": "shape",
+                        "shape": "circle",
+                        "radius": 8,
+                        "color": "#440044",
+                        "z": 10
+                    },
+                    {
+                        "name": "glow",
+                        "type": "shape",
+                        "shape": "circle",
+                        "radius": 12,
+                        "color": "#ff00ff",
+                        "alpha": 0.3,
+                        "z": 5
+                    }
+                ],
+                "animations": {
+                    "idle": {
+                        "type": "pulse",
+                        "property": "scale",
+                        "to": 1.2,
+                        "duration": 300
+                    },
+                    "walk": {
+                        "type": "jitter",
+                        "range": 5
+                    }
+                }
+            }
+        },
+        {
+            "id": "procedural_prism_slime",
+            "name": "Prism Slime",
+            "stats": {
+                "hp": 40,
+                "attack": 6,
+                "speed": 40,
+                "xp": 25,
+                "spawnAmount": [
+                    1,
+                    2
+                ]
+            },
+            "appearance": {
+                "baseSize": 40,
+                "layers": [
+                    {
+                        "name": "outer_body",
+                        "type": "shape",
+                        "shape": "circle",
+                        "radius": 20,
+                        "color": "#ff00ff",
+                        "alpha": 0.4,
+                        "z": 5
+                    },
+                    {
+                        "name": "inner_core",
+                        "type": "shape",
+                        "shape": "circle",
+                        "radius": 12,
+                        "color": "#00ffff",
+                        "alpha": 0.9,
+                        "z": 10
+                    },
+                    {
+                        "name": "eye_l",
+                        "type": "shape",
+                        "shape": "circle",
+                        "radius": 3,
+                        "color": "#ffffff",
+                        "offset": {
+                            "x": -8,
+                            "y": -5
+                        },
+                        "z": 15
+                    },
+                    {
+                        "name": "eye_r",
+                        "type": "shape",
+                        "shape": "circle",
+                        "radius": 3,
+                        "color": "#ffffff",
+                        "offset": {
+                            "x": 8,
+                            "y": -5
+                        },
+                        "z": 15
+                    }
+                ],
+                "animations": {
+                    "idle": {
+                        "type": "pulse",
+                        "property": "scale",
+                        "to": 1.15,
+                        "duration": 1200
+                    },
+                    "walk": {
+                        "type": "hop",
+                        "speed": 1.2
+                    }
+                }
+            }
+        },
+        {
+            "id": "procedural_beholder",
+            "name": "Echo Beholder",
+            "stats": {
+                "hp": 200,
+                "attack": 25,
+                "speed": 20,
+                "xp": 500,
+                "spawnAmount": [
+                    1,
+                    1
+                ]
+            },
+            "appearance": {
+                "baseSize": 64,
+                "layers": [
+                    {
+                        "name": "body",
+                        "type": "shape",
+                        "shape": "circle",
+                        "radius": 30,
+                        "color": "#4B0082",
+                        "z": 10
+                    },
+                    {
+                        "name": "main_eye",
+                        "type": "shape",
+                        "shape": "circle",
+                        "radius": 12,
+                        "color": "#FFFF00",
+                        "offset": {
+                            "x": 0,
+                            "y": -5
+                        },
+                        "z": 20
+                    },
+                    {
+                        "name": "pupil",
+                        "type": "shape",
+                        "shape": "circle",
+                        "radius": 4,
+                        "color": "#000000",
+                        "offset": {
+                            "x": 0,
+                            "y": -5
+                        },
+                        "z": 21
+                    }
+                ],
+                "animations": {
+                    "idle": {
+                        "type": "pulse",
+                        "property": "scale",
+                        "to": 1.1,
+                        "duration": 2000
+                    },
+                    "walk": {
+                        "type": "float",
+                        "range": 10,
+                        "speed": 0.5
+                    }
+                }
+            }
+        },
+        {
+            "id": "procedural_backlash",
+            "name": "Backlash Construct",
+            "stats": {
+                "hp": 40,
+                "attack": 10,
+                "speed": 50,
+                "xp": 25,
+                "spawnAmount": [
+                    2,
+                    3
+                ]
+            },
+            "appearance": {
+                "baseSize": 32,
+                "layers": [
+                    {
+                        "name": "core",
+                        "type": "shape",
+                        "shape": "circle",
+                        "radius": 15,
+                        "color": "#00CED1",
+                        "alpha": 0.8,
+                        "z": 10
+                    },
+                    {
+                        "name": "orbit1",
+                        "type": "shape",
+                        "shape": "circle",
+                        "radius": 5,
+                        "color": "#FFFFFF",
+                        "offset": {
+                            "x": 20,
+                            "y": 0
+                        },
+                        "z": 20
+                    },
+                    {
+                        "name": "orbit2",
+                        "type": "shape",
+                        "shape": "circle",
+                        "radius": 5,
+                        "color": "#FFFFFF",
+                        "offset": {
+                            "x": -20,
+                            "y": 0
+                        },
+                        "z": 20
+                    }
+                ],
+                "animations": {
+                    "idle": {
+                        "type": "pulse",
+                        "property": "alpha",
+                        "to": 0.5,
+                        "duration": 500
+                    },
+                    "walk": {
+                        "type": "jitter",
+                        "range": 5
+                    }
+                }
+            }
+        }
+    ]
+}

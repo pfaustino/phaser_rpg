@@ -1,0 +1,95 @@
+{
+    "dungeons": {
+        "tower_dungeon": {
+            "id": "tower_dungeon",
+            "name": "Watchtower Basement",
+            "levels": 3,
+            "tileset": {
+                "floor": "dungeon_floor",
+                "wall": "dungeon_wall"
+            },
+            "generation": {
+                "width": 50,
+                "height": 50,
+                "roomCount": {
+                    "min": 8,
+                    "max": 12
+                },
+                "roomSize": {
+                    "min": 3,
+                    "max": 8
+                },
+                "corridorWidth": 1
+            },
+            "monsters": [
+                {
+                    "id": "procedural_echo_mite",
+                    "chance": 0.5
+                },
+                {
+                    "id": "procedural_echo_mite",
+                    "chance": 0.4
+                },
+                {
+                    "id": "procedural_skeleton",
+                    "minLevel": 2,
+                    "chance": 0.3
+                }
+            ],
+            "bosses": [
+                {
+                    "level": 1,
+                    "monsterId": "corrupted_guardian"
+                },
+                {
+                    "level": 2,
+                    "monsterId": "corrupted_guardian"
+                },
+                {
+                    "level": 3,
+                    "monsterId": "echo_beholder"
+                }
+            ],
+            "victory_image": "victory_tower",
+            "storyline_lore": "You have defeated the Echo Beholder and cleansed the Watchtower. The corruption recedes, and the light of the sun returns to the valley. But deeper shadows stir elsewhere..."
+        },
+        "temple_ruins": {
+            "id": "temple_ruins",
+            "name": "The Sunken Temple",
+            "levels": 2,
+            "tileset": {
+                "floor": "dungeon_floor",
+                "wall": "dungeon_wall"
+            },
+            "generation": {
+                "width": 60,
+                "height": 60,
+                "roomCount": {
+                    "min": 10,
+                    "max": 15
+                },
+                "roomSize": {
+                    "min": 6,
+                    "max": 12
+                },
+                "corridorWidth": 2
+            },
+            "monsters": [
+                {
+                    "id": "corrupted_guardian",
+                    "chance": 0.4
+                }
+            ],
+            "bosses": [
+                {
+                    "level": 1,
+                    "monsterId": "corrupted_guardian"
+                },
+                {
+                    "level": 2,
+                    "monsterId": "corrupted_guardian"
+                }
+            ]
+        }
+    }
+}

@@ -209,16 +209,16 @@ function handleGamepadInput() {
 
     // --- D-PAD MENU TOGGLES (always work, except in shop) ---
     if (!inShop && !inDialog) {
-        // D-pad UP = Toggle Inventory
+        // D-pad UP = Toggle Equipment
         if (isButtonJustPressed(controllerConfig.buttons.DPAD_UP)) {
-            if (typeof toggleInventory === 'function') {
-                toggleInventory();
-            }
-        }
-        // D-pad DOWN = Toggle Equipment
-        if (isButtonJustPressed(controllerConfig.buttons.DPAD_DOWN)) {
             if (typeof toggleEquipment === 'function') {
                 toggleEquipment();
+            }
+        }
+        // D-pad DOWN = Toggle Quest Log
+        if (isButtonJustPressed(controllerConfig.buttons.DPAD_DOWN)) {
+            if (typeof UIManager !== 'undefined' && typeof UIManager.toggleQuestLog === 'function') {
+                UIManager.toggleQuestLog();
             }
         }
     }

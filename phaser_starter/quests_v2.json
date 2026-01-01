@@ -30,6 +30,7 @@
                     "id": "collect_echo_shards",
                     "type": "collect",
                     "itemId": "echo_shard",
+                    "icon": "echo_shard",
                     "label": "Collect Echo Shards",
                     "target": 8
                 }
@@ -37,7 +38,14 @@
             "rewards": {
                 "xp": 150,
                 "gold": 75
-            }
+            },
+            "assets": [
+                {
+                    "type": "image",
+                    "key": "echo_shard",
+                    "path": "assets/images/echo-shard.png"
+                }
+            ]
         },
         "main_01_002": {
             "id": "main_01_002",
@@ -146,9 +154,9 @@
             "objectives": [
                 {
                     "id": "choose_class_obj",
-                    "type": "class_selection",
+                    "type": "talk",
                     "npcId": "Trainer Garen",
-                    "label": "Choose your Class",
+                    "label": "Speak with Trainer Garen",
                     "target": 1
                 }
             ],
@@ -167,10 +175,17 @@
             "objectives": [
                 {
                     "id": "collect_flux",
-                    "type": "collect",
+                    "type": "dynamic_spawn",
                     "itemId": "stabilized_flux",
                     "label": "Stabilize Mana Fluxes",
-                    "target": 15
+                    "target": 12,
+                    "spawnConfig": {
+                        "visualType": "star",
+                        "color": 65535,
+                        "spawnRate": 0.05,
+                        "maxNodes": 5,
+                        "radius": 400
+                    }
                 }
             ],
             "rewards": {
@@ -232,7 +247,7 @@
         "main_01_010": {
             "id": "main_01_010",
             "title": "The Forgotten",
-            "description": "The miners who were trapped have... returned. Lay them to rest.",
+            "description": "The miners who were trapped in the deeper levels of the Watchtower have... returned. Descend further into the Watchtower dungeon in the wilderness and lay them to rest.",
             "giver": "Captain Thorne",
             "step": 10,
             "requires": "main_01_009",
@@ -253,8 +268,9 @@
         "main_01_011": {
             "id": "main_01_011",
             "title": "Solidified Corruption",
-            "description": "The corruption is forming hard crystalline structures. Mine 10 Echo Crystals from the lower depths.",
+            "description": "The corruption in the Watchtower's lower depths is forming hard crystalline structures. Mine 10 Echo Crystals from the floors below.",
             "giver": "Blacksmith Brond",
+            "step": 11,
             "requires": "main_01_010",
             "objectives": [
                 {
@@ -280,7 +296,7 @@
         "main_01_012": {
             "id": "main_01_012",
             "title": "The First Fragment",
-            "description": "A massive creature has nested near the breach. Defeat the Echo Beholder to reach the first fragment of the Aegis.",
+            "description": "A massive creature has nested near the breach in the floor of the deepest Watchtower level. Defeat the Echo Beholder to reach the first fragment of the Aegis.",
             "giver": "Elder Malik",
             "step": 12,
             "requires": "main_01_011",

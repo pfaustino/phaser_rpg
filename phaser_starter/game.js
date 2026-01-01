@@ -85,31 +85,34 @@ let specialZones = []; // Populated from zones.json
 // QUEST HELPERS (Global Bridge)
 // ============================================
 function isQuestActive(id) {
-    if (!id) return false;
+    if (!id || !playerStats || !playerStats.quests) return false;
 
-    // Legacy check
-    const legacyQuests = playerStats.quests.main.concat(playerStats.quests.active);
-    const legacyActive = legacyQuests.some(q => q.id === id);
+    // Legacy pool safety
+    const mainList = playerStats.quests.main || [];
+    const activeList = playerStats.quests.active || [];
+    const legacyQuests = mainList.concat(activeList);
+    const legacyActive = legacyQuests.some(q => q && q.id === id);
 
     // UQE check
     let uqeActive = false;
-    if (window.uqe) {
-        uqeActive = window.uqe.activeQuests.some(q => q.id === id);
+    if (window.uqe && window.uqe.activeQuests) {
+        uqeActive = window.uqe.activeQuests.some(q => q && q.id === id);
     }
 
     return legacyActive || uqeActive;
 }
 
 function isQuestCompleted(id) {
-    if (!id) return false;
+    if (!id || !playerStats || !playerStats.quests) return false;
 
     // Legacy check
-    const legacyCompleted = playerStats.quests.completed.includes(id);
+    const completedList = playerStats.quests.completed || [];
+    const legacyCompleted = completedList.includes(id);
 
     // UQE check
     let uqeCompleted = false;
-    if (window.uqe) {
-        uqeCompleted = window.uqe.completedQuests.some(q => q.id === id);
+    if (window.uqe && window.uqe.completedQuests) {
+        uqeCompleted = window.uqe.completedQuests.some(q => q && q.id === id);
     }
 
     return legacyCompleted || uqeCompleted;
@@ -655,7 +658,10 @@ function preload() {
     this.load.image('item_ring', 'assets/images/pixellab-golden-ring-1765494525925.png');
     this.load.image('item_consumable', 'assets/images/pixellab-red-simple-health-potion-1765494342318.png');
     this.load.image('mana_potion', 'assets/images/mana-potion.png');
+    this.load.image('echo_shard', 'assets/images/echo-shard.png');
+    this.load.image('echo_crystal', 'assets/images/echo-crystal.png');
     this.load.image('character-fallen', 'assets/images/character-fallen.png');
+
     // item_fragment and item_crystal are now loaded dynamically from quests_v2.json
     this.load.audio('bell_toll', 'assets/audio/bell-toll-407826.mp3');
 
@@ -1498,140 +1504,134 @@ function preload() {
     console.log('💡 To use real images: uncomment image loading lines in preload() and add assets/ folder');
 }
 
-
-
 /**
- * Create Mana Fluxes for the "Mana Instability" quest
+ * Generalized Dynamic Spawning Manager
+ * Handles objectives that require objects to appear near the player.
  */
-function createManaFluxes() {
-    const scene = game.scene.scenes[0];
-    const width = scene.mapWidth || 40;
-    const height = scene.mapHeight || 40;
+const DynamicSpawnManager = {
+    activeSpawnNodes: [], // Each node: { objective, sprite, id }
 
-    // Create 3-5 fluxes at random locations
-    const numFluxes = Phaser.Math.Between(3, 5);
-    const locations = [];
+    update(scene) {
+        if (!window.uqe || !player) return;
 
-    for (let i = 0; i < numFluxes; i++) {
-        locations.push({
-            x: Phaser.Math.Between(5, width - 5),
-            y: Phaser.Math.Between(5, height - 5)
+        // 1. Identify all active DynamicSpawnObjectives
+        const activeObjectives = [];
+        window.uqe.activeQuests.forEach(quest => {
+            quest.objectives.forEach(obj => {
+                if (obj.type === 'dynamic_spawn' && !obj.completed) {
+                    activeObjectives.push(obj);
+                }
+            });
         });
-    }
 
-    locations.forEach((loc, index) => {
-        const x = loc.x * 32;
-        const y = loc.y * 32;
+        // 2. Cleanup nodes for objectives that are no longer active/needed
+        for (let i = this.activeSpawnNodes.length - 1; i >= 0; i--) {
+            const node = this.activeSpawnNodes[i];
+            const isStillNeeded = activeObjectives.includes(node.objective);
 
-        // Visual: Purple glow/particle
-        // Use a simple circle if no particle texture, or 'flare' if avail
-        // We'll use a tinted rock or existing sprite if possible, or just a circle
+            if (!isStillNeeded || !node.sprite.active) {
+                if (node.sprite) node.sprite.destroy();
+                this.activeSpawnNodes.splice(i, 1);
+            }
+        }
 
-        // Using a particle emitter would be nice, but simple sprite is safer for now
-        // We'll use a small circle graphic
-        const flux = scene.add.circle(x, y, 10, 0xAA00FF, 0.7);
-        flux.setDepth(5);
+        // 3. Process each objective
+        activeObjectives.forEach(obj => {
+            const config = obj.spawnConfig;
+            const myNodes = this.activeSpawnNodes.filter(n => n.objective === obj);
 
-        // Add a pulsing tween
+            // Spawn new nodes if below max
+            if (myNodes.length < (config.maxNodes || 5)) {
+                if (Math.random() < (config.spawnRate || 0.02)) {
+                    this.spawnNode(scene, obj);
+                }
+            }
+
+            // Collection check
+            for (let i = this.activeSpawnNodes.length - 1; i >= 0; i--) {
+                const node = this.activeSpawnNodes[i];
+                if (node.objective !== obj) continue;
+
+                const dist = Phaser.Math.Distance.Between(player.x, player.y, node.sprite.x, node.sprite.y);
+                if (dist < 40) { // Collection radius
+                    // Visual feedback
+                    showDamageNumber(player.x, player.y - 40, `+1 ${obj.label}`, config.color || 0x00ffff);
+                    if (typeof playSound === 'function') playSound('item_pickup');
+
+                    // Emit collection event
+                    window.uqe.eventBus.emit('item_pickup', {
+                        id: obj.itemId,
+                        type: 'quest_item',
+                        amount: 1
+                    });
+
+                    // Cleanup
+                    node.sprite.destroy();
+                    this.activeSpawnNodes.splice(i, 1);
+                }
+            }
+        });
+    },
+
+    spawnNode(scene, objective) {
+        const config = objective.spawnConfig;
+        const radius = config.radius || 300;
+
+        let x, y;
+        let found = false;
+
+        // Retry loop using MapManager's safe location check
+        for (let i = 0; i < 50; i++) {
+            const angle = Math.random() * Math.PI * 2;
+            const dist = 100 + Math.random() * (radius - 100);
+            const tx = player.x + Math.cos(angle) * dist;
+            const ty = player.y + Math.sin(angle) * dist;
+
+            if (MapManager.isLocationSafe(tx, ty, 32)) {
+                x = tx;
+                y = ty;
+                found = true;
+                break;
+            }
+        }
+
+        if (!found) return null;
+
+        let visual;
+        if (config.visualType === 'circle') {
+            visual = scene.add.circle(x, y, 10, config.color || 0xff00ff);
+        } else {
+            // Default to star
+            visual = scene.add.star(x, y, 5, 10, 20, config.color || 0x00ffff);
+        }
+
+        visual.setDepth(5);
+        scene.physics.add.existing(visual);
+        if (visual.body) {
+            visual.body.setImmovable(true);
+            visual.body.setAllowGravity(false);
+        }
+
+        // Pulse animation
         scene.tweens.add({
-            targets: flux,
-            scale: 1.5,
-            alpha: 0.4,
-            duration: 1000,
+            targets: visual,
+            scale: { from: 1, to: 1.3 },
+            alpha: { from: 0.7, to: 1 },
+            duration: 800,
             yoyo: true,
             repeat: -1
         });
 
-        // Add an inner core
-        const core = scene.add.circle(x, y, 5, 0xFFFFFF, 0.9);
-        core.setDepth(6);
+        const node = {
+            objective: objective,
+            sprite: visual,
+            id: 'spawn_' + Date.now() + '_' + Math.random()
+        };
 
-        manaFluxes.push({
-            id: `flux_${index}`,
-            x: x,
-            y: y,
-            sprite: flux,
-            core: core,
-            active: true
-        });
-    });
-
-    console.log('✨ Created 3 Mana Fluxes');
-}
-
-/**
- * Check for interaction with Mana Fluxes
- */
-function checkManaFluxInteraction() {
-    // Only allow if quest "Mana Instability" (main_01_007) is active
-    // We check via UQE or legacy
-    updateAmbientZoneAudio();
-
-    let questActive = false;
-    if (window.uqe) {
-        // Check if quest is in active list
-        // uqe.activeQuests is usually a map or array
-        // We can use the global helper or check uqe state
-        if (window.uqe.isQuestActive) {
-            questActive = window.uqe.isQuestActive('main_01_007');
-        } else if (window.isQuestActive) {
-            questActive = window.isQuestActive('main_01_007');
-        }
+        this.activeSpawnNodes.push(node);
+        return node;
     }
-
-    if (!questActive) return false;
-
-    const scene = game.scene.scenes[0];
-    const interactionRadius = 60;
-
-    for (const flux of manaFluxes) {
-        if (!flux.active) continue;
-
-        const distance = Phaser.Math.Distance.Between(player.x, player.y, flux.x, flux.y);
-
-        if (distance < interactionRadius) {
-            // Stabilize it!
-            flux.active = false;
-
-            // Visual feedback
-            flux.sprite.setFillStyle(0x00FFFF); // Turn blue (stabilized)
-            flux.core.setFillStyle(0x0088FF);
-
-            // Pulse burst
-            const burst = scene.add.circle(flux.x, flux.y, 5, 0x00FFFF, 1);
-            scene.tweens.add({
-                targets: burst,
-                scale: 5,
-                alpha: 0,
-                duration: 500,
-                onComplete: () => burst.destroy()
-            });
-
-            // Message
-            showDamageNumber(player.x, player.y - 40, "Flux Stabilized!", 0x00FFFF);
-            addChatMessage("You stabilized the Mana Flux!", 0x00FFFF, "✨");
-            // playSound('level_up'); // Optional
-
-            // UQE Event
-            if (window.uqe && window.uqe.eventBus) {
-                // Emit event that matches the quest objective
-                // Objective looked for 'stabilized_flux' item pickup or similar
-
-                // We'll emit 'item_pickup' with 'stabilized_flux'
-                window.uqe.eventBus.emit('item_pickup', { id: 'stabilized_flux', amount: 1 });
-
-                // Also emit a specific custom event just in case
-                window.uqe.eventBus.emit('mana_flux_stabilized', { id: flux.id });
-
-                console.log('⚡ Emitted item_pickup: stabilized_flux');
-            }
-
-            return true; // Handled interaction
-        }
-    }
-
-    return false;
-}
+};
 
 /**
  * Check for interaction with Special Zones (e.g. Town Square Investigation)
@@ -1952,8 +1952,8 @@ function spawnBossMonster(x, y, level) {
     // For now, let's randomly decide or try to find a "Boss" type blueprint
     const hasBossBlueprint = monsterRenderer && (monsterRenderer.monsterBlueprints[bossId] || monsterRenderer.monsterBlueprints['Boss']);
 
-    // 50/50 chance to be procedural if a blueprint exists
-    const useProcedural = hasBossBlueprint && Math.random() < 0.5;
+    // Always use procedural for bosses if a blueprint exists
+    const useProcedural = hasBossBlueprint;
 
     const bossTypeData = {
         name: bossName,
@@ -2500,10 +2500,10 @@ function create() {
         // Merge quests from both sources
         const allQuests = { ...v2Data.quests };
 
-        uqe.init(allQuests);
+        window.uqe.init(allQuests);
 
         // Handle V2 Quest Completion
-        uqe.eventBus.on(UQE_EVENTS.QUEST_COMPLETED, (quest) => {
+        window.uqe.eventBus.on(UQE_EVENTS.QUEST_COMPLETED, (quest) => {
             console.log(`🎁 [UQE Bridge] Handling completion for: ${quest.title}`);
 
             // Give Rewards
@@ -3375,8 +3375,8 @@ function update(time, delta) {
         handleGamepadInput();
     }
 
-    // Mana Instability Quest Update
-    updateManaFluxNodes();
+    // Unified Dynamic Spawner (for fluxes, fireflies, etc)
+    DynamicSpawnManager.update(this);
 
     // Defense Quest Wave Spawner
     updateDefenseQuestSpawner(time);
@@ -5057,8 +5057,10 @@ function playerAttack(time) {
  * Monster attack player
  */
 function monsterAttackPlayer(monster, time) {
-    // 0. Safety/Pause Check
-    if ((typeof isGamePaused !== 'undefined' && isGamePaused) || !monster || !monster.active) {
+    // 0. Safety/Invulnerability/Pause Check
+    if ((typeof isGamePaused !== 'undefined' && isGamePaused) ||
+        !monster || !monster.active ||
+        (playerStats && playerStats.isInvulnerable)) {
         return;
     }
 
@@ -6329,8 +6331,20 @@ function spawnQuestItem(x, y, itemData) {
 
     // Determine sprite key
     let spriteKey = 'item_consumable';
-    if (item.id === 'crystal_shard' || item.id === 'echo_shard') spriteKey = 'item_crystal';
-    else if (item.id === 'artifact_fragment') spriteKey = 'item_fragment';
+    const itemId = (item.id || '').toLowerCase();
+    const itemName = (item.name || '').toLowerCase();
+
+    if (itemId === 'crystal_shard' || itemName.includes('crystal shard')) spriteKey = 'item_crystal';
+    else if (itemId === 'echo_shard' || itemName.includes('echo shard')) spriteKey = 'echo_shard';
+    else if (itemId === 'echo_crystal' || itemName.includes('echo crystal')) spriteKey = 'echo_crystal';
+    else if (itemId === 'artifact_fragment' || itemName.includes('artifact fragment')) spriteKey = 'item_fragment';
+
+
+    // Safety: Verify texture exists
+    if (!scene.textures.exists(spriteKey)) {
+        console.warn(`⚠️ spawnQuestItem texture not found: ${spriteKey}, falling back`);
+        spriteKey = 'item_consumable';
+    }
 
     const itemSprite = scene.add.sprite(x, y, spriteKey);
     itemSprite.setDepth(8);
@@ -6447,10 +6461,25 @@ function dropItemsFromMonster(x, y, monsterXP = 10) {
         else if (item.type === 'quest_item') {
             // Use specific sprite for quest items based on ID
             // Map item ID to sprite key: crystal_shard -> item_crystal
-            if (item.id === 'crystal_shard') spriteKey = 'item_crystal';
-            else if (item.id === 'echo_shard') spriteKey = 'item_crystal';
-            else if (item.id === 'artifact_fragment') spriteKey = 'item_fragment';
+            if (item.id === 'crystal_shard' || (item.name && item.name.toLowerCase().includes('crystal shard'))) spriteKey = 'item_crystal';
+            else if (item.id === 'echo_shard' || (item.name && item.name.toLowerCase().includes('echo shard'))) spriteKey = 'echo_shard';
+            else if (item.id === 'echo_crystal' || (item.name && item.name.toLowerCase().includes('echo crystal'))) spriteKey = 'echo_crystal';
+            else if (item.id === 'artifact_fragment' || (item.name && item.name.toLowerCase().includes('artifact fragment'))) spriteKey = 'item_fragment';
             else spriteKey = 'item_consumable'; // Fallback
+        }
+
+        // Fallback: Catch shards with wrong type field
+        else if (item.id === 'echo_shard' || (item.name && item.name.toLowerCase().includes('echo shard'))) {
+            spriteKey = 'echo_shard';
+        }
+        else if (item.id === 'crystal_shard' || (item.name && item.name.toLowerCase().includes('crystal shard'))) {
+            spriteKey = 'item_crystal';
+        }
+
+        // Safety: Verify texture exists
+        if (!scene.textures.exists(spriteKey)) {
+            console.warn(`⚠️ Ground item texture not found: ${spriteKey}, falling back`);
+            spriteKey = 'item_consumable';
         }
 
         const itemSprite = scene.add.sprite(x, y, spriteKey);
@@ -6673,23 +6702,26 @@ function pickupItem(item, index) {
         console.log(`📦 Adding item to inventory: ${item.name} (type: ${item.type})`);
         console.log(`   Before: ${playerStats.inventory.length} items`);
 
-        // Check if this is a stackable consumable
+        // Check if this is a stackable consumable or shard
         let stacked = false;
-        if (item.type === 'consumable' && item.name) {
+        const isShard = (item.type === 'quest_item' && ['crystal_shard', 'echo_shard', 'echo_crystal', 'shard_resonance'].includes(item.id));
+
+
+        if ((item.type === 'consumable' || isShard) && item.name) {
             // Find existing stack of same item
             const existingStack = playerStats.inventory.find(i =>
-                i.type === 'consumable' && i.name === item.name
+                (i.type === item.type) && i.name === item.name && (i.id === item.id || !isShard)
             );
             if (existingStack) {
-                existingStack.quantity = (existingStack.quantity || 1) + 1;
+                existingStack.quantity = (existingStack.quantity || 1) + (item.quantity || 1);
                 stacked = true;
                 console.log(`   Stacked with existing: now x${existingStack.quantity}`);
             }
         }
 
         if (!stacked) {
-            // Set initial quantity for consumables
-            if (item.type === 'consumable') {
+            // Set initial quantity for consumables and shards
+            if (item.type === 'consumable' || isShard) {
                 item.quantity = item.quantity || 1;
             }
             playerStats.inventory.push(item);
@@ -6755,29 +6787,10 @@ function destroySettingsUI() {
     UIManager.destroySettingsUI();
 }
 
-function toggleInventory() {
-    UIManager.toggleInventory();
-}
+// NOTE: toggleInventory, createInventoryUI, updateInventoryItems removed
+// The standalone Inventory UI has been deprecated in favor of the Equipment panel.
+// Equipment panel (E key / D-pad UP) now shows both equipment and inventory.
 
-/**
- * Create inventory UI panel
- */
-/**
- * Create inventory UI panel
- */
-function createInventoryUI() {
-    UIManager.createInventoryUI();
-}
-
-/**
- * Update inventory items display
- */
-/**
- * Update inventory items display
- */
-function updateInventoryItems() {
-    UIManager.updateInventoryItems();
-}
 
 /**
  * showTooltip - Unified tooltip system
@@ -7464,10 +7477,14 @@ function updateEquipmentInventoryItems() {
         else if (item.type === 'gold') spriteKey = 'item_gold';
         else if (item.type === 'quest_item') {
             // Specific mapping for quest items
-            if (item.id === 'crystal_shard') spriteKey = 'item_crystal';
-            else if (item.id === 'artifact_fragment') spriteKey = 'item_fragment';
+            if (item.id === 'crystal_shard' || (item.name && item.name.toLowerCase().includes('crystal shard'))) spriteKey = 'item_crystal';
+            else if (item.id === 'echo_shard' || (item.name && item.name.toLowerCase().includes('echo shard'))) spriteKey = 'echo_shard';
+            else if (item.id === 'echo_crystal' || (item.name && item.name.toLowerCase().includes('echo crystal'))) spriteKey = 'echo_crystal';
+            else if (item.id === 'artifact_fragment' || (item.name && item.name.toLowerCase().includes('artifact fragment'))) spriteKey = 'item_fragment';
             else spriteKey = 'item_consumable';
         }
+
+
         else {
             // Use default item sprite for unknown types
             spriteKey = 'item_weapon'; // Fallback
@@ -7943,9 +7960,13 @@ function initializeQuests() {
  * Check quest progress and complete quests
  */
 function checkQuestProgress() {
+    if (!playerStats || !playerStats.quests) return;
+
     // Check main quests
-    for (let i = playerStats.quests.main.length - 1; i >= 0; i--) {
-        const quest = playerStats.quests.main[i];
+    const mainQuests = playerStats.quests.main || [];
+    for (let i = mainQuests.length - 1; i >= 0; i--) {
+        const quest = mainQuests[i];
+        if (!quest) continue;
         const index = i;
         // Update progress using QuestManager
         if (questManager) {
@@ -7964,8 +7985,10 @@ function checkQuestProgress() {
     }
 
     // Check side quests
-    for (let i = playerStats.quests.active.length - 1; i >= 0; i--) {
-        const quest = playerStats.quests.active[i];
+    const activeQuests = playerStats.quests.active || [];
+    for (let i = activeQuests.length - 1; i >= 0; i--) {
+        const quest = activeQuests[i];
+        if (!quest) continue;
         const index = i;
         // Update progress using QuestManager
         if (questManager) {
@@ -10157,18 +10180,18 @@ function closeDialog() {
  * Shop inventory (items available for purchase)
  */
 const shopInventory = [
-    { type: 'weapon', name: 'Iron Sword', quality: 'Common', attackPower: 5, price: 50 },
-    { type: 'weapon', name: 'Steel Blade', quality: 'Uncommon', attackPower: 8, price: 100 },
-    { type: 'armor', name: 'Leather Armor', quality: 'Common', defense: 3, price: 40 },
-    { type: 'armor', name: 'Chain Mail', quality: 'Uncommon', defense: 5, price: 80 },
-    { type: 'helmet', name: 'Iron Helmet', quality: 'Common', defense: 2, price: 30 },
-    { type: 'helmet', name: 'Steel Helmet', quality: 'Uncommon', defense: 4, price: 60 },
-    { type: 'ring', name: 'Bronze Ring', quality: 'Common', attackPower: 1, defense: 1, price: 40 },
-    { type: 'ring', name: 'Silver Ring', quality: 'Uncommon', attackPower: 3, defense: 2, price: 80 },
-    { type: 'amulet', name: 'Copper Amulet', quality: 'Common', defense: 2, maxHp: 10, price: 50 },
-    { type: 'amulet', name: 'Gold Amulet', quality: 'Uncommon', defense: 4, maxHp: 20, price: 100 },
-    { type: 'boots', name: 'Leather Boots', quality: 'Common', defense: 1, speed: 5, price: 25 },
-    { type: 'boots', name: 'Steel Boots', quality: 'Uncommon', defense: 3, speed: 10, price: 50 },
+    { type: 'weapon', name: 'Iron Sword', quality: 'Common', attackPower: 5, price: 50, itemLevel: 5 },
+    { type: 'weapon', name: 'Steel Blade', quality: 'Uncommon', attackPower: 8, price: 100, itemLevel: 10 },
+    { type: 'armor', name: 'Leather Armor', quality: 'Common', defense: 3, price: 40, itemLevel: 5 },
+    { type: 'armor', name: 'Chain Mail', quality: 'Uncommon', defense: 5, price: 80, itemLevel: 10 },
+    { type: 'helmet', name: 'Iron Helmet', quality: 'Common', defense: 2, price: 30, itemLevel: 5 },
+    { type: 'helmet', name: 'Steel Helmet', quality: 'Uncommon', defense: 4, price: 60, itemLevel: 10 },
+    { type: 'ring', name: 'Bronze Ring', quality: 'Common', attackPower: 1, defense: 1, price: 40, itemLevel: 5 },
+    { type: 'ring', name: 'Silver Ring', quality: 'Uncommon', attackPower: 3, defense: 2, price: 80, itemLevel: 10 },
+    { type: 'amulet', name: 'Copper Amulet', quality: 'Common', defense: 2, maxHp: 10, price: 50, itemLevel: 5 },
+    { type: 'amulet', name: 'Gold Amulet', quality: 'Uncommon', defense: 4, maxHp: 20, price: 100, itemLevel: 10 },
+    { type: 'boots', name: 'Leather Boots', quality: 'Common', defense: 1, speed: 5, price: 25, itemLevel: 5 },
+    { type: 'boots', name: 'Steel Boots', quality: 'Uncommon', defense: 3, speed: 10, price: 50, itemLevel: 10 },
     { type: 'consumable', name: 'Health Potion', quality: 'Common', healAmount: 50, price: 20 },
     { type: 'consumable', name: 'Mana Potion', quality: 'Common', manaAmount: 30, price: 20 }
 ];
@@ -10195,8 +10218,8 @@ function chooseClass(className) {
         playerStats.baseDefense = 10;
 
         // Starting Gear
-        playerStats.equipment.weapon = { name: 'Rusty Sword', quality: 'Common', attackPower: 5, type: 'weapon' };
-        playerStats.equipment.armor = { name: 'Worn Chainmail', quality: 'Common', defense: 4, type: 'armor' };
+        playerStats.equipment.weapon = { name: 'Rusty Sword', quality: 'Common', attackPower: 5, type: 'weapon', itemLevel: 1 };
+        playerStats.equipment.armor = { name: 'Worn Chainmail', quality: 'Common', defense: 4, type: 'armor', itemLevel: 1 };
 
     } else if (className === 'Rogue') {
         playerStats.maxHp = 100;
@@ -10644,11 +10667,13 @@ function buyItem(item, price) {
     // Hide any tooltips before refreshing
     hideTooltip(true);
 
-    // Check if we can stack with existing consumable
+    // Check if we can stack with existing consumable or shard
     let stacked = false;
-    if (item.type === 'consumable' && item.name) {
+    const isShard = (item.type === 'quest_item' && ['crystal_shard', 'echo_shard', 'shard_resonance'].includes(item.id));
+
+    if ((item.type === 'consumable' || isShard) && item.name) {
         const existingStack = playerStats.inventory.find(i =>
-            i.type === 'consumable' && i.name === item.name
+            (i.type === item.type) && i.name === item.name && (i.id === item.id || !isShard)
         );
         if (existingStack) {
             existingStack.quantity = (existingStack.quantity || 1) + 1;
@@ -10666,8 +10691,8 @@ function buyItem(item, price) {
         // Create item copy for inventory
         const purchasedItem = {
             ...item,
-            id: `shop_${Date.now()}_${Math.random()}`,
-            quantity: item.type === 'consumable' ? 1 : undefined
+            id: isShard ? item.id : `shop_${Date.now()}_${Math.random()}`,
+            quantity: (item.type === 'consumable' || isShard) ? 1 : undefined
         };
         playerStats.inventory.push(purchasedItem);
     }
@@ -10823,10 +10848,14 @@ function updateShopInventoryItems() {
         else if (item.type === 'gold') spriteKey = 'item_gold';
         else if (item.type === 'quest_item') {
             // Specific mapping for quest items
-            if (item.id === 'crystal_shard') spriteKey = 'item_crystal';
-            else if (item.id === 'artifact_fragment') spriteKey = 'item_fragment';
+            if (item.id === 'crystal_shard' || (item.name && item.name.toLowerCase().includes('crystal shard'))) spriteKey = 'item_crystal';
+            else if (item.id === 'echo_shard' || (item.name && item.name.toLowerCase().includes('echo shard'))) spriteKey = 'echo_shard';
+            else if (item.id === 'echo_crystal' || (item.name && item.name.toLowerCase().includes('echo crystal'))) spriteKey = 'echo_crystal';
+            else if (item.id === 'artifact_fragment' || (item.name && item.name.toLowerCase().includes('artifact fragment'))) spriteKey = 'item_fragment';
             else spriteKey = 'item_consumable';
         }
+
+
 
         // Create item sprite with background (add to container)
         const itemBg = scene.add.rectangle(x, y, itemSize, itemSize, 0x222222, 0.8)
@@ -11759,38 +11788,57 @@ function loadGame() {
         // Restore player stats
         Object.assign(playerStats, saveData.playerStats);
 
-        // Migrate: Consolidate consumables into stacks (for old saves with separate items)
+        // Safety: Ensure quests structure is valid
+        if (!playerStats.quests || typeof playerStats.quests !== 'object' || Array.isArray(playerStats.quests)) {
+            playerStats.quests = {
+                main: [],
+                active: [],
+                completed: [],
+                available: []
+            };
+        } else {
+            playerStats.quests.main = playerStats.quests.main || [];
+            playerStats.quests.active = playerStats.quests.active || [];
+            playerStats.quests.completed = playerStats.quests.completed || [];
+            playerStats.quests.available = playerStats.quests.available || [];
+        }
+
+        // Migrate: Consolidate consumables and shards into stacks (for old saves with separate items)
         if (playerStats.inventory && playerStats.inventory.length > 0) {
             const consolidatedInventory = [];
-            const consumableStacks = {}; // Map name -> stacked item
+            const itemStacks = {}; // Map key -> stacked item
 
-            console.log('📦 Migration: Starting consumable consolidation...');
-            console.log('   Original inventory:', playerStats.inventory.map(i => `${i.name} (qty:${i.quantity || 1})`));
+            console.log('📦 Migration: Starting inventory consolidation...');
 
             playerStats.inventory.forEach(item => {
-                if (item.type === 'consumable' && item.name) {
-                    if (consumableStacks[item.name]) {
+                const isConsumable = item.type === 'consumable' && item.name;
+                const isStackableShard = (item.type === 'quest_item' && ['crystal_shard', 'echo_shard', 'shard_resonance', 'echo_crystal'].includes(item.id));
+
+                if (isConsumable || isStackableShard) {
+                    // Unique key for stacking - use ID for shards (to separate types), name for consumables
+                    const stackKey = isStackableShard ? item.id : item.name;
+
+                    if (itemStacks[stackKey]) {
                         // Add to existing stack
-                        const oldQty = consumableStacks[item.name].quantity || 1;
+                        const oldQty = itemStacks[stackKey].quantity || 1;
                         const addQty = item.quantity || 1;
-                        consumableStacks[item.name].quantity = oldQty + addQty;
-                        console.log(`   Stacked: ${item.name} (${oldQty} + ${addQty} = ${consumableStacks[item.name].quantity})`);
+                        itemStacks[stackKey].quantity = oldQty + addQty;
+                        console.log(`   Stacked: ${stackKey} (${oldQty} + ${addQty} = ${itemStacks[stackKey].quantity})`);
                     } else {
                         // Create new stack
                         item.quantity = item.quantity || 1;
-                        consumableStacks[item.name] = item;
+                        itemStacks[stackKey] = item;
                         consolidatedInventory.push(item);
-                        console.log(`   New stack: ${item.name} (qty:${item.quantity})`);
+                        console.log(`   New stack: ${stackKey} (qty:${item.quantity})`);
                     }
                 } else {
-                    // Non-consumable items stay as-is
+                    // Non-stackable items stay as-is
                     consolidatedInventory.push(item);
                 }
             });
 
             playerStats.inventory = consolidatedInventory;
-            console.log('   Final inventory:', playerStats.inventory.map(i => `${i.name} (qty:${i.quantity || 'N/A'})`));
-            console.log('📦 Migrated inventory: consolidated consumables into stacks');
+            console.log('📦 Migration complete: consolidated items into stacks');
         }
 
         // Restore UQE Quests
@@ -12176,6 +12224,35 @@ function showFallenDialog() {
                 isGamePaused = false;
 
                 showDamageNumber(player.x, player.y - 50, "Respawned!", 0xffff00);
+
+                // 4.5 Invulnerability Grace Period (3 seconds)
+                playerStats.isInvulnerable = true;
+                addChatMessage("Invincibility active (3s grace period)", 0xffff00, '✨');
+
+                // Visual feedback: Flash player
+                if (player && player.active) {
+                    const flashTween = scene.tweens.add({
+                        targets: player,
+                        alpha: 0.5,
+                        duration: 150,
+                        yoyo: true,
+                        repeat: 10 // ~3 seconds of flashing
+                    });
+
+                    scene.time.delayedCall(3000, () => {
+                        playerStats.isInvulnerable = false;
+                        if (player && player.active) {
+                            player.setAlpha(1);
+                            addChatMessage("Invincibility expired", 0xaaaaaa, '🛡️');
+                        }
+                    });
+                } else {
+                    // Fallback if player sprite missing
+                    scene.time.delayedCall(3000, () => {
+                        playerStats.isInvulnerable = false;
+                    });
+                }
+
                 console.log('✅ Respawn Complete');
 
                 // 5. Cleanup Fader (Chain a quick fade out for smoothness, or destroy)
@@ -13100,7 +13177,15 @@ function castShield() {
             };
 
             scene.events.on('update', updateShield);
-            addChatMessage("Divine Shield activated!", 0xffff00);
+
+            // Apply true invulnerability
+            playerStats.isInvulnerable = true;
+            addChatMessage("Divine Shield activated! (Invulnerable)", 0xffff00, '🛡️');
+
+            // Set cooldown to clear invulnerability
+            scene.time.delayedCall(duration, () => {
+                playerStats.isInvulnerable = false;
+            });
         }
     } catch (error) {
         console.error("Error in castShield:", error);
@@ -13918,13 +14003,17 @@ function spawnMonster(x, y, type, hpOverride, attackOverride, xpOverride, isBoss
         const diffSettings = window.Constants?.DIFFICULTY?.[difficulty] || { hpMult: 1, dmgMult: 1 };
         const monsterScaling = window.Constants?.MONSTER_SCALING || { hpPerLevel: 0.15, attackPerLevel: 0.10 };
 
-        // Calculate monster level from XP reward (level = floor(xp / 5), minimum 1)
+        // Calculate monster level from XP reward using sqrt for balanced progression
+        // Formula: ceil(sqrt(XP * 0.5)) - Slower than linear, avoids high level bloat
+        // Results: 10xp→Lv3, 50xp→Lv5, 100xp→Lv8, 200xp→Lv10, 500xp→Lv16, 1000xp→Lv23
         const xpReward = xpOverride !== undefined ? xpOverride : (type.xp || 10);
-        const monsterLvl = Math.max(1, Math.floor(xpReward / 5));
+        const monsterLvl = Math.max(1, Math.ceil(Math.sqrt(xpReward * 0.5)));
 
-        // Apply level-based scaling: +hpPerLevel% HP and +attackPerLevel% attack per level
-        const levelHpMult = 1 + (monsterLvl - 1) * monsterScaling.hpPerLevel;
-        const levelAtkMult = 1 + (monsterLvl - 1) * monsterScaling.attackPerLevel;
+        // Level-based scaling: Apply ONLY if stats weren't manually overridden (pre-scaled for dungeons)
+        // This prevents "Double Scaling" where dungeon stats are multiplied by level again
+        const hasOverrides = (hpOverride !== undefined || attackOverride !== undefined);
+        const levelHpMult = hasOverrides ? 1 : (1 + (monsterLvl - 1) * monsterScaling.hpPerLevel);
+        const levelAtkMult = hasOverrides ? 1 : (1 + (monsterLvl - 1) * monsterScaling.attackPerLevel);
 
         // Apply both level scaling and difficulty multipliers to HP and attack
         const baseHp = hpOverride !== undefined ? hpOverride : type.hp;
@@ -13981,10 +14070,8 @@ function spawnMonster(x, y, type, hpOverride, attackOverride, xpOverride, isBoss
         monster.hpBar = scene.add.rectangle(0, 0, monsterHpBarWidth - 2, monsterHpBarHeight - 2, 0xff0000)
             .setDepth(7).setOrigin(0, 0.5).setScrollFactor(1);
 
-        // Create level label (calculate level from XP reward using sqrt for balanced progression)
-        // This formula accounts for players doing side quests + main quests
-        // Results: 5xp→Lv2, 10xp→Lv3, 15xp→Lv3, 20xp→Lv4, 40xp→Lv6
-        const monsterLevel = Math.max(1, Math.ceil(Math.sqrt((monster.xpReward || 10) * 2)));
+        // Create level label (use already calculated monster.level)
+        const monsterLevel = monsterLvl;
         monster.level = monsterLevel;
         monster.levelLabel = scene.add.text(0, 0, `Lv${monsterLevel}`, {
             fontSize: '8px',
@@ -15793,111 +15880,6 @@ function showQuestPreviewModalEnhanced(questId, onAccept, onDecline) {
         duration: 200,
         ease: 'Back.out'
     });
-}
-
-/**
- * Spawn a Mana Flux node
- */
-function spawnManaFlux(x, y) {
-    if (!x || !y) {
-        // Random position near player if not specified
-        const radius = 300;
-        const angle = Math.random() * Math.PI * 2;
-        const dist = 100 + Math.random() * (radius - 100);
-        x = player.x + Math.cos(angle) * dist;
-        y = player.y + Math.sin(angle) * dist;
-
-        // Keep within world bounds (simple check)
-        if (x < 50) x = 50;
-        if (y < 50) y = 50;
-        if (x > 3150) x = 3150; // Approx world size
-        if (y > 3150) y = 3150;
-    }
-
-    // Create visual representation - Pulsing Blue Star
-    const star = game.scene.scenes[0].add.star(x, y, 5, 10, 20, 0x00ffff);
-    star.setDepth(5); // Below player but above ground
-
-    // Add physics
-    game.scene.scenes[0].physics.add.existing(star);
-    star.body.setImmovable(true);
-    star.body.setAllowGravity(false); // Top down game, probably no gravity, but safety first
-
-    // Add pulse animation
-    game.scene.scenes[0].tweens.add({
-        targets: star,
-        scale: { from: 1, to: 1.3 },
-        alpha: { from: 0.7, to: 1 },
-        duration: 800,
-        yoyo: true,
-        repeat: -1
-    });
-
-    const flux = {
-        sprite: star,
-        id: 'mana_flux_' + Date.now() + '_' + Math.random()
-    };
-
-    manaFluxes.push(flux);
-    return flux;
-}
-
-/**
- * Update Mana Flux nodes (spawning and collection)
- */
-function updateManaFluxNodes() {
-    // Only active if quest main_01_007 is active
-    if (typeof isQuestActive !== 'function' || !isQuestActive('main_01_007')) {
-        // Cleanup if they exist but quest is not active
-        if (manaFluxes.length > 0) {
-            manaFluxes.forEach(flux => {
-                if (flux.sprite) flux.sprite.destroy();
-            });
-            manaFluxes = [];
-        }
-        return;
-    }
-
-    // Maintain a count of flux nodes around the player
-    const MAX_FLUX_NODES = 5;
-    if (manaFluxes.length < MAX_FLUX_NODES) {
-        // 2% chance per frame to spawn one if below cap
-        if (Math.random() < 0.02) {
-            spawnManaFlux();
-        }
-    }
-
-    // Check collision with player
-    for (let i = manaFluxes.length - 1; i >= 0; i--) {
-        const flux = manaFluxes[i];
-
-        if (!flux.sprite.active) {
-            manaFluxes.splice(i, 1);
-            continue;
-        }
-
-        // Simple distance check for collection
-        const dist = Phaser.Math.Distance.Between(player.x, player.y, flux.sprite.x, flux.sprite.y);
-
-        if (dist < 40) { // Collection radius
-            // Collect!
-            manaFluxes.splice(i, 1);
-            flux.sprite.destroy();
-
-            // Visual feedback
-            showDamageNumber(player.x, player.y - 40, "+1 Stabilized Flux", 0x00ffff);
-            playSound('item_pickup');
-
-            // Send UQE Event
-            if (window.uqe) {
-                window.uqe.eventBus.emit('item_pickup', {
-                    id: 'stabilized_flux',
-                    type: 'quest_item',
-                    amount: 1
-                });
-            }
-        }
-    }
 }
 
 // Defense Quest Wave Spawner State

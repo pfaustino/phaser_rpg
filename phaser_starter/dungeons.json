@@ -47,7 +47,7 @@
                 },
                 {
                     "level": 3,
-                    "monsterId": "echo_beholder"
+                    "monsterId": "procedural_beholder"
                 }
             ],
             "victory_image": "victory_tower",

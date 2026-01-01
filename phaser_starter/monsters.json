@@ -839,12 +839,13 @@
         },
         {
             "id": "procedural_beholder",
+            "monsterId": "echo_beholder",
             "name": "Echo Beholder",
             "stats": {
-                "hp": 200,
+                "hp": 180,
                 "attack": 25,
                 "speed": 20,
-                "xp": 500,
+                "xp": 200,
                 "spawnAmount": [
                     1,
                     1

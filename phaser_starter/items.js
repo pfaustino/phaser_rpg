@@ -210,6 +210,48 @@ function getItemSet(setName) {
     return _itemSets[setName] || null;
 }
 
+/**
+ * Calculate a numerical score for an item based on its stats
+ * @param {object} item - The item object
+ * @returns {number} Calculated Gear Score
+ */
+function calculateItemScore(item) {
+    if (!item) return 0;
+    const weights = window.Constants?.ITEM_SCORE_WEIGHTS || {
+        attackPower: 1, defense: 1, maxHp: 0.1, speed: 1, critChance: 100, lifesteal: 100
+    };
+
+    let score = 0;
+
+    // Direct stats
+    if (item.attackPower) score += item.attackPower * (weights.attackPower || 1);
+    if (item.defense) score += item.defense * (weights.defense || 1);
+    if (item.maxHp) score += item.maxHp * (weights.maxHp || 0.1);
+    if (item.speed) score += item.speed * (weights.speed || 1);
+    if (item.critChance) score += item.critChance * (weights.critChance || 100);
+    if (item.lifesteal) score += item.lifesteal * (weights.lifesteal || 100);
+    if (item.healAmount) score += item.healAmount * (weights.healAmount || 0.5);
+    if (item.manaAmount) score += item.manaAmount * (weights.manaAmount || 0.5);
+
+    // Elemental Damage
+    if (item.elementalDamage && item.elementalDamage.amount) {
+        score += item.elementalDamage.amount * 1.5; // Elemental damage weighted 1.5x
+    }
+
+    // Resistances
+    if (item.resistance) {
+        Object.values(item.resistance).forEach(val => {
+            score += val * 100; // 0.1 (10%) resistance -> 10 points
+        });
+    }
+
+    // Quality bonus (small flat bonus for rarity itself)
+    const qualityLevels = { 'Common': 0, 'Uncommon': 5, 'Rare': 15, 'Epic': 35, 'Legendary': 75 };
+    score += qualityLevels[item.quality] || 0;
+
+    return Math.round(score);
+}
+
 // ============================================
 // ITEM LEVEL SCALING (New System)
 // ============================================

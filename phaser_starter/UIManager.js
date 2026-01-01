@@ -328,272 +328,32 @@ window.UIManager = {
     },
 
     // ============================================
-    // INVENTORY UI
+    // INVENTORY UI (DEPRECATED)
     // ============================================
+    // NOTE: The standalone Inventory UI has been removed.
+    // Use the Equipment panel (E key / D-pad UP) which shows both equipment and inventory.
 
+    // Stubs for backward compatibility (do nothing)
     toggleInventory: function () {
-        // If already open, close it
-        if (this.inventoryVisible) {
-            this.inventoryVisible = false;
-            this.destroyInventoryUI();
-            return;
-        }
-
-        // Close all other interfaces before opening
-        this.closeAllInterfaces();
-
-        // Now open inventory
-        this.inventoryVisible = true;
-        this.createInventoryUI();
+        console.warn('toggleInventory is deprecated. Use toggleEquipment instead.');
     },
+
 
     createInventoryUI: function () {
-        const scene = game.scene.scenes[0];
-        const panelWidth = 650;
-        const panelHeight = 600;
-        const centerX = scene.cameras.main.width / 2;
-        const centerY = scene.cameras.main.height / 2;
-
-        const bg = scene.add.rectangle(centerX, centerY, panelWidth, panelHeight, 0x1a1a1a, 0.95)
-            .setScrollFactor(0).setDepth(300).setStrokeStyle(3, 0xffffff);
-
-        const title = scene.add.text(centerX, centerY - panelHeight / 2 + 20, 'INVENTORY', {
-            fontSize: '28px',
-            fill: '#ffffff',
-            fontStyle: 'bold'
-        }).setScrollFactor(0).setDepth(301).setOrigin(0.5, 0);
-
-        const closeText = scene.add.text(centerX + panelWidth / 2 - 20, centerY - panelHeight / 2 + 20, 'Press I to Close', {
-            fontSize: '14px',
-            fill: '#aaaaaa'
-        }).setScrollFactor(0).setDepth(301).setOrigin(1, 0);
-
-        this.inventoryPanel = {
-            bg,
-            title,
-            closeText,
-            items: []
-        };
-
-        const inventoryStartY = centerY - panelHeight / 2 + 80;
-        const inventoryVisibleHeight = panelHeight - 120;
-        const inventoryContainer = null; // scene.add.container(centerX, inventoryStartY);
-        // inventoryContainer.setScrollFactor(0).setDepth(301);
-
-        const inventoryMask = scene.make.graphics();
-        inventoryMask.fillStyle(0xffffff);
-        inventoryMask.fillRect(centerX - panelWidth / 2, inventoryStartY, panelWidth, inventoryVisibleHeight);
-        inventoryMask.setScrollFactor(0);
-        const maskGeometry = inventoryMask.createGeometryMask();
-
-        // Scrollbar Callback
-        const onScroll = (scrollValue) => {
-            if (this.inventoryPanel && this.inventoryPanel.items) {
-                this.inventoryPanel.items.forEach(itemObj => {
-                    if (itemObj.baseY !== undefined) {
-                        const newY = itemObj.baseY - scrollValue;
-                        if (itemObj.sprite) itemObj.sprite.y = newY;
-                        if (itemObj.text) itemObj.text.y = newY + 30 + 5; // slotSize/2 + 5
-                        if (itemObj.borderRect) itemObj.borderRect.y = newY;
-                    }
-                });
-            }
-        };
-
-        const scrollbar = this.setupScrollbar({
-            scene,
-            x: centerX + panelWidth / 2 - 25,
-            y: inventoryStartY,
-            height: inventoryVisibleHeight,
-            depth: 303,
-            minScroll: 0,
-            initialScroll: 0,
-            onScroll: onScroll,
-            // container: inventoryContainer, // Removed Container link
-            // containerStartY: inventoryStartY,
-            wheelHitArea: this.inventoryPanel.bg,
-            visibleHeight: inventoryVisibleHeight
-        });
-
-        this.inventoryPanel.mask = inventoryMask;
-        this.inventoryPanel.maskGeometry = maskGeometry;
-        this.inventoryPanel.scrollbar = scrollbar;
-        this.inventoryPanel.startY = inventoryStartY;
-        this.inventoryPanel.visibleHeight = inventoryVisibleHeight;
-
-        this.updateInventoryItems();
+        console.warn('createInventoryUI is deprecated. Use Equipment panel instead.');
     },
 
+
     updateInventoryItems: function () {
-        const scene = game.scene.scenes[0];
-        if (!this.inventoryPanel) return;
-
-        const centerX = scene.cameras.main.width / 2;
-
-        // Hide tooltip
-        this.hideTooltip(true);
-
-        // Clear container
-        if (this.inventoryPanel.container) {
-            this.inventoryPanel.container.removeAll(true);
-        }
-        this.inventoryPanel.items = [];
-
-        const slotSize = 60;
-        const slotsPerRow = 6;
-        const spacing = 30;
-
-        // Calculate grid
-        const gridWidth = slotsPerRow * slotSize + (slotsPerRow - 1) * spacing;
-        const startX = centerX - gridWidth / 2 + slotSize / 2; // GLOBAL X
-        const startY = this.inventoryPanel.startY + 40;        // GLOBAL Y BASE
-
-        const currentScroll = this.inventoryPanel.scrollbar ? this.inventoryPanel.scrollbar.getScroll() : 0;
-
-        playerStats.inventory.forEach((item, index) => {
-            const row = Math.floor(index / slotsPerRow);
-            const col = index % slotsPerRow;
-
-            // Global Positioning
-            const globalX = startX + col * (slotSize + spacing);
-            const globalBaseY = startY + row * (slotSize + spacing);
-            const globalY = globalBaseY - currentScroll;
-
-            let spriteKey = 'item_weapon';
-            if (item.type === 'weapon') {
-                const weaponType = item.weaponType || 'Sword';
-                const weaponKey = `weapon_${weaponType.toLowerCase()}`;
-                if (scene.textures.exists(weaponKey)) spriteKey = weaponKey;
-            } else if (item.type === 'armor') spriteKey = 'item_armor';
-            else if (item.type === 'helmet') spriteKey = 'item_helmet';
-            else if (item.type === 'ring') spriteKey = 'item_ring';
-            else if (item.type === 'amulet') spriteKey = 'item_amulet';
-            else if (item.type === 'boots') spriteKey = 'item_boots';
-            else if (item.type === 'gloves') spriteKey = 'item_gloves';
-            else if (item.type === 'belt') spriteKey = 'item_belt';
-            else if (item.type === 'consumable') spriteKey = (item.name === 'Mana Potion') ? 'mana_potion' : 'item_consumable';
-            else if (item.type === 'gold') spriteKey = 'item_gold';
-            else if (item.type === 'quest_item' || item.type === 'quest') {
-                if (item.id === 'crystal_shard') spriteKey = 'item_crystal';
-                else if (item.id === 'artifact_fragment') spriteKey = 'item_fragment';
-                else spriteKey = 'item_consumable';
-            }
-
-            const itemSprite = scene.add.sprite(globalX, globalY, spriteKey);
-            itemSprite.setDepth(302).setScale(0.8).setScrollFactor(0);
-            itemSprite.setMask(this.inventoryPanel.maskGeometry); // Apply Mask
-
-            const qualityColor = window.QUALITY_COLORS ? (window.QUALITY_COLORS[item.quality] || window.QUALITY_COLORS['Common']) : 0xffffff;
-            const borderWidth = 2;
-            const spriteSize = slotSize * 0.8;
-            const borderRect = scene.add.rectangle(globalX, globalY, spriteSize + borderWidth * 2, spriteSize + borderWidth * 2, qualityColor, 0)
-                .setStrokeStyle(borderWidth, qualityColor)
-                .setDepth(300.5).setScrollFactor(0);
-            borderRect.setMask(this.inventoryPanel.maskGeometry); // Apply Mask
-
-            const displayName = (item.quantity && item.quantity > 1) ? `${item.name} x${item.quantity}` : item.name;
-            const itemText = scene.add.text(globalX, globalY + slotSize / 2 + 5, displayName, {
-                fontSize: '10px',
-                fill: '#ffffff',
-                wordWrap: { width: slotSize }
-            }).setDepth(302).setOrigin(0.5, 0).setScrollFactor(0);
-            itemText.setMask(this.inventoryPanel.maskGeometry); // Apply Mask
-
-            itemSprite.setInteractive({ useHandCursor: true });
-
-            const onPointerOver = () => {
-                this.showTooltip(item, globalX, globalY, 'inventory');
-            };
-            const onPointerOut = () => this.hideTooltip();
-
-            itemSprite.on('pointerover', onPointerOver);
-            itemSprite.on('pointerout', onPointerOut);
-            itemSprite._tooltipHandlers = { onPointerOver, onPointerOut };
-
-            // DEBUG: Visual Input Debug
-            // scene.input.enableDebug(itemSprite, 0xffff00);
-
-            // Removed Debug Control Item
-
-            const equippableTypes = ['weapon', 'armor', 'helmet', 'ring', 'amulet', 'boots', 'gloves', 'belt'];
-            if (equippableTypes.includes(item.type)) {
-                itemSprite.on('pointerdown', () => {
-                    if (typeof equipItemFromInventory === 'function') equipItemFromInventory(item, index);
-                    this.hideTooltip(true);
-                });
-            } else if (item.type === 'consumable' && item.healAmount) {
-                itemSprite.on('pointerdown', () => {
-                    if (typeof useConsumable === 'function') useConsumable(item, index);
-                    this.hideTooltip(true);
-                });
-            }
-
-            // Direct add to scene, but push to items array to track them
-            // this.inventoryPanel.container.add([borderRect, itemSprite, itemText]);
-
-            this.inventoryPanel.items.push({
-                sprite: itemSprite,
-                text: itemText,
-                borderRect: borderRect,
-                item: item,
-                baseY: globalBaseY // Store base Y for scroll calculation
-            });
-        });
-
-        // Update scrollbar logic
-        const totalRows = Math.ceil(playerStats.inventory.length / slotsPerRow);
-        const totalContentHeight = totalRows * (slotSize + spacing) + 20;
-        if (this.inventoryPanel.scrollbar) {
-            this.inventoryPanel.scrollbar.updateMaxScroll(Math.max(0, totalContentHeight - this.inventoryPanel.visibleHeight), totalContentHeight);
-        }
-
-        if (playerStats.inventory.length === 0) {
-            const emptyText = scene.add.text(0, 50, 'Inventory is empty\nKill monsters to collect items!', {
-                fontSize: '18px',
-                fill: '#888888',
-                align: 'center',
-                fontStyle: 'italic'
-            }).setScrollFactor(0).setDepth(302).setOrigin(0.5, 0);
-            // Manually position empty text centrally
-            emptyText.x = centerX;
-            emptyText.y = inventoryStartY + 50;
-            this.inventoryPanel.items.push({ text: emptyText });
-        }
+        // No-op: deprecated
     },
 
     destroyInventoryUI: function () {
         this.inventoryVisible = false;
-        this.hideTooltip(true);
-
-        if (this.inventoryPanel) {
-            if (this.inventoryPanel.bg) this.inventoryPanel.bg.destroy();
-            if (this.inventoryPanel.title) this.inventoryPanel.title.destroy();
-            if (this.inventoryPanel.closeText) this.inventoryPanel.closeText.destroy();
-            if (this.inventoryPanel.container) this.inventoryPanel.container.destroy();
-            if (this.inventoryPanel.scrollbar) this.inventoryPanel.scrollbar.destroy();
-
-            // Assuming `items` array holds references to display objects that need to be destroyed
-            // The original code just cleared the array, but if the objects are not in the container, they need explicit destruction.
-            // However, since they are added to `this.inventoryPanel.container`, `container.removeAll(true)` should handle it.
-            // If `itemElements` was intended, it's not defined in the original structure.
-            // Sticking to the original `items` array and assuming container handles destruction.
-            // Manually destroy items since they are no longer in the container
-            if (this.inventoryPanel.items) {
-                this.inventoryPanel.items.forEach(itemObj => {
-                    if (itemObj.sprite) itemObj.sprite.destroy();
-                    if (itemObj.text) itemObj.text.destroy();
-                    if (itemObj.borderRect) itemObj.borderRect.destroy();
-                });
-            }
-            this.inventoryPanel.items = [];
-
-            this.inventoryPanel = null;
-        }
     },
 
-    // Alias for backward compatibility / fixing user crash
     updateInventory: function () {
-        this.updateInventoryItems();
+        // No-op: deprecated
     },
 
     // ============================================
@@ -601,6 +361,7 @@ window.UIManager = {
     // ============================================
 
     showTooltip: function (item, x, y, context = 'inventory') {
+
         const scene = game.scene.scenes[0];
         if (!item) return;
 
@@ -613,7 +374,13 @@ window.UIManager = {
         let tooltipLines = [];
         tooltipLines.push(item.name || 'Unknown Item');
 
+        if (typeof calculateItemScore === 'function') {
+            const score = calculateItemScore(item);
+            if (score > 0) tooltipLines.push(`Gear Score: ${score}`);
+        }
+
         if (item.quality) tooltipLines.push(`Quality: ${item.quality}`);
+        if (item.itemLevel) tooltipLines.push(`iLvl: ${item.itemLevel}`);
         if (item.type) {
             const typeStr = item.type.charAt(0).toUpperCase() + item.type.slice(1);
             tooltipLines.push(`Type: ${typeStr}`);
@@ -1188,20 +955,20 @@ window.UIManager = {
                     fontSize: '24px', fill: '#ffffff', fontStyle: 'bold', wordWrap: { width: detailWidth - 20 }
                 }).setScrollFactor(0).setDepth(302).setOrigin(0, 0);
                 this.questPanel.questDetailElements.push(detailTitle);
-                detailY += 35;
+                detailY += detailTitle.height + 15;
 
                 const detailDesc = scene.add.text(detailStartX, detailY, quest.description, {
                     fontSize: '16px', fill: '#cccccc', wordWrap: { width: detailWidth - 20 }
                 }).setScrollFactor(0).setDepth(302).setOrigin(0, 0);
                 this.questPanel.questDetailElements.push(detailDesc);
-                detailY += 50;
+                detailY += detailDesc.height + 25;
 
                 if (quest.objectives) {
                     const objLabel = scene.add.text(detailStartX, detailY, 'Objectives:', {
                         fontSize: '18px', fill: '#ffffff', fontStyle: 'bold'
                     }).setScrollFactor(0).setDepth(302).setOrigin(0, 0);
                     this.questPanel.questDetailElements.push(objLabel);
-                    detailY += 30;
+                    detailY += objLabel.height + 10;
 
                     quest.objectives.forEach(obj => {
                         const statusStr = obj.completed ? '✅' : '⏳';
@@ -1216,10 +983,10 @@ window.UIManager = {
                         }
 
                         const objText = scene.add.text(detailStartX + textXOffset, detailY, `${statusStr} ${obj.label}: ${objProgress}/${obj.target}`, {
-                            fontSize: '14px', fill: obj.completed ? '#00ff00' : '#cccccc'
+                            fontSize: '14px', fill: obj.completed ? '#00ff00' : '#cccccc', wordWrap: { width: detailWidth - textXOffset - 20 }
                         }).setScrollFactor(0).setDepth(302).setOrigin(0, 0);
                         this.questPanel.questDetailElements.push(objText);
-                        detailY += 25;
+                        detailY += objText.height + 5;
                     });
                     detailY += 15;
                 }
@@ -1230,7 +997,7 @@ window.UIManager = {
                     fontSize: '18px', fill: '#ffd700', fontStyle: 'bold'
                 }).setScrollFactor(0).setDepth(302).setOrigin(0, 0);
                 this.questPanel.questDetailElements.push(rewardsLabel);
-                detailY += 30;
+                detailY += rewardsLabel.height + 5;
 
                 let rewardsText = '';
                 if (quest.rewards.xp) rewardsText += `+${quest.rewards.xp} XP`;

@@ -34,6 +34,52 @@ const MapManager = {
     // Reference to the main scene
     scene: null,
 
+    /**
+     * Check if a pixel coordinate is in a safe location (not in a building, etc.)
+     * @param {number} x - Pixel X coordinate
+     * @param {number} y - Pixel Y coordinate
+     * @param {number} padding - Padding around obstacles (default 32)
+     * @returns {boolean}
+     */
+    isLocationSafe(x, y, padding = 32) {
+        // 1. Check world bounds
+        const scene = this.scene || game.scene.scenes[0];
+        if (!scene) return false;
+
+        const bounds = scene.physics.world.bounds;
+        if (x < padding || x > bounds.width - padding || y < padding || y > bounds.height - padding) {
+            return false;
+        }
+
+        // 2. Check buildings (Town Map)
+        if (this.currentMap === 'town' && this.buildings.length > 0) {
+            for (const b of this.buildings) {
+                if (x >= b.x - padding && x <= b.x + b.width + padding &&
+                    y >= b.y - padding && y <= b.y + b.height + padding) {
+                    return false;
+                }
+            }
+
+            // Avoid player spawn/center crossroads
+            const centerX = bounds.width / 2;
+            const centerY = bounds.height / 2;
+            if (Math.abs(x - centerX) < 96 && Math.abs(y - centerY) < 96) return false;
+        }
+
+        // 3. Check dungeon walls
+        if (this.currentMap === 'dungeon' && this.dungeonWalls.length > 0) {
+            // Very basic check - if it's in a wall tile
+            // In a better system we'd use grid lookups
+            for (const wall of this.dungeonWalls) {
+                if (Math.abs(x - wall.pixelX) < 32 && Math.abs(y - wall.pixelY) < 32) {
+                    return false;
+                }
+            }
+        }
+
+        return true;
+    },
+
     init(scene) {
         this.scene = scene;
         this.wallGroup = scene.physics.add.staticGroup();
@@ -351,9 +397,6 @@ const MapManager = {
         // Initialize NPCs (assuming global function)
         if (typeof initializeNPCs === 'function') initializeNPCs();
 
-        // Create Mana Fluxes (assuming global or we move it later)
-        if (typeof createManaFluxes === 'function') createManaFluxes();
-
         // Strange Energy (MQ-01) - Visual & Trigger
         // MOVED to (22, 18) to be clearly visible in the square, away from the Shop (13-20)
 
@@ -406,6 +449,9 @@ const MapManager = {
             // Store for later interaction setup and indicators
             this.questZones['strange_energy_zone'] = energyZone;
         }
+
+        // Setup physics interactions for quest zones
+        this.setupQuestInteractions(scene, player);
     },
 
     /**
@@ -450,6 +496,7 @@ const MapManager = {
      */
     createWildernessMap() {
         const scene = this.scene;
+        if (this.wallGroup) this.wallGroup.clear(true, true);
         const tileSize = 32;
         const mapWidth = 50;
         const mapHeight = 50;
@@ -724,7 +771,7 @@ const MapManager = {
                     // Better: Add a zone or check in update loop. For now, add a zone.
                     const towerZone = scene.add.zone(dx, dy, tileSize * 4, tileSize * 4);
                     scene.physics.add.existing(towerZone, true);
-                    scene.physics.add.overlap(scene.player, towerZone, () => {
+                    scene.physics.add.overlap(player, towerZone, () => {
                         if (window.uqe && window.uqe.eventBus) {
                             window.uqe.eventBus.emit('location_explored', { id: 'watchtower' });
                         }
@@ -1168,6 +1215,10 @@ const MapManager = {
 
         // Aggressive cleanup: destroy all world objects that aren't the player
         // This catches orphaned graphics, particles, etc.
+        if (scene.physics && scene.physics.world) {
+            scene.physics.world.colliders.getActive().forEach(c => c.destroy());
+        }
+
         const children = scene.children.list.filter(c =>
             c !== player &&
             (c.scrollFactorX > 0 || c.scrollFactorY > 0) &&

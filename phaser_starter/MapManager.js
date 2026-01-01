@@ -10,7 +10,9 @@ const MapManager = {
     wallGroup: null, // Phaser StaticGroup
     transitionMarkers: [],
     questZones: {}, // Store quest interaction zones
+    displayMap: 'town',
     currentMap: 'town',
+    interactables: [], // Data-driven interactive objects
 
     // History State for Dungeon Returns
     lastMap: null,
@@ -78,6 +80,66 @@ const MapManager = {
         }
 
         return true;
+    },
+
+    /**
+     * Spawn interactables defined in interactables.json
+     * @param {string} mapName - Current map key
+     */
+    spawnInteractables(mapName) {
+        if (!this.scene) return;
+
+        // Clear existing
+        this.interactables.forEach(obj => {
+            if (obj.sprite) obj.sprite.destroy();
+            if (obj.label) obj.label.destroy();
+        });
+        this.interactables = [];
+
+        const allInteractables = this.scene.cache.json.get('interactables');
+        if (!allInteractables) {
+            console.warn('⚠️ [MapManager] interactables.json not loaded');
+            return;
+        }
+
+        const mapObjects = allInteractables.filter(obj => obj.map === mapName);
+        console.log(`🗿 [MapManager] Spawning ${mapObjects.length} interactables for ${mapName}`);
+
+        mapObjects.forEach(def => {
+            const x = def.x * this.scene.tileSize;
+            const y = def.y * this.scene.tileSize;
+
+            // Create Sprite
+            let sprite;
+            if (this.scene.textures.exists(def.spriteKey)) {
+                sprite = this.scene.physics.add.staticImage(x, y, def.spriteKey);
+            } else {
+                // Fallback
+                sprite = this.scene.add.rectangle(x, y, 32, 64, 0x555555);
+                this.scene.physics.add.existing(sprite, true);
+            }
+
+            if (def.scale) sprite.setScale(def.scale);
+            if (def.width && def.height && sprite.body) {
+                sprite.body.setSize(def.width, def.height);
+                sprite.body.setOffset((sprite.width - def.width) / 2, (sprite.height - def.height) / 2);
+            }
+            // Ensure visible depth
+            sprite.setDepth(def.depth || 10);
+
+            // Label (optional)
+            /*
+            const label = this.scene.add.text(x, y - 40, def.name, {
+                fontSize: '12px', fill: '#ffffff', stroke: '#000000', strokeThickness: 2
+            }).setOrigin(0.5).setDepth(20);
+            */
+
+            this.interactables.push({
+                definition: def,
+                sprite: sprite,
+                // label: label
+            });
+        });
     },
 
     init(scene) {
@@ -1243,6 +1305,9 @@ const MapManager = {
                 console.log("Spawn dungeon monsters logic missing or global.");
             }
         }
+
+        // spawn interactables
+        this.spawnInteractables(targetMap);
 
         scene.cameras.main.startFollow(player);
         scene.cameras.main.startFollow(player);

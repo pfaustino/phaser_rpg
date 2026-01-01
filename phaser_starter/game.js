@@ -396,7 +396,7 @@ function preload() {
     // this.load.json('questData', 'quests.json');
     this.load.json('questDataV2', 'quests_v2.json'); // UQE - Primary quest system
     // this.load.json('mainQuestData', 'main_quests.json'); // No longer used
-    this.load.audio('wind_effect', 'assets/audio/wind-sound-effect.mp3');
+    // wind_effect loaded from assets.json
 
     // Load Method 2 monster data
     this.load.json('monsterData', 'monsters.json');
@@ -649,101 +649,78 @@ function preload() {
         console.log('✅ Custom consumable image loaded');
     });
 
-    // Now load the images
-    this.load.image('item_weapon', 'assets/images/pixellab-medieval-short-sword-1765494973241.png');
-    // Weapon sprites for in-game display (48x48)
-    // For now, we'll use the same sprite for all weapons, but structure allows for weapon-specific sprites
-    this.load.image('weapon_sword', 'assets/images/pixellab-medieval-short-sword-1765494973241.png');
-    this.load.image('weapon_axe', 'assets/images/basic-axe.png');
-    this.load.image('weapon_bow', 'assets/images/basic-bow.png');
-    this.load.image('weapon_mace', 'assets/images/basic-mace.png');
-    this.load.image('weapon_dagger', 'assets/images/basic-dagger.png');
-    this.load.image('weapon_staff', 'assets/images/basic-staff.png');
-    this.load.image('weapon_crossbow', 'assets/images/basic-crossbow.png');
-    this.load.image('item_armor', 'assets/images/pixellab-medieval-cloth-chest-armor-1765494738527.png');
-    this.load.image('item_helmet', 'assets/images/pixellab-medieval-leather-helmet-1765494658638.png');
-    this.load.image('item_amulet', 'assets/images/pixellab-medieval-jeweled-amulet-1765494933856.png');
-    this.load.image('item_boots', 'assets/images/pixellab-medieval-leather-boots-1765494901812.png');
-    this.load.image('item_gloves', 'assets/images/pixellab-medieval-purple-cloth-gloves---1765494868593.png');
-    this.load.image('item_belt', 'assets/images/pixellab-medieval-belt---just-the-belt-1765494612990.png');
-    this.load.image('item_ring', 'assets/images/pixellab-golden-ring-1765494525925.png');
-    this.load.image('item_consumable', 'assets/images/pixellab-red-simple-health-potion-1765494342318.png');
-    // mana_potion, echo_shard, echo_crystal loaded from items.json
-    this.load.image('character-fallen', 'assets/images/character-fallen.png');
+    // Load Assets Manifest
+    this.load.on('filecomplete-json-assets', (key, type, data) => {
+        console.log('📦 assets.json loaded, processing...');
+        // Load Images
+        if (data.images) {
+            for (const [assetKey, path] of Object.entries(data.images)) {
+                this.load.image(assetKey, path);
+            }
+        }
+        // Load Audio
+        if (data.audio) {
+            for (const [assetKey, path] of Object.entries(data.audio)) {
+                this.load.audio(assetKey, path);
+            }
+        }
+    });
+    this.load.json('assets', 'assets.json');
 
+    // Load Monster Sprites from monsters.json
+    // Note: We already load 'monsters' JSON below, just need to hook into it
+    this.load.on('filecomplete-json-monsters', (key, type, data) => {
+        console.log('📦 monsters.json loaded, loading monster sprites...');
+        if (data.monsters) {
+            data.monsters.forEach(monster => {
+                if (monster.sprites) {
+                    // Load directional sprites
+                    Object.entries(monster.sprites).forEach(([dir, path]) => {
+                        // e.g. monster_goblin_south
+                        // We construct the key to match existing naming convention
+                        // The convention seems to be: monster_{id_suffix}_{dir} OR just what's in the key?
+                        // The existing keys were like 'monster_goblin_south'.
+                        // Let's assume the key construction: `monster_${monster.id.replace('procedural_', '')}_${dir}`
+                        // OR simpler: we can just use the key if we standardized it.
+                        // But the current game uses specific keys.
+                        // Let's use a safe naming convention: `monster_${monster.name.toLowerCase().replace(' ', '_')}_${dir}`
+                        // Actually, let's check existing usage. Goblin ID is procedural_goblin. Key is monster_goblin_south.
 
-    // item_fragment and item_crystal are now loaded dynamically from quests_v2.json
-    this.load.audio('bell_toll', 'assets/audio/bell-toll-407826.mp3');
+                        const simpleName = monster.name.toLowerCase().replace(' ', '_');
+                        const spriteKey = `monster_${simpleName}_${dir}`;
+                        if (!this.textures.exists(spriteKey)) {
+                            this.load.image(spriteKey, path);
+                        }
+                    });
+                }
+            });
+        }
+    });
 
-    // Background Music
-    this.load.audio('village_music', 'assets/audio/music/Village_Hearth_FULL_SONG_MusicGPT.mp3');
-    this.load.audio('wilderness_music', 'assets/audio/music/Wilderness_of_Arcana_FULL_SONG_MusicGPT.mp3');
-    this.load.audio('dungeon_music', 'assets/audio/music/Dungeon_of_Arcana_FULL_SONG_MusicGPT.mp3');
+    // Load Weapon Sprites from items.json
+    // Hook into existing listener
+    this.load.on('filecomplete-json-itemDefinitions', (key, type, data) => {
+        // ... existing ItemManager setup ...
 
-    // Load player and monster base images
-    this.load.image('player', 'assets/player.png');
-    this.load.image('monster', 'assets/monster.png');
+        // Also load default weapon sprites
+        if (data.weaponTypes) {
+            Object.entries(data.weaponTypes).forEach(([type, def]) => {
+                if (def.defaultSprite) {
+                    // Key convention: `weapon_${type.toLowerCase()}`?
+                    // Existing: 'weapon_sword', 'weapon_axe'
+                    // Actually, 'defaultSprite' in items.json matches this convention?
+                    // No, items.json just has the path. We need to assign the key.
+                    // Existing game uses: `weapon_${weaponType.toLowerCase()}`
+                    const spriteKey = `weapon_${type.toLowerCase()}`;
+                    if (!this.textures.exists(spriteKey)) {
+                        this.load.image(spriteKey, def.defaultSprite);
+                    }
+                }
+            });
+        }
+    });
 
-    // Load monster directional sprites (from PixelLab) - static images for fallback
-    // Goblin
-    this.load.image('monster_goblin_south', 'assets/animations/monster_goblin_south.png');
-    this.load.image('monster_goblin_north', 'assets/animations/monster_goblin_north.png');
-    this.load.image('monster_goblin_east', 'assets/animations/monster_goblin_east.png');
-    this.load.image('monster_goblin_west', 'assets/animations/monster_goblin_west.png');
-
-    // Orc
-    this.load.image('monster_orc_south', 'assets/animations/monster_orc_south.png');
-    this.load.image('monster_orc_north', 'assets/animations/monster_orc_north.png');
-    this.load.image('monster_orc_east', 'assets/animations/monster_orc_east.png');
-    this.load.image('monster_orc_west', 'assets/animations/monster_orc_west.png');
-
-    // Victory Images
-    this.load.image('victory_tower', 'assets/images/tower.png');
-    this.load.image('item_fragment', 'assets/images/artifact-fragment.png');
-
-    // Skeleton
-    this.load.image('monster_skeleton_south', 'assets/animations/monster_skeleton_south.png');
-    this.load.image('monster_skeleton_north', 'assets/animations/monster_skeleton_north.png');
-    this.load.image('monster_skeleton_east', 'assets/animations/monster_skeleton_east.png');
-    this.load.image('monster_skeleton_west', 'assets/animations/monster_skeleton_west.png');
-
-    // Slime
-    this.load.image('monster_slime_south', 'assets/animations/monster_slime_south.png');
-    this.load.image('monster_slime_north', 'assets/animations/monster_slime_north.png');
-    this.load.image('monster_slime_east', 'assets/animations/monster_slime_east.png');
-    this.load.image('monster_slime_west', 'assets/animations/monster_slime_west.png');
-
-    // Wolf
-    this.load.image('monster_wolf_south', 'assets/animations/monster_wolf_south.png');
-    this.load.image('monster_wolf_north', 'assets/animations/monster_wolf_north.png');
-    this.load.image('monster_wolf_east', 'assets/animations/monster_wolf_east.png');
-    this.load.image('monster_wolf_west', 'assets/animations/monster_wolf_west.png');
-
-    // Dragon
-    this.load.image('monster_dragon_south', 'assets/animations/monster_dragon_south.png');
-    this.load.image('monster_dragon_north', 'assets/animations/monster_dragon_north.png');
-    this.load.image('monster_dragon_east', 'assets/animations/monster_dragon_east.png');
-    this.load.image('monster_dragon_west', 'assets/animations/monster_dragon_west.png');
-
-    // Ghost
-    this.load.image('monster_ghost_south', 'assets/animations/monster_ghost_south.png');
-    this.load.image('monster_ghost_north', 'assets/animations/monster_ghost_north.png');
-    this.load.image('monster_ghost_east', 'assets/animations/monster_ghost_east.png');
-    this.load.image('monster_ghost_west', 'assets/animations/monster_ghost_west.png');
-
-    // Spider (quadruped version)
-    this.load.image('monster_spider_south', 'assets/animations/monster_spider_south.png');
-    this.load.image('monster_spider_north', 'assets/animations/monster_spider_north.png');
-    this.load.image('monster_spider_east', 'assets/animations/monster_spider_east.png');
-    this.load.image('monster_spider_west', 'assets/animations/monster_spider_west.png');
-
-    // Echo Mite (from PixelLab)
-    this.load.image('monster_echo_mite', 'assets/animations/monster_echo_mite_south.png');
-    this.load.image('monster_echo_mite_south', 'assets/animations/monster_echo_mite_south.png');
-    this.load.image('monster_echo_mite_north', 'assets/animations/monster_echo_mite_north.png');
-    this.load.image('monster_echo_mite_east', 'assets/animations/monster_echo_mite_east.png');
-    this.load.image('monster_echo_mite_west', 'assets/animations/monster_echo_mite_west.png');
-
+    // Legacy/Hardcoded Spritesheets (complex configs not yet moved to JSON)
     // Echo Mite attack animations (64x64 frames)
     this.load.spritesheet('monster_echo_mite_attack_south', 'assets/animations/monster-echo-mite-attack-south.png', {
         frameWidth: 64,
@@ -1480,20 +1457,7 @@ function preload() {
     console.log('📢 Attempting to load sound files from assets/audio/');
 
     // Sound Effects
-    this.load.audio('attack', 'assets/audio/attack_swing.wav');
-    this.load.audio('fireball', 'assets/audio/fireball_cast.wav');
-    this.load.audio('ice_nova_sound', 'assets/audio/ice-nova.mp3');
-    this.load.audio('heal', 'assets/audio/heal_cast.wav'); // Used for potions too
-    this.load.audio('hit_monster', 'assets/audio/hit_monster.mp3');
-    this.load.audio('hit_player', 'assets/audio/hit_player.mp3');
-    this.load.audio('item_pickup', 'assets/audio/item_pickup.wav');
-    this.load.audio('level_up', 'assets/audio/level-up.mp3'); // or level_up.wav
-    this.load.audio('monster_die', 'assets/audio/monster_die.mp3');
-    this.load.audio('new_quest', 'assets/audio/new-quest.mp3');
-    this.load.audio('quest_complete', 'assets/audio/quest-completed.mp3');
-    this.load.audio('quest_accept', 'assets/audio/accepter.mp3');
-    this.load.audio('quest_decline', 'assets/audio/quick-beep-high-to-low.mp3');
-    this.load.audio('gold_pickup', 'assets/audio/gold-pickup.mp3');
+    // Audio loaded from assets.json
 
     // Verify loading
     this.load.on('filecomplete-audio-attack', () => console.log('✅ Loaded attack sound'));
@@ -1831,6 +1795,7 @@ function spawnDungeonMonsters() {
                     if (mDef.minLevel && MapManager.dungeonLevel < mDef.minLevel) return;
 
                     dungeonMonsterTypes.push({
+                        id: mDef.id, // Ensure ID is passed for blueprint lookup
                         ...baseStats,
                         chance: mDef.chance || 1.0,
                         spawnAmount: mDef.spawnAmount || [1, 2]
@@ -1871,6 +1836,8 @@ function spawnDungeonMonsters() {
                         speed: bp.stats.speed,
                         xp: bp.stats.xp,
                         textureKey: bp.id,
+                        generationType: bp.generationType, // Pass generation type for spawnMonster
+                        proceduralConfig: bp.proceduralConfig, // Pass procedural config
                         isProcedural: true,
                         spawnAmount: bp.stats.spawnAmount || selectedType.spawnAmount
                     };
@@ -4518,34 +4485,42 @@ function update(time, delta) {
         const monstersNeeded = MAX_MONSTERS - monsters.length;
 
         // Use data-driven monster types if available
-        let monsterTypes = [
-            { name: 'Goblin', textureKey: 'monster_goblin', hp: 30, attack: 5, speed: 50, xp: 10, isProcedural: false, spawnAmount: [1, 3] },
-            { name: 'Orc', textureKey: 'monster_orc', hp: 50, attack: 8, speed: 40, xp: 20, isProcedural: false, spawnAmount: [1, 2] },
-            { name: 'Skeleton', textureKey: 'monster_skeleton', hp: 25, attack: 6, speed: 60, xp: 15, isProcedural: false, spawnAmount: [1, 2] },
-            { name: 'Spider', textureKey: 'monster_spider', hp: 20, attack: 4, speed: 70, xp: 8, isProcedural: false, spawnAmount: [3, 5] },
-            { name: 'Slime', textureKey: 'monster_slime', hp: 15, attack: 3, speed: 30, xp: 5, isProcedural: false, spawnAmount: [2, 4] },
-            { name: 'Wolf', textureKey: 'monster_wolf', hp: 40, attack: 7, speed: 65, xp: 18, isProcedural: false, spawnAmount: [2, 3] },
-            { name: 'Dragon', textureKey: 'monster_dragon', hp: 80, attack: 12, speed: 35, xp: 40, isProcedural: false, spawnAmount: [1, 1] },
-            { name: 'Echo Mite', id: 'procedural_echo_mite', textureKey: 'monster_echo_mite', hp: 15, attack: 3, speed: 60, xp: 5, isProcedural: false, spawnAmount: [2, 4] },
-            { name: 'Ghost', textureKey: 'monster_ghost', hp: 35, attack: 6, speed: 55, xp: 12, isProcedural: false, spawnAmount: [1, 2] }
-        ];
+        // Use data-driven monster types if available
+        let monsterTypes = [];
 
         if (monsterRenderer && Object.keys(monsterRenderer.monsterBlueprints).length > 0) {
             const uniqueBlueprints = Array.from(new Set(Object.values(monsterRenderer.monsterBlueprints)));
-
             uniqueBlueprints.forEach(bp => {
-                monsterTypes.push({
-                    name: bp.name,
-                    id: bp.id,
-                    hp: bp.stats.hp,
-                    attack: bp.stats.attack,
-                    speed: bp.stats.speed,
-                    xp: bp.stats.xp,
-                    textureKey: bp.id,
-                    isProcedural: true,
-                    spawnAmount: bp.stats.spawnAmount || [1, 1]
-                });
+                // Filter for wilderness-appropriate monsters if needed, for now include all non-boss
+                if (bp.id !== 'boss' && !bp.isBoss) {
+                    monsterTypes.push({
+                        name: bp.name,
+                        id: bp.id,
+                        hp: bp.stats.hp,
+                        attack: bp.stats.attack,
+                        speed: bp.stats.speed,
+                        xp: bp.stats.xp,
+                        textureKey: bp.id,
+                        generationType: bp.generationType,
+                        proceduralConfig: bp.proceduralConfig,
+                        isProcedural: true,
+                        spawnAmount: bp.stats.spawnAmount || [1, 1]
+                    });
+                }
             });
+        } else {
+            // Fallback to hardcoded list (UPDATED to be procedural)
+            monsterTypes = [
+                { name: 'Goblin', id: 'procedural_goblin', generationType: 'mask_based', textureKey: 'monster_goblin', hp: 30, attack: 5, speed: 50, xp: 10, isProcedural: true, spawnAmount: [1, 3] },
+                { name: 'Orc', id: 'procedural_orc', generationType: 'mask_based', textureKey: 'monster_orc', hp: 50, attack: 8, speed: 40, xp: 20, isProcedural: true, spawnAmount: [1, 2] },
+                { name: 'Skeleton', id: 'procedural_skeleton', generationType: 'mask_based', textureKey: 'monster_skeleton', hp: 25, attack: 6, speed: 60, xp: 15, isProcedural: true, spawnAmount: [1, 2] },
+                { name: 'Spider', id: 'procedural_spider', generationType: 'mask_based', textureKey: 'monster_spider', hp: 20, attack: 4, speed: 70, xp: 8, isProcedural: true, spawnAmount: [3, 5] },
+                { name: 'Slime', id: 'procedural_slime', generationType: 'cellular_automata', textureKey: 'monster_slime', hp: 15, attack: 3, speed: 30, xp: 5, isProcedural: true, spawnAmount: [2, 4] },
+                { name: 'Wolf', id: 'procedural_wolf', generationType: 'mask_based', textureKey: 'monster_wolf', hp: 40, attack: 7, speed: 65, xp: 18, isProcedural: true, spawnAmount: [2, 3] },
+                { name: 'Dragon', id: 'procedural_dragon', generationType: 'mask_based', textureKey: 'monster_dragon', hp: 80, attack: 12, speed: 35, xp: 40, isProcedural: true, spawnAmount: [1, 1] },
+                { name: 'Ghost', id: 'procedural_ghost', generationType: 'cellular_automata', textureKey: 'monster_ghost', hp: 35, attack: 6, speed: 55, xp: 12, isProcedural: true, spawnAmount: [1, 2] },
+                { name: 'Echo_Mite', id: 'procedural_echo_mite', generationType: 'cellular_automata', textureKey: 'monster_echo_mite', hp: 15, attack: 3, speed: 60, xp: 5, isProcedural: true, spawnAmount: [2, 4] }
+            ];
         }
 
         // Spawn monsters away from player (using pack spawning)
@@ -13825,34 +13800,42 @@ function createAssetsWindow() {
  */
 function spawnInitialMonsters(mapWidth, mapHeight) {
     // Use data-driven monster types if available from Method 2
-    let monsterTypes = [
-        { name: 'Goblin', textureKey: 'monster_goblin', hp: 30, attack: 5, speed: 50, xp: 10, isProcedural: false, spawnAmount: [1, 3] },
-        { name: 'Orc', textureKey: 'monster_orc', hp: 50, attack: 8, speed: 40, xp: 20, isProcedural: false, spawnAmount: [1, 2] },
-        { name: 'Skeleton', textureKey: 'monster_skeleton', hp: 25, attack: 6, speed: 60, xp: 15, isProcedural: false, spawnAmount: [1, 2] },
-        { name: 'Spider', textureKey: 'monster_spider', hp: 20, attack: 4, speed: 70, xp: 8, isProcedural: false, spawnAmount: [3, 5] },
-        { name: 'Slime', textureKey: 'monster_slime', hp: 15, attack: 3, speed: 30, xp: 5, isProcedural: false, spawnAmount: [2, 4] },
-        { name: 'Wolf', textureKey: 'monster_wolf', hp: 40, attack: 7, speed: 65, xp: 18, isProcedural: false, spawnAmount: [2, 3] },
-        { name: 'Dragon', textureKey: 'monster_dragon', hp: 80, attack: 12, speed: 35, xp: 40, isProcedural: false, spawnAmount: [1, 1] },
-        { name: 'Ghost', textureKey: 'monster_ghost', hp: 35, attack: 6, speed: 55, xp: 12, isProcedural: false, spawnAmount: [1, 2] },
-        { name: 'Echo_Mite', textureKey: 'monster_echo_mite', hp: 15, attack: 3, speed: 60, xp: 5, isProcedural: false, spawnAmount: [2, 4] }
-    ];
+    // Use data-driven monster types if available from Method 2
+    let monsterTypes = [];
 
     if (monsterRenderer && Object.keys(monsterRenderer.monsterBlueprints).length > 0) {
         const uniqueBlueprints = Array.from(new Set(Object.values(monsterRenderer.monsterBlueprints)));
-
         uniqueBlueprints.forEach(bp => {
-            monsterTypes.push({
-                name: bp.name,
-                id: bp.id,
-                hp: bp.stats.hp,
-                attack: bp.stats.attack,
-                speed: bp.stats.speed,
-                xp: bp.stats.xp,
-                textureKey: bp.id,
-                isProcedural: true,
-                spawnAmount: bp.stats.spawnAmount || [1, 1]
-            });
+            // Include all (bosses might be filtered differently, but initial spawn is usually wilderness)
+            if (bp.id !== 'boss' && !bp.isBoss) {
+                monsterTypes.push({
+                    name: bp.name,
+                    id: bp.id,
+                    hp: bp.stats.hp,
+                    attack: bp.stats.attack,
+                    speed: bp.stats.speed,
+                    xp: bp.stats.xp,
+                    textureKey: bp.id,
+                    generationType: bp.generationType,
+                    proceduralConfig: bp.proceduralConfig,
+                    isProcedural: true,
+                    spawnAmount: bp.stats.spawnAmount || [1, 1]
+                });
+            }
         });
+    } else {
+        // Fallback to updated hardcoded list
+        monsterTypes = [
+            { name: 'Goblin', id: 'procedural_goblin', generationType: 'mask_based', textureKey: 'monster_goblin', hp: 30, attack: 5, speed: 50, xp: 10, isProcedural: true, spawnAmount: [1, 3] },
+            { name: 'Orc', id: 'procedural_orc', generationType: 'mask_based', textureKey: 'monster_orc', hp: 50, attack: 8, speed: 40, xp: 20, isProcedural: true, spawnAmount: [1, 2] },
+            { name: 'Skeleton', id: 'procedural_skeleton', generationType: 'mask_based', textureKey: 'monster_skeleton', hp: 25, attack: 6, speed: 60, xp: 15, isProcedural: true, spawnAmount: [1, 2] },
+            { name: 'Spider', id: 'procedural_spider', generationType: 'mask_based', textureKey: 'monster_spider', hp: 20, attack: 4, speed: 70, xp: 8, isProcedural: true, spawnAmount: [3, 5] },
+            { name: 'Slime', id: 'procedural_slime', generationType: 'cellular_automata', textureKey: 'monster_slime', hp: 15, attack: 3, speed: 30, xp: 5, isProcedural: true, spawnAmount: [2, 4] },
+            { name: 'Wolf', id: 'procedural_wolf', generationType: 'mask_based', textureKey: 'monster_wolf', hp: 40, attack: 7, speed: 65, xp: 18, isProcedural: true, spawnAmount: [2, 3] },
+            { name: 'Dragon', id: 'procedural_dragon', generationType: 'mask_based', textureKey: 'monster_dragon', hp: 80, attack: 12, speed: 35, xp: 40, isProcedural: true, spawnAmount: [1, 1] },
+            { name: 'Ghost', id: 'procedural_ghost', generationType: 'cellular_automata', textureKey: 'monster_ghost', hp: 35, attack: 6, speed: 55, xp: 12, isProcedural: true, spawnAmount: [1, 2] },
+            { name: 'Echo_Mite', id: 'procedural_echo_mite', generationType: 'cellular_automata', textureKey: 'monster_echo_mite', hp: 15, attack: 3, speed: 60, xp: 5, isProcedural: true, spawnAmount: [2, 4] }
+        ];
     }
 
     // Spawn monsters spread across entire map, avoiding player spawn area
@@ -13905,39 +13888,95 @@ function spawnMonster(x, y, type, hpOverride, attackOverride, xpOverride, isBoss
     const scene = game.scene.scenes[0];
     let monster;
 
-    // Check if we should use Method 2 (procedural blueprints)
-    const canUseMethod2 = monsterRenderer && (monsterRenderer.monsterBlueprints[type.name] || monsterRenderer.monsterBlueprints[type.name.toLowerCase()] || (type.id && monsterRenderer.monsterBlueprints[type.id]));
-
-    if (type.isProcedural && canUseMethod2) {
-        const blueprintId = type.id && monsterRenderer.monsterBlueprints[type.id] ? type.id :
-            (monsterRenderer.monsterBlueprints[type.name] ? type.name : type.name.toLowerCase());
-
-        console.log(`👾 Spawning Method 2 monster: ${type.name} (${blueprintId})`);
-        monster = monsterRenderer.createMonster(x, y, blueprintId);
-        monster.setData('isMethod2', true);
-        monster.setData('blueprintId', blueprintId);
-
-        if (monster) {
-            // Add name and stats for common game logic
-            monster.name = type.name;
-            monster.monsterId = type.id;
-            monster.monsterType = type.name.toLowerCase();
-            monster.blueprintId = blueprintId; // Crucial for animation skip check
-            monster.setDepth(5); // Ensure they appear above tiles
-            monster.stats = { ...type };
-
-            // Common properties initialized below the if/else
+    // Handle string type input (look up blueprint or default)
+    if (typeof type === 'string') {
+        const typeName = type;
+        // Try to find in monsterRenderer blueprints
+        if (monsterRenderer && monsterRenderer.monsterBlueprints) {
+            const bp = monsterRenderer.monsterBlueprints[typeName] ||
+                monsterRenderer.monsterBlueprints[typeName.toLowerCase()] ||
+                Object.values(monsterRenderer.monsterBlueprints).find(m => m.name.toLowerCase() === typeName.toLowerCase());
+            if (bp) {
+                type = {
+                    name: bp.name,
+                    id: bp.id,
+                    hp: bp.stats.hp,
+                    attack: bp.stats.attack,
+                    speed: bp.stats.speed,
+                    xp: bp.stats.xp,
+                    xp: bp.stats.xp,
+                    generationType: bp.generationType,
+                    proceduralConfig: bp.proceduralConfig,
+                    isProcedural: true // Assume blueprint ==> procedural (Method 2 or CA)
+                };
+            } else {
+                // Fallback if not found in blueprints
+                type = { name: typeName, textureKey: 'monster_' + typeName.toLowerCase() };
+            }
+        } else {
+            type = { name: typeName, textureKey: 'monster_' + typeName.toLowerCase() };
         }
-    } else {
-        // FALLBACK TO METHOD 1 (Spritesheets)
-        // Use directional sprite if available, otherwise fall back to old texture
-        const monsterType = type.name.toLowerCase();
-        const initialTexture = `monster_${monsterType}_south`; // Start facing south
-        const fallbackTexture = type.textureKey; // Old procedural texture
+    }
 
-        const textureToUse = scene.textures.exists(initialTexture) ? initialTexture : fallbackTexture;
-        monster = scene.physics.add.sprite(x, y, textureToUse);
-        monster.setDepth(5); // Monsters above tiles but below player
+    // Generic Procedural Generation Check (Data-Driven)
+    if (type.generationType && type.generationType !== 'default') {
+        if (typeof ProceduralMonster !== 'undefined') {
+            // Pass generation type and config options
+            const textureKey = ProceduralMonster.generate(scene, type.name, null, {
+                type: type.generationType,
+                ...type.proceduralConfig
+            });
+            monster = scene.physics.add.sprite(x, y, textureKey);
+            monster.setDepth(5);
+            monster.generationType = type.generationType; // Propagate to sprite
+            monster.isProcedural = true; // Mark as procedural
+            monster.stats = { ...type };
+            // Ensure basic stats if missing
+            if (!monster.stats.hp) monster.stats.hp = 15;
+            if (!monster.stats.attack) monster.stats.attack = 3;
+            if (!monster.stats.xp) monster.stats.xp = 5;
+            if (!monster.stats.speed) monster.stats.speed = 60;
+
+            // Go to common setup
+        }
+    }
+
+    // Check if we should use Method 2 (procedural blueprints)
+    if (!monster) {
+        const canUseMethod2 = monsterRenderer && (monsterRenderer.monsterBlueprints[type.name] || monsterRenderer.monsterBlueprints[type.name.toLowerCase()] || (type.id && monsterRenderer.monsterBlueprints[type.id]));
+
+        if (type.isProcedural && canUseMethod2) {
+            const blueprintId = type.id && monsterRenderer.monsterBlueprints[type.id] ? type.id :
+                (monsterRenderer.monsterBlueprints[type.name] ? type.name : type.name.toLowerCase());
+
+            console.log(`👾 Spawning Method 2 monster: ${type.name} (${blueprintId})`);
+            monster = monsterRenderer.createMonster(x, y, blueprintId);
+
+            monster.setData('isMethod2', true);
+            monster.setData('blueprintId', blueprintId);
+
+            if (monster) {
+                // Add name and stats for common game logic
+                monster.name = type.name;
+                monster.monsterId = type.id;
+                monster.monsterType = type.name.toLowerCase();
+                monster.blueprintId = blueprintId; // Crucial for animation skip check
+                monster.setDepth(5); // Ensure they appear above tiles
+                monster.stats = { ...type };
+
+                // Common properties initialized below the if/else
+            }
+        } else {
+            // FALLBACK TO METHOD 1 (Spritesheets)
+            // Use directional sprite if available, otherwise fall back to old texture
+            const monsterType = type.name.toLowerCase();
+            const initialTexture = `monster_${monsterType}_south`; // Start facing south
+            const fallbackTexture = type.textureKey; // Old procedural texture
+
+            const textureToUse = scene.textures.exists(initialTexture) ? initialTexture : fallbackTexture;
+            monster = scene.physics.add.sprite(x, y, textureToUse);
+            monster.setDepth(5); // Monsters above tiles but below player
+        }
     }
 
     if (monster) {
@@ -14983,6 +15022,11 @@ function updateMonsterAnimation(monster, delta) {
         monster.animationState = newState;
         monster.isMoving = isMoving;
 
+        // Skip texture updates for procedural monsters (they use generated textures)
+        if (monster.isProcedural || (monster.stats && (monster.stats.isProcedural || monster.stats.generationType)) || monster.generationType) {
+            return;
+        }
+
         // Get monster type name (lowercase)
         const monsterType = (monster.monsterType || 'goblin').toLowerCase();
 
@@ -15036,7 +15080,13 @@ function playMonsterAttackAnimation(monster) {
 
     // Method 2 monsters (procedural) handle their own animations if needed, 
     // or use simpler visual cues for now.
-    if (monster.blueprintId || monster.getData('isMethod2')) return;
+    // Generic Procedural Monster Handling (Method 2 + Cellular Automata)
+    if (monster.blueprintId || monster.getData('isMethod2') || monster.isProcedural || (monster.stats && (monster.stats.isProcedural || monster.stats.generationType)) || monster.generationType) {
+        if (typeof ProceduralMonster !== 'undefined') {
+            ProceduralMonster.playAttackAnimation(scene, monster);
+        }
+        return;
+    }
 
     const monsterType = (monster.monsterType || 'goblin').toLowerCase();
 
@@ -15881,15 +15931,14 @@ function updateDefenseQuestSpawner(time) {
         console.log(`🛡️ Spawning defense wave: ${toSpawn} Echo Mites`);
 
         // Echo Mite type for defense quest
+        // Echo Mite type for defense quest (Procedural)
         const miteType = {
-            id: 'mite',
-            name: 'Echo Mite',
-            hp: 15,
-            attack: 3,
-            speed: 60,
-            xp: 8,
-            textureKey: 'monster_mite',
-            isProcedural: false
+            id: 'procedural_echo_mite',
+            name: 'Echo_Mite', // Matches monsters.json
+            generationType: 'cellular_automata',
+            isProcedural: true,
+            // Stats will be loaded from monsters.json/blueprints via spawnMonster lookup
+            // provided we use the correct ID/Name
         };
 
         for (let i = 0; i < toSpawn; i++) {
@@ -16210,17 +16259,16 @@ function startResonantFrequenciesEvent() {
                     const spawnY = blacksmithY + Phaser.Math.Between(-100, 150);
 
                     // Echo Mite stats
+                    // Echo Mite stats (Procedural)
                     const miteType = {
-                        name: 'Echo Mite',
-                        textureKey: 'monster_echo_mite',
-                        hp: 35,
-                        attack: 7,
-                        speed: 80,
-                        xp: 15,
+                        id: 'procedural_echo_mite',
+                        name: 'Echo_Mite',
+                        generationType: 'cellular_automata',
+                        isProcedural: true,
                         spawnAmount: [1, 1]
                     };
 
-                    spawnMonster(spawnX, spawnY, miteType, miteType.hp, miteType.attack, miteType.xp);
+                    spawnMonster(spawnX, spawnY, miteType);
 
                     // Optional: Visual effect
                     if (scene.add) {

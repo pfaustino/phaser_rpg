@@ -1,0 +1,39 @@
+{
+    "images": {
+        "player": "assets/player.png",
+        "monster": "assets/monster.png",
+        "victory_tower": "assets/images/tower.png",
+        "character-fallen": "assets/images/character-fallen.png",
+        "item_weapon": "assets/images/pixellab-medieval-short-sword-1765494973241.png",
+        "item_armor": "assets/images/pixellab-medieval-cloth-chest-armor-1765494738527.png",
+        "item_helmet": "assets/images/pixellab-medieval-leather-helmet-1765494658638.png",
+        "item_amulet": "assets/images/pixellab-medieval-jeweled-amulet-1765494933856.png",
+        "item_boots": "assets/images/pixellab-medieval-leather-boots-1765494901812.png",
+        "item_gloves": "assets/images/pixellab-medieval-purple-cloth-gloves---1765494868593.png",
+        "item_belt": "assets/images/pixellab-medieval-belt---just-the-belt-1765494612990.png",
+        "item_ring": "assets/images/pixellab-golden-ring-1765494525925.png",
+        "item_consumable": "assets/images/pixellab-red-simple-health-potion-1765494342318.png",
+        "item_gold": "assets/images/gold_coin.png"
+    },
+    "audio": {
+        "bell_toll": "assets/audio/bell-toll-407826.mp3",
+        "village_music": "assets/audio/music/Village_Hearth_FULL_SONG_MusicGPT.mp3",
+        "wilderness_music": "assets/audio/music/Wilderness_of_Arcana_FULL_SONG_MusicGPT.mp3",
+        "dungeon_music": "assets/audio/music/Dungeon_of_Arcana_FULL_SONG_MusicGPT.mp3",
+        "wind_effect": "assets/audio/wind-sound-effect.mp3",
+        "attack": "assets/audio/attack_swing.wav",
+        "fireball": "assets/audio/fireball_cast.wav",
+        "ice_nova_sound": "assets/audio/ice-nova.mp3",
+        "heal": "assets/audio/heal_cast.wav",
+        "hit_monster": "assets/audio/hit_monster.mp3",
+        "hit_player": "assets/audio/hit_player.mp3",
+        "item_pickup": "assets/audio/item_pickup.wav",
+        "level_up": "assets/audio/level-up.mp3",
+        "monster_die": "assets/audio/monster_die.mp3",
+        "new_quest": "assets/audio/new-quest.mp3",
+        "quest_complete": "assets/audio/quest-completed.mp3",
+        "quest_accept": "assets/audio/accepter.mp3",
+        "quest_decline": "assets/audio/quick-beep-high-to-low.mp3",
+        "gold_pickup": "assets/audio/gold-pickup.mp3"
+    }
+}

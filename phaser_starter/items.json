@@ -64,43 +64,50 @@
             "baseAttack": 1.0,
             "speed": 1.0,
             "critChance": 0.05,
-            "hitSound": "sword_hit"
+            "hitSound": "sword_hit",
+            "defaultSprite": "assets/images/pixellab-medieval-short-sword-1765494973241.png"
         },
         "Axe": {
             "baseAttack": 1.15,
             "speed": 0.9,
             "critChance": 0.08,
-            "hitSound": "axe_hit"
+            "hitSound": "axe_hit",
+            "defaultSprite": "assets/images/basic-axe.png"
         },
         "Mace": {
             "baseAttack": 1.1,
             "speed": 0.85,
             "critChance": 0.06,
-            "hitSound": "mace_hit"
+            "hitSound": "mace_hit",
+            "defaultSprite": "assets/images/basic-mace.png"
         },
         "Dagger": {
             "baseAttack": 0.85,
             "speed": 1.2,
             "critChance": 0.12,
-            "hitSound": "dagger_hit"
+            "hitSound": "dagger_hit",
+            "defaultSprite": "assets/images/basic-dagger.png"
         },
         "Staff": {
             "baseAttack": 0.9,
             "speed": 1.1,
             "critChance": 0.07,
-            "hitSound": "staff_hit"
+            "hitSound": "staff_hit",
+            "defaultSprite": "assets/images/basic-staff.png"
         },
         "Bow": {
             "baseAttack": 0.95,
             "speed": 1.15,
             "critChance": 0.10,
-            "hitSound": "bow_hit"
+            "hitSound": "bow_hit",
+            "defaultSprite": "assets/images/basic-bow.png"
         },
         "Crossbow": {
             "baseAttack": 1.05,
             "speed": 0.95,
             "critChance": 0.09,
-            "hitSound": "bow_hit"
+            "hitSound": "bow_hit",
+            "defaultSprite": "assets/images/basic-crossbow.png"
         }
     },
     "materials": {

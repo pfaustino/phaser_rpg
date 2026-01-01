@@ -3,6 +3,18 @@
         {
             "id": "procedural_slime",
             "name": "Slime",
+            "generationType": "cellular_automata",
+            "proceduralConfig": {
+                "scale": 4,
+                "density": 0.5,
+                "minPixels": 15
+            },
+            "sprites": {
+                "south": "assets/animations/monster_slime_south.png",
+                "north": "assets/animations/monster_slime_north.png",
+                "east": "assets/animations/monster_slime_east.png",
+                "west": "assets/animations/monster_slime_west.png"
+            },
             "stats": {
                 "hp": 20,
                 "speed": 30,
@@ -84,6 +96,10 @@
         {
             "id": "procedural_goblin",
             "name": "Goblin",
+            "generationType": "mask_based",
+            "proceduralConfig": {
+                "scale": 4
+            },
             "stats": {
                 "hp": 30,
                 "attack": 5,
@@ -198,6 +214,10 @@
         {
             "id": "procedural_orc",
             "name": "Orc",
+            "generationType": "mask_based",
+            "proceduralConfig": {
+                "scale": 4
+            },
             "stats": {
                 "hp": 50,
                 "attack": 8,
@@ -298,6 +318,10 @@
         {
             "id": "procedural_skeleton",
             "name": "Skeleton",
+            "generationType": "mask_based",
+            "proceduralConfig": {
+                "scale": 4
+            },
             "stats": {
                 "hp": 25,
                 "attack": 6,
@@ -386,6 +410,10 @@
         {
             "id": "procedural_spider",
             "name": "Spider",
+            "generationType": "mask_based",
+            "proceduralConfig": {
+                "scale": 4
+            },
             "stats": {
                 "hp": 20,
                 "attack": 4,
@@ -485,6 +513,10 @@
         {
             "id": "procedural_wolf",
             "name": "Wolf",
+            "generationType": "mask_based",
+            "proceduralConfig": {
+                "scale": 4
+            },
             "stats": {
                 "hp": 40,
                 "attack": 7,
@@ -576,6 +608,10 @@
         {
             "id": "procedural_dragon",
             "name": "Dragon",
+            "generationType": "mask_based",
+            "proceduralConfig": {
+                "scale": 4
+            },
             "stats": {
                 "hp": 80,
                 "attack": 12,
@@ -655,6 +691,12 @@
         {
             "id": "procedural_ghost",
             "name": "Ghost",
+            "generationType": "cellular_automata",
+            "proceduralConfig": {
+                "scale": 4,
+                "density": 0.5,
+                "minPixels": 15
+            },
             "stats": {
                 "hp": 35,
                 "attack": 6,
@@ -719,6 +761,12 @@
         {
             "id": "procedural_echo_mite",
             "name": "Echo_Mite",
+            "generationType": "cellular_automata",
+            "proceduralConfig": {
+                "scale": 4,
+                "density": 0.5,
+                "minPixels": 15
+            },
             "stats": {
                 "hp": 15,
                 "attack": 3,
@@ -767,6 +815,7 @@
         {
             "id": "procedural_prism_slime",
             "name": "Prism Slime",
+            "generationType": "cellular_automata",
             "stats": {
                 "hp": 40,
                 "attack": 6,

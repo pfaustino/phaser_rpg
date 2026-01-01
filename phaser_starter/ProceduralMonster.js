@@ -302,8 +302,8 @@ const ProceduralMonster = {
     /**
      * Render pixel data to a Phaser texture
      */
-    renderToTexture: function (scene, key, pixels, width, height) {
-        const scale = 6; // Scale up for visibility
+    renderToTexture: function (scene, key, pixels, width, height, scale = 4) {
+        // scale is passed in or default to 4
         const canvasWidth = width * scale;
         const canvasHeight = height * scale;
 
@@ -421,7 +421,7 @@ const ProceduralMonster = {
     /**
      * Generate using cellular automata (organic blobs)
      */
-    generateCellularAutomata: function (scene, monsterType, seed = null) {
+    generateCellularAutomata: function (scene, monsterType, seed = null, config = {}) {
         const rng = seed !== null ? this.seededRandom(seed) : Math.random;
         const paletteOptions = this.palettes[monsterType] || this.palettes.slime;
         const palette = paletteOptions[Math.floor(rng() * paletteOptions.length)];
@@ -430,24 +430,50 @@ const ProceduralMonster = {
         const height = 10;
         const key = `ca_monster_${monsterType}_${Date.now()}_${Math.floor(rng() * 10000)}`;
 
-        // Step 1: Random initial state (40% fill)
         let grid = [];
-        for (let y = 0; y < height; y++) {
-            grid[y] = [];
-            for (let x = 0; x < width; x++) {
-                grid[y][x] = rng() < 0.4 ? 1 : 0;
+        let pixelCount = 0;
+        let attempts = 0;
+
+        // Data-driven configuration (defaults if not provided)
+        const density = config.density || 0.50;
+        const minPixels = config.minPixels || 15;
+        const scale = (config && config.scale) ? config.scale : 4;
+
+        // Retry loop to ensure we don't return an empty/tiny blob
+        while (pixelCount < minPixels && attempts < 5) {
+            attempts++;
+            pixelCount = 0;
+
+            // Step 1: Random initial state (50% fill), but keep borders empty
+            for (let y = 0; y < height; y++) {
+                grid[y] = [];
+                for (let x = 0; x < width; x++) {
+                    // Force borders to be empty
+                    if (x === 0 || x === width - 1 || y === 0 || y === height - 1) {
+                        grid[y][x] = 0;
+                    } else {
+                        grid[y][x] = rng() < density ? 1 : 0; // Increased fill rate to prevent die-off
+                    }
+                }
             }
-        }
 
-        // Step 2: Run CA rules (4-5 iterations)
-        for (let i = 0; i < 5; i++) {
-            grid = this.caStep(grid, width, height);
-        }
+            // Step 2: Run CA rules (4 iterations - reduced to preserve mass)
+            for (let i = 0; i < 4; i++) {
+                grid = this.caStep(grid, width, height);
+            }
 
-        // Step 3: Apply horizontal symmetry
-        for (let y = 0; y < height; y++) {
-            for (let x = 0; x < Math.floor(width / 2); x++) {
-                grid[y][width - 1 - x] = grid[y][x];
+            // Step 3: Apply horizontal symmetry
+            for (let y = 0; y < height; y++) {
+                for (let x = 0; x < Math.floor(width / 2); x++) {
+                    grid[y][width - 1 - x] = grid[y][x];
+                }
+            }
+
+            // Count mass
+            for (let y = 0; y < height; y++) {
+                for (let x = 0; x < width; x++) {
+                    if (grid[y][x]) pixelCount++;
+                }
             }
         }
 
@@ -482,7 +508,9 @@ const ProceduralMonster = {
         if (pixels[eyeY] && pixels[eyeY][eyeX1]) pixels[eyeY][eyeX1] = palette.eyes;
         if (pixels[eyeY] && pixels[eyeY][eyeX2]) pixels[eyeY][eyeX2] = palette.eyes;
 
-        this.renderToTexture(scene, key, pixels, width, height);
+        if (pixels[eyeY] && pixels[eyeY][eyeX2]) pixels[eyeY][eyeX2] = palette.eyes;
+
+        this.renderToTexture(scene, key, pixels, width, height, scale);
         this.cache[key] = true;
 
         console.log(`🧬 Generated CA monster: ${monsterType} -> ${key}`);
@@ -498,11 +526,13 @@ const ProceduralMonster = {
             newGrid[y] = [];
             for (let x = 0; x < width; x++) {
                 const neighbors = this.caCountNeighbors(grid, x, y, width, height);
-                // B678/S345678 - Cave generation rules
-                if (grid[y][x] === 1) {
-                    newGrid[y][x] = (neighbors >= 3) ? 1 : 0;
+                // Smoothing / Majority Vote Rule (Creates rounder, cleaner blobs)
+                if (neighbors > 4) {
+                    newGrid[y][x] = 1;
+                } else if (neighbors < 4) {
+                    newGrid[y][x] = 0;
                 } else {
-                    newGrid[y][x] = (neighbors >= 5) ? 1 : 0;
+                    newGrid[y][x] = grid[y][x];
                 }
             }
         }
@@ -522,7 +552,7 @@ const ProceduralMonster = {
                 if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
                     count += grid[ny][nx];
                 } else {
-                    count += 1; // Treat border as filled
+                    count += 0; // Treat border as empty for distinct sprite generation
                 }
             }
         }
@@ -591,7 +621,7 @@ const ProceduralMonster = {
     /**
      * Monster types that use component-based assembly
      */
-    componentMonsterTypes: ['goblin', 'orc', 'skeleton'],
+    componentMonsterTypes: [],
 
     /**
      * Component templates (small pixel patterns)
@@ -748,7 +778,8 @@ const ProceduralMonster = {
         if (pixels[eyeY] && pixels[eyeY][eyeX2]) pixels[eyeY][eyeX2] = palette.eyes;
 
         const key = `comp_monster_${monsterType}_${Date.now()}_${Math.floor(rng() * 10000)}`;
-        this.renderToTexture(scene, key, pixels, maxWidth, totalHeight);
+        const scale = (config && config.scale) ? config.scale : 4;
+        this.renderToTexture(scene, key, pixels, maxWidth, totalHeight, scale);
         this.cache[key] = true;
 
         console.log(`🔧 Generated component monster: ${monsterType} -> ${key}`);
@@ -782,24 +813,35 @@ const ProceduralMonster = {
     /**
      * Generate a unique monster sprite using the best algorithm for the type
      */
-    generate: function (scene, monsterType, seed = null) {
+    generate: function (scene, monsterType, seed = null, options = {}) {
         const type = monsterType.toLowerCase().replace(' ', '_');
 
-        // Choose algorithm based on monster type
-        if (this.caMonsterTypes.includes(type)) {
-            return this.generateCellularAutomata(scene, type, seed);
-        } else if (this.componentMonsterTypes.includes(type)) {
-            return this.generateComponentBased(scene, type, seed);
+        // Handle legacy call where options might be a string (generationType)
+        let generationType = null;
+        let config = {};
+
+        if (typeof options === 'string') {
+            generationType = options;
+        } else if (options && typeof options === 'object') {
+            generationType = options.type;
+            config = options;
+        }
+
+        // Choose algorithm based on explicit type or fallback to hardcoded lists
+        if (generationType === 'cellular_automata' || this.caMonsterTypes.includes(type)) {
+            return this.generateCellularAutomata(scene, type, seed, config);
+        } else if (generationType === 'component_based' || this.componentMonsterTypes.includes(type)) {
+            return this.generateComponentBased(scene, type, seed, config);
         } else {
             // Default: mask-based generation
-            return this.generateMaskBased(scene, type, seed);
+            return this.generateMaskBased(scene, type, seed, config);
         }
     },
 
     /**
      * Original mask-based generation (renamed)
      */
-    generateMaskBased: function (scene, monsterType, seed = null) {
+    generateMaskBased: function (scene, monsterType, seed = null, config = null) {
         const type = monsterType.toLowerCase().replace(' ', '_');
         const template = this.templates[type] || this.templates.slime;
         const paletteOptions = this.palettes[type] || this.palettes.slime;
@@ -814,7 +856,8 @@ const ProceduralMonster = {
         }
 
         const pixels = this.generatePixels(template, palette, rng);
-        this.renderToTexture(scene, key, pixels, template.width, template.height);
+        const scale = (config && config.scale) ? config.scale : 4;
+        this.renderToTexture(scene, key, pixels, template.width, template.height, scale);
 
         this.cache[key] = true;
         console.log(`🎨 Generated mask-based monster: ${type} -> ${key}`);

@@ -601,10 +601,20 @@ function preload() {
     };
 
     // Track successful image loads (set up handlers BEFORE loading)
+    this.load.on('filecomplete-json-itemDefinitions', (key, type, data) => {
+        console.log('📦 items.json loaded, parsing definitions...');
+        ItemManager.definitions = data;
+        ItemManager.isLoaded = true;
+        ItemManager.loadAllSprites(this);
+    });
+
+    this.load.json('itemDefinitions', 'items.json');
+
     this.load.on('filecomplete-image-item_weapon', () => {
         this.customItemImagesLoaded.weapon = true;
         console.log('✅ Custom weapon image loaded');
     });
+
     this.load.on('filecomplete-image-item_armor', () => {
         this.customItemImagesLoaded.armor = true;
         console.log('✅ Custom armor image loaded');
@@ -633,6 +643,7 @@ function preload() {
         this.customItemImagesLoaded.ring = true;
         console.log('✅ Custom ring image loaded');
     });
+
     this.load.on('filecomplete-image-item_consumable', () => {
         this.customItemImagesLoaded.consumable = true;
         console.log('✅ Custom consumable image loaded');
@@ -657,10 +668,9 @@ function preload() {
     this.load.image('item_belt', 'assets/images/pixellab-medieval-belt---just-the-belt-1765494612990.png');
     this.load.image('item_ring', 'assets/images/pixellab-golden-ring-1765494525925.png');
     this.load.image('item_consumable', 'assets/images/pixellab-red-simple-health-potion-1765494342318.png');
-    this.load.image('mana_potion', 'assets/images/mana-potion.png');
-    this.load.image('echo_shard', 'assets/images/echo-shard.png');
-    this.load.image('echo_crystal', 'assets/images/echo-crystal.png');
+    // mana_potion, echo_shard, echo_crystal loaded from items.json
     this.load.image('character-fallen', 'assets/images/character-fallen.png');
+
 
     // item_fragment and item_crystal are now loaded dynamically from quests_v2.json
     this.load.audio('bell_toll', 'assets/audio/bell-toll-407826.mp3');
@@ -6330,14 +6340,9 @@ function spawnQuestItem(x, y, itemData) {
     const item = itemData;
 
     // Determine sprite key
-    let spriteKey = 'item_consumable';
-    const itemId = (item.id || '').toLowerCase();
-    const itemName = (item.name || '').toLowerCase();
+    // Determine sprite key
+    let spriteKey = ItemManager.getSpriteKey(item);
 
-    if (itemId === 'crystal_shard' || itemName.includes('crystal shard')) spriteKey = 'item_crystal';
-    else if (itemId === 'echo_shard' || itemName.includes('echo shard')) spriteKey = 'echo_shard';
-    else if (itemId === 'echo_crystal' || itemName.includes('echo crystal')) spriteKey = 'echo_crystal';
-    else if (itemId === 'artifact_fragment' || itemName.includes('artifact fragment')) spriteKey = 'item_fragment';
 
 
     // Safety: Verify texture exists
@@ -6445,36 +6450,9 @@ function dropItemsFromMonster(x, y, monsterXP = 10) {
     if (droppedItem) {
         const item = droppedItem;
         // Create item sprite on ground
-        let spriteKey = 'item_gold';
-        if (item.type === 'weapon') spriteKey = 'item_weapon';
-        else if (item.type === 'armor') spriteKey = 'item_armor';
-        else if (item.type === 'helmet') spriteKey = 'item_helmet';
-        else if (item.type === 'ring') spriteKey = 'item_ring';
-        else if (item.type === 'amulet') spriteKey = 'item_amulet';
-        else if (item.type === 'boots') spriteKey = 'item_boots';
-        else if (item.type === 'gloves') spriteKey = 'item_gloves';
-        else if (item.type === 'belt') spriteKey = 'item_belt';
+        // Create item sprite on ground
+        let spriteKey = ItemManager.getSpriteKey(item);
 
-        else if (item.type === 'consumable') {
-            spriteKey = (item.name === 'Mana Potion') ? 'mana_potion' : 'item_consumable';
-        }
-        else if (item.type === 'quest_item') {
-            // Use specific sprite for quest items based on ID
-            // Map item ID to sprite key: crystal_shard -> item_crystal
-            if (item.id === 'crystal_shard' || (item.name && item.name.toLowerCase().includes('crystal shard'))) spriteKey = 'item_crystal';
-            else if (item.id === 'echo_shard' || (item.name && item.name.toLowerCase().includes('echo shard'))) spriteKey = 'echo_shard';
-            else if (item.id === 'echo_crystal' || (item.name && item.name.toLowerCase().includes('echo crystal'))) spriteKey = 'echo_crystal';
-            else if (item.id === 'artifact_fragment' || (item.name && item.name.toLowerCase().includes('artifact fragment'))) spriteKey = 'item_fragment';
-            else spriteKey = 'item_consumable'; // Fallback
-        }
-
-        // Fallback: Catch shards with wrong type field
-        else if (item.id === 'echo_shard' || (item.name && item.name.toLowerCase().includes('echo shard'))) {
-            spriteKey = 'echo_shard';
-        }
-        else if (item.id === 'crystal_shard' || (item.name && item.name.toLowerCase().includes('crystal shard'))) {
-            spriteKey = 'item_crystal';
-        }
 
         // Safety: Verify texture exists
         if (!scene.textures.exists(spriteKey)) {
@@ -6704,13 +6682,13 @@ function pickupItem(item, index) {
 
         // Check if this is a stackable consumable or shard
         let stacked = false;
-        const isShard = (item.type === 'quest_item' && ['crystal_shard', 'echo_shard', 'echo_crystal', 'shard_resonance'].includes(item.id));
+        const isStackable = ItemManager.isStackable(item);
 
 
-        if ((item.type === 'consumable' || isShard) && item.name) {
+        if (isStackable && item.name) {
             // Find existing stack of same item
             const existingStack = playerStats.inventory.find(i =>
-                (i.type === item.type) && i.name === item.name && (i.id === item.id || !isShard)
+                (i.type === item.type) && i.name === item.name && (item.id ? i.id === item.id : true)
             );
             if (existingStack) {
                 existingStack.quantity = (existingStack.quantity || 1) + (item.quantity || 1);
@@ -6720,10 +6698,11 @@ function pickupItem(item, index) {
         }
 
         if (!stacked) {
-            // Set initial quantity for consumables and shards
-            if (item.type === 'consumable' || isShard) {
+            // Set initial quantity for stackable items
+            if (isStackable) {
                 item.quantity = item.quantity || 1;
             }
+
             playerStats.inventory.push(item);
         }
 
@@ -7466,29 +7445,10 @@ function updateEquipmentInventoryItems() {
             } else {
                 spriteKey = 'item_weapon'; // Fallback
             }
-        } else if (item.type === 'armor') spriteKey = 'item_armor';
-        else if (item.type === 'helmet') spriteKey = 'item_helmet';
-        else if (item.type === 'ring') spriteKey = 'item_ring';
-        else if (item.type === 'amulet') spriteKey = 'item_amulet';
-        else if (item.type === 'boots') spriteKey = 'item_boots';
-        else if (item.type === 'gloves') spriteKey = 'item_gloves';
-        else if (item.type === 'belt') spriteKey = 'item_belt';
-        else if (item.type === 'consumable') spriteKey = (item.name === 'Mana Potion') ? 'mana_potion' : 'item_consumable';
-        else if (item.type === 'gold') spriteKey = 'item_gold';
-        else if (item.type === 'quest_item') {
-            // Specific mapping for quest items
-            if (item.id === 'crystal_shard' || (item.name && item.name.toLowerCase().includes('crystal shard'))) spriteKey = 'item_crystal';
-            else if (item.id === 'echo_shard' || (item.name && item.name.toLowerCase().includes('echo shard'))) spriteKey = 'echo_shard';
-            else if (item.id === 'echo_crystal' || (item.name && item.name.toLowerCase().includes('echo crystal'))) spriteKey = 'echo_crystal';
-            else if (item.id === 'artifact_fragment' || (item.name && item.name.toLowerCase().includes('artifact fragment'))) spriteKey = 'item_fragment';
-            else spriteKey = 'item_consumable';
+        } else {
+            spriteKey = ItemManager.getSpriteKey(item);
         }
 
-
-        else {
-            // Use default item sprite for unknown types
-            spriteKey = 'item_weapon'; // Fallback
-        }
 
         // Create item sprite with background (add to container)
         // Note: Items in container use relative coordinates, and container has setScrollFactor(0)
@@ -10837,23 +10797,10 @@ function updateShopInventoryItems() {
             } else {
                 spriteKey = 'item_weapon'; // Fallback
             }
-        } else if (item.type === 'armor') spriteKey = 'item_armor';
-        else if (item.type === 'helmet') spriteKey = 'item_helmet';
-        else if (item.type === 'ring') spriteKey = 'item_ring';
-        else if (item.type === 'amulet') spriteKey = 'item_amulet';
-        else if (item.type === 'boots') spriteKey = 'item_boots';
-        else if (item.type === 'gloves') spriteKey = 'item_gloves';
-        else if (item.type === 'belt') spriteKey = 'item_belt';
-        else if (item.type === 'consumable') spriteKey = (item.name === 'Mana Potion') ? 'mana_potion' : 'item_consumable';
-        else if (item.type === 'gold') spriteKey = 'item_gold';
-        else if (item.type === 'quest_item') {
-            // Specific mapping for quest items
-            if (item.id === 'crystal_shard' || (item.name && item.name.toLowerCase().includes('crystal shard'))) spriteKey = 'item_crystal';
-            else if (item.id === 'echo_shard' || (item.name && item.name.toLowerCase().includes('echo shard'))) spriteKey = 'echo_shard';
-            else if (item.id === 'echo_crystal' || (item.name && item.name.toLowerCase().includes('echo crystal'))) spriteKey = 'echo_crystal';
-            else if (item.id === 'artifact_fragment' || (item.name && item.name.toLowerCase().includes('artifact fragment'))) spriteKey = 'item_fragment';
-            else spriteKey = 'item_consumable';
+        } else {
+            spriteKey = ItemManager.getSpriteKey(item);
         }
+
 
 
 
@@ -11811,12 +11758,12 @@ function loadGame() {
             console.log('📦 Migration: Starting inventory consolidation...');
 
             playerStats.inventory.forEach(item => {
-                const isConsumable = item.type === 'consumable' && item.name;
-                const isStackableShard = (item.type === 'quest_item' && ['crystal_shard', 'echo_shard', 'shard_resonance', 'echo_crystal'].includes(item.id));
+                const isStackable = ItemManager.isStackable(item);
 
-                if (isConsumable || isStackableShard) {
-                    // Unique key for stacking - use ID for shards (to separate types), name for consumables
-                    const stackKey = isStackableShard ? item.id : item.name;
+                if (isStackable) {
+                    // Unique key for stacking - use ID if available, otherwise name
+                    const stackKey = item.id || item.name;
+
 
                     if (itemStacks[stackKey]) {
                         // Add to existing stack

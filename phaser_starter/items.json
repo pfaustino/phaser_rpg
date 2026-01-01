@@ -1,4 +1,64 @@
 {
+    "questItems": {
+        "echo_shard": {
+            "name": "Echo Shard",
+            "sprite": "assets/images/echo-shard.png",
+            "spriteKey": "echo_shard",
+            "stackable": true,
+            "quality": "Uncommon",
+            "description": "A fragment of corrupted echo energy"
+        },
+        "echo_crystal": {
+            "name": "Echo Crystal",
+            "sprite": "assets/images/echo-crystal.png",
+            "spriteKey": "echo_crystal",
+            "stackable": true,
+            "quality": "Rare",
+            "description": "A larger formation of crystallized echo energy"
+        },
+        "crystal_shard": {
+            "name": "Crystal Shard",
+            "sprite": "assets/images/crystal-shard.png",
+            "spriteKey": "item_crystal",
+            "stackable": true,
+            "quality": "Uncommon",
+            "description": "A glowing crystal fragment"
+        },
+        "artifact_fragment": {
+            "name": "Artifact Fragment",
+            "sprite": "assets/images/artifact-fragment.png",
+            "spriteKey": "item_fragment",
+            "stackable": true,
+            "quality": "Rare",
+            "description": "A piece of an ancient artifact"
+        },
+        "shard_resonance": {
+            "name": "Shard of Resonance",
+            "sprite": "assets/images/echo-shard.png",
+            "spriteKey": "echo_shard",
+            "stackable": true,
+            "quality": "Epic",
+            "description": "A powerful resonating crystal"
+        }
+    },
+    "consumables": {
+        "health_potion": {
+            "name": "Health Potion",
+            "sprite": "assets/images/pixellab-red-simple-health-potion-1765494342318.png",
+            "spriteKey": "item_consumable",
+            "stackable": true,
+            "healAmount": 50,
+            "description": "Restores 50 HP"
+        },
+        "mana_potion": {
+            "name": "Mana Potion",
+            "sprite": "assets/images/mana-potion.png",
+            "spriteKey": "mana_potion",
+            "stackable": true,
+            "manaAmount": 30,
+            "description": "Restores 30 MP"
+        }
+    },
     "weaponTypes": {
         "Sword": {
             "baseAttack": 1.0,

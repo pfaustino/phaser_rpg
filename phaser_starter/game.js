@@ -57,7 +57,19 @@ let map;
 // Global State Variables
 // (Moved to GameState.js)
 // (Moved to GameState.js: questTrackerEntries, lastPlayerX/Y, monsters, items, npcs, isGamePaused)
+// Global State Variables
+// (Moved to GameState.js)
+// (Moved to GameState.js: questTrackerEntries, lastPlayerX/Y, monsters, items, npcs, isGamePaused)
 let spaceKey;
+let regenTimerEvent = null;
+let hpRegenTimerEvent = null;
+let dialogDatabase = {};
+
+const ABILITY_DEFINITIONS = {
+    'fireball': { icon: 'fireball_effect', color: 0xff4400, manaCost: 10, cooldown: 1000 },
+    'heal': { icon: 'heal_effect', color: 0x00ff00, manaCost: 20, cooldown: 5000 },
+    'shield': { icon: 'shield_effect', color: 0x0088ff, manaCost: 15, cooldown: 8000 }
+};
 
 let questMarkers = new Map(); // Quest objective markers (key: targetId, value: {sprite, tween})
 let defenseSpawnerState = {
@@ -724,6 +736,12 @@ function preload() {
         }
     });
 
+    // Load Projectile Assets
+    // arrow loaded via assets.json
+    if (!this.textures.exists('fireball_effect')) {
+        this.load.image('fireball_effect', 'assets/images/fireball_effect.png');
+    }
+
     // Legacy/Hardcoded Spritesheets (complex configs not yet moved to JSON)
     // Echo Mite attack animations (64x64 frames)
     this.load.spritesheet('monster_echo_mite_attack_south', 'assets/animations/monster-echo-mite-attack-south.png', {
@@ -811,7 +829,7 @@ function preload() {
         frameWidth: 48,
         frameHeight: 48
     });
-    this.load.spritesheet('monster_orc_attack_west', 'assets/animations/Orc-Attack-West.png', { frameWidth: 32, frameHeight: 32 });
+    this.load.spritesheet('monster_orc_attack_west', 'assets/animations/monster_orc_attack_west.png', { frameWidth: 48, frameHeight: 48 });
 
     // Skeleton walking animations (48x48 frames, 6 frames per direction)
     this.load.spritesheet('monster_skeleton_walk_south', 'assets/animations/monster_skeleton_walk_south.png', {
@@ -1373,14 +1391,16 @@ function preload() {
 
     // Ability effect sprites
     // Fireball effect (orange/red circle)
-    this.add.graphics()
-        .fillStyle(0xff4400)
-        .fillCircle(16, 16, 12)
-        .fillStyle(0xffff00)
-        .fillCircle(16, 16, 8)
-        .fillStyle(0xffffff)
-        .fillCircle(16, 16, 4)
-        .generateTexture('fireball_effect', 32, 32);
+    if (!this.textures.exists('fireball_effect')) {
+        this.add.graphics()
+            .fillStyle(0xff4400)
+            .fillCircle(16, 16, 12)
+            .fillStyle(0xffff00)
+            .fillCircle(16, 16, 8)
+            .fillStyle(0xffffff)
+            .fillCircle(16, 16, 4)
+            .generateTexture('fireball_effect', 32, 32);
+    }
 
     // Heal effect (green cross/circle)
     this.add.graphics()
@@ -2413,6 +2433,9 @@ function create() {
         console.error('❌ MapManager not found!');
     }
 
+    // Disable context menu for Right-Click attacks
+    this.input.mouse.disableContextMenu();
+
     // Initialize procedural monster renderer (Method 2)
     monsterRenderer = new MonsterRenderer(this);
     window.monsterRenderer = monsterRenderer;
@@ -2435,6 +2458,20 @@ function create() {
             if (typeof initController === 'function') {
                 initController(this);
             }
+        });
+    }
+
+    // Initialize Projectile Manager (Ranged Combat)
+    if (typeof ProjectileManager !== 'undefined') {
+        window.projectileManager = new ProjectileManager(this);
+        window.projectileManager.init();
+        console.log('✅ ProjectileManager initialized');
+
+        // Right Click Listener Removed
+        // Spacebar Listener for Ranged Attack
+        this.input.keyboard.on('keydown-SPACE', () => {
+            console.log('⌨️ Spacebar pressed');
+            playerAttack(this.time.now);
         });
     }
 
@@ -3361,9 +3398,16 @@ window.triggerItemPickup = triggerItemPickup;
  * Update loop (like pygame game loop)
  */
 function update(time, delta) {
+    // DEBUG: SANITY CHECK
+    if (Math.random() < 0.01) console.log(`🔄 Update Loop Running. Time: ${time}, Paused: ${typeof isGamePaused !== 'undefined' ? isGamePaused : 'undef'}, ProjMgr: ${!!window.projectileManager}`);
     // Update Damage/Healing Numbers
     if (window.updateDamageNumbers) {
         window.updateDamageNumbers(time, delta);
+    }
+
+    // Update Projectile Manager (Priority Update)
+    if (window.projectileManager) {
+        window.projectileManager.update(time, delta);
     }
 
     // If game is paused (e.g. death dialog), stop all game logic
@@ -3400,6 +3444,11 @@ function update(time, delta) {
     // Handle gamepad/controller input
     if (typeof handleGamepadInput === 'function') {
         handleGamepadInput();
+    }
+
+    // Update Projectiles
+    if (window.projectileManager) {
+        window.projectileManager.update(time, delta);
     }
 
     // Unified Dynamic Spawner (for fluxes, fireflies, etc)
@@ -4354,6 +4403,8 @@ function update(time, delta) {
     // Update ability cooldowns
     updateAbilityCooldowns(time);
 
+    // Update Projectile Manager - MOVED TO TOP
+
     // Toggle inventory (I key) - REMOVED
     // if (Phaser.Input.Keyboard.JustDown(inventoryKey)) {
     //     toggleInventory();
@@ -4752,8 +4803,7 @@ function update(time, delta) {
         // Monster attack player if in range
 
 
-        // Update monster HP bar position and visibility
-        if (monster.hpBarBg && monster.hpBar && monster.active) {
+        if (monster.hpBarBg && monster.hpBar && monster.active && !monster.isDead) {
             const offsetY = -24; // Position above monster sprite
             monster.hpBarBg.x = monster.x;
             monster.hpBarBg.y = monster.y + offsetY;
@@ -4779,6 +4829,12 @@ function update(time, delta) {
             monster.hpBarBg.setVisible(showBar);
             monster.hpBar.setVisible(showBar);
             if (monster.levelLabel) monster.levelLabel.setVisible(showBar);
+        } else if (monster.isDead && (monster.hpBar || monster.hpBarBg)) {
+            console.warn(`🧟 ZOMBIE UI DETECTED for ${monster.id}! isDead=${monster.isDead}, Active=${monster.active}, hpBar=${!!monster.hpBar}`);
+            // Emergency cleanup
+            if (monster.hpBarBg) { monster.hpBarBg.destroy(); monster.hpBarBg = null; }
+            if (monster.hpBar) { monster.hpBar.destroy(); monster.hpBar = null; }
+            if (monster.levelLabel) { monster.levelLabel.destroy(); monster.levelLabel = null; }
         }
 
         // Remove dead monsters
@@ -4806,9 +4862,22 @@ function update(time, delta) {
 /**
  * Handle monster death (XP, quests, loot, animations)
  */
-function handleMonsterDeath(monster) {
-    if (!monster || monster.isDead) return;
+// --- Handle Monster Death ---
+window.handleMonsterDeath = function (monster) {
+    if (!monster) return;
+    console.log(`💀 handleMonsterDeath CALLED for ${monster.id || 'unknown'} (Dead? ${monster.isDead})`);
+
+    if (monster.isDead) {
+        console.warn(`💀 ...monster already marked dead. Skipping logic?`);
+        return;
+    }
     monster.isDead = true;
+
+    // Destroy HP bars and level label IMMEDIATELY to prevent lingering
+    console.log(`🗑️ Destroying UI for ${monster.id}`);
+    if (monster.hpBarBg) { monster.hpBarBg.destroy(); monster.hpBarBg = null; }
+    if (monster.hpBar) { monster.hpBar.destroy(); monster.hpBar = null; }
+    if (monster.levelLabel) { monster.levelLabel.destroy(); monster.levelLabel = null; }
 
     const scene = game.scene.scenes[0];
 
@@ -4845,10 +4914,7 @@ function handleMonsterDeath(monster) {
         onBossDefeated(MapManager.dungeonLevel, monster.x, monster.y);
     }
 
-    // Destroy HP bars and level label
-    if (monster.hpBarBg) monster.hpBarBg.destroy();
-    if (monster.hpBar) monster.hpBar.destroy();
-    if (monster.levelLabel) monster.levelLabel.destroy();
+
 
     // Play death animation & particles
     playMonsterDeathAnimation(monster);
@@ -4924,14 +4990,99 @@ function handleMonsterDeath(monster) {
 /**
  * Player attack function
  */
-function playerAttack(time) {
+function playerAttack(time, isRightClick = false, aimAngle = null) {
     const stats = playerStats;
     const scene = game.scene.scenes[0];
+
+    // Fallback for time if called without args
+    if (!time) time = scene.time.now;
 
     // Check cooldown
     if (time - stats.lastAttackTime < stats.attackCooldown) {
         return;
     }
+
+    // Ranged/Secondary Attack Check
+    // If weapon has a projectile, treat as ranged attack by default
+    // Helper to get fresh definition (in case equipped item is stale)
+    const equippedWeapon = (stats.equipment && stats.equipment.weapon) ? stats.equipment.weapon : {};
+    console.log('⚔️ [DEBUG] playerAttack: Equipped:', equippedWeapon);
+    console.log('⚔️ [DEBUG] playerAttack: Definitions available?', !!(ItemManager && ItemManager.definitions));
+    if (equippedWeapon.weaponType) {
+        console.log('⚔️ [DEBUG] playerAttack: Definition for ' + equippedWeapon.weaponType + ':', ItemManager.definitions.weaponTypes[equippedWeapon.weaponType]);
+    }
+    let projectileType = equippedWeapon.projectile;
+    let projectileSpeed = equippedWeapon.projectileSpeed;
+    let projectileRange = equippedWeapon.range;
+
+    // Try to lookup from ItemManager if properties are missing
+    if (!projectileType && equippedWeapon.weaponType && ItemManager.definitions && ItemManager.definitions.weaponTypes) {
+        const def = ItemManager.definitions.weaponTypes[equippedWeapon.weaponType];
+        if (def && def.projectile) {
+            projectileType = def.projectile;
+            projectileSpeed = def.projectileSpeed;
+            projectileRange = def.range;
+            console.log(`🔄 Refreshed weapon data from definitions: ${projectileType}`);
+        }
+    }
+
+    if (projectileType) {
+        let angle;
+        let targetX, targetY;
+
+        if (aimAngle !== null) {
+            angle = aimAngle;
+            // Calculate dummy target for facing direction logic
+            targetX = player.x + Math.cos(angle) * 100;
+            targetY = player.y + Math.sin(angle) * 100;
+        } else {
+            targetX = scene.input.activePointer.worldX;
+            targetY = scene.input.activePointer.worldY;
+            angle = Phaser.Math.Angle.Between(player.x, player.y, targetX, targetY);
+        }
+
+        const fired = window.projectileManager.fireProjectile(
+            { x: player.x, y: player.y },
+            angle,
+            {
+                projectileType: projectileType,
+                speed: projectileSpeed,
+                range: projectileRange,
+                damage: stats.attack || 10,
+                critChance: stats.critChance || 0.05
+            }
+        );
+
+        if (fired) {
+            stats.lastAttackTime = time;
+
+            // Update facing direction even for ranged
+            if (Math.abs(targetX - player.x) > Math.abs(targetY - player.y)) {
+                player.facingDirection = targetX > player.x ? 'east' : 'west';
+            } else {
+                player.facingDirection = targetY > player.y ? 'south' : 'north';
+            }
+            const walkTextureKey = `player_walk_${player.facingDirection}`;
+            if (scene.textures.exists(walkTextureKey)) {
+                player.setTexture(walkTextureKey);
+            }
+
+            return; // EXIT FUNCTION - DO NOT DO MELEE ATTACK
+        }
+        // Optional: Face direction
+        if (Math.abs(targetX - player.x) > Math.abs(targetY - player.y)) {
+            player.facingDirection = targetX > player.x ? 'east' : 'west';
+        } else {
+            player.facingDirection = targetY > player.y ? 'south' : 'north';
+        }
+        // Update texture to face direction
+        const walkTextureKey = `player_walk_${player.facingDirection}`;
+        if (scene.textures.exists(walkTextureKey)) {
+            player.setTexture(walkTextureKey);
+        }
+        return; // Skip melee swing
+    }
+
 
     // Combo tracking - check if within combo window
     const timeSinceLastAttack = time - stats.lastAttackTime;
@@ -4946,7 +5097,7 @@ function playerAttack(time) {
     stats.comboTimer = 0; // Reset combo timer
 
     // Get weapon quality for trail color
-    const equippedWeapon = stats.equipment.weapon;
+    // equippedWeapon is already defined at start of function
     const weaponQuality = equippedWeapon ? (equippedWeapon.quality || 'Common') : 'Common';
     const weaponType = equippedWeapon ? (equippedWeapon.weaponType || 'Sword') : 'Sword';
 
@@ -5078,6 +5229,8 @@ function playerAttack(time) {
         }
     }
 }
+
+
 
 /**
  * Monster attack player
@@ -9510,7 +9663,10 @@ function checkNPCInteraction() {
 /**
  * Dialog database - loaded from dialogs.json
  */
-let dialogDatabase = {};
+/**
+ * Dialog database - loaded from dialogs.json
+ */
+// dialogDatabase declared globally
 
 /**
  * Load dialogs from JSON file
@@ -12304,8 +12460,8 @@ function checkAutoLoad() {
 // REGENERATION SYSTEM
 // ============================================
 
-let regenTimerEvent = null;
-let hpRegenTimerEvent = null;
+// regenTimerEvent declared globally
+// hpRegenTimerEvent declared globally
 
 /**
  * Starts the passive regeneration loop
@@ -12387,46 +12543,7 @@ function startHpRegen() {
 /**
  * Ability definitions
  */
-const ABILITY_DEFINITIONS = {
-    heal: {
-        name: 'Heal',
-        manaCost: 20,
-        cooldown: 3000, // 3 seconds
-        healAmount: 30,
-        icon: 'heal_effect',
-        color: 0x00ff00,
-        description: 'Restores 30 HP'
-    },
-    fireball: {
-        name: 'Fireball',
-        manaCost: 15,
-        cooldown: 2000, // 2 seconds
-        damage: 25,
-        range: 150,
-        icon: 'fireball_effect',
-        color: 0xff4400,
-        description: 'Deals damage in a line'
-    },
-    ice_nova: {
-        name: 'Ice Nova',
-        manaCost: 20,
-        cooldown: 3000, // 3 seconds
-        damage: 15,
-        range: 150,
-        icon: 'fireball_effect', // Reusing effect sprite by color tinting
-        color: 0x00ffff,
-        description: 'Freezes enemies and deals damage'
-    },
-    shield: {
-        name: 'Shield',
-        manaCost: 30,
-        cooldown: 5000, // 5 seconds
-        duration: 3000,
-        icon: 'shield_effect',
-        color: 0xffd700,
-        description: 'Reduces damage taken'
-    }
-};
+
 
 /**
  * Create ability bar UI

@@ -14,7 +14,8 @@
         "item_ring": "assets/images/pixellab-golden-ring-1765494525925.png",
         "item_consumable": "assets/images/pixellab-red-simple-health-potion-1765494342318.png",
         "item_gold": "assets/images/gold_coin.png",
-        "obelisk": "assets/images/obelisk.png"
+        "obelisk": "assets/images/obelisk.png",
+        "arrow": "assets/images/arrow.png"
     },
     "audio": {
         "bell_toll": "assets/audio/bell-toll-407826.mp3",

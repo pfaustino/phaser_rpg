@@ -21,6 +21,7 @@ let currentMenuItems = [];
 
 // Virtual Cursor state
 let virtualCursor = null;
+let aimReticle = null;
 let virtualCursorSpeed = 600; // Pixels per second
 let cursorVisible = false;
 
@@ -80,6 +81,14 @@ function initController(scene) {
             .setScrollFactor(0); // UI element
 
         console.log('🎮 Virtual cursor created');
+    }
+
+    // Create aim reticle (initially hidden)
+    if (!aimReticle) {
+        aimReticle = scene.add.circle(0, 0, 5, 0xff0000)
+            .setStrokeStyle(2, 0xffffff)
+            .setDepth(900)
+            .setVisible(false);
     }
 
     // Listen for gamepad connection
@@ -288,6 +297,9 @@ function handleGamepadInput() {
 
         // --- MOVEMENT (left stick, only when NOT in menu/dialog) ---
         handleGamepadMovement(pad, deadzone);
+
+        // --- AIMING (right stick) ---
+        handleGamepadAiming(pad, deadzone);
     }
 
     // --- BUTTON ACTIONS ---
@@ -333,6 +345,19 @@ function handleGamepadInput() {
             usePotion('mana');
         } else if (typeof window.usePotion === 'function') {
             window.usePotion('mana');
+        }
+    }
+
+    // RT - Ranged Attack
+    if (pad.buttons[controllerConfig.buttons.RT]?.pressed) {
+        // Check if we have an aim angle
+        const angle = player.aimAngle !== undefined ? player.aimAngle : player.rotation;
+
+        // Trigger Ranged Attack (isRightClick=true, pass aimAngle)
+        if (typeof playerAttack === 'function') {
+            playerAttack(controllerScene.time.now, true, angle);
+        } else if (typeof window.playerAttack === 'function') {
+            window.playerAttack(controllerScene.time.now, true, angle);
         }
     }
 
@@ -392,6 +417,45 @@ function handleGamepadMovement(pad, deadzone) {
         if (typeof cursors !== 'undefined' && !cursors.up?.isDown && !cursors.down?.isDown) {
             player.setVelocityY(0);
         }
+    }
+}
+
+/**
+ * Handle aiming input from gamepad (right stick)
+ */
+function handleGamepadAiming(pad, deadzone) {
+    if (typeof player === 'undefined' || !player) return;
+
+    let rx = 0, ry = 0;
+    if (pad.rightStick) {
+        rx = pad.rightStick.x;
+        ry = pad.rightStick.y;
+    } else if (pad.axes.length >= 4) {
+        // Fallback for some non-standard mappings
+        rx = typeof pad.axes[2].getValue === 'function' ? pad.axes[2].getValue() : pad.axes[2];
+        ry = typeof pad.axes[3].getValue === 'function' ? pad.axes[3].getValue() : pad.axes[3];
+    }
+
+    if (Math.abs(rx) > deadzone || Math.abs(ry) > deadzone) {
+        const angle = Math.atan2(ry, rx);
+        player.aimAngle = angle; // Store for firing
+
+        // Position reticle at fixed distance
+        const aimDist = 100;
+        if (aimReticle) {
+            aimReticle.setPosition(player.x + Math.cos(angle) * aimDist, player.y + Math.sin(angle) * aimDist);
+            aimReticle.setVisible(true);
+        }
+
+        // Also update facing direction based on aim
+        if (Math.abs(rx) > Math.abs(ry)) {
+            player.facingDirection = rx > 0 ? 'east' : 'west';
+        } else {
+            player.facingDirection = ry > 0 ? 'south' : 'north';
+        }
+    } else {
+        if (aimReticle) aimReticle.setVisible(false);
+        // Don't clear player.aimAngle, keep last aim
     }
 }
 

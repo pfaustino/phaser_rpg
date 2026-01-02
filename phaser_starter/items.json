@@ -93,7 +93,11 @@
             "speed": 1.1,
             "critChance": 0.07,
             "hitSound": "staff_hit",
-            "defaultSprite": "assets/images/basic-staff.png"
+            "defaultSprite": "assets/images/basic-staff.png",
+            "projectile": "fireball",
+            "projectileSpeed": 300,
+            "range": 400,
+            "action": "cast"
         },
         "Bow": {
             "baseAttack": 0.95,
@@ -101,6 +105,10 @@
             "critChance": 0.10,
             "hitSound": "bow_hit",
             "defaultSprite": "assets/images/basic-bow.png",
+            "projectile": "arrow",
+            "projectileSpeed": 500,
+            "range": 600,
+            "action": "shoot",
             "pivotPoint": {
                 "x": 36,
                 "y": 32
@@ -121,6 +129,10 @@
             "critChance": 0.09,
             "hitSound": "bow_hit",
             "defaultSprite": "assets/images/basic-crossbow.png",
+            "projectile": "bolt",
+            "projectileSpeed": 600,
+            "range": 500,
+            "action": "shoot",
             "pivotPoint": {
                 "x": 19,
                 "y": 22

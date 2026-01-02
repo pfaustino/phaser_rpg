@@ -19,6 +19,9 @@ class ProjectileManager {
      * Initialize the physics group for projectiles
      */
     init() {
+        if (this.projectiles) {
+            console.warn('⚠️ ProjectileManager: Re-initializing existing group!');
+        }
         this.projectiles = this.scene.physics.add.group({
             classType: Phaser.GameObjects.Sprite,
             runChildUpdate: true
@@ -27,7 +30,8 @@ class ProjectileManager {
         // Add collision with world bounds
         this.scene.physics.world.on('worldbounds', (body) => {
             if (body.gameObject && body.gameObject.isProjectile) {
-                this.destroyProjectile(body.gameObject);
+                console.log('💥 Projectile hit World Bounds (Ignored for Debug)');
+                // this.destroyProjectile(body.gameObject); // DISABLE for debugging
             }
         });
 
@@ -41,14 +45,21 @@ class ProjectileManager {
      * @param {Object} config - Weapon config { speed, projectileType, damage, range }
      */
     fireProjectile(startPos, angle, config) {
+        console.log(`🔥 fireProjectile called: Type=${config.projectileType}, Speed=${config.speed}`);
         const now = this.scene.time.now;
-        if (now < this.nextFireTime) return false;
+        if (now < this.nextFireTime) {
+            console.log(`⏳ Cooldown active: ${now} < ${this.nextFireTime}`);
+            return false;
+        }
+
+        // Log World Bounds
+        const bounds = this.scene.physics.world.bounds;
+        console.log(`🌍 World Bounds: x=${bounds.x}, y=${bounds.y}, w=${bounds.width}, h=${bounds.height}`);
 
         if (!this.projectiles) this.init();
 
         // Get projectile sprite key based on type
         let spriteKey = 'item_weapon'; // Fallback
-        let frame = 0;
 
         // Map projectile types to assets
         switch (config.projectileType) {
@@ -56,11 +67,17 @@ class ProjectileManager {
                 spriteKey = 'fireball_effect'; // Should be a particle/effect sprite
                 break;
             case 'arrow':
-                spriteKey = 'item_weapon'; // Placeholder, ideally a dedicated arrow sprite
+                spriteKey = 'arrow';
                 break;
             case 'bolt':
-                spriteKey = 'item_weapon';
+                spriteKey = 'arrow';
                 break;
+        }
+
+        // Texture safety check
+        if (!this.scene.textures.exists(spriteKey)) {
+            console.warn(`⚠️ Projectile texture '${spriteKey}' missing, falling back to 'item_weapon'`);
+            spriteKey = 'item_weapon';
         }
 
         const projectile = this.projectiles.get(startPos.x, startPos.y, spriteKey);
@@ -69,7 +86,7 @@ class ProjectileManager {
             projectile.setActive(true);
             projectile.setVisible(true);
             projectile.isProjectile = true;
-            projectile.damage = config.damage || 10;
+            projectile.damage = (config.damage !== undefined) ? config.damage : 10;
             projectile.startPos = { x: startPos.x, y: startPos.y };
             projectile.maxRange = config.range || 500;
             projectile.isCritical = Math.random() < (config.critChance || 0.05);
@@ -78,7 +95,9 @@ class ProjectileManager {
             this.scene.physics.velocityFromRotation(angle, config.speed || 400, projectile.body.velocity);
             projectile.setRotation(angle);
 
-            // Adjust hit box
+            projectile.hasHit = false; // Reset hit flag
+            projectile.body.enable = true; // Re-enable body
+            projectile.body.checkCollision.none = false; // Re-enable collisions
             projectile.body.setCircle(10);
             projectile.body.setCollideWorldBounds(true);
             projectile.body.onWorldBounds = true;
@@ -91,6 +110,18 @@ class ProjectileManager {
                 projectile.setTint(0xffffff);
                 projectile.setScale(0.8);
             }
+
+            // Ensure visibility over map
+            projectile.setDepth(2000); // Try extremely high depth
+
+            console.log(`🏹 Projectile Spawned: x=${projectile.x}, y=${projectile.y}, depth=${projectile.depth}, visible=${projectile.visible}, alpha=${projectile.alpha}, texture=${projectile.texture.key}, frame=${projectile.frame.name}`);
+            console.log(`   Velocity: x=${projectile.body.velocity.x}, y=${projectile.body.velocity.y}`);
+
+            // DEBUG: Force a visible red box attached to the projectile
+            // This proves if the object exists and moves, independent of the sprite texture
+            // Uncommented for debug
+            const debugRect = this.scene.add.rectangle(0, 0, 20, 20, 0xff0000, 1);
+            projectile.debugRect = debugRect; // Attach to projectile to update in loop
 
             // Play sound
             if (typeof playSound === 'function') {
@@ -112,7 +143,12 @@ class ProjectileManager {
     update(time, delta) {
         if (!this.projectiles) return;
 
-        this.projectiles.children.iterate((projectile) => {
+        const activeCount = this.projectiles.countActive(true);
+        if (activeCount > 0) {
+            // console.log(`🔄 ProjectileManager.update. Active: ${activeCount}`);
+        }
+
+        this.projectiles.getChildren().forEach((projectile) => {
             if (projectile && projectile.active) {
                 // Range check
                 const dist = Phaser.Math.Distance.Between(
@@ -121,7 +157,17 @@ class ProjectileManager {
                 );
 
                 if (dist > projectile.maxRange) {
+                    console.log('📏 Projectile exceeded range');
+                    if (projectile.debugRect) projectile.debugRect.destroy();
                     this.destroyProjectile(projectile);
+                    return; // Continue forEach
+                }
+
+                // Update Debug Rect
+                if (projectile.debugRect) {
+                    projectile.debugRect.setPosition(projectile.x, projectile.y);
+                    projectile.debugRect.setDepth(2001);
+                    // console.log(`🏹 Proj Update: x=${projectile.x.toFixed(1)}, y=${projectile.y.toFixed(1)}`);
                 }
 
                 // Add visual trail for fireballs
@@ -140,16 +186,62 @@ class ProjectileManager {
                 }
             }
         });
+
+        // handle collisions (checked every frame like game.js)
+        if (window.monsters) {
+            this.scene.physics.overlap(this.projectiles, window.monsters, (projectile, monster) => {
+                this.handleMonsterCollision(projectile, monster);
+            });
+        }
+
+        // Wall collision
+        if (window.MapManager && window.MapManager.wallGroup) {
+            this.scene.physics.collide(this.projectiles, window.MapManager.wallGroup, (projectile, wall) => {
+                this.handleWallCollision(projectile, wall);
+            });
+        }
     }
 
     /**
      * Handle collision with monster
      */
-    handleMonsterCollision(projectile, monster) {
-        if (!projectile.active || !monster.active) return;
+    handleMonsterCollision(obj1, obj2) {
+        let projectile, monster;
+
+        // Dynamic identification: Projectiles have the isProjectile flag
+        if (obj1.isProjectile) {
+            projectile = obj1;
+            monster = obj2;
+        } else {
+            projectile = obj2;
+            monster = obj1;
+        }
+
+        if (!projectile || !monster || !projectile.active || !monster.active) return;
+
+        // STRICT single-hit verify
+        if (projectile.hasHit) {
+            return;
+        }
+
+        // Mark as hit immediately
+        projectile.hasHit = true;
+
+        // Stop physics interaction immediately
+        if (projectile.body) {
+            projectile.body.checkCollision.none = true;
+            projectile.body.enable = false;
+        }
+
+        projectile.setActive(false);
+        projectile.setVisible(false);
+
+        // Debug collision
+        console.log('🎯 Projectile hit monster!', monster.id || monster.name);
 
         // Deal damage
-        let damage = projectile.damage;
+        let damage = projectile.damage || 10; // Default to 10 if undefined
+
 
         // Crit multiplier
         if (projectile.isCritical) {
@@ -162,7 +254,7 @@ class ProjectileManager {
 
         // Visuals
         const color = projectile.isCritical ? 0xff0000 : 0xffff00;
-        const text = projectile.isCritical ? `-${damage} CRIT!` : `-${damage}`;
+        const text = projectile.isCritical ? `- ${damage} CRIT!` : ` - ${damage} `;
 
         if (typeof showDamageNumber === 'function') {
             showDamageNumber(monster.x, monster.y - 20, text, color, projectile.isCritical, 'physical');
@@ -182,8 +274,15 @@ class ProjectileManager {
         this.destroyProjectile(projectile);
 
         // Trigger death if needed (handled in game.js usually, but good to ensure)
-        if (monster.hp <= 0 && typeof handleMonsterDeath === 'function') {
-            handleMonsterDeath(monster);
+        if (monster.hp <= 0) {
+            if (typeof window.handleMonsterDeath === 'function') {
+                console.log(`💀 Monster ${monster.id} killed by projectile.invoking death.`);
+                window.handleMonsterDeath(monster);
+            } else if (typeof handleMonsterDeath === 'function') {
+                handleMonsterDeath(monster);
+            } else {
+                console.error('❌ handleMonsterDeath not found!');
+            }
         }
     }
 
@@ -192,10 +291,12 @@ class ProjectileManager {
      */
     handleWallCollision(projectile, wall) {
         if (!projectile.active) return;
+        console.log('🧱 Projectile hit Wall at', wall.x, wall.y);
         this.destroyProjectile(projectile);
     }
 
     destroyProjectile(projectile) {
+        console.log(`💀 Reacting to destroyProjectile.POS: ${projectile.x}, ${projectile.y} `);
         // Impact effect
         if (this.scene && this.scene.add) {
             const burst = this.scene.add.circle(projectile.x, projectile.y, 5, 0xffffff, 0.8);
@@ -208,6 +309,9 @@ class ProjectileManager {
             });
         }
 
+        if (projectile.debugRect) {
+            projectile.debugRect.destroy();
+        }
         projectile.destroy();
     }
 }

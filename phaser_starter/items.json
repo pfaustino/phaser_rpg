@@ -100,14 +100,40 @@
             "speed": 1.15,
             "critChance": 0.10,
             "hitSound": "bow_hit",
-            "defaultSprite": "assets/images/basic-bow.png"
+            "defaultSprite": "assets/images/basic-bow.png",
+            "pivotPoint": {
+                "x": 36,
+                "y": 32
+            },
+            "flipWest": true,
+            "rotationEast": 0,
+            "rotationWest": 0,
+            "rotationNorth": -90,
+            "rotationSouth": 90,
+            "renderOffset": {
+                "x": 3,
+                "y": 0
+            }
         },
         "Crossbow": {
             "baseAttack": 1.05,
             "speed": 0.95,
             "critChance": 0.09,
             "hitSound": "bow_hit",
-            "defaultSprite": "assets/images/basic-crossbow.png"
+            "defaultSprite": "assets/images/basic-crossbow.png",
+            "pivotPoint": {
+                "x": 19,
+                "y": 22
+            },
+            "flipWest": true,
+            "rotationEast": -20,
+            "rotationWest": 20,
+            "rotationNorth": -90,
+            "rotationSouth": 90,
+            "renderOffset": {
+                "x": -8,
+                "y": 0
+            }
         }
     },
     "materials": {

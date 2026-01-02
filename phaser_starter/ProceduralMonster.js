@@ -10,6 +10,7 @@ const ProceduralMonster = {
     // Texture cache to avoid regenerating (disabled for now to fix shading issues)
     cache: {},
     useCache: false, // Set to true once shading is verified working
+    enableOutline: true, // Toggle for 1px outline
 
     // Clear the texture cache (useful for debugging)
     clearCache: function () {
@@ -224,7 +225,7 @@ const ProceduralMonster = {
         const pixels = this.generatePixels(template, palette, rng);
 
         // Render to canvas and create texture
-        this.renderToTexture(scene, key, pixels, template.width, template.height);
+        this.renderToTexture(scene, key, pixels, template.width, template.height, 4, palette.dark);
 
         this.cache[key] = true;
         return key;
@@ -302,20 +303,47 @@ const ProceduralMonster = {
     /**
      * Render pixel data to a Phaser texture
      */
-    renderToTexture: function (scene, key, pixels, width, height, scale = 4) {
+    renderToTexture: function (scene, key, pixels, width, height, scale = 4, outlineColor = 0x000000) {
         // scale is passed in or default to 4
-        const canvasWidth = width * scale;
-        const canvasHeight = height * scale;
+
+        // Determine offset and size based on outline
+        const offset = this.enableOutline ? 1 : 0;
+        const canvasWidth = (width + (offset * 2)) * scale;
+        const canvasHeight = (height + (offset * 2)) * scale;
 
         // Create graphics and render
         const graphics = scene.make.graphics({ x: 0, y: 0, add: false });
 
+        // Pass 1: Draw Outlines (if enabled)
+        if (this.enableOutline && outlineColor !== null) {
+            graphics.fillStyle(outlineColor, 1);
+            for (let y = 0; y < height; y++) {
+                for (let x = 0; x < width; x++) {
+                    if (pixels[y][x] !== null) {
+                        // Draw outline in 4 cardinal directions
+                        // We draw at (x+offset) +/- 1, (y+offset) +/- 1
+                        // But simplification: Just draw a block at target positions
+
+                        // Top
+                        graphics.fillRect((x + offset) * scale, (y + offset - 1) * scale, scale, scale);
+                        // Bottom
+                        graphics.fillRect((x + offset) * scale, (y + offset + 1) * scale, scale, scale);
+                        // Left
+                        graphics.fillRect((x + offset - 1) * scale, (y + offset) * scale, scale, scale);
+                        // Right
+                        graphics.fillRect((x + offset + 1) * scale, (y + offset) * scale, scale, scale);
+                    }
+                }
+            }
+        }
+
+        // Pass 2: Draw Body
         for (let y = 0; y < height; y++) {
             for (let x = 0; x < width; x++) {
                 const color = pixels[y][x];
                 if (color !== null) {
                     graphics.fillStyle(color, 1);
-                    graphics.fillRect(x * scale, y * scale, scale, scale);
+                    graphics.fillRect((x + offset) * scale, (y + offset) * scale, scale, scale);
                 }
             }
         }
@@ -510,7 +538,7 @@ const ProceduralMonster = {
 
         if (pixels[eyeY] && pixels[eyeY][eyeX2]) pixels[eyeY][eyeX2] = palette.eyes;
 
-        this.renderToTexture(scene, key, pixels, width, height, scale);
+        this.renderToTexture(scene, key, pixels, width, height, scale, palette.dark);
         this.cache[key] = true;
 
         console.log(`🧬 Generated CA monster: ${monsterType} -> ${key}`);
@@ -779,7 +807,7 @@ const ProceduralMonster = {
 
         const key = `comp_monster_${monsterType}_${Date.now()}_${Math.floor(rng() * 10000)}`;
         const scale = (config && config.scale) ? config.scale : 4;
-        this.renderToTexture(scene, key, pixels, maxWidth, totalHeight, scale);
+        this.renderToTexture(scene, key, pixels, maxWidth, totalHeight, scale, palette.dark);
         this.cache[key] = true;
 
         console.log(`🔧 Generated component monster: ${monsterType} -> ${key}`);
@@ -857,7 +885,7 @@ const ProceduralMonster = {
 
         const pixels = this.generatePixels(template, palette, rng);
         const scale = (config && config.scale) ? config.scale : 4;
-        this.renderToTexture(scene, key, pixels, template.width, template.height, scale);
+        this.renderToTexture(scene, key, pixels, template.width, template.height, scale, palette.dark);
 
         this.cache[key] = true;
         console.log(`🎨 Generated mask-based monster: ${type} -> ${key}`);

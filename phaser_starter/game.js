@@ -45,6 +45,7 @@ console.log('🎮 GAME CONFIG CREATED - Preload function:', typeof preload);
 
 // Create the game instance
 const game = new Phaser.Game(config);
+window.game = game;
 
 console.log('🎮 PHASER GAME INSTANCE CREATED');
 
@@ -403,6 +404,9 @@ function preload() {
     this.load.json('milestoneData', 'milestones.json');
     this.load.json('npcData', 'npc.json');
     this.load.json('zoneData', 'zones.json');
+    this.load.json('assets', 'assets.json');
+    this.load.json('interactables', 'interactables.json');
+    this.load.json('monsters', 'monsters.json');
     this.load.json('dungeonData', 'dungeons.json');
 
 
@@ -1934,6 +1938,7 @@ function spawnBossMonster(x, y, level) {
 
     const bossTypeData = {
         name: bossName,
+        id: bossId, // Include ID for blueprint lookup
         textureKey: textureKey,
         hp: 100 + (level * 50),
         attack: 15 + (level * 5),
@@ -2409,6 +2414,7 @@ function create() {
 
     // Initialize procedural monster renderer (Method 2)
     monsterRenderer = new MonsterRenderer(this);
+    window.monsterRenderer = monsterRenderer;
     if (this.cache.json.exists('monsterData')) {
         monsterRenderer.init(this.cache.json.get('monsterData'));
     }
@@ -2532,10 +2538,12 @@ function create() {
                 window.UIManager.showQuestToast(quest.title, "Quest Accepted", false);
             }
 
-            // Special Handler: Resonant Frequencies (main_01_005)
-            if (quest.id === 'main_01_005') {
-                if (typeof startResonantFrequenciesEvent === 'function') {
-                    startResonantFrequenciesEvent();
+            // Data-Driven Quest Start Events
+            const def = window.uqe.allDefinitions[quest.id];
+            if (def && def.startEvent && window.QuestEvents && window.QuestEvents[def.startEvent]) {
+                console.log(`▶️ Triggering Start Event: ${def.startEvent}`);
+                if (typeof window.QuestEvents[def.startEvent].start === 'function') {
+                    window.QuestEvents[def.startEvent].start();
                 }
             }
 
@@ -2553,10 +2561,12 @@ function create() {
                 window.UIManager.showQuestToast(quest.title, "Quest Completed!", true);
             }
 
-            // Special Handler: Stop Resonant Frequencies
-            if (quest.id === 'main_01_005') {
-                if (typeof stopResonantFrequenciesEvent === 'function') {
-                    stopResonantFrequenciesEvent();
+            // Data-Driven Quest Stop Events
+            const defStop = window.uqe.allDefinitions[quest.id];
+            if (defStop && defStop.stopEvent && window.QuestEvents && window.QuestEvents[defStop.stopEvent]) {
+                console.log(`⏹️ Triggering Stop Event: ${defStop.stopEvent}`);
+                if (typeof window.QuestEvents[defStop.stopEvent].stop === 'function') {
+                    window.QuestEvents[defStop.stopEvent].stop();
                 }
             }
 
@@ -2646,8 +2656,11 @@ function create() {
             const def = data.definition;
             addChatMessage(`New Quest Available: ${def.title}`, 0x00ffff, '📜');
 
-            // Queue the popup/preview
-            queueDialog('QUEST_AVAILABLE', def);
+            // Queue the popup/preview ONLY if there is no specific giver (auto-popup)
+            // If there is a giver, the player must go talk to them.
+            if (!def.giver) {
+                queueDialog('QUEST_AVAILABLE', def);
+            }
         });
 
         // Initialize starter quests for new games (if no UQE quests active yet)
@@ -3183,6 +3196,38 @@ function triggerWorldInteraction() {
         return true;
     }
 
+    // Check Data-Driven Interactables
+    if (MapManager.interactables && MapManager.interactables.length > 0) {
+        let closestObj = null;
+        let minDst = 9999;
+
+        for (const obj of MapManager.interactables) {
+            if (!obj.sprite) continue;
+            const dist = Phaser.Math.Distance.Between(player.x, player.y, obj.sprite.x, obj.sprite.y);
+            // Default radius 60 if not specified
+            const radius = obj.definition.interactionRadius || 60;
+
+            if (dist < radius && dist < minDst) {
+                minDst = dist;
+                closestObj = obj;
+            }
+        }
+
+        if (closestObj) {
+            console.log(`🗿 Interacting with ${closestObj.definition.name} (${closestObj.definition.id})`);
+            if (window.uqe && window.uqe.eventBus) {
+                // Emit generic interact_object event
+                window.uqe.eventBus.emit('interact_object', {
+                    id: closestObj.definition.id,
+                    type: closestObj.definition.interactionType
+                });
+            }
+            // Feedback
+            if (typeof showDamageNumber === 'function') showDamageNumber(player.x, player.y - 50, "Interacted!", 0xffff00);
+            return true; // Interaction handled
+        }
+    }
+
     // Check Mana Flux interactions first (closest priority)
     if (typeof checkManaFluxInteraction === 'function' && checkManaFluxInteraction()) {
         return true; // Handled
@@ -3354,6 +3399,11 @@ function update(time, delta) {
 
     // Unified Dynamic Spawner (for fluxes, fireflies, etc)
     DynamicSpawnManager.update(this);
+
+    // Ensure weapon sprite follows player every frame
+    if (typeof updateWeaponPosition === 'function') {
+        updateWeaponPosition();
+    }
 
     // Defense Quest Wave Spawner
     updateDefenseQuestSpawner(time);
@@ -5279,6 +5329,7 @@ function updateWeaponSprite() {
     updateWeaponPosition();
     console.log(`✅ Weapon sprite updated: ${weaponType} (${weaponKey})`);
 }
+window.updateWeaponSprite = updateWeaponSprite;
 
 /**
  * Update weapon sprite position based on player facing direction
@@ -5295,94 +5346,121 @@ function updateWeaponPosition() {
     const equippedWeapon = playerStats.equipment.weapon;
     const weaponType = equippedWeapon ? (equippedWeapon.weaponType || 'Sword') : 'Sword';
 
-    const offsetX = 0;
-    const offsetY = 0;
+    // --- DATA DRIVEN POSITIONING SYSTEM ---
 
-    // Position weapon relative to player based on facing direction
-    // Adjust these offsets to position the weapon correctly
-    let x = player.x + offsetX;
-    let y = player.y + offsetY;
+    // 1. Get Weapon Definition
+    let weaponDef = null;
+    if (typeof ItemManager !== 'undefined' && ItemManager.definitions && ItemManager.definitions.weaponTypes) {
+        weaponDef = ItemManager.definitions.weaponTypes[weaponType];
+    }
 
-    // Adjust position based on direction (weapon appears in front of player)
+    // 2. Determine Pivot Point (Origin)
+    // Default to bottom-center (0.5, 1.0) which assumes handle is at bottom
+    let originX = 0.5;
+    let originY = 1.0;
+
+    if (weaponDef && weaponDef.pivotPoint) {
+        // Convert pixel coordinates (relative to 64x64 grid) to normalized 0-1 origin
+        originX = weaponDef.pivotPoint.x / 64;
+        originY = weaponDef.pivotPoint.y / 64;
+    }
+
+    // 3. Determine Render Offset (Global adjustment)
+    let renderOffsetX = 0;
+    let renderOffsetY = 0;
+
+    if (weaponDef && weaponDef.renderOffset) {
+        renderOffsetX = weaponDef.renderOffset.x || 0;
+        renderOffsetY = weaponDef.renderOffset.y || 0;
+    }
+
+    // 4. Calculate Position (Player Center + Render Offset)
+    // Note: Render Offset moves the entire weapon sprite relative to the player
+    let x = player.x + renderOffsetX;
+    let y = player.y + renderOffsetY;
+
+    // 5. Apply Directional Logic (Offsets for "Hand" position relative to body)
+    // These are "standard" offsets to put the weapon in the general vicinity of the hand
+    // We can make these data-driven later if needed, but for now standardizing them is safer
     switch (facingDirection) {
         case 'north':
-            y -= 20; // Weapon above player
+            y -= 20; // Hand is behind/above head
             break;
         case 'south':
-            y += 8; // Weapon closer to player (hand level, not too far below)
-            x -= 8; // Offset left so handle aligns with character's right hand
+            y += 8;  // Hand is lower
+            x -= 8;  // Hand is to the left (player's right)
             break;
         case 'east':
-            if (weaponType === 'Mace') {
-                x += 12; // Mace closer to player's hand (reduced from 20)
-                y -= 4; // Slightly higher to align handle with hand
-            } else {
-                x += 20; // Weapon to the right
-            }
+            x += 20; // Hand is right
             break;
         case 'west':
-            if (weaponType === 'Mace') {
-                x -= 12; // Mace closer to player's hand (reduced from 20)
-                y -= 4; // Slightly higher to align handle with hand
-            } else {
-                x -= 20; // Weapon to the left
-            }
+            x -= 20; // Hand is left
             break;
     }
 
     weaponSprite.x = x;
     weaponSprite.y = y;
 
-    // Set rotation and flip based on direction (skip during animation)
-    // Origin point is where the handle is (fulcrum for rotation)
+    // 6. Apply Rotation and Origin
+    // 6. Apply Rotation and Origin
     if (!skipRotation) {
+        weaponSprite.setOrigin(originX, originY);
+
+        // Start with base mirror settings
+        let doFlipX = weaponDef && weaponDef.mirrorX === true;
+        let doFlipY = weaponDef && weaponDef.mirrorY === true;
+
+        // weaponSprite.setFlipX(false); // REMOVE THIS HARD RESET logic implies
+
+        let rotationDegrees = 0;
+
         switch (facingDirection) {
             case 'north':
-                weaponSprite.setFlipX(false);
-                weaponSprite.rotation = -Math.PI / 2; // Point up
-                // Handle is at bottom of sprite (which is left when rotated -90°)
-                weaponSprite.setOrigin(1.0, 1.0); // Right edge, bottom (handle position)
+                if (weaponDef && typeof weaponDef.rotationNorth !== 'undefined') rotationDegrees = weaponDef.rotationNorth;
+                else rotationDegrees = -90;
+
+                if (weaponDef && typeof weaponDef.flipNorth !== 'undefined') doFlipX = weaponDef.flipNorth;
                 break;
+
             case 'south':
-                weaponSprite.setFlipX(false);
-                weaponSprite.rotation = Math.PI / 2; // Point down (90° clockwise)
-                // Keep same origin as East (handle at bottom)
-                // When rotated 90°, handle moves to left side, blade points down
-                weaponSprite.setOrigin(0.5, 1.0); // Center horizontally, bottom (handle position)
+                if (weaponDef && typeof weaponDef.rotationSouth !== 'undefined') rotationDegrees = weaponDef.rotationSouth;
+                else rotationDegrees = 90;
+
+                if (weaponDef && typeof weaponDef.flipSouth !== 'undefined') doFlipX = weaponDef.flipSouth;
                 break;
+
             case 'east':
-                weaponSprite.setFlipX(false); // Normal orientation (sword on right)
-                weaponSprite.rotation = 0; // Point right
-                // Handle is at bottom of sprite
-                weaponSprite.setOrigin(0.5, 1.0); // Center horizontally, bottom (handle)
+                if (weaponDef && typeof weaponDef.rotationEast !== 'undefined') rotationDegrees = weaponDef.rotationEast;
+                else rotationDegrees = 0;
+
+                if (weaponDef && typeof weaponDef.flipEast !== 'undefined') doFlipX = weaponDef.flipEast;
                 break;
+
             case 'west':
-                weaponSprite.setFlipX(true); // Flip horizontally (sword on left, right-side up)
-                weaponSprite.rotation = 0; // No rotation, just flipped
-                // Handle is at bottom of sprite
-                weaponSprite.setOrigin(0.5, 1.0); // Center horizontally, bottom (handle)
+                if (weaponDef && typeof weaponDef.rotationWest !== 'undefined') {
+                    rotationDegrees = weaponDef.rotationWest;
+                } else {
+                    rotationDegrees = 180; // Default pure rotation
+                }
+
+                // Explicit flip override
+                if (weaponDef && typeof weaponDef.flipWest !== 'undefined') {
+                    doFlipX = weaponDef.flipWest;
+                }
+                // Legacy fallback: if no rotation AND no flip defined, invert default flip
+                else if (!weaponDef || typeof weaponDef.rotationWest === 'undefined') {
+                    doFlipX = !doFlipX;
+                    rotationDegrees = 0;
+                }
                 break;
         }
+
+        weaponSprite.setFlipX(doFlipX);
+        weaponSprite.setFlipY(doFlipY);
+        weaponSprite.rotation = Phaser.Math.DegToRad(rotationDegrees);
     } else {
-        // During animation, only update origin and flip (not rotation)
-        switch (facingDirection) {
-            case 'north':
-                weaponSprite.setFlipX(false);
-                weaponSprite.setOrigin(1.0, 1.0);
-                break;
-            case 'south':
-                weaponSprite.setFlipX(false);
-                weaponSprite.setOrigin(0.5, 1.0);
-                break;
-            case 'east':
-                weaponSprite.setFlipX(false);
-                weaponSprite.setOrigin(0.5, 1.0);
-                break;
-            case 'west':
-                weaponSprite.setFlipX(true);
-                weaponSprite.setOrigin(0.5, 1.0);
-                break;
-        }
+        // Animation state - maintain origin
+        weaponSprite.setOrigin(originX, originY);
     }
 }
 
@@ -5400,24 +5478,50 @@ function animateWeaponStrike(direction, weaponType = 'Sword') {
     const scene = game.scene.scenes[0];
 
     // Get base rotation and flip state for direction FIRST
+    // Get base rotation and flip state for direction FIRST
     let baseRotation = 0;
     let isFlipped = false;
+
+    // Get Weapon Definition
+    let weaponDef = null;
+    if (typeof ItemManager !== 'undefined' && ItemManager.definitions && ItemManager.definitions.weaponTypes) {
+        weaponDef = ItemManager.definitions.weaponTypes[weaponType];
+    }
+
     switch (direction) {
         case 'north':
-            baseRotation = -Math.PI / 2;
-            isFlipped = false;
+            if (weaponDef && typeof weaponDef.rotationNorth !== 'undefined') baseRotation = Phaser.Math.DegToRad(weaponDef.rotationNorth);
+            else baseRotation = -Math.PI / 2;
+
+            if (weaponDef && typeof weaponDef.flipNorth !== 'undefined') isFlipped = weaponDef.flipNorth;
             break;
+
         case 'south':
-            baseRotation = Math.PI / 2;
-            isFlipped = false;
+            if (weaponDef && typeof weaponDef.rotationSouth !== 'undefined') baseRotation = Phaser.Math.DegToRad(weaponDef.rotationSouth);
+            else baseRotation = Math.PI / 2;
+
+            if (weaponDef && typeof weaponDef.flipSouth !== 'undefined') isFlipped = weaponDef.flipSouth;
             break;
+
         case 'east':
-            baseRotation = 0;
-            isFlipped = false;
+            if (weaponDef && typeof weaponDef.rotationEast !== 'undefined') baseRotation = Phaser.Math.DegToRad(weaponDef.rotationEast);
+            else baseRotation = 0;
+
+            if (weaponDef && typeof weaponDef.flipEast !== 'undefined') isFlipped = weaponDef.flipEast;
             break;
+
         case 'west':
-            baseRotation = 0;
-            isFlipped = true; // Flip horizontally for west
+            if (weaponDef && typeof weaponDef.rotationWest !== 'undefined') {
+                baseRotation = Phaser.Math.DegToRad(weaponDef.rotationWest);
+            } else {
+                baseRotation = 0; // Default when flipping
+            }
+
+            if (weaponDef && typeof weaponDef.flipWest !== 'undefined') {
+                isFlipped = weaponDef.flipWest;
+            } else if (!weaponDef || typeof weaponDef.rotationWest === 'undefined') {
+                isFlipped = true; // Legacy fallback
+            }
             break;
     }
 
@@ -5437,6 +5541,11 @@ function animateWeaponStrike(direction, weaponType = 'Sword') {
     // Different animation styles based on weapon type
     if (weaponType === 'Bow' || weaponType === 'Crossbow') {
         // Ranged weapons: Pull back animation
+
+        // Apply calculated rotation/flip immediately so it respects the new data
+        weaponSprite.rotation = baseRotation;
+        weaponSprite.setFlipX(isFlipped);
+
         const pullBackDistance = 10;
         let pullX = weaponSprite.x;
         let pullY = weaponSprite.y;
@@ -5472,6 +5581,7 @@ function animateWeaponStrike(direction, weaponType = 'Sword') {
                     duration: 50,
                     ease: 'Power3',
                     onComplete: () => {
+                        weaponSprite.isAnimating = false; // Fix: Reset animation flag
                         updateWeaponPosition();
                     }
                 });
@@ -6153,16 +6263,14 @@ function updateAttackSpeedIndicator() {
  */
 /**
  * Calculate total XP needed to reach the NEXT level
- * Curve: 400 * Level + 100 * Level^2 (Steepened to slow down leveling)
+ * Curve: 500 * Level + 250 * Level^2 (Significantly steeper to prevent over-leveling)
  * Example:
- * Lvl 1->2: 500 XP
- * Lvl 2->3: 1200 XP (Total 1700)
- * Lvl 3->4: 2100 XP (Total 3800)
- * Lvl 4->5: 3200 XP (Total 7000)
- * Lvl 5->6: 4500 XP (Total 11500)
+ * Lvl 1->2: 750 XP
+ * Lvl 19->20: ~100k XP
+ * Lvl 34->35: ~300k XP
  */
 function getXPNeededForLevel(level) {
-    return 400 * level + 100 * Math.pow(level, 2);
+    return 500 * level + 250 * Math.pow(level, 2);
 }
 
 /**
@@ -7211,39 +7319,32 @@ function updateEquipmentSlots() {
     const slotSize = 80;
     const startY = 150; // Start below title (increased from 120 to 150 for more padding)
 
-    // Equipment slots in a grid layout (2 columns for better fit)
-    const slotsPerRow = 2;
-    const slotSpacing = 120;
-    const rowSpacing = 140;
-    const startX = leftPanelX - slotSpacing / 2;
+    // Equipment slots in a grid layout (3 columns for better fit)
+    const slotSpacing = 110;
+    const rowSpacing = 150;
 
-    // Row 1: Helmet, Amulet
-    const helmetSlot = createEquipmentSlot('helmet', startX, startY, slotSize);
-    equipmentPanel.slots.helmet = helmetSlot;
+    // Grid coordinates relative to center
+    const col0 = leftPanelX - slotSpacing;
+    const col1 = leftPanelX;
+    const col2 = leftPanelX + slotSpacing;
 
-    const amuletSlot = createEquipmentSlot('amulet', startX + slotSpacing, startY, slotSize);
-    equipmentPanel.slots.amulet = amuletSlot;
+    // Row 1: Helmet, Amulet, Armor
+    equipmentPanel.slots.helmet = createEquipmentSlot('helmet', col0, startY, slotSize);
+    equipmentPanel.slots.amulet = createEquipmentSlot('amulet', col1, startY, slotSize);
+    equipmentPanel.slots.armor = createEquipmentSlot('armor', col2, startY, slotSize);
 
-    // Row 2: Armor, Weapon
-    const armorSlot = createEquipmentSlot('armor', startX, startY + rowSpacing, slotSize);
-    equipmentPanel.slots.armor = armorSlot;
+    // Row 2: Weapon, Gloves, Ring
+    const row2Y = startY + rowSpacing;
+    equipmentPanel.slots.weapon = createEquipmentSlot('weapon', col0, row2Y, slotSize);
+    equipmentPanel.slots.gloves = createEquipmentSlot('gloves', col1, row2Y, slotSize);
+    equipmentPanel.slots.ring = createEquipmentSlot('ring', col2, row2Y, slotSize);
 
-    const weaponSlot = createEquipmentSlot('weapon', startX + slotSpacing, startY + rowSpacing, slotSize);
-    equipmentPanel.slots.weapon = weaponSlot;
-
-    // Row 3: Gloves, Ring
-    const glovesSlot = createEquipmentSlot('gloves', startX, startY + rowSpacing * 2, slotSize);
-    equipmentPanel.slots.gloves = glovesSlot;
-
-    const ringSlot = createEquipmentSlot('ring', startX + slotSpacing, startY + rowSpacing * 2, slotSize);
-    equipmentPanel.slots.ring = ringSlot;
-
-    // Row 4: Belt, Boots
-    const beltSlot = createEquipmentSlot('belt', startX, startY + rowSpacing * 3, slotSize);
-    equipmentPanel.slots.belt = beltSlot;
-
-    const bootsSlot = createEquipmentSlot('boots', startX + slotSpacing, startY + rowSpacing * 3, slotSize);
-    equipmentPanel.slots.boots = bootsSlot;
+    // Row 3: Belt, Boots (Centered)
+    const row3Y = startY + rowSpacing * 2;
+    const row3Left = leftPanelX - slotSpacing / 2;
+    const row3Right = leftPanelX + slotSpacing / 2;
+    equipmentPanel.slots.belt = createEquipmentSlot('belt', row3Left, row3Y, slotSize);
+    equipmentPanel.slots.boots = createEquipmentSlot('boots', row3Right, row3Y, slotSize);
 
     // Show current stats with bonuses at bottom of left panel
     const statsY = 660;
@@ -9623,9 +9724,8 @@ function startDialog(npc) {
         const uqeActiveIds = uqe.activeQuests.map(q => q.id);
 
         // Get all quests for this NPC from UQE definitions
-        // Skip Merchant Lysa - she has a custom 'About that favor...' sub-menu
         const npcQuests = Object.values(uqe.allDefinitions).filter(q =>
-            q.giver === npc.name && npc.name !== 'Merchant Lysa'
+            q.giver === npc.name
         );
 
         // 1. Inject STATUS requests for ACTIVE quests given by this NPC
@@ -13918,6 +14018,33 @@ function spawnMonster(x, y, type, hpOverride, attackOverride, xpOverride, isBoss
         }
     }
 
+    // Handle Object type input - ensure stats are populated from blueprints if missing
+    if (typeof type === 'object' && (!type.hp || !type.attack)) {
+        if (monsterRenderer && monsterRenderer.monsterBlueprints) {
+            // Try to look up by ID first, then Name
+            let bp = null;
+            if (type.id) bp = monsterRenderer.monsterBlueprints[type.id];
+            if (!bp && type.name) {
+                bp = monsterRenderer.monsterBlueprints[type.name] ||
+                    monsterRenderer.monsterBlueprints[type.name.toLowerCase()] ||
+                    Object.values(monsterRenderer.monsterBlueprints).find(m => m.name.toLowerCase() === type.name.toLowerCase());
+            }
+
+            if (bp) {
+                console.log(`🧬 Injecting data-driven stats for ${type.name || type.id}`);
+                // Inject stats if missing
+                if (type.hp === undefined && bp.stats.hp) type.hp = bp.stats.hp;
+                if (type.attack === undefined && bp.stats.attack) type.attack = bp.stats.attack;
+                if (type.speed === undefined && bp.stats.speed) type.speed = bp.stats.speed;
+                if (type.xp === undefined && bp.stats.xp) type.xp = bp.stats.xp;
+
+                // Also ensure procedural config matches if not set
+                if (type.generationType === undefined && bp.generationType) type.generationType = bp.generationType;
+                if (type.proceduralConfig === undefined && bp.proceduralConfig) type.proceduralConfig = bp.proceduralConfig;
+            }
+        }
+    }
+
     // Generic Procedural Generation Check (Data-Driven)
     if (type.generationType && type.generationType !== 'default') {
         if (typeof ProceduralMonster !== 'undefined') {
@@ -13943,6 +14070,15 @@ function spawnMonster(x, y, type, hpOverride, attackOverride, xpOverride, isBoss
 
     // Check if we should use Method 2 (procedural blueprints)
     if (!monster) {
+        if (type.id === 'procedural_beholder' || type.isProcedural) {
+            console.log(`👾 spawnMonster Check for ${type.name}:`, {
+                id: type.id,
+                isProcedural: type.isProcedural,
+                hasRenderer: !!monsterRenderer,
+                blueprintsCount: monsterRenderer ? Object.keys(monsterRenderer.monsterBlueprints).length : 0,
+                hasBlueprintId: monsterRenderer && type.id ? !!monsterRenderer.monsterBlueprints[type.id] : false
+            });
+        }
         const canUseMethod2 = monsterRenderer && (monsterRenderer.monsterBlueprints[type.name] || monsterRenderer.monsterBlueprints[type.name.toLowerCase()] || (type.id && monsterRenderer.monsterBlueprints[type.id]));
 
         if (type.isProcedural && canUseMethod2) {
@@ -16298,3 +16434,106 @@ function stopResonantFrequenciesEvent() {
 // Expose globally
 window.startResonantFrequenciesEvent = startResonantFrequenciesEvent;
 window.stopResonantFrequenciesEvent = stopResonantFrequenciesEvent;
+
+// ==========================================
+// Quest Event: Survive the Backlash (main_01_016)
+// ==========================================
+var backlashEventTimer = null;
+
+function startBacklashEvent() {
+    console.log('⚡ STARTING Event: Obelisk Backlash');
+    const scene = game.scene.scenes[0];
+    if (!scene) return;
+
+    // Safety check: Remove existing timer
+    if (backlashEventTimer) {
+        backlashEventTimer.remove();
+        backlashEventTimer = null;
+    }
+
+    // Visual Effect: Camera Shake
+    scene.cameras.main.shake(500, 0.005);
+    if (typeof showDamageNumber === 'function') {
+        showDamageNumber(player.x, player.y - 50, "THE OBELISK DESTABILIZES!", 0xff0000);
+    }
+
+    // Timer: Runs every 1 second
+    backlashEventTimer = scene.time.addEvent({
+        delay: 1000,
+        loop: true,
+        callback: () => {
+            // 1. Emit Survival Time
+            if (window.uqe && window.uqe.eventBus) {
+                const eventName = (typeof UQE_EVENTS !== 'undefined') ? UQE_EVENTS.TIME_SURVIVED : 'time_survived';
+                window.uqe.eventBus.emit(eventName, { seconds: 1, id: 'survive_backlash' });
+            }
+
+            // Failsafe: Check if quest is still active
+            if (!window.isQuestActive('main_01_016')) {
+                console.warn('⚠️ Backlash Timer running but quest not active! stopping...');
+                stopBacklashEvent();
+                return;
+            }
+
+            // 2. Spawn Logic (Backlash Constructs near Obelisk)
+            // Obelisk is at 21, 21 -> 672, 672
+            if (MapManager.currentMap !== 'town') return;
+
+            const obeliskX = 21 * 32;
+            const obeliskY = 21 * 32;
+
+            // Aggressive Spawning: High chance (50%) per second
+            if (Math.random() < 0.5) {
+                const spawnX = obeliskX + Phaser.Math.Between(-200, 200);
+                const spawnY = obeliskY + Phaser.Math.Between(-200, 200);
+
+                // Use the generic spawnMonster function which handles lookup
+                // We pass the ID 'procedural_backlash' which should be in the blueprints
+                const monster = spawnMonster(spawnX, spawnY, 'procedural_backlash');
+
+                if (monster) {
+                    // Make them aggressive immediately
+                    monster.isAggressive = true;
+                    monster.aggroRange = 1000;
+                    // Visual spawn effect
+                    monster.setAlpha(0);
+                    monster.setScale(0);
+
+                    // Determine target scale from stats or default
+                    const targetScale = (monster.stats && monster.stats.proceduralConfig && monster.stats.proceduralConfig.scale) || 4;
+
+                    scene.tweens.add({
+                        targets: monster,
+                        alpha: 1,
+                        scale: targetScale,
+                        duration: 500
+                    });
+                }
+            }
+        }
+    });
+}
+
+function stopBacklashEvent() {
+    console.log('🛑 STOPPING Event: Obelisk Backlash');
+    if (backlashEventTimer) {
+        backlashEventTimer.remove();
+        backlashEventTimer = null;
+    }
+}
+window.startBacklashEvent = startBacklashEvent;
+window.stopBacklashEvent = stopBacklashEvent;
+
+// ==========================================
+// Quest Event Registry (Data-Driven Support)
+// ==========================================
+window.QuestEvents = {
+    "resonant_frequencies": {
+        start: startResonantFrequenciesEvent,
+        stop: stopResonantFrequenciesEvent
+    },
+    "backlash_event": {
+        start: startBacklashEvent,
+        stop: stopBacklashEvent
+    }
+};

@@ -13,7 +13,8 @@
         "item_belt": "assets/images/pixellab-medieval-belt---just-the-belt-1765494612990.png",
         "item_ring": "assets/images/pixellab-golden-ring-1765494525925.png",
         "item_consumable": "assets/images/pixellab-red-simple-health-potion-1765494342318.png",
-        "item_gold": "assets/images/gold_coin.png"
+        "item_gold": "assets/images/gold_coin.png",
+        "obelisk": "assets/images/obelisk.png"
     },
     "audio": {
         "bell_toll": "assets/audio/bell-toll-407826.mp3",

@@ -1,0 +1,15 @@
+[
+    {
+        "id": "obelisk_town_center",
+        "name": "Ancient Obelisk",
+        "map": "town",
+        "x": 21,
+        "y": 21,
+        "spriteKey": "obelisk",
+        "spritePath": "assets/images/obelisk.png",
+        "width": 64,
+        "height": 128,
+        "interactionRadius": 60,
+        "interactionType": "quest_trigger"
+    }
+]

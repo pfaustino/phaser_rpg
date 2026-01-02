@@ -1,0 +1,22 @@
+# Antigravity Global Project Rules
+
+## 1. Data-Driven Philosophy
+- **Centralized Data**: All game content (quests, items, monsters, dialogs, NPCs) MUST be defined in their respective JSON files (`quests_v2.json`, `items.json`, `monsters.json`, `dialogs.json`, `npc.json`).
+- **No Hardcoding**: Avoid hardcoding specific entity IDs (e.g., "quest_005", "Merchant Lysa") inside logic files like `game.js` or `UnifiedQuestSystem.js`. Write generic logic that interprets the JSON data.
+- **Procedural Integrety**: When generating content (like procedural monsters), always fallback to the definitions in `monsters.json` for base stats if explicit values are not provided.
+
+## 2. Coding Standards
+- **Modern JavaScript**: Use `const` and `let` exclusively; avoid `var`.
+- **Modularity**: Functions should be small and focused. If a function in `game.js` grows too large, consider extracting helper functions or moving logic to a dedicated module.
+- **Validation**: When making changes to data files (like `quests_v2.json`), consider creating or running a verification script (e.g., `verify_quests.py`) to ensure data integrity.
+
+## 3. Game Architecture
+- **Quest System**: Side quests must require NPC interaction (`giver` field) and explicit prerequisites (`requires` field). Do not allow auto-popups for side quests.
+- **Interaction**: Player interaction should be driven by the "F" key (or defined `interactKey`) and routed through `triggerWorldInteraction` -> `checkNPCInteraction` / `checkZoneInteraction`.
+
+## 4. Debugging & Maintenance
+- **Safety First**: When fixing a bug for a specific case, always ask: "Does this fix apply generically to all similar cases?" (e.g., fixing one monster spawner vs. fixing the spawn function).
+- **Comments**: Comment complex logic, especially in the massive `game.js` file, to aid future navigation.
+
+## 5. Feature Development
+- **Reuse Before Build**: Unless specified, always assume that a seemingly new feature already exists and search first before writing code for it. When found, use that code. If not found, then of course write it.

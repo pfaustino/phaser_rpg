@@ -1330,6 +1330,11 @@ const MapManager = {
         if (window.uqe && window.uqe.eventBus) {
             window.uqe.eventBus.emit('map_entered', { map: targetMap, level: level, dungeonId: dungeonId });
         }
+
+        // Restore weapon sprite (was destroyed by cleanup)
+        if (typeof window.updateWeaponSprite === 'function') {
+            window.updateWeaponSprite();
+        }
     },
 
     /**

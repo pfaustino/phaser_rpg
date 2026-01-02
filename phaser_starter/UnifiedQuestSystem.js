@@ -46,7 +46,8 @@ const UQE_EVENTS = {
     TIME_SURVIVED: 'time_survived',
     LEVEL_UP: 'level_up',
     GOLD_EARNED: 'gold_earned',
-    LOCATION_EXPLORED: 'location_explored'
+    LOCATION_EXPLORED: 'location_explored',
+    INTERACT_OBJECT: 'interact_object'
 };
 
 class UqeObjective {
@@ -218,6 +219,20 @@ class ExploreLocationObjective extends UqeObjective {
     }
 }
 
+class InteractObjective extends UqeObjective {
+    constructor(data, eventBus) {
+        super(data, eventBus);
+        // data.targetObjectId is the preferred key, but fallback to objectId or zoneId
+        this.targetObjectId = data.targetObjectId || data.objectId || data.zoneId;
+
+        this.subscribe(UQE_EVENTS.INTERACT_OBJECT, (eventData) => {
+            if (eventData.id === this.targetObjectId) {
+                this.updateProgress(1);
+            }
+        });
+    }
+}
+
 class SurviveObjective extends UqeObjective {
     constructor(data, eventBus) {
         super(data, eventBus);
@@ -260,6 +275,19 @@ class LevelObjective extends UqeObjective {
             }
         });
     }
+    rehydrate(saveData) {
+        super.rehydrate(saveData);
+        // Validate against actual player level to prevent regression/stuck quests
+        if (typeof playerStats !== 'undefined' && playerStats.level) {
+            if (playerStats.level > this.progress) {
+                this.progress = playerStats.level;
+            }
+        }
+        if (this.progress >= this.target) {
+            this.completed = true;
+            this.progress = this.target;
+        }
+    }
 }
 
 class GoldObjective extends UqeObjective {
@@ -297,6 +325,7 @@ class Quest {
                 case 'collect': obj = new CollectObjective(data, eventBus); break;
                 case 'explore': obj = new ExploreObjective(data, eventBus); break;
                 case 'explore_location': obj = new ExploreLocationObjective(data, eventBus); break;
+                case 'interact': obj = new InteractObjective(data, eventBus); break;
                 case 'survive': obj = new SurviveObjective(data, eventBus); break;
                 case 'level': obj = new LevelObjective(data, eventBus); break;
                 case 'gold': obj = new GoldObjective(data, eventBus); break;

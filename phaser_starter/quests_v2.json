@@ -22,6 +22,7 @@
         },
         "side_01_001": {
             "id": "side_01_001",
+            "requires": "main_01_001",
             "title": "The Echo's Whisper",
             "description": "Blacksmith Brond has noticed strange vibrations coming from the wilderness. Investigate the area and gather Echo Shards from the crystalline growths.",
             "giver": "Blacksmith Brond",
@@ -131,6 +132,8 @@
             "giver": "Elder Malik",
             "step": 5,
             "requires": "main_01_004",
+            "startEvent": "resonant_frequencies",
+            "stopEvent": "resonant_frequencies",
             "objectives": [
                 {
                     "id": "survive_defense",
@@ -375,10 +378,9 @@
             "objectives": [
                 {
                     "id": "interact_obelisk",
-                    "type": "explore_location",
-                    "label": "Interact with Obelisk (Center)",
-                    "targetX": 20,
-                    "targetY": 20,
+                    "type": "interact",
+                    "label": "Interact with Ancient Obelisk",
+                    "targetObjectId": "obelisk_town_center",
                     "target": 1
                 }
             ],
@@ -394,7 +396,8 @@
             "giver": "Elder Malik",
             "step": 16,
             "requires": "main_01_015",
-            "autoAccept": true,
+            "startEvent": "backlash_event",
+            "stopEvent": "backlash_event",
             "objectives": [
                 {
                     "id": "survive_backlash",
@@ -414,7 +417,9 @@
             "description": "Constructs have emerged from the light. Defeat 20 Backlash constructs to stabilize the ritual.",
             "giver": "Elder Malik",
             "step": 17,
-            "requires": "main_01_016",
+            "requires": "main_01_015",
+            "startEvent": "backlash_event",
+            "stopEvent": "backlash_event",
             "autoAccept": true,
             "objectives": [
                 {
@@ -442,7 +447,7 @@
                     "id": "explore_calib",
                     "type": "explore",
                     "label": "Travel Tiles",
-                    "target": 2000
+                    "target": 500
                 }
             ],
             "rewards": {
@@ -453,16 +458,16 @@
         "main_01_019": {
             "id": "main_01_019",
             "title": "Resonance Established",
-            "description": "Your connection with the Aegis is growing. Reach Level 5 to finalize your attunement.",
+            "description": "Your connection with the Aegis is growing. Reach Level 20 to finalize your attunement.",
             "giver": "Elder Malik",
             "step": 19,
             "requires": "main_01_018",
             "objectives": [
                 {
-                    "id": "reach_level_5",
+                    "id": "reach_level_20",
                     "type": "level",
-                    "label": "Reach Level 5",
-                    "target": 5
+                    "label": "Reach Level 20",
+                    "target": 20
                 }
             ],
             "rewards": {
@@ -706,6 +711,7 @@
         },
         "quest_001": {
             "id": "quest_001",
+            "requires": "main_01_001",
             "title": "First Steps",
             "description": "Kill 15 monsters to prove your worth.",
             "giver": "Captain Thorne",
@@ -725,6 +731,7 @@
         },
         "quest_002": {
             "id": "quest_002",
+            "requires": "main_01_001",
             "title": "Treasure Hunter",
             "description": "Collect items from defeated monsters to prove your resourcefulness.",
             "giver": "Merchant Lysa",
@@ -744,6 +751,7 @@
         },
         "quest_003": {
             "id": "quest_003",
+            "requires": "main_01_001",
             "title": "Rising Power",
             "description": "Reach level 2 to unlock new abilities.",
             "giver": "Mage Elara",
@@ -762,6 +770,7 @@
         },
         "quest_004": {
             "id": "quest_004",
+            "requires": "main_01_001",
             "title": "Gold Rush",
             "description": "Earn 75 gold from monster drops.",
             "giver": "Merchant Lysa",
@@ -780,6 +789,7 @@
         },
         "quest_005": {
             "id": "quest_005",
+            "requires": "main_01_001",
             "title": "Explorer",
             "description": "Travel 1500 tiles across the map.",
             "giver": "Elder Malik",
@@ -798,6 +808,7 @@
         },
         "quest_006": {
             "id": "quest_006",
+            "requires": "main_01_001",
             "title": "Survivor",
             "description": "Survive for 2 minutes without dying.",
             "giver": "Captain Kael",
@@ -816,6 +827,7 @@
         },
         "quest_007": {
             "id": "quest_007",
+            "requires": "main_01_001",
             "title": "Monster Hunter",
             "description": "Defeat 15 monsters to earn the title of Hunter.",
             "giver": "Captain Thorne",
@@ -835,6 +847,7 @@
         },
         "quest_008": {
             "id": "quest_008",
+            "giver": "Merchant Lysa",
             "title": "Item Collector",
             "description": "Gather 6 items from your adventures.",
             "requires": "quest_002",
@@ -854,6 +867,7 @@
         },
         "quest_009": {
             "id": "quest_009",
+            "giver": "Mage Elara",
             "title": "Level Up",
             "description": "Reach level 3 and grow stronger.",
             "requires": "quest_003",
@@ -872,6 +886,7 @@
         },
         "quest_010": {
             "id": "quest_010",
+            "giver": "Merchant Lysa",
             "title": "Wealth Accumulator",
             "description": "Amass 50 gold through your efforts.",
             "requires": "quest_004",
@@ -890,6 +905,7 @@
         },
         "quest_011": {
             "id": "quest_011",
+            "giver": "Elder Malik",
             "title": "Wanderer",
             "description": "Explore 1000 tiles of the world.",
             "requires": "quest_005",
@@ -927,6 +943,7 @@
         },
         "quest_013": {
             "id": "quest_013",
+            "giver": "Captain Thorne",
             "title": "Exterminator",
             "description": "Eliminate 10 monsters from the land.",
             "requires": "quest_007",
@@ -946,6 +963,7 @@
         },
         "quest_014": {
             "id": "quest_014",
+            "giver": "Merchant Lysa",
             "title": "Hoarder",
             "description": "Collect 12 items for your inventory.",
             "requires": "quest_008",
@@ -965,6 +983,7 @@
         },
         "quest_015": {
             "id": "quest_015",
+            "giver": "Mage Elara",
             "title": "Power Seeker",
             "description": "Achieve level 5 through experience.",
             "requires": "quest_009",
@@ -983,6 +1002,7 @@
         },
         "quest_016": {
             "id": "quest_016",
+            "giver": "Merchant Lysa",
             "title": "Rich Beyond Measure",
             "description": "Accumulate 500 gold pieces.",
             "requires": "quest_010",
@@ -1001,6 +1021,7 @@
         },
         "quest_017": {
             "id": "quest_017",
+            "giver": "Elder Malik",
             "title": "World Traveler",
             "description": "Journey across 2000 tiles of terrain.",
             "requires": "quest_011",
@@ -1038,6 +1059,7 @@
         },
         "quest_019": {
             "id": "quest_019",
+            "giver": "Captain Thorne",
             "title": "Massacre",
             "description": "Slay 50 monsters in your path.",
             "requires": "quest_013",
@@ -1499,7 +1521,7 @@
                 }
             ],
             "rewards": {
-                "xp": 4000,
+                "xp": 2500,
                 "gold": 2000
             }
         },
@@ -1518,7 +1540,7 @@
                 }
             ],
             "rewards": {
-                "xp": 10000,
+                "xp": 5000,
                 "gold": 5000
             }
         },
@@ -1537,7 +1559,7 @@
                 }
             ],
             "rewards": {
-                "xp": 25000,
+                "xp": 10000,
                 "gold": 12500
             }
         }

@@ -1022,6 +1022,7 @@ function preload() {
     this.load.image('dungeon_entrance', 'assets/dungeon_entrance.png');
     this.load.text('dungeon_floor_metadata', 'assets/tiles/dungeon/dungeon_floor_metadata.json');
     this.load.text('dungeon_wall_metadata', 'assets/tiles/dungeon/dungeon_wall_metadata.json');
+    this.load.image('forge', 'assets/images/forge.png');
 
     // Generate fallback graphics AFTER preload completes
     // This prevents "texture key already in use" errors
@@ -3214,7 +3215,11 @@ function triggerWorldInteraction() {
         }
 
         if (closestObj) {
-            console.log(`🗿 Interacting with ${closestObj.definition.name} (${closestObj.definition.id})`);
+            if (closestObj.definition.interactionType === 'forge') {
+                if (window.ForgeUI) window.ForgeUI.toggle();
+                return true;
+            }
+
             if (window.uqe && window.uqe.eventBus) {
                 // Emit generic interact_object event
                 window.uqe.eventBus.emit('interact_object', {
@@ -3541,16 +3546,6 @@ function update(time, delta) {
         // Check for click input to set target
         // We use pointer down to set the target (works for click and drag/hold)
         if (pointer.isDown && pointer.button === 0) {
-            // DEBUG: Log everything under the pointer
-            const debugHitTest = this.input.hitTestPointer(pointer);
-            if (debugHitTest.length > 0) {
-                console.log('🖱️ Pointer Down Hit Test Results:', debugHitTest.length, 'objects');
-                debugHitTest.forEach((obj, idx) => {
-                    console.log(`   [${idx}] Type: ${obj.type}, Depth: ${obj.depth}, Interactive: ${obj.input ? obj.input.enabled : 'N/A'}, Name: ${obj.name}`);
-                });
-            } else {
-                console.log('🖱️ Pointer Down: No objects detected under cursor');
-            }
 
             // Robust UI Check: Block if cursor is over any high-depth object (UI > 100)
             const hitObjects = this.input.hitTestPointer(pointer);
@@ -3603,7 +3598,6 @@ function update(time, delta) {
 
                     // Monster click priority - set target entity and move to attack
                     if (clickedMonster) {
-                        console.log('⚔️ Monster clicked:', clickedMonster.name || clickedMonster.monsterId);
                         this.clickTargetEntity = clickedMonster;
                         this.clickMoveTarget = { x: clickedMonster.x, y: clickedMonster.y };
                         this.isMovingToClick = true;
@@ -3613,7 +3607,6 @@ function update(time, delta) {
 
                     // NPC click priority
                     if (clickedNPC) {
-                        console.log('💬 NPC clicked:', clickedNPC.name || clickedNPC.npcId);
                         this.clickTargetEntity = clickedNPC;
                         this.clickMoveTarget = { x: clickedNPC.x, y: clickedNPC.y };
                         this.isMovingToClick = true;
@@ -3623,7 +3616,6 @@ function update(time, delta) {
 
                     // Item click priority
                     if (clickedItem) {
-                        console.log('🎒 Item clicked:', clickedItem.itemData ? clickedItem.itemData.name : 'Unknown');
                         this.clickTargetEntity = clickedItem;
                         this.clickMoveTarget = { x: clickedItem.x, y: clickedItem.y };
                         this.isMovingToClick = true;
@@ -3632,7 +3624,6 @@ function update(time, delta) {
                     }
 
                     // No entity clicked - process as click-to-move
-                    console.log('Movement Triggered. WindowsOpen:', isAnyWindowOpen(), 'LastCloseDelta:', this.time.now - (this.lastWindowCloseTime || 0));
 
                     // Set target position
                     this.clickMoveTarget = { x: pointer.worldX, y: pointer.worldY };

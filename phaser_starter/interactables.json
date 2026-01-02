@@ -11,5 +11,19 @@
         "height": 128,
         "interactionRadius": 60,
         "interactionType": "quest_trigger"
+    },
+    {
+        "id": "blacksmith_forge",
+        "name": "Forge",
+        "map": "town",
+        "x": 27,
+        "y": 19,
+        "spriteKey": "forge",
+        "spritePath": "assets/images/forge.png",
+        "width": 64,
+        "height": 64,
+        "interactionRadius": 50,
+        "depth": 1,
+        "interactionType": "forge"
     }
 ]

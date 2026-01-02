@@ -458,16 +458,16 @@
         "main_01_019": {
             "id": "main_01_019",
             "title": "Resonance Established",
-            "description": "Your connection with the Aegis is growing. Reach Level 20 to finalize your attunement.",
+            "description": "Your connection with the Aegis is growing. Reach Level 15 to finalize your attunement.",
             "giver": "Elder Malik",
             "step": 19,
             "requires": "main_01_018",
             "objectives": [
                 {
-                    "id": "reach_level_20",
+                    "id": "reach_level_15",
                     "type": "level",
-                    "label": "Reach Level 20",
-                    "target": 20
+                    "label": "Reach Level 15",
+                    "target": 15
                 }
             ],
             "rewards": {

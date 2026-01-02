@@ -685,33 +685,7 @@ function preload() {
 
     // Load Monster Sprites from monsters.json
     // Note: We already load 'monsters' JSON below, just need to hook into it
-    this.load.on('filecomplete-json-monsters', (key, type, data) => {
-        console.log('📦 monsters.json loaded, loading monster sprites...');
-        if (data.monsters) {
-            data.monsters.forEach(monster => {
-                if (monster.sprites) {
-                    // Load directional sprites
-                    Object.entries(monster.sprites).forEach(([dir, path]) => {
-                        // e.g. monster_goblin_south
-                        // We construct the key to match existing naming convention
-                        // The convention seems to be: monster_{id_suffix}_{dir} OR just what's in the key?
-                        // The existing keys were like 'monster_goblin_south'.
-                        // Let's assume the key construction: `monster_${monster.id.replace('procedural_', '')}_${dir}`
-                        // OR simpler: we can just use the key if we standardized it.
-                        // But the current game uses specific keys.
-                        // Let's use a safe naming convention: `monster_${monster.name.toLowerCase().replace(' ', '_')}_${dir}`
-                        // Actually, let's check existing usage. Goblin ID is procedural_goblin. Key is monster_goblin_south.
-
-                        const simpleName = monster.name.toLowerCase().replace(' ', '_');
-                        const spriteKey = `monster_${simpleName}_${dir}`;
-                        if (!this.textures.exists(spriteKey)) {
-                            this.load.image(spriteKey, path);
-                        }
-                    });
-                }
-            });
-        }
-    });
+    // Monster sprite loading removed in favor of procedural generation
 
     // Load Weapon Sprites from items.json
     // Hook into existing listener
@@ -743,291 +717,7 @@ function preload() {
     }
 
     // Legacy/Hardcoded Spritesheets (complex configs not yet moved to JSON)
-    // Echo Mite attack animations (64x64 frames)
-    this.load.spritesheet('monster_echo_mite_attack_south', 'assets/animations/monster-echo-mite-attack-south.png', {
-        frameWidth: 64,
-        frameHeight: 64
-    });
-    this.load.spritesheet('monster_echo_mite_attack_north', 'assets/animations/monster-echo-mite-attack-north.png', {
-        frameWidth: 64,
-        frameHeight: 64
-    });
-    this.load.spritesheet('monster_echo_mite_attack_east', 'assets/animations/monster-echo-mite-attack-east.png', {
-        frameWidth: 64,
-        frameHeight: 64
-    });
-    this.load.spritesheet('monster_echo_mite_attack_west', 'assets/animations/monster-echo-mite-attack-west.png', {
-        frameWidth: 64,
-        frameHeight: 64
-    });
-
-    // Load animated sprite sheets for walking (Goblin, Orc, Skeleton, Wolf, Dragon, Slime, Ghost, and Spider)
-    // Goblin walking animations (48x48 frames, 6 frames per direction)
-    this.load.spritesheet('monster_goblin_walk_south', 'assets/animations/monster_goblin_walk_south.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-    this.load.spritesheet('monster_goblin_walk_north', 'assets/animations/monster_goblin_walk_north.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-    this.load.spritesheet('monster_goblin_walk_east', 'assets/animations/monster_goblin_walk_east.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-    this.load.spritesheet('monster_goblin_walk_west', 'assets/animations/monster_goblin_walk_west.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-
-    // Goblin attack animations (48x48 frames)
-    this.load.spritesheet('monster_goblin_attack_south', 'assets/animations/monster_goblin_attack_south.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-    this.load.spritesheet('monster_goblin_attack_north', 'assets/animations/monster_goblin_attack_north.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-    this.load.spritesheet('monster_goblin_attack_east', 'assets/animations/monster_goblin_attack_east.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-    this.load.spritesheet('monster_goblin_attack_west', 'assets/animations/monster_goblin_attack_west.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-
-    // Orc walking animations (48x48 frames, 6 frames per direction)
-    this.load.spritesheet('monster_orc_walk_south', 'assets/animations/monster_orc_walk_south.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-    this.load.spritesheet('monster_orc_walk_north', 'assets/animations/monster_orc_walk_north.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-    this.load.spritesheet('monster_orc_walk_east', 'assets/animations/monster_orc_walk_east.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-    this.load.spritesheet('monster_orc_walk_west', 'assets/animations/monster_orc_walk_west.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-
-    // Orc attack animations (48x48 frames)
-    this.load.spritesheet('monster_orc_attack_south', 'assets/animations/monster_orc_attack_south.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-    this.load.spritesheet('monster_orc_attack_north', 'assets/animations/monster_orc_attack_north.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-    this.load.spritesheet('monster_orc_attack_east', 'assets/animations/monster_orc_attack_east.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-    this.load.spritesheet('monster_orc_attack_west', 'assets/animations/monster_orc_attack_west.png', { frameWidth: 48, frameHeight: 48 });
-
-    // Skeleton walking animations (48x48 frames, 6 frames per direction)
-    this.load.spritesheet('monster_skeleton_walk_south', 'assets/animations/monster_skeleton_walk_south.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-    this.load.spritesheet('monster_skeleton_walk_north', 'assets/animations/monster_skeleton_walk_north.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-    this.load.spritesheet('monster_skeleton_walk_east', 'assets/animations/monster_skeleton_walk_east.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-    this.load.spritesheet('monster_skeleton_walk_west', 'assets/animations/monster_skeleton_walk_west.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-
-    // Skeleton attack animations (48x48 frames)
-    this.load.spritesheet('monster_skeleton_attack_south', 'assets/animations/monster_skeleton_attack_south.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-    this.load.spritesheet('monster_skeleton_attack_north', 'assets/animations/monster_skeleton_attack_north.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-    this.load.spritesheet('monster_skeleton_attack_east', 'assets/animations/monster_skeleton_attack_east.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-    this.load.spritesheet('monster_skeleton_attack_west', 'assets/animations/monster_skeleton_attack_west.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-
-    // Wolf walking animations (48x48 frames, 6 frames per direction)
-    this.load.spritesheet('monster_wolf_walk_south', 'assets/animations/monster_wolf_walk_south.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-    this.load.spritesheet('monster_wolf_walk_north', 'assets/animations/monster_wolf_walk_north.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-    this.load.spritesheet('monster_wolf_walk_east', 'assets/animations/monster_wolf_walk_east.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-    this.load.spritesheet('monster_wolf_walk_west', 'assets/animations/monster_wolf_walk_west.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-
-    // Wolf attack animations (48x48 frames)
-    this.load.spritesheet('monster_wolf_attack_south', 'assets/animations/monster_wolf_attack_south.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-    this.load.spritesheet('monster_wolf_attack_north', 'assets/animations/monster_wolf_attack_north.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-    this.load.spritesheet('monster_wolf_attack_east', 'assets/animations/monster_wolf_attack_east.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-    this.load.spritesheet('monster_wolf_attack_west', 'assets/animations/monster_wolf_attack_west.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-
-    // Dragon walking animations (48x48 frames, 6 frames per direction)
-    this.load.spritesheet('monster_dragon_walk_south', 'assets/animations/monster_dragon_walk_south.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-    this.load.spritesheet('monster_dragon_walk_north', 'assets/animations/monster_dragon_walk_north.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-    this.load.spritesheet('monster_dragon_walk_east', 'assets/animations/monster_dragon_walk_east.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-    this.load.spritesheet('monster_dragon_walk_west', 'assets/animations/monster_dragon_walk_west.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-
-    // Dragon attack animations (48x48 frames)
-    this.load.spritesheet('monster_dragon_attack_south', 'assets/animations/monster_dragon_attack_south.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-    this.load.spritesheet('monster_dragon_attack_north', 'assets/animations/monster_dragon_attack_north.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-    this.load.spritesheet('monster_dragon_attack_east', 'assets/animations/monster_dragon_attack_east.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-    this.load.spritesheet('monster_dragon_attack_west', 'assets/animations/monster_dragon_attack_west.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-
-    // Slime walking animations (48x48 frames, 6 frames per direction)
-    this.load.spritesheet('monster_slime_walk_south', 'assets/animations/monster_slime_walk_south.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-    this.load.spritesheet('monster_slime_walk_north', 'assets/animations/monster_slime_walk_north.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-    this.load.spritesheet('monster_slime_walk_east', 'assets/animations/monster_slime_walk_east.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-    this.load.spritesheet('monster_slime_walk_west', 'assets/animations/monster_slime_walk_west.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-
-    // Slime attack animations (48x48 frames)
-    this.load.spritesheet('monster_slime_attack_south', 'assets/animations/monster_slime_attack_south.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-    this.load.spritesheet('monster_slime_attack_north', 'assets/animations/monster_slime_attack_north.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-    this.load.spritesheet('monster_slime_attack_east', 'assets/animations/monster_slime_attack_east.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-    this.load.spritesheet('monster_slime_attack_west', 'assets/animations/monster_slime_attack_west.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-
-    // Ghost walking animations (48x48 frames, 6 frames per direction)
-    this.load.spritesheet('monster_ghost_walk_south', 'assets/animations/monster_ghost_walk_south.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-    this.load.spritesheet('monster_ghost_walk_north', 'assets/animations/monster_ghost_walk_north.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-    this.load.spritesheet('monster_ghost_walk_east', 'assets/animations/monster_ghost_walk_east.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-    this.load.spritesheet('monster_ghost_walk_west', 'assets/animations/monster_ghost_walk_west.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-
-    // Ghost attack animations (48x48 frames)
-    this.load.spritesheet('monster_ghost_attack_south', 'assets/animations/monster_ghost_attack_south.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-    this.load.spritesheet('monster_ghost_attack_north', 'assets/animations/monster_ghost_attack_north.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-    this.load.spritesheet('monster_ghost_attack_east', 'assets/animations/monster_ghost_attack_east.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-    this.load.spritesheet('monster_ghost_attack_west', 'assets/animations/monster_ghost_attack_west.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-
-    // Spider walking animations (48x48 frames, 6 frames per direction)
-    this.load.spritesheet('monster_spider_walk_south', 'assets/animations/monster_spider_walk_south.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-    this.load.spritesheet('monster_spider_walk_north', 'assets/animations/monster_spider_walk_north.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-    this.load.spritesheet('monster_spider_walk_east', 'assets/animations/monster_spider_walk_east.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-    this.load.spritesheet('monster_spider_walk_west', 'assets/animations/monster_spider_walk_west.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
+    // Hardcoded monster spritesheets removed in favor of procedural generation
 
     this.load.image('dirt', 'assets/tiles/tile_floor_dirt.png');
     this.load.image('stone', 'assets/tiles/tile_floor_stone.png');
@@ -3104,62 +2794,14 @@ function create() {
     // Create ability bar
     createAbilityBar();
 
-    // Set up input (like pygame keyboard)
-    cursors = this.input.keyboard.createCursorKeys();
-
-    // Add WASD keys
-    this.wasd = this.input.keyboard.addKeys('W,S,A,D');
-
-    // Add Spacebar for attack
-    spaceKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
-
-    // Add 'I' key for inventory - REMOVED
-    // inventoryKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.I);
-
-    // Add 'E' key for equipment
-    equipmentKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.E);
-
-    // Add 'Q' key for quest log
-    questKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.Q);
-
-    // Add F8 for Visual Debugging (Input Hit Areas)
+    // --- SYSTEM KEYS ---
+    // Debug Key (F8) - Kept separate from controller system for now (System shortcut)
     this.debugKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.F8);
-
-    // Add 'F' key for interaction
-    interactKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.F);
-
-    // Add 'ESC' key for settings
-    settingsKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ESC);
-
-    // Add save/load keys
-    this.saveKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.F6);
-    this.loadKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.F9);
-
-    // Add 'H' key for help/controls toggle
-    this.helpKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.H);
-
-    // Add ability keys (1, 2, 3) and potion keys (4, 5)
-    this.abilityOneKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ONE);
-    this.abilityTwoKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.TWO);
-    this.abilityThreeKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.THREE);
-    this.potionFourKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.FOUR);
-    this.potionFiveKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.FIVE);
-
-    // Ensure keyboard triggers cast abilities/potions (Restoring functionality)
-    this.input.keyboard.on('keydown-ONE', () => { if (window.useAbility) window.useAbility(1); });
-    this.input.keyboard.on('keydown-TWO', () => { if (window.useAbility) window.useAbility(2); });
-    this.input.keyboard.on('keydown-THREE', () => { if (window.useAbility) window.useAbility(3); });
-    this.input.keyboard.on('keydown-FOUR', () => { if (window.useAbility) window.useAbility(4); });
-    this.input.keyboard.on('keydown-FIVE', () => { if (window.usePotion) window.usePotion('health'); });
-    this.input.keyboard.on('keydown-SIX', () => { if (window.usePotion) window.usePotion('mana'); });
-
-    // Add CTRL+A for assets window
-    assetsKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A);
+    // CTRL Key (Modifier) - Kept for advanced debug combos if needed
     this.ctrlKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.CTRL);
 
-    // Add CTRL+M for grass debug window
-    grassDebugKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.M);
-    console.log('✅ Grass debug key (M) initialized:', grassDebugKey);
+    console.log('✅ System keys initialized (F8, CTRL)');
+
 
     // Initialize Controller System
     if (typeof loadControllerConfig === 'function') {
@@ -3284,7 +2926,7 @@ function create() {
         }
     });
 
-    this.input.on('pointerup', () => {
+    this.input.on('pointerup', (pointer) => {
         // Cancel long press on release
         if (this.longPressTimer) {
             this.longPressTimer.remove();
@@ -3292,6 +2934,32 @@ function create() {
             if (this.longPressFeedback) {
                 this.longPressFeedback.destroy();
                 this.longPressFeedback = null;
+            }
+        }
+
+        // --- TAP TO FIRE LOGIC (Mobile) ---
+        // Calculate duration and distance
+        const duration = pointer.upTime - pointer.downTime;
+        const dist = pointer.getDistance();
+
+        const tapDuration = (typeof controllerConfig !== 'undefined' && controllerConfig.touch) ? controllerConfig.touch.tapDuration : 200;
+        const dragThreshold = (typeof controllerConfig !== 'undefined' && controllerConfig.touch) ? controllerConfig.touch.dragThreshold : 20;
+
+        // Check if it's a tap and NOT interacting with UI or entities (which block propagation usually, but just in case)
+        if (duration < tapDuration && dist < dragThreshold) {
+
+            const equippedWeapon = playerStats.equipment.weapon;
+            const weaponType = equippedWeapon ? (equippedWeapon.weaponType || 'Sword') : 'Sword';
+            const isRanged = ['Bow', 'Crossbow', 'Staff'].includes(weaponType);
+
+            if (isRanged && typeof playerAttack === 'function') {
+                // Calculate angle
+                const worldPoint = pointer.positionToCamera(this.cameras.main);
+                const angle = Phaser.Math.Angle.Between(player.x, player.y, worldPoint.x, worldPoint.y);
+
+                // Attack
+                playerAttack(this.time.now, true, angle);
+                console.log('📱 Tap-to-Fire triggered');
             }
         }
     });
@@ -3713,6 +3381,97 @@ function update(time, delta) {
     // Update attack speed indicator
     updateAttackSpeedIndicator();
 
+    // --- INPUT ACTIONS (Controller/Keyboard/Touch) ---
+    if (typeof isActionJustPressed === 'function') {
+        // Attack (SPACE / A Button / RT)
+        if (isActionJustPressed('attack') || isActionJustPressed('fire')) {
+            // Priority: Pickup items first
+            let pickupHandled = false;
+            if (typeof triggerItemPickup === 'function') {
+                pickupHandled = triggerItemPickup();
+            }
+
+            if (!pickupHandled) {
+                // Pass controller aim angle if available
+                let aimAngle = undefined;
+                if (typeof player.aimAngle !== 'undefined') {
+                    aimAngle = player.aimAngle;
+                }
+
+                if (typeof playerAttack === 'function') {
+                    // Check if we should use controller aim (active controller + right stick moved recently)
+                    // Or just always pass it if valid? 
+                    // Let's pass it - playerAttack (or ProjectileManager) should handle null/undefined by using mouse
+                    // Actually, let's explicit: if controller is active and we have an angle, use it.
+                    if (typeof player.aimAngle === 'number') {
+                        // Use stored aim angle (works for both sticky gamepad aim and mouse)
+                        playerAttack(this.time.now, true, player.aimAngle);
+                    } else {
+                        // Fallback to mouse pointer calculation if no angle stored
+                        playerAttack(this.time.now);
+                    }
+                }
+            }
+        }
+        // Interact
+        if (isActionJustPressed('interact')) {
+            if (typeof triggerWorldInteraction === 'function') triggerWorldInteraction();
+        }
+
+        // UI Toggles
+        if (window.UIManager) {
+            if (isActionJustPressed('inventory')) {
+                if (typeof toggleEquipment === 'function') toggleEquipment();
+            }
+            if (isActionJustPressed('equipment')) {
+                if (typeof toggleEquipment === 'function') toggleEquipment();
+            }
+            if (isActionJustPressed('quests')) {
+                if (typeof toggleQuestLog === 'function') toggleQuestLog();
+                else if (window.UIManager && typeof window.UIManager.toggleQuestLog === 'function') window.UIManager.toggleQuestLog();
+            }
+            if (isActionJustPressed('settings')) {
+                if (typeof toggleSettings === 'function') toggleSettings();
+                else if (window.UIManager && typeof window.UIManager.toggleSettings === 'function') window.UIManager.toggleSettings();
+            }
+            if (isActionJustPressed('debug_assets') && this.ctrlKey && this.ctrlKey.isDown) {
+                if (typeof toggleAssetsWindow === 'function') toggleAssetsWindow();
+            }
+        }
+
+        // Help Toggle
+        if (isActionJustPressed('help')) {
+            if (this.controlsText) {
+                this.controlsExpanded = !this.controlsExpanded;
+                this.controlsText.setText(this.controlsExpanded ? this.controlsFullText : this.controlsShortText);
+            }
+        }
+
+        // Debug (CTRL+M)
+        if (isActionJustPressed('debug_grass') && this.ctrlKey && this.ctrlKey.isDown) {
+            if (typeof toggleGrassDebugWindow === 'function') toggleGrassDebugWindow();
+        }
+
+        // Abilities & Potions
+        if (window.useAbility) {
+            if (isActionJustPressed('ability1')) window.useAbility(1);
+            if (isActionJustPressed('ability2')) window.useAbility(2);
+            if (isActionJustPressed('ability3')) window.useAbility(3);
+        }
+        if (window.usePotion) {
+            if (isActionJustPressed('healthPotion')) window.usePotion('health');
+            if (isActionJustPressed('manaPotion')) window.usePotion('mana');
+        }
+
+        // Save/Load
+        if (isActionJustPressed('save') && typeof saveGame === 'function') {
+            saveGame();
+        }
+        if (isActionJustPressed('load') && typeof loadGame === 'function') {
+            loadGame();
+        }
+    }
+
     // Process dialog queue
     processDialogQueue();
 
@@ -3720,11 +3479,21 @@ function update(time, delta) {
     // Don't allow movement when shop/inventory/dialog/settings/building is open
 
     // Check if controller is providing input (don't reset if controller is active)
+    // Check for controller input state (not just velocity)
     const controllerActive = typeof isControllerConnected === 'function' && isControllerConnected();
-    const hasControllerMovement = controllerActive && (Math.abs(player.body.velocity.x) > 0 || Math.abs(player.body.velocity.y) > 0);
+    let controllerMoving = false;
+    if (controllerActive && typeof activeGamepad !== 'undefined' && activeGamepad && controllerConfig) {
+        const deadzone = controllerConfig.deadzone || 0.3;
+        // Check simple left stick deflection
+        const lx = activeGamepad.leftStick ? activeGamepad.leftStick.x : 0;
+        const ly = activeGamepad.leftStick ? activeGamepad.leftStick.y : 0;
+        if (Math.abs(lx) > deadzone || Math.abs(ly) > deadzone) {
+            controllerMoving = true;
+        }
+    }
 
-    // Only reset velocity if no controller movement
-    if (!hasControllerMovement) {
+    // Only reset velocity if NO controller input AND NO click movement
+    if (!controllerMoving && !this.isMovingToClick) {
         player.setVelocity(0);
     }
 
@@ -3738,24 +3507,25 @@ function update(time, delta) {
         let newDirection = player.facingDirection; // Default to current direction
 
         // Keyboard Movement supersedes mouse movement
-        if (cursors.left.isDown || this.wasd.A.isDown) {
+        // Using centralized controller check (supports WASD, Arrows, and rebinds)
+        if (typeof isActionActive === 'function' && isActionActive('move_left')) {
             player.setVelocityX(-speed);
             newDirection = 'west';
             moving = true;
             this.isMovingToClick = false; // Cancel click movement
-        } else if (cursors.right.isDown || this.wasd.D.isDown) {
+        } else if (typeof isActionActive === 'function' && isActionActive('move_right')) {
             player.setVelocityX(speed);
             newDirection = 'east';
             moving = true;
             this.isMovingToClick = false; // Cancel click movement
         }
 
-        if (cursors.up.isDown || this.wasd.W.isDown) {
+        if (typeof isActionActive === 'function' && isActionActive('move_up')) {
             player.setVelocityY(-speed);
             newDirection = 'north';
             moving = true;
             this.isMovingToClick = false; // Cancel click movement
-        } else if (cursors.down.isDown || this.wasd.S.isDown) {
+        } else if (typeof isActionActive === 'function' && isActionActive('move_down')) {
             player.setVelocityY(speed);
             newDirection = 'south';
             moving = true;
@@ -4541,133 +4311,26 @@ function update(time, delta) {
         }
     }
 
-    // Player attack or item pickup (Spacebar)
-    // Player attack or item pickup (Spacebar)
-    // Priority: Pick up items if nearby, otherwise attack
-    if (Phaser.Input.Keyboard.JustDown(spaceKey)) {
-        // Try pickup first
-        if (!triggerItemPickup()) {
-            playerAttack(time);
-        }
-    }
-
     // Get scene reference (used for multiple things below)
     const scene = game.scene.scenes[0];
 
-    // Ability keys (1, 2, 3)
-    if (Phaser.Input.Keyboard.JustDown(scene.abilityOneKey)) {
-        castAbility('heal', time);
-    }
-    if (Phaser.Input.Keyboard.JustDown(scene.abilityTwoKey)) {
-        castAbility('fireball', time);
-    }
-    if (Phaser.Input.Keyboard.JustDown(scene.abilityThreeKey)) {
-        castAbility('shield', time);
-    }
-
-    // Potion keys (4, 5)
-    if (scene.potionFourKey && Phaser.Input.Keyboard.JustDown(scene.potionFourKey)) {
-        usePotion('health');
-    }
-    if (scene.potionFiveKey && Phaser.Input.Keyboard.JustDown(scene.potionFiveKey)) {
-        usePotion('mana');
-    }
+    // Ability/Potion keys handled by Central Input System now (above)
 
     // Update ability cooldowns
     updateAbilityCooldowns(time);
 
     // Update Projectile Manager - MOVED TO TOP
 
-    // Toggle inventory (I key) - REMOVED
-    // if (Phaser.Input.Keyboard.JustDown(inventoryKey)) {
-    //     toggleInventory();
-    // }
+    // Legacy Input Checks Removed (Moved to Central Input System)
 
-    // Toggle equipment (E key) - always check, even when panel is open
-    if (equipmentKey && Phaser.Input.Keyboard.JustDown(equipmentKey)) {
-        toggleEquipment();
-    }
-
-    // Update inventory if visible
-    if (inventoryVisible) {
+    // Restore UI Updates (Required per frame)
+    if (typeof inventoryVisible !== 'undefined' && inventoryVisible && typeof updateInventory === 'function') {
         updateInventory();
     }
-
-    // Update equipment if visible
-    if (equipmentVisible) {
+    if (typeof equipmentVisible !== 'undefined' && equipmentVisible && typeof updateEquipment === 'function') {
         updateEquipment();
     }
 
-    // Toggle quest log (Q key)
-    if (Phaser.Input.Keyboard.JustDown(questKey)) {
-        toggleQuestLog();
-    }
-
-    // ESC key - close any open interface
-    if (settingsKey && Phaser.Input.Keyboard.JustDown(settingsKey)) {
-        // Check if any interface is open (including dialogs, building panels, and quest modals)
-        const anyInterfaceOpen = inventoryVisible || equipmentVisible || questVisible || shopVisible || settingsVisible || dialogVisible || buildingPanelVisible || questCompletedModal || newQuestModal;
-
-        if (anyInterfaceOpen) {
-            // Close all interfaces - don't open settings
-            closeAllInterfaces();
-            // Also close dialog and building panel if they're open
-            // (closeDialog() and closeBuildingUI() will set their visibility flags)
-            if (dialogVisible) {
-                closeDialog(); // This sets dialogVisible = false internally
-            }
-            if (buildingPanelVisible) {
-                closeBuildingUI(); // This sets buildingPanelVisible = false internally
-            }
-            // Quest modals have their own ESC handlers that will close them
-            // We just need to prevent Settings from opening
-        } else {
-            // Only open settings if NO interface is open
-            toggleSettings();
-        }
-    }
-
-    // Interaction (F key)
-    if (Phaser.Input.Keyboard.JustDown(interactKey)) {
-        if (shopVisible) {
-            closeShop();
-        } else {
-            triggerWorldInteraction();
-        }
-    }
-
-    // Assets window (CTRL+A)
-    if (Phaser.Input.Keyboard.JustDown(assetsKey) && scene.ctrlKey.isDown) {
-        toggleAssetsWindow();
-    }
-
-    // Grass debug window (CTRL+M)
-    if (grassDebugKey && scene.ctrlKey) {
-        if (Phaser.Input.Keyboard.JustDown(grassDebugKey) && scene.ctrlKey.isDown) {
-            console.log('🔍 CTRL+M pressed!');
-            toggleGrassDebugWindow();
-        }
-    } else {
-        // Debug: log if keys aren't initialized
-        if (!grassDebugKey) console.warn('⚠️ grassDebugKey not initialized');
-        if (!scene.ctrlKey) console.warn('⚠️ scene.ctrlKey not initialized');
-    }
-
-    // Save/Load
-    if (Phaser.Input.Keyboard.JustDown(scene.saveKey)) {
-        saveGame();
-    }
-    if (Phaser.Input.Keyboard.JustDown(scene.loadKey)) {
-        loadGame();
-    }
-
-    // Toggle controls (H key) - switch between short and full text
-    if (Phaser.Input.Keyboard.JustDown(scene.helpKey)) {
-        if (scene.controlsText) {
-            scene.controlsExpanded = !scene.controlsExpanded;
-            scene.controlsText.setText(scene.controlsExpanded ? scene.controlsFullText : scene.controlsShortText);
-        }
-    }
 
     // Toggle Debug Visualization (F8)
     if (scene.debugKey && Phaser.Input.Keyboard.JustDown(scene.debugKey)) {
@@ -5691,93 +5354,157 @@ function updateWeaponPosition() {
         renderOffsetY = weaponDef.renderOffset.y || 0;
     }
 
-    // 4. Calculate Position (Player Center + Render Offset)
-    // Note: Render Offset moves the entire weapon sprite relative to the player
-    let x = player.x + renderOffsetX;
-    let y = player.y + renderOffsetY;
+    // Determine if weapon is ranged (Data-driven)
+    // Checks for 'projectile' property OR specific actions in the definition
+    const isRanged = weaponDef ?
+        (!!weaponDef.projectile || weaponDef.action === 'shoot' || weaponDef.action === 'cast') :
+        ['Bow', 'Crossbow', 'Staff'].includes(weaponType);
 
-    // 5. Apply Directional Logic (Offsets for "Hand" position relative to body)
-    // These are "standard" offsets to put the weapon in the general vicinity of the hand
-    // We can make these data-driven later if needed, but for now standardizing them is safer
-    switch (facingDirection) {
-        case 'north':
-            y -= 20; // Hand is behind/above head
-            break;
-        case 'south':
-            y += 8;  // Hand is lower
-            x -= 8;  // Hand is to the left (player's right)
-            break;
-        case 'east':
-            x += 20; // Hand is right
-            break;
-        case 'west':
-            x -= 20; // Hand is left
-            break;
-    }
+    // --- RANGED WEAPON LOGIC ---
+    if (isRanged && !skipRotation) {
+        // Ranged weapons aim at cursor/gamepad stick
+        let angle = 0;
 
-    weaponSprite.x = x;
-    weaponSprite.y = y;
+        // Check Controller Aim (Right Stick)
+        if (typeof isControllerConnected === 'function' && isControllerConnected()) {
+            // Access controller directly if available (or via wrapper)
+            if (activeGamepad && (Math.abs(activeGamepad.rightStick.x) > 0.1 || Math.abs(activeGamepad.rightStick.y) > 0.1)) {
+                angle = Math.atan2(activeGamepad.rightStick.y, activeGamepad.rightStick.x);
+                if (player) player.aimAngle = angle; // Ensure we keep it sync'd
+            } else if (player && typeof player.aimAngle === 'number') {
+                // Stick is idle, use last known aim angle (prevents snap to mouse)
+                angle = player.aimAngle;
+            } else {
+                // Fallback to mouse only if no previous aim
+                const scene = game.scene.scenes[0];
+                const pointer = scene.input.activePointer;
+                const worldPoint = pointer.positionToCamera(scene.cameras.main);
+                angle = Phaser.Math.Angle.Between(player.x, player.y, worldPoint.x, worldPoint.y);
+            }
+        } else {
+            // Mouse Aim
+            const scene = game.scene.scenes[0];
+            const pointer = scene.input.activePointer;
+            const worldPoint = pointer.positionToCamera(scene.cameras.main);
+            angle = Phaser.Math.Angle.Between(player.x, player.y, worldPoint.x, worldPoint.y);
+            if (player) player.aimAngle = angle; // Save mouse aim too
+        }
 
-    // 6. Apply Rotation and Origin
-    // 6. Apply Rotation and Origin
-    if (!skipRotation) {
+        // Snap to 10 degrees (approx 0.1745 rad)
+        const snap = Phaser.Math.DegToRad(10);
+        angle = Math.round(angle / snap) * snap;
+
+        // Apply Rotation
+        // Default offset is +90 degrees (assuming sprite points UP by default)
+        // Can be overridden by rotationOffset in items.json
+        let rotationOffset = Phaser.Math.DegToRad(90);
+        if (weaponDef && typeof weaponDef.rotationOffset === 'number') {
+            rotationOffset = Phaser.Math.DegToRad(weaponDef.rotationOffset);
+        }
+
+        // Determines Flip
+        let shouldFlip = false;
+        if (Math.abs(angle) > Math.PI / 2 && Math.abs(rotationOffset) < 0.8) {
+            shouldFlip = true;
+        }
+        weaponSprite.setFlipY(shouldFlip);
+        weaponSprite.setFlipX(false);
+
+        // Apply Rotation with Offset
+        // If flipped, we often need to invert the offset because the sprite's "clockwise" bias becomes "counter-clockwise"
+        const appliedOffset = shouldFlip ? -rotationOffset : rotationOffset;
+        weaponSprite.rotation = angle + appliedOffset;
+
+        // Position: Orbit 20px around player center
+        weaponSprite.x = player.x + Math.cos(angle) * 20;
+        weaponSprite.y = player.y + Math.sin(angle) * 20;
+
+        // Apply Origin
         weaponSprite.setOrigin(originX, originY);
 
-        // Start with base mirror settings
-        let doFlipX = weaponDef && weaponDef.mirrorX === true;
-        let doFlipY = weaponDef && weaponDef.mirrorY === true;
+        // No FlipX for ranged usually
+        weaponSprite.setFlipX(false);
 
-        // weaponSprite.setFlipX(false); // REMOVE THIS HARD RESET logic implies
+    } else {
+        // --- MELEE WEAPON LOGIC (Legay/Standard) ---
 
-        let rotationDegrees = 0;
+        // 4. Calculate Position (Player Center + Render Offset)
+        let x = player.x + renderOffsetX;
+        let y = player.y + renderOffsetY;
 
+        // 5. Apply Directional Logic
         switch (facingDirection) {
             case 'north':
-                if (weaponDef && typeof weaponDef.rotationNorth !== 'undefined') rotationDegrees = weaponDef.rotationNorth;
-                else rotationDegrees = -90;
-
-                if (weaponDef && typeof weaponDef.flipNorth !== 'undefined') doFlipX = weaponDef.flipNorth;
+                y -= 20;
                 break;
-
             case 'south':
-                if (weaponDef && typeof weaponDef.rotationSouth !== 'undefined') rotationDegrees = weaponDef.rotationSouth;
-                else rotationDegrees = 90;
-
-                if (weaponDef && typeof weaponDef.flipSouth !== 'undefined') doFlipX = weaponDef.flipSouth;
+                y += 8;
+                x -= 8;
                 break;
-
             case 'east':
-                if (weaponDef && typeof weaponDef.rotationEast !== 'undefined') rotationDegrees = weaponDef.rotationEast;
-                else rotationDegrees = 0;
-
-                if (weaponDef && typeof weaponDef.flipEast !== 'undefined') doFlipX = weaponDef.flipEast;
+                x += 20;
                 break;
-
             case 'west':
-                if (weaponDef && typeof weaponDef.rotationWest !== 'undefined') {
-                    rotationDegrees = weaponDef.rotationWest;
-                } else {
-                    rotationDegrees = 180; // Default pure rotation
-                }
-
-                // Explicit flip override
-                if (weaponDef && typeof weaponDef.flipWest !== 'undefined') {
-                    doFlipX = weaponDef.flipWest;
-                }
-                // Legacy fallback: if no rotation AND no flip defined, invert default flip
-                else if (!weaponDef || typeof weaponDef.rotationWest === 'undefined') {
-                    doFlipX = !doFlipX;
-                    rotationDegrees = 0;
-                }
+                x -= 20;
                 break;
         }
 
-        weaponSprite.setFlipX(doFlipX);
-        weaponSprite.setFlipY(doFlipY);
-        weaponSprite.rotation = Phaser.Math.DegToRad(rotationDegrees);
-    } else {
-        // Animation state - maintain origin
-        weaponSprite.setOrigin(originX, originY);
+        weaponSprite.x = x;
+        weaponSprite.y = y;
+
+        // 6. Apply Rotation and Origin
+        if (!skipRotation) {
+            weaponSprite.setOrigin(originX, originY);
+
+            // Start with base mirror settings
+            let doFlipX = weaponDef && weaponDef.mirrorX === true;
+            let doFlipY = weaponDef && weaponDef.mirrorY === true;
+
+            let rotationDegrees = 0;
+
+            switch (facingDirection) {
+                case 'north':
+                    if (weaponDef && typeof weaponDef.rotationNorth !== 'undefined') rotationDegrees = weaponDef.rotationNorth;
+                    else rotationDegrees = -90;
+
+                    if (weaponDef && typeof weaponDef.flipNorth !== 'undefined') doFlipX = weaponDef.flipNorth;
+                    break;
+                case 'south':
+                    if (weaponDef && typeof weaponDef.rotationSouth !== 'undefined') rotationDegrees = weaponDef.rotationSouth;
+                    else rotationDegrees = 90;
+
+                    if (weaponDef && typeof weaponDef.flipSouth !== 'undefined') doFlipX = weaponDef.flipSouth;
+                    break;
+                case 'east':
+                    if (weaponDef && typeof weaponDef.rotationEast !== 'undefined') rotationDegrees = weaponDef.rotationEast;
+                    else rotationDegrees = 0;
+
+                    if (weaponDef && typeof weaponDef.flipEast !== 'undefined') doFlipX = weaponDef.flipEast;
+                    break;
+                case 'west':
+                    if (weaponDef && typeof weaponDef.rotationWest !== 'undefined') {
+                        rotationDegrees = weaponDef.rotationWest;
+                    } else {
+                        rotationDegrees = 180; // Default pure rotation
+                    }
+
+                    if (weaponDef && typeof weaponDef.flipWest !== 'undefined') {
+                        doFlipX = weaponDef.flipWest;
+                    }
+                    else if (!weaponDef || typeof weaponDef.rotationWest === 'undefined') {
+                        doFlipX = !doFlipX;
+                        rotationDegrees = 0;
+                    }
+                    break;
+            }
+
+            weaponSprite.setFlipX(doFlipX);
+            weaponSprite.setFlipY(doFlipY);
+            weaponSprite.rotation = Phaser.Math.DegToRad(rotationDegrees);
+        } else {
+            // Animation state - maintain origin
+            weaponSprite.setOrigin(originX, originY);
+        }
     }
 }
 
@@ -5849,7 +5576,7 @@ function animateWeaponStrike(direction, weaponType = 'Sword') {
     // The skipRotation flag will prevent it from resetting rotation during animation
     updateWeaponPosition();
 
-    console.log(`🎬 Animating weapon strike: ${weaponType} facing ${direction}`);
+    console.log(`🎬 Animating weapon strike: ${weaponType} facing ${direction} `);
     console.log(`   Base rotation: ${baseRotation} (${(baseRotation * 180 / Math.PI).toFixed(1)}°)`);
 
     // Set initial flip state
@@ -5974,7 +5701,8 @@ function animateWeaponStrike(direction, weaponType = 'Sword') {
             const progress = stepAngles[currentStep];
             const targetRotation = swingStart + (swingEnd - swingStart) * progress;
 
-            console.log(`   Step ${currentStep + 1}/5: ${(targetRotation * 180 / Math.PI).toFixed(1)}° (${(progress * 100).toFixed(0)}%)`);
+            console.log(`   Step ${currentStep + 1} /5: ${(targetRotation * 180 / Math.PI).toFixed(1)
+                }° (${(progress * 100).toFixed(0)}%)`);
 
             // Animate to this step
             scene.tweens.add({
@@ -6272,12 +6000,12 @@ function addChatMessage(text, color = 0xffffff, icon = '') {
 
     const scene = game.scene.scenes[0];
     const timestamp = new Date().toLocaleTimeString();
-    const displayText = icon ? `${icon} ${text}` : text;
+    const displayText = icon ? `${icon} ${text} ` : text;
 
     // Create message text
-    const messageText = scene.add.text(0, 0, `[${timestamp}] ${displayText}`, {
+    const messageText = scene.add.text(0, 0, `[${timestamp}] ${displayText} `, {
         fontSize: '11px',
-        fill: `#${color.toString(16).padStart(6, '0')}`,
+        fill: `#${color.toString(16).padStart(6, '0')} `,
         wordWrap: { width: systemChatBox.width - 15 }
     }).setOrigin(0, 0);
 
@@ -6383,10 +6111,10 @@ function addChatMessage(text, color = 0xffffff, icon = '') {
     if (!systemChatBox || !systemChatBox.container) return;
 
     const scene = game.scene.scenes[0];
-    const fullText = icon ? `${icon} ${text}` : text;
-    const colorHex = `#${color.toString(16).padStart(6, '0')}`;
+    const fullText = icon ? `${icon} ${text} ` : text;
+    const colorHex = `#${color.toString(16).padStart(6, '0')} `;
 
-    console.log(`💬 Chat: ${fullText}`);
+    console.log(`💬 Chat: ${fullText} `);
 
     // Create text object
     const msgText = scene.add.text(systemChatBox.padding, 0, fullText, {
@@ -6560,7 +6288,7 @@ function updateAttackSpeedIndicator() {
     }
 
     const speedPercent = Math.round(comboAttackSpeedBonus * 100);
-    attackSpeedIndicator.setText(`⚡ Attack Speed +${speedPercent}%`);
+    attackSpeedIndicator.setText(`⚡ Attack Speed + ${speedPercent}% `);
 
     // Pulse effect (only if not already tweening)
     if (!attackSpeedIndicator.speedTween) {
@@ -6619,9 +6347,9 @@ function updateUI() {
         if (Math.random() < 0.01) {
             // Only log occasionally
             if (isNaN(manaPercent) || manaPercent < 0) {
-                console.error(`[UI Error] Invalid mana percent: ${manaPercent}, Mana: ${stats.mana}, Max: ${stats.maxMana}`);
+                console.error(`[UI Error] Invalid mana percent: ${manaPercent}, Mana: ${stats.mana}, Max: ${stats.maxMana} `);
             } else {
-                // console.log(`[UI Debug] Mana: ${stats.mana}/${stats.maxMana} (${(manaPercent * 100).toFixed(1)}%), Width: ${manaBar.width}`);
+                // console.log(`[UI Debug]Mana: ${ stats.mana }/${stats.maxMana} (${(manaPercent * 100).toFixed(1)}%), Width: ${manaBar.width}`);
             }
         }
 
@@ -14406,15 +14134,24 @@ function spawnMonster(x, y, type, hpOverride, attackOverride, xpOverride, isBoss
                 // Common properties initialized below the if/else
             }
         } else {
-            // FALLBACK TO METHOD 1 (Spritesheets)
-            // Use directional sprite if available, otherwise fall back to old texture
-            const monsterType = type.name.toLowerCase();
-            const initialTexture = `monster_${monsterType}_south`; // Start facing south
-            const fallbackTexture = type.textureKey; // Old procedural texture
+            // PROCEED WITH PROCEDURAL FALLBACK (Method 2 or Basic Shape)
+            // If no unique blueprint found, use a default texture/shape to ensure consistency
+            // instead of trying to load a sprite.
 
-            const textureToUse = scene.textures.exists(initialTexture) ? initialTexture : fallbackTexture;
-            monster = scene.physics.add.sprite(x, y, textureToUse);
-            monster.setDepth(5); // Monsters above tiles but below player
+            // Check if we have a texture, if not generate a simple placeholder
+            const fallbackKey = 'monster_placeholder_' + type.name;
+            if (!scene.textures.exists(fallbackKey)) {
+                const color = 0xFF0000; // Default red
+                const graphics = scene.make.graphics({ x: 0, y: 0, add: false });
+                graphics.fillStyle(color, 1);
+                graphics.fillRect(0, 0, 32, 32);
+                graphics.generateTexture(fallbackKey, 32, 32);
+            }
+
+            console.warn(`⚠️ No blueprint found for ${type.name}. Using default procedural placeholder.`);
+            monster = scene.physics.add.sprite(x, y, fallbackKey);
+            monster.setDepth(5);
+            monster.isProcedural = true;
         }
     }
 

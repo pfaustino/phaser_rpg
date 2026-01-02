@@ -135,6 +135,19 @@ const ItemManager = {
         loadCategory('questItems');
         loadCategory('consumables');
 
+        // Load Weapon Sprites (using special key format: weapon_[type])
+        if (this.definitions.weaponTypes) {
+            Object.entries(this.definitions.weaponTypes).forEach(([type, def]) => {
+                if (def.defaultSprite) {
+                    const key = `weapon_${type.toLowerCase()}`;
+                    if (!scene.textures.exists(key)) {
+                        scene.load.image(key, def.defaultSprite);
+                        count++;
+                    }
+                }
+            });
+        }
+
         console.log(`📦 ItemManager: Queued ${count} sprites for loading`);
     }
 };

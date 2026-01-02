@@ -9,12 +9,6 @@
                 "density": 0.5,
                 "minPixels": 15
             },
-            "sprites": {
-                "south": "assets/animations/monster_slime_south.png",
-                "north": "assets/animations/monster_slime_north.png",
-                "east": "assets/animations/monster_slime_east.png",
-                "west": "assets/animations/monster_slime_west.png"
-            },
             "stats": {
                 "hp": 20,
                 "speed": 30,

@@ -27,9 +27,40 @@
         "healthPotion": "LB",
         "manaPotion": "RB",
         "menu": "START",
-        "interact": "A"
+        "interact": "A",
+        "inventory": "DPAD_LEFT",
+        "equipment": "DPAD_UP",
+        "quests": "DPAD_DOWN",
+        "settings": "SELECT",
+        "debug_grass": "L3",
+        "debug_assets": "R3",
+        "fire": "RT"
+    },
+    "touch": {
+        "tapDuration": 200,
+        "dragThreshold": 20,
+        "longPressDelay": 600
     },
     "keyboard": {
-        "ESC": "menu"
+        "move_up": "W,UP",
+        "move_down": "S,DOWN",
+        "move_left": "A,LEFT",
+        "move_right": "D,RIGHT",
+        "attack": "SPACE",
+        "interact": "F",
+        "ability1": "ONE",
+        "ability2": "TWO",
+        "ability3": "THREE",
+        "healthPotion": "FOUR",
+        "manaPotion": "FIVE",
+        "inventory": "I",
+        "equipment": "E",
+        "quests": "Q",
+        "settings": "ESC",
+        "save": "F6",
+        "load": "F9",
+        "help": "H",
+        "debug_grass": "M",
+        "debug_assets": "A"
     }
 }

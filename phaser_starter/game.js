@@ -67,7 +67,7 @@ let dialogDatabase = {};
 
 const ABILITY_DEFINITIONS = {
     'fireball': { icon: 'fireball_effect', color: 0xff4400, manaCost: 10, cooldown: 1000 },
-    'heal': { icon: 'heal_effect', color: 0x00ff00, manaCost: 20, cooldown: 5000 },
+    'heal': { icon: 'heal_effect', color: 0x00ff00, manaCost: 20, cooldown: 5000, healAmount: 50 },
     'shield': { icon: 'shield_effect', color: 0x0088ff, manaCost: 15, cooldown: 8000 }
 };
 
@@ -2186,9 +2186,95 @@ function showVictoryCinematic(scene, imageKey, loreText) {
         console.log('🖱️ Continue Button Clicked!');
         closeCinematic();
     });
-    btnText.setInteractive({ useHandCursor: true }).on('pointerdown', () => {
-        console.log('🖱️ Continue Text Clicked!');
-        closeCinematic();
+
+    // --- RANGED COMBAT INPUT ---
+    this.input.on('pointerdown', (pointer) => {
+        if (pointer.rightButtonDown()) {
+            // FIRE PROJECTILE
+            if (typeof playerAttack === 'function') {
+                const angle = Phaser.Math.Angle.Between(player.x, player.y, worldX, worldY);
+                playerAttack(this.time.now, true, angle);
+            }
+        } else {
+            // --- LONG PRESS INTERACTION LOGIC (Mobile Support) ---
+            if (!this.longPressTimer) {
+                // Check if we are clicking on UI to avoid conflicting
+                // Simple heuristic: if clicking in bottom right (Ability Bar) or other UI areas
+                // For now, world interaction is global, so maybe it's fine.
+
+                // Visual feedback: Scaling circle
+                // We'll add this to 'this' to access in pointerup
+                this.longPressFeedback = this.add.circle(pointer.x, pointer.y, 10, 0xffffff, 0.5)
+                    .setScrollFactor(0).setDepth(10000);
+
+                this.tweens.add({
+                    targets: this.longPressFeedback,
+                    scale: 3,
+                    alpha: 0,
+                    duration: 600
+                });
+
+                this.longPressTimer = this.time.delayedCall(600, () => {
+                    console.log('👆 Long Press Detected: Triggering Interaction');
+                    if (this.longPressFeedback) this.longPressFeedback.destroy();
+                    this.longPressFeedback = null;
+                    this.longPressTimer = null;
+
+                    // Trigger "F" / Interact
+                    if (typeof triggerWorldInteraction === 'function') {
+                        const handled = triggerWorldInteraction();
+                        if (handled) {
+                            // Prevent walking if possible, but player might already be moving.
+                            // We can stop player movement here if desired.
+                            if (player && player.body) {
+                                player.body.setVelocity(0);
+                                // Also clear destination if tap-to-move was implemented
+                                if (player.targetDest) player.targetDest = null;
+                            }
+                        } else {
+                            showDamageNumber(player.x, player.y - 40, "No interaction nearby", 0xcccccc);
+                        }
+                    }
+                });
+
+                // Store start position to detect drag/move cancellation
+                this.longPressStart = { x: pointer.x, y: pointer.y };
+            }
+        }
+    });
+
+    this.input.on('pointermove', (pointer) => {
+        // Cancel long press if moved significantly (drag)
+        if (this.longPressTimer && this.longPressStart) {
+            const dist = Phaser.Math.Distance.Between(pointer.x, pointer.y, this.longPressStart.x, this.longPressStart.y);
+            if (dist > 20) { // 20px tolerance
+                // console.log('👋 Long Press Cancelled (Moved)');
+                this.longPressTimer.remove();
+                this.longPressTimer = null;
+                if (this.longPressFeedback) {
+                    this.longPressFeedback.destroy();
+                    this.longPressFeedback = null;
+                }
+            }
+        }
+
+        // Update worldX/Y for other systems
+        const worldPoint = this.input.activePointer.positionToCamera(this.cameras.main);
+        worldX = worldPoint.x;
+        worldY = worldPoint.y;
+    });
+
+    this.input.on('pointerup', () => {
+        // Cancel long press on release logic
+        if (this.longPressTimer) {
+            // console.log('👋 Long Press Cancelled (Released)');
+            this.longPressTimer.remove();
+            this.longPressTimer = null;
+            if (this.longPressFeedback) {
+                this.longPressFeedback.destroy();
+                this.longPressFeedback = null;
+            }
+        }
     });
 
     // Debug Hit Area NOT ENABLED by default for user, but useful if needed:
@@ -3121,7 +3207,94 @@ function create() {
     };
 
     this.input.keyboard.on('keydown', unlockAudio);
-    this.input.on('pointerdown', unlockAudio);
+    // --- COMBAT & INTERACTION INPUT ---
+    this.input.on('pointerdown', (pointer) => {
+        // Unlock audio context on any interaction
+        unlockAudio();
+
+        if (pointer.rightButtonDown()) {
+            // FIRE PROJECTILE (Ranged Attack)
+            if (typeof playerAttack === 'function') {
+                // Determine target angle using camera-relative world coordinates
+                const worldPoint = pointer.positionToCamera(this.cameras.main);
+                const angle = Phaser.Math.Angle.Between(player.x, player.y, worldPoint.x, worldPoint.y);
+                playerAttack(this.time.now, true, angle);
+            }
+        } else {
+            // --- LONG PRESS INTERACTION LOGIC (Mobile Support) ---
+            if (!this.longPressTimer) {
+                // Visual feedback: Scaling circle
+                this.longPressFeedback = this.add.circle(pointer.x, pointer.y, 10, 0xffffff, 0.5)
+                    .setScrollFactor(0).setDepth(10000); // UI depth
+
+                this.tweens.add({
+                    targets: this.longPressFeedback,
+                    scale: 3,
+                    alpha: 0,
+                    duration: 600
+                });
+
+                this.longPressTimer = this.time.delayedCall(600, () => {
+                    console.log('👆 Long Press Detected: Triggering Interaction');
+                    if (this.longPressFeedback) {
+                        this.longPressFeedback.destroy();
+                        this.longPressFeedback = null;
+                    }
+                    this.longPressTimer = null;
+
+                    // Trigger "F" / Interact
+                    if (typeof triggerWorldInteraction === 'function') {
+                        const handled = triggerWorldInteraction();
+                        if (handled) {
+                            // Stop movement immediately
+                            if (player && player.body) {
+                                player.body.setVelocity(0);
+                                if (player.targetDest) player.targetDest = null;
+                            }
+                            // Clear click-to-move flags to prevent update loop from resuming movement
+                            if (this.isMovingToClick) this.isMovingToClick = false;
+                            if (this.clickMoveTarget) this.clickMoveTarget = null;
+                        } else {
+                            // Only show feedback if we really mean to interact (long press completed)
+                            if (typeof showDamageNumber === 'function') {
+                                showDamageNumber(player.x, player.y - 40, "No interaction nearby", 0xcccccc);
+                            }
+                        }
+                    }
+                });
+
+                // Store start position
+                this.longPressStart = { x: pointer.x, y: pointer.y };
+            }
+        }
+    });
+
+    this.input.on('pointermove', (pointer) => {
+        // Cancel long press if moved significantly (drag)
+        if (this.longPressTimer && this.longPressStart) {
+            const dist = Phaser.Math.Distance.Between(pointer.x, pointer.y, this.longPressStart.x, this.longPressStart.y);
+            if (dist > 20) { // 20px tolerance
+                this.longPressTimer.remove();
+                this.longPressTimer = null;
+                if (this.longPressFeedback) {
+                    this.longPressFeedback.destroy();
+                    this.longPressFeedback = null;
+                }
+            }
+        }
+    });
+
+    this.input.on('pointerup', () => {
+        // Cancel long press on release
+        if (this.longPressTimer) {
+            this.longPressTimer.remove();
+            this.longPressTimer = null;
+            if (this.longPressFeedback) {
+                this.longPressFeedback.destroy();
+                this.longPressFeedback = null;
+            }
+        }
+    });
 
     // Handle clicks on interactive objects (Monsters, NPCs)
     // Initialize click tracking variables
@@ -11957,6 +12130,16 @@ function loadGame() {
         // Restore player stats
         Object.assign(playerStats, saveData.playerStats);
 
+        // Sanitize Stats (Recover from NaN corruption)
+        if (typeof playerStats.maxHp !== 'number' || isNaN(playerStats.maxHp)) playerStats.maxHp = 100;
+        if (typeof playerStats.hp !== 'number' || isNaN(playerStats.hp)) playerStats.hp = playerStats.maxHp;
+
+        if (typeof playerStats.maxMana !== 'number' || isNaN(playerStats.maxMana)) playerStats.maxMana = 50;
+        if (typeof playerStats.mana !== 'number' || isNaN(playerStats.mana)) playerStats.mana = playerStats.maxMana;
+
+        if (typeof playerStats.xp !== 'number' || isNaN(playerStats.xp)) playerStats.xp = 0;
+        if (typeof playerStats.level !== 'number' || isNaN(playerStats.level)) playerStats.level = 1;
+
         // Safety: Ensure quests structure is valid
         if (!playerStats.quests || typeof playerStats.quests !== 'object' || Array.isArray(playerStats.quests)) {
             playerStats.quests = {
@@ -12839,12 +13022,24 @@ function castHeal() {
     playSound('heal_cast');
 
     // Effect: Heal player
-    const healAmount = ABILITY_DEFINITIONS.heal.healAmount;
+    // Safety check for ability definitions
+    const healDef = (typeof ABILITY_DEFINITIONS !== 'undefined' && ABILITY_DEFINITIONS.heal)
+        ? ABILITY_DEFINITIONS.heal
+        : { healAmount: 50 }; // Default fallback
+
+    const healAmount = healDef.healAmount || 50;
     const oldHp = playerStats.hp;
     playerStats.hp = Math.min(playerStats.maxHp, playerStats.hp + healAmount);
+
+    // Ensure HP is a valid number, recover from NaN if it happened
+    if (isNaN(playerStats.hp)) {
+        console.warn('⚠️ Player HP became NaN during heal! Resetting to MaxHP.');
+        playerStats.hp = playerStats.maxHp;
+    }
+
     const actualHeal = playerStats.hp - oldHp;
 
-    showDamageNumber(player.x, player.y - 30, `+${actualHeal}`, 0x00ff00, false);
+    showDamageNumber(player.x, player.y - 30, `+${Math.floor(actualHeal)}`, 0x00ff00, false);
 
     // Visual effect
     const particles = scene.add.particles(player.x, player.y, 'heal_effect', {
@@ -14233,11 +14428,39 @@ function spawnMonster(x, y, type, hpOverride, attackOverride, xpOverride, isBoss
         const diffSettings = window.Constants?.DIFFICULTY?.[difficulty] || { hpMult: 1, dmgMult: 1 };
         const monsterScaling = window.Constants?.MONSTER_SCALING || { hpPerLevel: 0.15, attackPerLevel: 0.10 };
 
-        // Calculate monster level from XP reward using sqrt for balanced progression
-        // Formula: ceil(sqrt(XP * 0.5)) - Slower than linear, avoids high level bloat
-        // Results: 10xp→Lv3, 50xp→Lv5, 100xp→Lv8, 200xp→Lv10, 500xp→Lv16, 1000xp→Lv23
-        const xpReward = xpOverride !== undefined ? xpOverride : (type.xp || 10);
-        const monsterLvl = Math.max(1, Math.ceil(Math.sqrt(xpReward * 0.5)));
+        // --- NEW DYNAMIC SCALING ---
+        // Get player level (default to 1)
+        const playerLevel = (window.playerStats && window.playerStats.level) ? window.playerStats.level : 1;
+
+        // Calculate monster level: Player Level +/- variance
+        // Regular: -1 to +1 (e.g. Player Lv12 -> Mon Lv11-13)
+        // Boss: +2 to +4
+        let levelVariance = Phaser.Math.Between(-1, 1);
+        if (isBoss) levelVariance = Phaser.Math.Between(2, 4);
+
+        // If overrides exist (Dungeon), respect them? 
+        // Actually, dungeon generation usually passes 'spawnMonsterScaled' which calls this.
+        // If 'hpOverride' is passed, we usually assume the level logic shouldn't mess up too much,
+        // BUT 'monsterLvl' is used for the label.
+
+        // We stick to dynamic scaling UNLESS inside a dungeon context where precise control might be needed?
+        // For now, let's apply dynamic scaling generally since 'spawnMonsterScaled' doesn't pass a level override explicitly yet.
+
+        const monsterLvl = Math.max(1, playerLevel + levelVariance);
+
+        // Scale XP Reward based on Level
+        // If xpOverride is provided, use it. Otherwise, scale base XP.
+        // Formula: BaseXP * (1 + (Level-1) * 0.2) -> 20% more XP per level
+        let finalXp = xpOverride !== undefined ? xpOverride : (type.xp || 10);
+
+        if (xpOverride === undefined) {
+            const baseXp = type.xp || 10;
+            // Scale linearly
+            finalXp = Math.floor(baseXp * (1 + (monsterLvl - 1) * 0.25));
+        }
+
+        const xpReward = finalXp;
+        // ---------------------------
 
         // Level-based scaling: Apply ONLY if stats weren't manually overridden (pre-scaled for dungeons)
         // This prevents "Double Scaling" where dungeon stats are multiplied by level again

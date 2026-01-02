@@ -117,11 +117,7 @@ class ProjectileManager {
             console.log(`🏹 Projectile Spawned: x=${projectile.x}, y=${projectile.y}, depth=${projectile.depth}, visible=${projectile.visible}, alpha=${projectile.alpha}, texture=${projectile.texture.key}, frame=${projectile.frame.name}`);
             console.log(`   Velocity: x=${projectile.body.velocity.x}, y=${projectile.body.velocity.y}`);
 
-            // DEBUG: Force a visible red box attached to the projectile
-            // This proves if the object exists and moves, independent of the sprite texture
-            // Uncommented for debug
-            const debugRect = this.scene.add.rectangle(0, 0, 20, 20, 0xff0000, 1);
-            projectile.debugRect = debugRect; // Attach to projectile to update in loop
+
 
             // Play sound
             if (typeof playSound === 'function') {
@@ -163,12 +159,7 @@ class ProjectileManager {
                     return; // Continue forEach
                 }
 
-                // Update Debug Rect
-                if (projectile.debugRect) {
-                    projectile.debugRect.setPosition(projectile.x, projectile.y);
-                    projectile.debugRect.setDepth(2001);
-                    // console.log(`🏹 Proj Update: x=${projectile.x.toFixed(1)}, y=${projectile.y.toFixed(1)}`);
-                }
+
 
                 // Add visual trail for fireballs
                 if (projectile.isProjectile && projectile.texture.key === 'fireball_effect') {
@@ -309,9 +300,7 @@ class ProjectileManager {
             });
         }
 
-        if (projectile.debugRect) {
-            projectile.debugRect.destroy();
-        }
+
         projectile.destroy();
     }
 }

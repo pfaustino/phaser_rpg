@@ -268,6 +268,7 @@ const MapManager = {
         // Clear existing buildings and markers
         this.buildings = [];
         this.transitionMarkers = [];
+        this.questZones = {}; // Clear old quest zones to prevent stale state
 
         // Ensure mana regen is running (assuming global function)
         if (typeof startManaRegen === 'function') startManaRegen();
@@ -459,61 +460,148 @@ const MapManager = {
         // Initialize NPCs (assuming global function)
         if (typeof initializeNPCs === 'function') initializeNPCs();
 
-        // Strange Energy (MQ-01) - Visual & Trigger
-        // MOVED to (22, 18) to be clearly visible in the square, away from the Shop (13-20)
-
-        // CHECK QUEST STATE: Only show if 'main_02_001' (Mysterious Arrival) is active
-        // This quest deals with the strange energy in the town square.
-        const energyQuestId = 'main_02_001';
-        const showEnergy = window.isQuestActive(energyQuestId);
-
-        if (showEnergy) {
-            const energyX = 22 * tileSize + 16;
-            const energyY = 18 * tileSize + 16;
-
-            // Particle Effect for Strange Energy
-            // 1. Ensure a texture exists for particles (using a simple generated graphic)
-            if (!scene.textures.exists('energy_particle')) {
-                const graphics = scene.make.graphics({ x: 0, y: 0, add: false });
-                graphics.fillStyle(0x00ffff, 1);
-                graphics.fillCircle(4, 4, 4); // 8x8 circle
-                graphics.generateTexture('energy_particle', 8, 8);
-            }
-
-            // 2. Create Emitter
-            const particles = scene.add.particles(energyX, energyY, 'energy_particle', {
-                speed: { min: 20, max: 60 },
-                angle: { min: 0, max: 360 },
-                scale: { start: 1.5, end: 0 }, // Larger particles
-                alpha: { start: 1, end: 0 },
-                lifespan: 1200,
-                frequency: 80, // More frequent
-                blendMode: 'ADD'
-            });
-            particles.setDepth(5); // Higher depth to sit above ground debris
-
-            // Inner core (Static anchor) - Larger and pulsing
-            const core = scene.add.circle(energyX, energyY, 10, 0x00ffff, 0.8).setDepth(6);
-            scene.tweens.add({
-                targets: core,
-                scaleX: 1.2,
-                scaleY: 1.2,
-                alpha: 0.5,
-                duration: 1000,
-                yoyo: true,
-                repeat: -1
-            });
-
-            // Interactive Zone trigger
-            const energyZone = scene.add.zone(energyX, energyY, 64, 64); // Larger zone
-            scene.physics.add.existing(energyZone, true);
-
-            // Store for later interaction setup and indicators
-            this.questZones['strange_energy_zone'] = energyZone;
-        }
+        // Generic Quest Zones - Visual & Trigger
+        this.updateQuestZones(scene);
 
         // Setup physics interactions for quest zones
         this.setupQuestInteractions(scene, player);
+    },
+
+
+
+    /**
+     * Check and spawn generic quest zones/effects based on active objectives
+     * @param {Phaser.Scene} scene
+     */
+    updateQuestZones(scene) {
+        if (!window.uqe || !window.uqe.activeQuests) return;
+
+        // 1. Identify all currently active zones (Mark)
+        const activeZoneIds = new Set();
+
+        window.uqe.activeQuests.forEach(quest => {
+            if (!quest.objectives) return;
+            quest.objectives.forEach(obj => {
+                // Check definition first (where custom props live), then direct prop, then static fallback
+                let effect = (obj.definition && obj.definition.visualEffect) || obj.visualEffect;
+
+                if (!effect && window.uqe.allDefinitions && window.uqe.allDefinitions[quest.id]) {
+                    const staticQuest = window.uqe.allDefinitions[quest.id];
+                    const staticObj = staticQuest.objectives.find(o => o.id === obj.id);
+                    if (staticObj) effect = staticObj.visualEffect;
+                }
+
+                // Only process incomplete objectives with a visual effect
+                if (effect && !obj.completed) {
+                    const zoneId = (obj.definition && obj.definition.locationId) || obj.zoneId || obj.locationId || obj.id;
+                    activeZoneIds.add(zoneId);
+
+                    // Spawn if not exists
+                    if (!this.questZones[zoneId] || !this.questZones[zoneId].active) {
+                        // Get coordinates
+                        const tx = (obj.definition && obj.definition.targetX !== undefined) ? obj.definition.targetX : obj.targetX;
+                        const ty = (obj.definition && obj.definition.targetY !== undefined) ? obj.definition.targetY : obj.targetY;
+
+                        if (tx !== undefined && ty !== undefined) {
+                            const tileSize = scene.tileSize || 32;
+                            const worldX = tx * tileSize + 16;
+                            const worldY = ty * tileSize + 16;
+
+                            if (effect === 'strange_energy') {
+                                this.spawnStrangeEnergy(scene, worldX, worldY, zoneId);
+                            }
+                        }
+                    }
+                }
+            });
+        });
+
+        // 2. Remove stale zones (Sweep)
+        Object.keys(this.questZones).forEach(zoneId => {
+            if (!activeZoneIds.has(zoneId)) {
+                // Zone is no longer active (quest completed/objective finished)
+                const zone = this.questZones[zoneId];
+                if (zone) {
+                    // Destroy visuals
+                    if (zone._questVisuals) {
+                        if (zone._questVisuals.particles) zone._questVisuals.particles.destroy();
+                        if (zone._questVisuals.core) zone._questVisuals.core.destroy();
+                        if (zone._questVisuals.tweens) zone._questVisuals.tweens.forEach(t => t.remove());
+                    }
+                    // Destroy zone itself
+                    zone.destroy();
+                    console.log(`🧹 [MapManager] Cleaned up completed quest zone: ${zoneId}`);
+                }
+                delete this.questZones[zoneId];
+            }
+        });
+    },
+
+    /**
+     * Helper to spawn "Strange Energy" visual and zone
+     */
+    spawnStrangeEnergy(scene, x, y, zoneId) {
+        // 1. Ensure a texture exists for particles
+        if (!scene.textures.exists('energy_particle')) {
+            const graphics = scene.make.graphics({ x: 0, y: 0, add: false });
+            graphics.fillStyle(0x00ffff, 1);
+            graphics.fillCircle(4, 4, 4); // 8x8 circle
+            graphics.generateTexture('energy_particle', 8, 8);
+        }
+
+        // 2. Create Emitter
+        const particles = scene.add.particles(x, y, 'energy_particle', {
+            speed: { min: 20, max: 60 },
+            angle: { min: 0, max: 360 },
+            scale: { start: 1.5, end: 0 },
+            alpha: { start: 1, end: 0 },
+            lifespan: 1200,
+            frequency: 80,
+            blendMode: 'ADD',
+            emitting: true
+        });
+        particles.setDepth(5);
+
+        // Inner core
+        const core = scene.add.circle(x, y, 10, 0x00ffff, 0.8).setDepth(6);
+        // Store visuals for cleanup
+        const tween = scene.tweens.add({
+            targets: core,
+            scaleX: 1.2,
+            scaleY: 1.2,
+            alpha: 0.5,
+            duration: 1000,
+            yoyo: true,
+            repeat: -1
+        });
+
+        // Interactive Zone trigger
+        const energyZone = scene.add.zone(x, y, 64, 64);
+        scene.physics.add.existing(energyZone, true);
+
+        // Store for later interaction setup
+        energyZone._questVisuals = {
+            particles: particles,
+            core: core,
+            tweens: [tween]
+        };
+        this.questZones[zoneId] = energyZone;
+
+        // Immediate overlap setup if player exists
+        if (window.game && window.game.scene && window.game.scene.scenes[0]) {
+            const activeScene = window.game.scene.scenes[0];
+            // Try to find player in global scope or scene
+            const p = window.player || (activeScene.player);
+
+            if (p && p.body) {
+                scene.physics.add.overlap(p, energyZone, () => {
+                    if (window.uqe && window.uqe.eventBus) {
+                        const eventName = (typeof UQE_EVENTS !== 'undefined') ? UQE_EVENTS.LOCATION_EXPLORED : 'location_explored';
+                        window.uqe.eventBus.emit(eventName, { id: zoneId, zoneId: zoneId });
+                    }
+                });
+            }
+        }
     },
 
     /**
@@ -528,26 +616,18 @@ const MapManager = {
             return;
         }
 
-        // Strange Energy (MQ-01)
-        const energyZone = this.questZones['strange_energy_zone'];
-        if (energyZone) {
-            console.log('🔹 [MapManager] Found strange_energy_zone. Active:', energyZone.active);
-            if (energyZone.body) console.log(`   Zone Body: x=${energyZone.body.x}, y=${energyZone.body.y}, w=${energyZone.body.width}, h=${energyZone.body.height}`);
-            else console.warn('⚠️ [MapManager] strange_energy_zone has NO physics body');
-
-            scene.physics.add.overlap(player, energyZone, () => {
-                console.log('⚡ [MapManager] Player overlapped strange energy!');
-                // Emit exploration event
-                if (window.uqe && window.uqe.eventBus) {
-                    const eventName = (typeof UQE_EVENTS !== 'undefined') ? UQE_EVENTS.LOCATION_EXPLORED : 'location_explored';
-                    console.log(`📡 [MapManager] Emitting ${eventName} for strange_energy_zone`);
-                    window.uqe.eventBus.emit(eventName, { id: 'strange_energy_zone', zoneId: 'strange_energy_zone' });
-                }
-            });
-            console.log('✅ [MapManager] Strange Energy interaction setup complete');
-        } else {
-            console.warn('⚠️ [MapManager] strange_energy_zone NOT FOUND in questZones');
-        }
+        // Generic Loop for all quest zones
+        Object.keys(this.questZones).forEach(zoneId => {
+            const zone = this.questZones[zoneId];
+            if (zone) {
+                scene.physics.add.overlap(player, zone, () => {
+                    if (window.uqe && window.uqe.eventBus) {
+                        const eventName = (typeof UQE_EVENTS !== 'undefined') ? UQE_EVENTS.LOCATION_EXPLORED : 'location_explored';
+                        window.uqe.eventBus.emit(eventName, { id: zoneId, zoneId: zoneId });
+                    }
+                });
+            }
+        });
 
         // Play Town Music
         if (typeof playBackgroundMusic === 'function') playBackgroundMusic('town');

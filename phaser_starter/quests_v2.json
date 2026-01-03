@@ -515,9 +515,11 @@
                     "id": "explore_square",
                     "type": "explore_location",
                     "label": "Investigate Town Square Energy",
-                    "targetX": 15,
-                    "targetY": 15,
-                    "target": 1
+                    "locationId": "strange_energy_zone",
+                    "targetX": 22,
+                    "targetY": 18,
+                    "target": 1,
+                    "visualEffect": "strange_energy"
                 },
                 {
                     "id": "return_thorne",
@@ -575,7 +577,11 @@
                     "itemId": "artifact_fragment",
                     "icon": "item_fragment",
                     "label": "Retrieve Artifact Fragment",
-                    "target": 1
+                    "target": 1,
+                    "locationId": "find_ruins",
+                    "targetX": 35,
+                    "targetY": 35,
+                    "visualEffect": "strange_energy"
                 },
                 {
                     "id": "return_thorne_ruins",

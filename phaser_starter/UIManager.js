@@ -1109,6 +1109,141 @@ window.UIManager = {
     // TOOLTIP SYSTEM (Monsters/Items)
     // ============================================
 
+    showTooltip: function (item, x, y, context = 'inventory') {
+        if (!window.game || !window.game.scene || !window.game.scene.scenes[0]) return;
+        const scene = window.game.scene.scenes[0];
+
+        // Clean up existing tooltip
+        this.hideTooltip();
+
+        // Safe check for item
+        if (!item) return;
+
+        // Create container
+        // Offset slightly to not cover the item entirely or cursor
+        const tooltipX = x + 20;
+        const tooltipY = y;
+
+        const tooltip = scene.add.container(tooltipX, tooltipY).setDepth(20000).setScrollFactor(0);
+        this.currentTooltip = tooltip;
+
+        const rarityColors = {
+            'Legendary': 0xffaa00,
+            'Epic': 0x9900cc,
+            'Rare': 0x0099ff,
+            'Common': 0xffffff
+        };
+        const rarityColor = rarityColors[item.quality] || 0xffffff;
+        const rarityHex = '#' + rarityColor.toString(16).padStart(6, '0');
+
+        // Text elements array to calculate height
+        const texts = [];
+        let currentY = 10;
+        const padding = 10;
+        const width = 220;
+
+        // 1. Name
+        const nameText = scene.add.text(width / 2, currentY, item.name, {
+            fontSize: '14px', fontFamily: 'Arial', fontStyle: 'bold', fill: '#ffffff',
+            wordWrap: { width: width - 20 }
+        }).setOrigin(0.5, 0);
+        tooltip.add(nameText);
+        texts.push(nameText);
+        currentY += nameText.height + 5;
+
+        // 2. Gear Score (if applicable) - approximate logic or reading from item? 
+        // Item Level is usually a good proxy if GS isn't explicit
+        if (item.itemLevel) {
+            const gsText = scene.add.text(width / 2, currentY, `Gear Score: ${item.itemLevel * 10 + 50}`, { // Dummy calc to match look
+                fontSize: '12px', fontFamily: 'Arial', fill: '#aaaaaa'
+            }).setOrigin(0.5, 0);
+            tooltip.add(gsText);
+            texts.push(gsText);
+            currentY += gsText.height + 2;
+        }
+
+        // 3. Quality
+        const qualityText = scene.add.text(width / 2, currentY, `Quality: ${item.quality}`, {
+            fontSize: '12px', fontFamily: 'Arial', fill: rarityHex
+        }).setOrigin(0.5, 0);
+        tooltip.add(qualityText);
+        texts.push(qualityText);
+        currentY += qualityText.height + 2;
+
+        // 4. Type
+        const typeText = scene.add.text(width / 2, currentY, `Type: ${item.type.charAt(0).toUpperCase() + item.type.slice(1)}`, {
+            fontSize: '12px', fontFamily: 'Arial', fill: '#aaaaaa'
+        }).setOrigin(0.5, 0);
+        tooltip.add(typeText);
+        texts.push(typeText);
+        currentY += typeText.height + 8;
+
+        // 5. Stats
+        const stats = [
+            { label: 'Attack', val: item.attackPower || item.attack, prefix: '+' },
+            { label: 'Defense', val: item.defense, prefix: '+' },
+            { label: 'Crit', val: item.critChance ? Math.round(item.critChance * 100) + '%' : null, prefix: '+' },
+            { label: 'Speed', val: item.speedBonus || item.speed, prefix: '+' },
+            { label: 'Health', val: item.maxHp || item.hpBonus, prefix: '+' }, // maxHp on item usually means bonus
+            { label: 'Lifesteal', val: item.lifesteal ? Math.round(item.lifesteal * 100) + '%' : null, prefix: '+' }
+        ];
+
+        stats.forEach(stat => {
+            if (stat.val) {
+                const statText = scene.add.text(padding + 10, currentY, `${stat.label}: ${stat.prefix}${stat.val}`, {
+                    fontSize: '12px', fontFamily: 'Arial', fill: '#dddddd'
+                }).setOrigin(0, 0);
+                tooltip.add(statText);
+                texts.push(statText);
+                currentY += statText.height + 2;
+            }
+        });
+
+        // 6. Description (if any)
+        if (item.description) {
+            currentY += 5;
+            const descText = scene.add.text(width / 2, currentY, item.description, {
+                fontSize: '11px', fontFamily: 'Arial', fill: '#aaaaaa', fontStyle: 'italic',
+                wordWrap: { width: width - 20 }, align: 'center'
+            }).setOrigin(0.5, 0);
+            tooltip.add(descText);
+            texts.push(descText);
+            currentY += descText.height + 5;
+        }
+
+        // 7. Hint
+        currentY += 10;
+        const hintText = scene.add.text(width / 2, currentY, 'Click to Equip', {
+            fontSize: '11px', fontFamily: 'Arial', fill: '#666666'
+        }).setOrigin(0.5, 0);
+        tooltip.add(hintText);
+        texts.push(hintText);
+        currentY += hintText.height + 10;
+
+        // Background (created last to know height, but added first via sendToBack... or just insert at 0?)
+        // Container add order matters for rendering. We should add bg first.
+        // We can use moveDown or just create it first (but we didn't know height).
+        // Best: create bg, then add all texts again? Or update bg size.
+        // Let's create bg now and send to back.
+        const bgHeight = currentY;
+        const bg = scene.add.rectangle(width / 2, bgHeight / 2, width, bgHeight, 0x000000, 0.9)
+            .setStrokeStyle(2, rarityColor);
+        tooltip.add(bg);
+        tooltip.sendToBack(bg);
+
+        // Ensure tooltip stays on screen
+        const camera = scene.cameras.main;
+        if (tooltipX + width / 2 > camera.width) {
+            tooltip.x = x - width - 20;
+        }
+        if (tooltipY + bgHeight / 2 > camera.height) {
+            tooltip.y = camera.height - bgHeight / 2 - 10;
+        }
+        if (tooltip.y - bgHeight / 2 < 0) {
+            tooltip.y = bgHeight / 2 + 10;
+        }
+    },
+
     showMonsterTooltip: function (monster, x, y) {
         if (!window.game || !window.game.scene || !window.game.scene.scenes[0]) return;
         const scene = window.game.scene.scenes[0];
@@ -1156,7 +1291,17 @@ window.UIManager = {
 
     hideTooltip: function () {
         if (this.currentTooltip) {
-            this.currentTooltip.destroy();
+            try {
+                if (typeof this.currentTooltip.destroy === 'function') {
+                    this.currentTooltip.destroy();
+                } else if (this.currentTooltip.active) {
+                    // Fallback if it's a game object but somehow destroy is missing (unlikely)
+                    // or if generic object
+                    this.currentTooltip.destroy && this.currentTooltip.destroy();
+                }
+            } catch (e) {
+                console.warn('UIManager: Safe destroy of tooltip failed', e);
+            }
             this.currentTooltip = null;
         }
     },

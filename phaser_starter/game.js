@@ -2297,7 +2297,9 @@ function create() {
 
             // 1. Grant Rewards (XP and Gold)
             if (quest.rewards) {
+                console.log(`🎁 [Rewards Debug] Inspecting rewards for ${quest.id}:`, quest.rewards);
                 if (quest.rewards.xp) {
+                    console.log(`   granting ${quest.rewards.xp} XP (Type: ${typeof quest.rewards.xp})`);
                     addXp(quest.rewards.xp);
                     console.log(`   + Awarded ${quest.rewards.xp} XP`);
                 }
@@ -2578,6 +2580,9 @@ function create() {
     }
 
     player = this.physics.add.sprite(400, 300, playerTexture);
+    // Expose player globally for MapManager and other systems
+    window.player = player;
+    this.player = player;
 
     // Restore saved position if loaded
     if (typeof window.savedPlayerX !== 'undefined') {
@@ -3032,6 +3037,67 @@ function create() {
 }
 
 /**
+ * Check for NPC Interaction
+ * Iterate through active NPCs and trigger dialog if close enough
+ */
+function checkNPCInteraction() {
+    if (!window.npcs || window.npcs.length === 0) return false;
+
+    // Use player position
+    const px = player.x;
+    const py = player.y;
+    const interactionRadius = 60; // 60px range
+
+    let closestNPC = null;
+    let minDst = interactionRadius;
+
+    // Find closest NPC
+    window.npcs.forEach(npc => {
+        if (!npc.active) return;
+        const dist = Phaser.Math.Distance.Between(px, py, npc.x, npc.y);
+        if (dist <= minDst) {
+            minDst = dist;
+            closestNPC = npc;
+        }
+    });
+
+    if (closestNPC) {
+        console.log(`💬 Interacting with NPC: ${closestNPC.name} (${closestNPC.id})`);
+
+        // Emit UQE Event (Crucial for generic quest triggers like 'talk_thorne_return')
+        if (window.uqe) {
+            // Try ID from definition first, then instance ID
+            const eventId = (closestNPC.definition ? closestNPC.definition.id : closestNPC.id) || closestNPC.name.toLowerCase().replace(' ', '_');
+            window.uqe.eventBus.emit('NPC_TALK', { id: eventId, name: closestNPC.name });
+            console.log(`   -> Emitted NPC_TALK for ${eventId}`);
+        }
+
+        // Open Dialog UI
+        // Try known dialog function names (startDialog, showDialog, openDialog)
+        const dialogId = closestNPC.dialogId || (closestNPC.definition ? closestNPC.definition.dialogId : null);
+
+        if (dialogId) {
+            if (typeof startDialog === 'function') {
+                startDialog(dialogId, closestNPC.name);
+                return true;
+            } else if (typeof showDialog === 'function') {
+                showDialog(dialogId, closestNPC.name);
+                return true;
+            } else if (typeof openDialog === 'function') {
+                openDialog(dialogId, closestNPC.name);
+                return true;
+            } else {
+                console.warn(`⚠️ Dialog function missing! Cannot open dialog '${dialogId}' for ${closestNPC.name}`);
+                if (typeof addChatMessage === 'function') addChatMessage(`${closestNPC.name}: (Dialog System Unavailable)`, 0xffff00);
+            }
+        }
+        return true; // Interaction handled (even if UI failed)
+    }
+
+    return false;
+}
+
+/**
  * Handle World Interaction (F Key / Controller A)
  * Returns true if an interaction occurred (blocking other actions)
  */
@@ -3214,6 +3280,13 @@ window.triggerItemPickup = triggerItemPickup;
  * Update loop (like pygame game loop)
  */
 function update(time, delta) {
+    // Dynamic Quest Visuals (Check every frame, returns early if not needed)
+    if (typeof MapManager !== 'undefined' && MapManager.updateQuestZones) {
+        // Use active scene reference explicitly to avoid context issues with 'this'
+        const activeScene = (typeof game !== 'undefined' && game.scene && game.scene.scenes) ? game.scene.scenes[0] : this;
+        if (activeScene) MapManager.updateQuestZones(activeScene);
+    }
+
     // DEBUG: SANITY CHECK
     if (Math.random() < 0.01) console.log(`🔄 Update Loop Running. Time: ${time}, Paused: ${typeof isGamePaused !== 'undefined' ? isGamePaused : 'undef'}, ProjMgr: ${!!window.projectileManager}`);
     // Update Damage/Healing Numbers
@@ -6400,9 +6473,21 @@ function updateUI() {
 function addXp(amount) {
     if (!amount || amount <= 0) return;
 
+    // Safety check for NaN or undefined XP
+    if (typeof playerStats.xp !== 'number' || isNaN(playerStats.xp)) {
+        console.warn('⚠️ [GameState] Fixed corrupted XP value (was NaN/undefined)');
+        playerStats.xp = 0;
+    }
+
+    // AUTO-REPAIR: Check if XP is lower than the minimum required for the current level
+    // This handles the "Level 19 with 0 XP" bug
+    const minXP = playerStats.level > 1 ? getXPNeededForLevel(playerStats.level - 1) : 0;
+    if (playerStats.xp < minXP) {
+        console.warn(`⚠️ [GameState] Detected XP Desync! Level ${playerStats.level} requires ${minXP} XP, but found ${playerStats.xp}. Repairing...`);
+        playerStats.xp = minXP;
+    }
+
     playerStats.xp += amount;
-    // Track total if needed (optional)
-    // playerStats.questStats.xpEarned = (playerStats.questStats.xpEarned || 0) + amount; 
 
     // Visual feedback
     showDamageNumber(player.x, player.y - 50, `+${amount} XP`, 0xb478ff, false, 'xp');
@@ -7351,10 +7436,68 @@ function createEquipmentUI() {
     dividerGraphics.setScrollFactor(0).setDepth(301);
     const divider = dividerGraphics;
 
-    // Define scrollable area dimensions first
-    const inventoryStartY = 90; // Start below title (reduced for less padding)
-    const inventoryEndY = gameHeight - 20; // Leave some space at bottom
-    const inventoryVisibleHeight = inventoryEndY - inventoryStartY;
+    // Initialize current tab safely
+    let currentTab = 'all';
+    if (typeof equipmentPanel !== 'undefined' && equipmentPanel && equipmentPanel.currentTab) {
+        currentTab = equipmentPanel.currentTab;
+    }
+
+    // Clean up existing UI if present (prevents ghost items and stuck tooltips)
+    if (typeof equipmentPanel !== 'undefined' && equipmentPanel) {
+        destroyEquipmentUI();
+        // Since destroyEquipmentUI sets equipmentVisible = false? No, checking logic...
+        // destroyEquipmentUI usually assumes we are closing it. 
+        // But we want to keep it open.
+        // Let's make sure we restore visibility if destroyEquipmentUI toggles it or if toggleEquipment logic interferes.
+        // Actually destroyEquipmentUI() does NOT touch equipmentVisible. It just cleans up.
+        // But wait, toggleEquipment uses equipmentVisible to decide whether to call destroyEquipmentUI.
+        // HERE inside createEquipmentUI, we definitely want it visible.
+        equipmentVisible = true; // Ensure it stays true
+    }
+
+    // Tab definitions
+    const tabs = [
+        { id: 'all', label: 'All' },
+        { id: 'weapon', label: 'Weapons' },
+        { id: 'armor', label: 'Armor' },
+        { id: 'accessory', label: 'Access.' }, // Accessories (includes belts)
+        { id: 'consumable', label: 'Items' }   // Consumables
+    ];
+
+    // Create tabs at the top of right panel
+    const tabWidth = (panelWidth - 20) / tabs.length;
+    const tabHeight = 30;
+    const tabY = 70; // Position below title
+
+    // Adjust inventory start Y to account for tabs
+    const inventoryStartY = 120; // Lowered to make room for tabs
+
+    tabs.forEach((tab, index) => {
+        const tabX = rightPanelX - panelWidth / 2 + 10 + index * tabWidth + tabWidth / 2;
+
+        // Tab background (highlight active)
+        const isActive = currentTab === tab.id;
+        const tabColor = isActive ? 0x00aaff : 0x333333;
+        const tabAlpha = isActive ? 0.8 : 0.6;
+
+        const tabBg = scene.add.rectangle(tabX, tabY, tabWidth - 4, tabHeight, tabColor, tabAlpha)
+            .setScrollFactor(0).setDepth(302).setInteractive({ useHandCursor: true });
+
+        // Tab text
+        const tabText = scene.add.text(tabX, tabY, tab.label, {
+            fontSize: '12px',
+            fill: '#ffffff',
+            fontStyle: isActive ? 'bold' : 'normal'
+        }).setScrollFactor(0).setDepth(303).setOrigin(0.5, 0.5);
+
+        // Tab click handler
+        tabBg.on('pointerdown', () => {
+            if (typeof equipmentPanel !== 'undefined' && equipmentPanel) {
+                equipmentPanel.currentTab = tab.id;
+            }
+            createEquipmentUI();
+        });
+    });
 
     // Create scrollable container for inventory items
     // Container starts higher to show first items fully when scrollPosition = minScroll
@@ -7369,6 +7512,9 @@ function createEquipmentUI() {
 
     // Create mask for the scrollable area (visible area in right panel)
     // Start mask well above inventoryStartY to prevent clipping of first row
+    const inventoryEndY = gameHeight - 20; // Leave some space at bottom
+    const inventoryVisibleHeight = inventoryEndY - inventoryStartY;
+
     const maskTopOffset = 40; // Increased further to show entire first row sprites
     const inventoryMask = scene.make.graphics();
     inventoryMask.fillStyle(0xffffff);
@@ -7395,10 +7541,15 @@ function createEquipmentUI() {
         visibleHeight: inventoryVisibleHeight
     });
 
+    // Update global reference (merging safely if needed, but we usually overwrite)
+    // Preserve currentTab if we are re-creating
+    // const currentTab = equipmentPanel.currentTab; // Use local variable from top instead
+
     equipmentPanel = {
         leftBg: leftBg,
         rightBg: rightBg,
         divider: divider,
+        currentTab: currentTab,
         leftTitle: scene.add.text(leftPanelX, 30, 'EQUIPMENT', {
             fontSize: '24px',
             fill: '#ffffff',
@@ -7421,7 +7572,7 @@ function createEquipmentUI() {
         scrollbar: scrollbar,
         inventoryStartY: inventoryStartY,
         inventoryVisibleHeight: inventoryVisibleHeight,
-        containerOffset: containerOffset, // Store offset so it's accessible in updateEquipmentInventoryItems
+        containerOffset: containerOffset,
         minScroll: minScroll
     };
 
@@ -7599,12 +7750,61 @@ function updateEquipmentInventoryItems() {
         ? equipmentPanel.inventoryStartY
         : 100; // Default fallback
 
-    // Show all inventory items (not just equippable ones)
-    const inventoryItems = playerStats.inventory;
+    // Filter and Sort inventory items
+    const currentTab = equipmentPanel.currentTab || 'all';
+
+    // 1. Filter
+    let inventoryItems = playerStats.inventory.filter(item => {
+        if (currentTab === 'all') return true;
+
+        if (currentTab === 'weapon') {
+            return item.type === 'weapon';
+        }
+
+        if (currentTab === 'armor') {
+            return ['armor', 'helmet', 'boots', 'gloves'].includes(item.type);
+        }
+
+        if (currentTab === 'accessory') {
+            // Belts are accessories now
+            return ['ring', 'amulet', 'belt'].includes(item.type);
+        }
+
+        if (currentTab === 'consumable') {
+            return item.type === 'consumable' || item.type === 'quest_item';
+        }
+
+        return true;
+    });
+
+    // 2. Sort
+    inventoryItems.sort((a, b) => {
+        // Sort by type first
+        const typeOrder = ['weapon', 'armor', 'helmet', 'boots', 'gloves', 'belt', 'amulet', 'ring', 'consumable', 'quest_item'];
+        const typeA = typeOrder.indexOf(a.type);
+        const typeB = typeOrder.indexOf(b.type);
+
+        if (typeA !== typeB) {
+            return typeA - typeB;
+        }
+
+        // Sort by quality (Legendary > Epic > Rare > Common)
+        const qualityOrder = { 'Legendary': 3, 'Epic': 2, 'Rare': 1, 'Common': 0 };
+        const qA = qualityOrder[a.quality] || 0;
+        const qB = qualityOrder[b.quality] || 0;
+
+        if (qA !== qB) {
+            return qB - qA; // Higher quality first
+        }
+
+        // Sort by name
+        return a.name.localeCompare(b.name);
+    });
+
 
     if (inventoryItems.length === 0) {
         const rightPanelXValue = equipmentPanel.rightBg ? equipmentPanel.rightBg.x : 768;
-        const emptyText = scene.add.text(rightPanelXValue, 200, 'Inventory is empty', {
+        const emptyText = scene.add.text(rightPanelXValue, 200, 'No items in this category', {
             fontSize: '16px',
             fill: '#888888',
             fontStyle: 'italic'
@@ -7645,7 +7845,7 @@ function updateEquipmentInventoryItems() {
     console.log(`   Container exists: ${!!equipmentPanel.inventoryContainer}, active: ${equipmentPanel.inventoryContainer?.active}`);
 
     inventoryItems.forEach((item, index) => {
-        console.log(`  - Equipment panel item ${index}: ${item.name} (type: ${item.type})`);
+        // console.log(`  - Equipment panel item ${index}: ${item.name} (type: ${item.type})`); // Reduced log spam
         const row = Math.floor(index / itemsPerRow);
         const col = index % itemsPerRow;
         const x = startX + col * (itemSize + spacing);
@@ -7700,7 +7900,7 @@ function updateEquipmentInventoryItems() {
         // Add all items to container
         equipmentPanel.inventoryContainer.add([itemBg, itemSprite, borderRect, itemNameText]);
 
-        console.log(`   Added item ${index} to container at relative position (${x}, ${y})`);
+        // console.log(`   Added item ${index} to container at relative position (${x}, ${y})`);
 
         // Make clickable - equip if equippable, otherwise show tooltip
         const isEquippable = equippableTypes.includes(item.type);
@@ -7751,7 +7951,7 @@ function updateEquipmentInventoryItems() {
     if (equipmentPanel.inventoryContainer) {
         if (equipmentPanel.maskGeometry) {
             equipmentPanel.inventoryContainer.setMask(equipmentPanel.maskGeometry);
-            console.log(`📦 Mask applied to container`);
+            // console.log(`📦 Mask applied to container`);
         } else {
             console.warn(`⚠️ No maskGeometry found for equipment panel container`);
         }
@@ -7773,20 +7973,14 @@ function updateEquipmentInventoryItems() {
         // Position container: at minScroll (-40), container is at inventoryStartY - containerOffset - (-40)
         // Container position is managed by setScrollPosition, but we ensure it's initialized correctly
         equipmentPanel.inventoryContainer.y = inventoryStartY - containerOffset;
-        console.log(`📦 Equipment panel container positioned at (${equipmentPanel.inventoryContainer.x}, ${equipmentPanel.inventoryContainer.y})`);
-        console.log(`   startY: ${inventoryStartY}, offset: ${containerOffset}, rightPanelX: ${rightPanelXValue}`);
-        console.log(`   Container children count: ${equipmentPanel.inventoryContainer.list.length}`);
-        if (equipmentPanel.inventoryContainer.list.length > 0) {
-            const firstChild = equipmentPanel.inventoryContainer.list[0];
-            console.log(`   First child position: (${firstChild.x}, ${firstChild.y}), visible: ${firstChild.visible}`);
-        }
+
+        // console.log(`📦 Equipment panel container positioned at (${equipmentPanel.inventoryContainer.x}, ${equipmentPanel.inventoryContainer.y})`);
     }
 
     // Force container to be visible and active
     if (equipmentPanel.inventoryContainer) {
         equipmentPanel.inventoryContainer.setVisible(true);
         equipmentPanel.inventoryContainer.setActive(true);
-        console.log(`📦 Container visibility: visible=${equipmentPanel.inventoryContainer.visible}, active=${equipmentPanel.inventoryContainer.active}`);
     }
 
     // Update scrollbar visibility and size
@@ -10502,7 +10696,7 @@ function createShopUI(npc) {
     const divider = dividerGraphics;
 
     // --- Right Panel: Player Inventory ---
-    const inventoryStartY = 100;
+    const inventoryStartY = 150; // Increased to 150 to make room for tabs
     const inventoryEndY = gameHeight - 20;
     const inventoryVisibleHeight = inventoryEndY - inventoryStartY;
     const inventoryContainerOffset = 60;
@@ -10590,7 +10784,9 @@ function createShopUI(npc) {
         inventoryContainerOffset: inventoryContainerOffset,
         minScroll: -30,
         shopMask: shopMask,
-        inventoryMask: inventoryMask
+        inventoryMask: inventoryMask,
+        currentTab: 'all', // Initialize tab
+        tabs: [] // Store tab objects
     };
 
 
@@ -10602,8 +10798,79 @@ function createShopUI(npc) {
         fontStyle: 'bold'
     }).setScrollFactor(0).setDepth(401).setOrigin(0, 0);
 
+    createShopTabs(); // Create tabs
     updateShopItems();
     updateShopInventoryItems();
+}
+
+/**
+ * Create shop tabs (Player Inventory side)
+ */
+function createShopTabs() {
+    const scene = game.scene.scenes[0];
+    if (!shopPanel) return;
+
+    // Clear existing tabs
+    if (shopPanel.tabs) {
+        shopPanel.tabs.forEach(t => {
+            if (t.bg) t.bg.destroy();
+            if (t.text) t.text.destroy();
+        });
+    }
+    shopPanel.tabs = [];
+
+    // Tab definitions
+    const tabs = [
+        { id: 'all', label: 'All' },
+        { id: 'weapon', label: 'Weapons' },
+        { id: 'armor', label: 'Armor' },
+        { id: 'accessory', label: 'Access.' },
+        { id: 'consumable', label: 'Items' }
+    ];
+
+    const panelWidth = shopPanel.rightBg.width;
+    const rightPanelX = shopPanel.rightBg.x;
+    const tabWidth = (panelWidth - 20) / tabs.length;
+    const tabHeight = 30;
+    const tabY = 70; // Position below title
+
+    const currentTab = shopPanel.currentTab || 'all';
+
+    tabs.forEach((tab, index) => {
+        const tabX = rightPanelX - panelWidth / 2 + 10 + index * tabWidth + tabWidth / 2;
+
+        // Tab background
+        const isActive = currentTab === tab.id;
+        const tabColor = isActive ? 0x00aaff : 0x333333;
+        const tabAlpha = isActive ? 0.8 : 0.6;
+
+        const tabBg = scene.add.rectangle(tabX, tabY, tabWidth - 4, tabHeight, tabColor, tabAlpha)
+            .setScrollFactor(0).setDepth(402).setInteractive({ useHandCursor: true });
+
+        // Tab text
+        const tabText = scene.add.text(tabX, tabY, tab.label, {
+            fontSize: '12px',
+            fill: '#ffffff',
+            fontStyle: isActive ? 'bold' : 'normal'
+        }).setScrollFactor(0).setDepth(403).setOrigin(0.5, 0.5);
+
+        // Click handler
+        tabBg.on('pointerdown', () => {
+            shopPanel.currentTab = tab.id;
+            createShopTabs(); // Refresh tabs (highlight)
+            updateShopInventoryItems(); // Refresh list
+        });
+
+        // Hover effects
+        tabBg.on('pointerover', () => {
+            if (shopPanel.currentTab !== tab.id) tabBg.setFillStyle(0x444444);
+        });
+        tabBg.on('pointerout', () => {
+            if (shopPanel.currentTab !== tab.id) tabBg.setFillStyle(0x333333);
+        });
+
+        shopPanel.tabs.push({ bg: tabBg, text: tabText });
+    });
 }
 
 /**
@@ -10922,7 +11189,41 @@ function updateShopInventoryItems() {
     }
 
     const rightPanelX = shopPanel.rightBg.x;
-    const inventoryItems = playerStats.inventory;
+
+    // Filter items based on current tab
+    const currentTab = shopPanel.currentTab || 'all';
+    const inventoryItems = playerStats.inventory.filter(item => {
+        if (currentTab === 'all') return true;
+        if (currentTab === 'weapon') return item.type === 'weapon';
+        if (currentTab === 'armor') return ['armor', 'helmet', 'boots', 'gloves', 'belt'].includes(item.type);
+        if (currentTab === 'accessory') return ['ring', 'amulet'].includes(item.type);
+        if (currentTab === 'consumable') return ['consumable', 'quest_item'].includes(item.type);
+        return true;
+    });
+
+    // Sort inventory items to match Equipment UI behavior
+    inventoryItems.sort((a, b) => {
+        // Sort by type first
+        const typeOrder = ['weapon', 'armor', 'helmet', 'boots', 'gloves', 'belt', 'amulet', 'ring', 'consumable', 'quest_item'];
+        const typeA = typeOrder.indexOf(a.type);
+        const typeB = typeOrder.indexOf(b.type);
+
+        if (typeA !== typeB) {
+            return typeA - typeB;
+        }
+
+        // Sort by quality (Legendary > Epic > Rare > Common)
+        const qualityOrder = { 'Legendary': 3, 'Epic': 2, 'Rare': 1, 'Common': 0 };
+        const qA = qualityOrder[a.quality] || 0;
+        const qB = qualityOrder[b.quality] || 0;
+
+        if (qA !== qB) {
+            return qB - qA; // Higher quality first
+        }
+
+        // Sort by name
+        return a.name.localeCompare(b.name);
+    });
 
     if (inventoryItems.length === 0) {
         const emptyText = scene.add.text(rightPanelX, 200, 'Inventory is empty', {
@@ -11214,6 +11515,14 @@ function closeShop() {
             if (item.buyText && item.buyText.active) item.buyText.destroy();
             if (item.borderRect && item.borderRect.active) item.borderRect.destroy();
         });
+
+        // Destroy tabs
+        if (shopPanel.tabs) {
+            shopPanel.tabs.forEach(tab => {
+                if (tab.bg && tab.bg.active) tab.bg.destroy();
+                if (tab.text && tab.text.active) tab.text.destroy();
+            });
+        }
 
         // Destroy all inventory item elements (right panel)
         shopPanel.inventoryItems.forEach(item => {

@@ -17,6 +17,12 @@
 ## 4. Debugging & Maintenance
 - **Safety First**: When fixing a bug for a specific case, always ask: "Does this fix apply generically to all similar cases?" (e.g., fixing one monster spawner vs. fixing the spawn function).
 - **Comments**: Comment complex logic, especially in the massive `game.js` file, to aid future navigation.
+- **Logging**: Use console.log sparingly and only for debugging. Avoid logging every frame or every update.
+- **Error Handling**: Implement proper error handling and fallbacks to prevent the game from crashing.
+- **Memory Management**: Be mindful of memory usage, especially when loading assets or creating objects.
+- **Performance**: Optimize performance-critical code, such as collision detection or physics calculations.
+- **Usability**: When looking for different strings, use a common phrase so that filtering is easier.
 
 ## 5. Feature Development
 - **Reuse Before Build**: Unless specified, always assume that a seemingly new feature already exists and search first before writing code for it. When found, use that code. If not found, then of course write it.
+

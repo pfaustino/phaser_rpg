@@ -18,7 +18,7 @@
         "x": 1120,
         "y": 1120,
         "radius": 100,
-        "requiredObjectiveId": "find_ruins",
+        "requiredObjectiveId": "collect_fragment",
         "onInteract": {
             "type": "composite",
             "actions": [

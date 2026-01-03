@@ -1340,6 +1340,18 @@ function checkZoneInteraction() {
     let interacted = false;
 
     specialZones.forEach(zone => {
+        // Resolve dynamic location if available
+        let zoneX = zone.x;
+        let zoneY = zone.y;
+
+        if (game.scene.scenes[0] && game.scene.scenes[0].mapManager) {
+            const dynamicLoc = game.scene.scenes[0].mapManager.getLocationXY(zone.id);
+            if (dynamicLoc) {
+                zoneX = dynamicLoc.x;
+                zoneY = dynamicLoc.y;
+            }
+        }
+
         // Only check if objective is active (or if zone is always active)
         let isActive = zone.alwaysActive || false;
 
@@ -1355,7 +1367,7 @@ function checkZoneInteraction() {
         }
 
         if (isActive) {
-            const dist = Phaser.Math.Distance.Between(player.x, player.y, zone.x, zone.y);
+            const dist = Phaser.Math.Distance.Between(player.x, player.y, zoneX, zoneY);
             if (dist <= zone.radius && !interacted) {
                 // Interaction radius met
                 if (window.uqe) {
@@ -2214,6 +2226,10 @@ function create() {
         window.uqe.eventBus.on(UQE_EVENTS.QUEST_COMPLETED, (quest) => {
             console.log(`🎁 [UQE Bridge] Handling completion for: ${quest.title}`);
 
+            // BLOCK LEVEL UP EFFECT temporarily
+            // This prevents the level up animation from playing BEFORE the quest dialog opens
+            window.blockLevelUpEffect = true;
+
             // Give Rewards
             if (quest.rewards.xp) {
                 playerStats.xp += quest.rewards.xp;
@@ -2223,7 +2239,15 @@ function create() {
                 playerStats.gold += quest.rewards.gold;
                 addChatMessage(`Gained ${quest.rewards.gold} Gold from quest`, 0xffd700, '💰');
             }
-            updatePlayerStats();
+            if (quest.rewards.gold) {
+                playerStats.gold += quest.rewards.gold;
+                addChatMessage(`Gained ${quest.rewards.gold} Gold from quest`, 0xffd700, '💰');
+            }
+
+            // Explicitly verify level up status (Respecting the block we just set)
+            // We replaced 'updatePlayerStats()' with explicit calls to ensure control
+            checkLevelUp();
+            updateUI();
 
             // Always update the tracker HUD to remove the completed quest
             updateQuestTrackerHUD();
@@ -2234,6 +2258,13 @@ function create() {
             // Deferred logic is now handled by the queue system automatically
             console.log('✅ Queueing quest completion dialog');
             queueDialog('QUEST_COMPLETED', quest);
+
+            // Release the block after a short delay to allow dialog to open
+            setTimeout(() => {
+                window.blockLevelUpEffect = false;
+                // Force a check in case it's still pending but dialog is somehow closed (safety)
+                if (typeof checkPendingLevelUp === 'function') checkPendingLevelUp();
+            }, 500);
         });
 
         // Handle Objective Progress HUD - WoW-style persistent tracker
@@ -4806,6 +4837,14 @@ window.handleMonsterDeath = function (monster) {
     }
 
     // Use ProceduralMonster animation
+    // Disable interactions immediately upon death to prevent "stuck" tooltips
+    if (monster.disableInteractive) {
+        monster.disableInteractive();
+    }
+    if (window.UIManager && window.UIManager.hideTooltip) {
+        window.UIManager.hideTooltip(true); // Force hide immediately
+    }
+
     if (typeof ProceduralMonster !== 'undefined' && typeof ProceduralMonster.playDeathAnimation === 'function') {
         const scene = game.scene.scenes[0];
         const animScene = monster.scene || scene;
@@ -6528,9 +6567,12 @@ function checkLevelUp() {
     }
 
     if (leveledUp) {
-        // Check if any UI is open
-        if (dialogVisible || shopVisible || inventoryVisible || settingsVisible || buildingPanelVisible || questVisible) {
-            console.log('⏳ Level Up Queued (UI Open)');
+        // Check if any UI is open OR if explicitly blocked OR if dialogs are queued
+        // This covers the gap where a dialog is queued but not yet visible
+        const isQueueActive = (typeof dialogQueue !== 'undefined' && dialogQueue.length > 0);
+
+        if (isAnyWindowOpen() || window.blockLevelUpEffect || isQueueActive) {
+            console.log('⏳ Level Up Queued (UI Open, Blocked, or Dialog Queued)');
             window.pendingLevelUp = true;
             window.pendingLevelUpStats = { level: stats.level }; // store for display
         } else {
@@ -6565,6 +6607,17 @@ function createLevelUpEffect(newLevel) {
     }
 
     console.log(`🎵 Level Up Effect Sync: ${duration.toFixed(0)}ms`);
+
+    // Guard: Prevent playing if blocked or UI open (Double check)
+    if (window.blockLevelUpEffect || (typeof isAnyWindowOpen === 'function' && isAnyWindowOpen()) || (typeof dialogQueue !== 'undefined' && dialogQueue.length > 0)) {
+        console.log('🛑 Level Up Effect BLOCKED (Safety Guard)');
+        window.pendingLevelUp = true;
+        // Ensure stats are saved for the pending level up
+        if (!window.pendingLevelUpStats && playerStats) {
+            window.pendingLevelUpStats = { level: playerStats.level };
+        }
+        return;
+    }
 
     // 2. Sound
     playSound('level_up');
@@ -6624,7 +6677,10 @@ window.cheatLevelUp = function () {
 // Check for pending level ups
 function checkPendingLevelUp() {
     if (window.pendingLevelUp) {
-        if (!dialogVisible && !shopVisible && !inventoryVisible && !settingsVisible && !buildingPanelVisible && !questVisible) {
+        // Only trigger if NO windows are open, NOT blocked, and NO dialogs queued
+        const isQueueActive = (typeof dialogQueue !== 'undefined' && dialogQueue.length > 0);
+
+        if (!isAnyWindowOpen() && !window.blockLevelUpEffect && !isQueueActive) {
             console.log('✅ Triggering Queued Level Up');
             createLevelUpEffect(window.pendingLevelUpStats ? window.pendingLevelUpStats.level : playerStats.level);
             window.pendingLevelUp = false;
@@ -7472,6 +7528,9 @@ function createEquipmentUI() {
     // Adjust inventory start Y to account for tabs
     const inventoryStartY = 120; // Lowered to make room for tabs
 
+    // Local array to hold tab elements before equipmentPanel is initialized
+    const tabElements = [];
+
     tabs.forEach((tab, index) => {
         const tabX = rightPanelX - panelWidth / 2 + 10 + index * tabWidth + tabWidth / 2;
 
@@ -7489,6 +7548,10 @@ function createEquipmentUI() {
             fill: '#ffffff',
             fontStyle: isActive ? 'bold' : 'normal'
         }).setScrollFactor(0).setDepth(303).setOrigin(0.5, 0.5);
+
+        // Store tab elements for cleanup
+        tabElements.push(tabBg);
+        tabElements.push(tabText);
 
         // Tab click handler
         tabBg.on('pointerdown', () => {
@@ -7573,7 +7636,9 @@ function createEquipmentUI() {
         inventoryStartY: inventoryStartY,
         inventoryVisibleHeight: inventoryVisibleHeight,
         containerOffset: containerOffset,
-        minScroll: minScroll
+        minScroll: minScroll,
+        minScroll: minScroll,
+        tabs: tabElements // Persist tabs
     };
 
 
@@ -8174,6 +8239,14 @@ function destroyEquipmentUI() {
         }
         if (equipmentPanel.statsText && equipmentPanel.statsText.active) {
             equipmentPanel.statsText.destroy();
+        }
+
+        // Destroy Tabs
+        if (equipmentPanel.tabs) {
+            equipmentPanel.tabs.forEach(tabElem => {
+                if (tabElem && tabElem.active) tabElem.destroy();
+            });
+            equipmentPanel.tabs = [];
         }
 
         // Destroy all slot elements including backgrounds
@@ -13209,7 +13282,12 @@ function processDialogQueue() {
 
     try {
         if (item.type === 'QUEST_COMPLETED') {
-            showQuestCompletedPopupEnhanced(item.data);
+            // Use standard popup if enhanced is missing
+            if (typeof showQuestCompletedPopupEnhanced === 'function') {
+                showQuestCompletedPopupEnhanced(item.data);
+            } else {
+                showQuestCompletedPopup(item.data);
+            }
             // Remove from queue ONLY after showing? 
             // Actually showQuestCompletedPopup creates a modal that blocks via questCompletedModal check
             // So we can remove it from queue now, and the next check will be blocked by the modal
@@ -13347,6 +13425,7 @@ function showQuestCompletedPopup(quest) {
 
     // Store as global blocker with destroy method
     window.questCompletedModal = {
+        visible: true, // Explicitly set for UIManager check
         closeBtn: closeBtnBg,
         destroy: () => {
             if (overlay) overlay.destroy();

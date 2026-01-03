@@ -51,7 +51,7 @@ window.UIManager = {
             (typeof window.buildingPanelVisible !== 'undefined' && window.buildingPanelVisible) ||
             this.assetsVisible ||
             this.grassDebugVisible ||
-            (window.questCompletedModal && window.questCompletedModal.visible) ||
+            (window.questCompletedModal && (window.questCompletedModal.visible || window.questCompletedModal.closeBtn)) ||
             (window.newQuestModal && window.newQuestModal.visible) ||
             (window.questPreviewModal !== null); // Assuming questPreviewModal remains global or moves here later
     },

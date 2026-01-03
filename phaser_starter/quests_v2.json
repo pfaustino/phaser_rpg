@@ -567,8 +567,7 @@
                     "id": "find_ruins",
                     "type": "explore_location",
                     "label": "Find Temple Ruins",
-                    "targetX": 35,
-                    "targetY": 35,
+                    "locationId": "temple_ruins",
                     "target": 1
                 },
                 {
@@ -578,9 +577,7 @@
                     "icon": "item_fragment",
                     "label": "Retrieve Artifact Fragment",
                     "target": 1,
-                    "locationId": "find_ruins",
-                    "targetX": 35,
-                    "targetY": 35,
+                    "locationId": "temple_ruins",
                     "visualEffect": "strange_energy"
                 },
                 {
@@ -663,8 +660,7 @@
                     "id": "find_traitor_trail",
                     "type": "explore_location",
                     "label": "Find Traitor's Camp",
-                    "targetX": 40,
-                    "targetY": 10,
+                    "locationId": "traitor_camp",
                     "target": 1
                 }
             ],

@@ -442,19 +442,19 @@
                     {
                         "text": "What was that shockwave?",
                         "next": "mq_01_briefing",
-                        "condition": "quest_objective_active:mq_01_disturbance:talk_thorne_dist",
+                        "condition": "quest_objective_active:main_02_001:talk_thorne_intro",
                         "isQuest": true,
                         "action": "complete_objective",
-                        "questId": "mq_01_disturbance",
-                        "objectiveId": "talk_thorne_dist"
+                        "questId": "main_02_001",
+                        "objectiveId": "talk_thorne_intro"
                     },
                     {
                         "text": "I investigated the square. The energy is unstable!",
-                        "next": "mq_01_debrief",
-                        "condition": "quest_objective_active:mq_01_disturbance:return_thorne_dist",
+                        "next": "mysterious_arrival_complete",
+                        "condition": "quest_objective_active:main_02_001:return_thorne",
                         "isQuest": true,
                         "action": "complete_quest",
-                        "questId": "mq_01_disturbance"
+                        "questId": "main_02_001"
                     },
                     {
                         "text": "Tell me about the monsters",

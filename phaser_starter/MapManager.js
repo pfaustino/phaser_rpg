@@ -473,6 +473,28 @@ const MapManager = {
      * Check and spawn generic quest zones/effects based on active objectives
      * @param {Phaser.Scene} scene
      */
+    /**
+     * Resolve a semantic Location ID to runtime coordinates (X, Y)
+     * Checks Dungeons, Buildings, and other dynamic map markers.
+     */
+    getLocationXY(locationId) {
+        if (!locationId) return null;
+
+        // 1. Check Transition Markers (Dungeons, Exits)
+        const marker = this.transitionMarkers.find(m => m.dungeonId === locationId || m.targetMap === locationId || m.id === locationId);
+        if (marker) {
+            return { x: marker.x, y: marker.y };
+        }
+
+        // 2. Check Buildings (Town)
+        const building = this.buildings.find(b => b.type === locationId || b.id === locationId);
+        if (building) {
+            return { x: building.centerX, y: building.centerY };
+        }
+
+        return null;
+    },
+
     updateQuestZones(scene) {
         if (!window.uqe || !window.uqe.activeQuests) return;
 
@@ -498,15 +520,27 @@ const MapManager = {
 
                     // Spawn if not exists
                     if (!this.questZones[zoneId] || !this.questZones[zoneId].active) {
-                        // Get coordinates
-                        const tx = (obj.definition && obj.definition.targetX !== undefined) ? obj.definition.targetX : obj.targetX;
-                        const ty = (obj.definition && obj.definition.targetY !== undefined) ? obj.definition.targetY : obj.targetY;
+                        // Resolve Coordinates Dynamically
+                        let worldX, worldY;
+                        const dynamicLoc = this.getLocationXY(zoneId);
 
-                        if (tx !== undefined && ty !== undefined) {
-                            const tileSize = scene.tileSize || 32;
-                            const worldX = tx * tileSize + 16;
-                            const worldY = ty * tileSize + 16;
+                        if (dynamicLoc) {
+                            worldX = dynamicLoc.x;
+                            worldY = dynamicLoc.y;
+                            // console.log(`📍 [QuestViz] Resolved dynamic location '${zoneId}' to ${worldX},${worldY}`);
+                        } else {
+                            // Fallback to static JSON coordinates
+                            const tx = (obj.definition && obj.definition.targetX !== undefined) ? obj.definition.targetX : obj.targetX;
+                            const ty = (obj.definition && obj.definition.targetY !== undefined) ? obj.definition.targetY : obj.targetY;
 
+                            if (tx !== undefined && ty !== undefined) {
+                                const tileSize = scene.tileSize || 32;
+                                worldX = tx * tileSize + 16;
+                                worldY = ty * tileSize + 16;
+                            }
+                        }
+
+                        if (worldX !== undefined && worldY !== undefined) {
                             if (effect === 'strange_energy') {
                                 this.spawnStrangeEnergy(scene, worldX, worldY, zoneId);
                             }
@@ -515,6 +549,7 @@ const MapManager = {
                 }
             });
         });
+
 
         // 2. Remove stale zones (Sweep)
         Object.keys(this.questZones).forEach(zoneId => {
@@ -875,7 +910,7 @@ const MapManager = {
             x: exitX, y: exitY, radius: tileSize * 1.5, targetMap: 'town', marker: exitMarker, text: returnText
         });
 
-        const numDungeons = 2; // Fixed to 2 for now (Tower + Temple)
+        const numDungeons = 3; // Fixed to 3 (Tower + Temple + Traitor Camp)
 
         for (let i = 0; i < numDungeons; i++) {
             // Split map into sectors to ensure spacing
@@ -940,7 +975,37 @@ const MapManager = {
                     });
                 }
             }
+
+            // Traitor's Camp (Quest Specific)
+            // Requirement: 'main_02_005' active or completed
+            if (i === 2) {
+                const campReq = 'main_02_005';
+                const showCamp = window.isQuestActive(campReq) || window.isQuestCompleted(campReq);
+
+                if (showCamp) {
+                    const dMarker = scene.add.rectangle(dx, dy, tileSize * 2, tileSize * 2, 0xff0000, 0.8)
+                        .setDepth(3).setStrokeStyle(2, 0xffffff);
+                    const dText = scene.add.text(dx, dy, 'TRAITOR\nCAMP', { fontSize: '11px', fill: '#ffffff', align: 'center', stroke: '#000000', strokeThickness: 3 })
+                        .setDepth(4).setOrigin(0.5);
+
+                    this.transitionMarkers.push({
+                        x: dx, y: dy, radius: tileSize * 1.5, targetMap: 'wilderness', // Stay in wilderness, just a POI
+                        dungeonId: 'traitor_camp',
+                        dungeonLevel: 1, marker: dMarker, text: dText
+                    });
+
+                    // Add Zone for interaction handling
+                    const campZone = scene.add.zone(dx, dy, tileSize * 4, tileSize * 4);
+                    scene.physics.add.existing(campZone, true);
+                    scene.physics.add.overlap(player, campZone, () => {
+                        if (window.uqe && window.uqe.eventBus) {
+                            window.uqe.eventBus.emit('location_explored', { id: 'traitor_camp' });
+                        }
+                    });
+                }
+            }
         }
+
 
         scene.mapWidth = mapWidth;
         scene.mapHeight = mapHeight;
@@ -959,6 +1024,9 @@ const MapManager = {
 
         // Play Wilderness Music
         if (typeof playBackgroundMusic === 'function') playBackgroundMusic('wilderness');
+
+        // Force update of quest visuals now that map is generated
+        this.updateQuestZones(scene);
     },
 
     /**

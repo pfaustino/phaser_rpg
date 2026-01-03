@@ -13,7 +13,7 @@
         }
     },
     {
-        "id": "find_ruins",
+        "id": "temple_ruins",
         "label": "Temple Ruins",
         "x": 1120,
         "y": 1120,
@@ -41,6 +41,19 @@
                     }
                 }
             ]
+        }
+    },
+    {
+        "id": "traitor_camp",
+        "label": "Traitor's Camp",
+        "x": 0,
+        "y": 0,
+        "radius": 80,
+        "requiredObjectiveId": "find_traitor_trail",
+        "onInteract": {
+            "type": "event",
+            "eventName": "LOCATION_EXPLORED",
+            "feedback": "Camp Found!"
         }
     }
 ]

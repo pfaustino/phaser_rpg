@@ -43,8 +43,13 @@ class MonsterRenderer {
         const w = bounds.width || (bounds.radius * 2) || 40;
         const h = bounds.height || (bounds.radius * 2) || 40;
 
-        container.body.setSize(w, h);
-        container.body.setOffset(-w / 2, -h / 2); // Center the body on the container (0,0)
+        // Cap physics size to 24px to allow navigation in 32px hallways
+        // This decouples visual size from collision size
+        const physicsW = Math.min(w, 24);
+        const physicsH = Math.min(h, 24);
+
+        container.body.setSize(physicsW, physicsH);
+        container.body.setOffset(-physicsW / 2, -physicsH / 2); // Center the body on the container (0,0)
 
         appearance.layers.sort((a, b) => (a.z || 0) - (b.z || 0)).forEach(layer => {
             let element;
@@ -81,6 +86,27 @@ class MonsterRenderer {
         // Use a hit area rectangle based on appearance bounds
         // (bounds, w, h are already calculated at the top of the function)
         container.setInteractive(new Phaser.Geom.Rectangle(-w / 2, -h / 2, w, h), Phaser.Geom.Rectangle.Contains);
+
+        // Tooltip Listeners
+        container.on('pointerover', () => {
+            console.log('🖱️ Mouse over monster:', container.monsterType);
+            if (window.UIManager && window.UIManager.showMonsterTooltip) {
+                console.log('   -> Triggers Text Tooltip');
+                // Pass the container which has the stats (hp, name, etc.)
+                window.UIManager.showMonsterTooltip(container, container.x, container.y);
+            } else {
+                console.warn('   -> UIManager or showMonsterTooltip missing!');
+            }
+        });
+
+        container.on('pointerout', () => {
+            console.log('👋 Mouse out monster');
+            if (window.UIManager && window.UIManager.hideTooltip) {
+                window.UIManager.hideTooltip();
+            }
+        });
+
+        console.log(`✅ Monster interactive set for ${blueprintId}. Size: ${w}x${h}`);
 
         // Add Hover Effect
         if (typeof window.enableHoverEffect === 'function') {
@@ -208,7 +234,8 @@ class MonsterRenderer {
         const MONSTER_AGGRO_RADIUS = 200;
         const MONSTER_DEAGGRO_RADIUS = 400;
 
-        if (distance < MONSTER_AGGRO_RADIUS) {
+        // Check forced aggro (from damage/projectiles) or proximity
+        if (monster.isForceAggro || distance < MONSTER_AGGRO_RADIUS) {
             monster.isAggro = true;
         } else if (distance > MONSTER_DEAGGRO_RADIUS) {
             monster.isAggro = false;

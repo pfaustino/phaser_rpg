@@ -48,6 +48,7 @@ window.UIManager = {
             this.dialogVisible ||
             this.shopVisible ||
             this.buildingPanelVisible ||
+            (typeof window.buildingPanelVisible !== 'undefined' && window.buildingPanelVisible) ||
             this.assetsVisible ||
             this.grassDebugVisible ||
             (window.questCompletedModal && window.questCompletedModal.visible) ||
@@ -79,7 +80,20 @@ window.UIManager = {
         if (this.dialogVisible) {
             this.closeDialog();
         }
-        // Add others as they are migrated
+
+        // Handle Building UIs
+        if (typeof window.buildingPanelVisible !== 'undefined' && window.buildingPanelVisible) {
+            if (typeof window.closeBuildingUI === 'function') {
+                window.closeBuildingUI();
+            } else {
+                // Manual fallback for specific buildings
+                if (window.TavernUI && window.TavernUI.visible) window.TavernUI.close();
+                if (window.InnUI && window.InnUI.visible) window.InnUI.close();
+                if (window.ForgeUI && window.ForgeUI.visible) window.ForgeUI.close();
+            }
+            window.buildingPanelVisible = false;
+            this.buildingPanelVisible = false;
+        }
     },
 
     // ============================================
@@ -87,17 +101,21 @@ window.UIManager = {
     // ============================================
 
     toggleSettings: function () {
-        // If already open, close it
+        // If settings is already open, close it (handled by closeAllInterfaces via isAnyWindowOpen check, but explicit check here is fine too)
         if (this.settingsVisible) {
             this.settingsVisible = false;
             this.destroySettingsUI();
             return;
         }
 
-        // Close all other interfaces before opening
-        this.closeAllInterfaces();
+        // If ANY other window is open, simply close them and DO NOT open settings
+        // This makes ESC act as a generic "Close" button
+        if (this.isAnyWindowOpen() || (typeof window.buildingPanelVisible !== 'undefined' && window.buildingPanelVisible)) {
+            this.closeAllInterfaces();
+            return;
+        }
 
-        // Now open settings
+        // Now open settings (only if nothing else was open)
         this.settingsVisible = true;
         this.createSettingsUI();
     },
@@ -1086,6 +1104,63 @@ window.UIManager = {
     },
 
 
+
+    // ============================================
+    // TOOLTIP SYSTEM (Monsters/Items)
+    // ============================================
+
+    showMonsterTooltip: function (monster, x, y) {
+        if (!window.game || !window.game.scene || !window.game.scene.scenes[0]) return;
+        const scene = window.game.scene.scenes[0];
+
+        // Clean up existing tooltip
+        this.hideTooltip();
+
+        // Create container
+        const tooltip = scene.add.container(x, y - 50).setDepth(20000);
+        this.currentTooltip = tooltip;
+
+        // Background
+        const bg = scene.add.rectangle(0, 0, 150, 60, 0x000000, 0.8)
+            .setStrokeStyle(2, 0xff0000);
+        tooltip.add(bg);
+
+        // Name Text
+        const nameText = scene.add.text(0, -15, monster.name || 'Unknown', {
+            fontSize: '16px',
+            fontFamily: 'Arial',
+            fontStyle: 'bold',
+            fill: '#ffffff'
+        }).setOrigin(0.5);
+        tooltip.add(nameText);
+
+        // Level Text
+        const levelText = scene.add.text(0, 5, `Lvl ${monster.level || 1}`, {
+            fontSize: '12px',
+            fontFamily: 'Arial',
+            fill: '#cccccc'
+        }).setOrigin(0.5);
+        tooltip.add(levelText);
+
+        // HP Text
+        // Use monster.hp vs monster.maxHp
+        // Handle potential undefined maxHp
+        const maxHp = monster.maxHp || monster.hp || 100;
+        const hpText = scene.add.text(0, 20, `HP: ${Math.floor(monster.hp)}/${Math.floor(maxHp)}`, {
+            fontSize: '12px',
+            fontFamily: 'Arial',
+            fill: '#ff4444'
+        }).setOrigin(0.5);
+        tooltip.add(hpText);
+    },
+
+    hideTooltip: function () {
+        if (this.currentTooltip) {
+            this.currentTooltip.destroy();
+            this.currentTooltip = null;
+        }
+    },
+
     // ============================================
     // TOAST / NOTIFICATION SYSTEM
     // ============================================
@@ -1097,6 +1172,7 @@ window.UIManager = {
      * @param {number} duration - ms to display
      */
     showToast(message, type = 'info', duration = 3000) {
+        return; // Disabled by user request
         if (!window.game || !window.game.scene || !window.game.scene.scenes[0]) return;
         const scene = window.game.scene.scenes[0];
 

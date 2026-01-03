@@ -443,9 +443,17 @@ function assignItemSet(item, quality) {
     // Only Epic and Legendary can be set items, and only 30% chance
     if ((quality === 'Epic' || quality === 'Legendary') && Math.random() < 0.3) {
         const itemSets = getItemSets();
+
+        // Safety check: if no item sets are defined, return null
+        if (!itemSets || Object.keys(itemSets).length === 0) {
+            return null;
+        }
+
         const setNames = Object.keys(itemSets);
         const set = Phaser.Math.RND.pick(setNames);
-        if (itemSets[set].pieces.includes(item.type)) {
+
+        // Safety check: ensure set exists and has pieces array
+        if (set && itemSets[set] && itemSets[set].pieces && itemSets[set].pieces.includes(item.type)) {
             return set;
         }
     }

@@ -98,7 +98,14 @@ class ProjectileManager {
             projectile.hasHit = false; // Reset hit flag
             projectile.body.enable = true; // Re-enable body
             projectile.body.checkCollision.none = false; // Re-enable collisions
-            projectile.body.setCircle(10);
+
+            // Set circle radius to 4 (8px diameter) and CENTER it on the sprite
+            // radius = 4. Offset = (width/2) - radius
+            const radius = 4;
+            const offsetX = (projectile.width / 2) - radius;
+            const offsetY = (projectile.height / 2) - radius;
+            projectile.body.setCircle(radius, offsetX, offsetY);
+
             projectile.body.setCollideWorldBounds(true);
             projectile.body.onWorldBounds = true;
 
@@ -260,6 +267,24 @@ class ProjectileManager {
         const angle = projectile.rotation;
         monster.x += Math.cos(angle) * 10;
         monster.y += Math.sin(angle) * 10;
+
+        // --- Aggro Logic: Infinite Range + Chain Aggro ---
+        monster.isForceAggro = true; // Aggro victim regardless of distance
+
+        // Chain Aggro: Alert nearby monsters
+        if (window.monsters) {
+            const CHAIN_RADIUS = 300; // Pixels
+            window.monsters.forEach(m => {
+                if (m && m.active && !m.isDead && m !== monster) {
+                    const dist = Phaser.Math.Distance.Between(monster.x, monster.y, m.x, m.y);
+                    if (dist <= CHAIN_RADIUS) {
+                        m.isForceAggro = true;
+                        // Optional: Visual feedback could be added here (e.g. "!")
+                    }
+                }
+            });
+        }
+        // ------------------------------------------------
 
         // Destroy projectile
         this.destroyProjectile(projectile);

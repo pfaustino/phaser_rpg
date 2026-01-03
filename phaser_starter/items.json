@@ -44,7 +44,7 @@
     "consumables": {
         "health_potion": {
             "name": "Health Potion",
-            "sprite": "assets/images/pixellab-red-simple-health-potion-1765494342318.png",
+            "sprite": "assets/images/item_consumable.png",
             "spriteKey": "item_consumable",
             "stackable": true,
             "healAmount": 50,
@@ -57,6 +57,30 @@
             "stackable": true,
             "manaAmount": 30,
             "description": "Restores 30 MP"
+        },
+        "stew": {
+            "name": "Stew",
+            "sprite": "assets/images/stew.png",
+            "spriteKey": "stew",
+            "stackable": true,
+            "healAmount": 30,
+            "description": "Restores 30 HP"
+        },
+        "ale": {
+            "name": "Ale",
+            "sprite": "assets/images/ale.png",
+            "spriteKey": "ale",
+            "stackable": true,
+            "healAmount": 20,
+            "description": "Restores 20 HP"
+        },
+        "bread": {
+            "name": "Bread",
+            "sprite": "assets/images/bread.png",
+            "spriteKey": "bread",
+            "stackable": true,
+            "healAmount": 10,
+            "description": "Restores 10 HP"
         }
     },
     "weaponTypes": {
@@ -65,7 +89,7 @@
             "speed": 1.0,
             "critChance": 0.05,
             "hitSound": "sword_hit",
-            "defaultSprite": "assets/images/pixellab-medieval-short-sword-1765494973241.png"
+            "defaultSprite": "assets/images/item_weapon.png"
         },
         "Axe": {
             "baseAttack": 1.15,

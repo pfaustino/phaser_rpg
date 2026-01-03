@@ -965,10 +965,14 @@ const MapManager = {
                         this.dungeonWalls.push({ x: x * tileSize, y: y * tileSize, width: tileSize, height: tileSize, rect: wall });
 
                         // Add to physics group for monster collision
+                        // Add to physics group for monster collision
                         if (this.wallGroup) {
                             const pWall = this.wallGroup.create(x * tileSize + tileSize / 2, y * tileSize + tileSize / 2, null);
-                            pWall.setSize(tileSize, tileSize);
-                            pWall.setVisible(false); // Invisible physics body, visual is separate
+                            // Reduce wall body size to 24x24 to allow smoother navigation around corners
+                            // Effectively widens corridors from 32px to 40px physics-wise
+                            pWall.setSize(24, 24);
+                            pWall.setOffset(4, 4); // Center in 32x32 tile
+                            pWall.setVisible(false);
                         }
                     }
                 }

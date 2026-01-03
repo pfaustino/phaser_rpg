@@ -1877,96 +1877,6 @@ function showVictoryCinematic(scene, imageKey, loreText) {
         closeCinematic();
     });
 
-    // --- RANGED COMBAT INPUT ---
-    this.input.on('pointerdown', (pointer) => {
-        if (pointer.rightButtonDown()) {
-            // FIRE PROJECTILE
-            if (typeof playerAttack === 'function') {
-                const angle = Phaser.Math.Angle.Between(player.x, player.y, worldX, worldY);
-                playerAttack(this.time.now, true, angle);
-            }
-        } else {
-            // --- LONG PRESS INTERACTION LOGIC (Mobile Support) ---
-            if (!this.longPressTimer) {
-                // Check if we are clicking on UI to avoid conflicting
-                // Simple heuristic: if clicking in bottom right (Ability Bar) or other UI areas
-                // For now, world interaction is global, so maybe it's fine.
-
-                // Visual feedback: Scaling circle
-                // We'll add this to 'this' to access in pointerup
-                this.longPressFeedback = this.add.circle(pointer.x, pointer.y, 10, 0xffffff, 0.5)
-                    .setScrollFactor(0).setDepth(10000);
-
-                this.tweens.add({
-                    targets: this.longPressFeedback,
-                    scale: 3,
-                    alpha: 0,
-                    duration: 600
-                });
-
-                this.longPressTimer = this.time.delayedCall(600, () => {
-                    console.log('👆 Long Press Detected: Triggering Interaction');
-                    if (this.longPressFeedback) this.longPressFeedback.destroy();
-                    this.longPressFeedback = null;
-                    this.longPressTimer = null;
-
-                    // Trigger "F" / Interact
-                    if (typeof triggerWorldInteraction === 'function') {
-                        const handled = triggerWorldInteraction();
-                        if (handled) {
-                            // Prevent walking if possible, but player might already be moving.
-                            // We can stop player movement here if desired.
-                            if (player && player.body) {
-                                player.body.setVelocity(0);
-                                // Also clear destination if tap-to-move was implemented
-                                if (player.targetDest) player.targetDest = null;
-                            }
-                        } else {
-                            showDamageNumber(player.x, player.y - 40, "No interaction nearby", 0xcccccc);
-                        }
-                    }
-                });
-
-                // Store start position to detect drag/move cancellation
-                this.longPressStart = { x: pointer.x, y: pointer.y };
-            }
-        }
-    });
-
-    this.input.on('pointermove', (pointer) => {
-        // Cancel long press if moved significantly (drag)
-        if (this.longPressTimer && this.longPressStart) {
-            const dist = Phaser.Math.Distance.Between(pointer.x, pointer.y, this.longPressStart.x, this.longPressStart.y);
-            if (dist > 20) { // 20px tolerance
-                // console.log('👋 Long Press Cancelled (Moved)');
-                this.longPressTimer.remove();
-                this.longPressTimer = null;
-                if (this.longPressFeedback) {
-                    this.longPressFeedback.destroy();
-                    this.longPressFeedback = null;
-                }
-            }
-        }
-
-        // Update worldX/Y for other systems
-        const worldPoint = this.input.activePointer.positionToCamera(this.cameras.main);
-        worldX = worldPoint.x;
-        worldY = worldPoint.y;
-    });
-
-    this.input.on('pointerup', () => {
-        // Cancel long press on release logic
-        if (this.longPressTimer) {
-            // console.log('👋 Long Press Cancelled (Released)');
-            this.longPressTimer.remove();
-            this.longPressTimer = null;
-            if (this.longPressFeedback) {
-                this.longPressFeedback.destroy();
-                this.longPressFeedback = null;
-            }
-        }
-    });
-
     // Debug Hit Area NOT ENABLED by default for user, but useful if needed:
     // scene.input.enableDebug(btn);
 
@@ -2246,6 +2156,7 @@ function create() {
         // Right Click Listener Removed
         // Spacebar Listener for Ranged Attack
         this.input.keyboard.on('keydown-SPACE', () => {
+            if (window.UIManager && window.UIManager.isAnyWindowOpen()) return;
             console.log('⌨️ Spacebar pressed');
             playerAttack(this.time.now);
         });
@@ -2505,12 +2416,41 @@ function create() {
         MapManager.loadDungeonTilesets();
     }
 
-    // Start with town map
-    // Create initial map
-    if (typeof MapManager !== 'undefined') {
-        MapManager.createTownMap();
-    } else {
-        console.error('❌ MapManager not defined!');
+    // Start with town map or loaded map
+    let loadedFromSave = false;
+    if (window.SaveManager) {
+        window.SaveManager.init(this);
+        if (localStorage.getItem('rpg_load_on_start') === 'true') {
+            localStorage.removeItem('rpg_load_on_start');
+            const data = window.SaveManager.loadGame();
+            if (data && data.world) {
+                loadedFromSave = true;
+                window.savedPlayerX = data.world.playerX;
+                window.savedPlayerY = data.world.playerY;
+
+                const map = data.world.currentMap || 'town';
+                console.log(`💾 Loading map from save: ${map}`);
+
+                if (typeof MapManager !== 'undefined') {
+                    if (map === 'wilderness') {
+                        MapManager.createWildernessMap();
+                    } else if (map === 'dungeon') {
+                        MapManager.createDungeonMap(data.world.dungeonId || 'tower_dungeon', data.world.dungeonLevel || 1);
+                    } else {
+                        MapManager.createTownMap();
+                    }
+                }
+            }
+        }
+    }
+
+    if (!loadedFromSave) {
+        // Create initial map
+        if (typeof MapManager !== 'undefined') {
+            MapManager.createTownMap();
+        } else {
+            console.error('❌ MapManager not defined!');
+        }
     }
 
     // Start village music on initial load
@@ -2638,6 +2578,17 @@ function create() {
     }
 
     player = this.physics.add.sprite(400, 300, playerTexture);
+
+    // Restore saved position if loaded
+    if (typeof window.savedPlayerX !== 'undefined') {
+        player.x = window.savedPlayerX;
+        player.y = window.savedPlayerY;
+        console.log(`📍 Player position restored to (${player.x}, ${player.y})`);
+
+        // Clear temp vars
+        window.savedPlayerX = undefined;
+        window.savedPlayerY = undefined;
+    }
 
     // Scale player to 64x64 (source is 48x48, so scale = 64/48 = 1.333...)
     player.setScale(64 / 48);
@@ -2854,6 +2805,11 @@ function create() {
         // Unlock audio context on any interaction
         unlockAudio();
 
+        // BLOCK INPUT IF UI IS OPEN
+        if (window.UIManager && window.UIManager.isAnyWindowOpen()) {
+            return;
+        }
+
         if (pointer.rightButtonDown()) {
             // FIRE PROJECTILE (Ranged Attack)
             if (typeof playerAttack === 'function') {
@@ -2927,6 +2883,19 @@ function create() {
     });
 
     this.input.on('pointerup', (pointer) => {
+        // BLOCK INPUT IF UI IS OPEN
+        if (window.UIManager && window.UIManager.isAnyWindowOpen()) {
+            // Ensure timer is cleared anyway to prevent stuck states
+            if (this.longPressTimer) {
+                this.longPressTimer.remove();
+                this.longPressTimer = null;
+                if (this.longPressFeedback) {
+                    this.longPressFeedback.destroy();
+                    this.longPressFeedback = null;
+                }
+            }
+            return;
+        }
         // Cancel long press on release
         if (this.longPressTimer) {
             this.longPressTimer.remove();
@@ -3179,6 +3148,12 @@ function triggerWorldInteraction() {
     // If building UI is open, close it (handled by caller usually, but good check)
     if (typeof buildingPanelVisible !== 'undefined' && buildingPanelVisible) {
         if (typeof closeBuildingUI === 'function') closeBuildingUI();
+        return true;
+    }
+
+    // If Shop UI is open, close it
+    if (typeof shopVisible !== 'undefined' && shopVisible) {
+        if (typeof closeShop === 'function') closeShop();
         return true;
     }
 
@@ -4753,34 +4728,45 @@ window.handleMonsterDeath = function (monster) {
 
 
     // Play death animation & particles
-    playMonsterDeathAnimation(monster);
-    createDeathEffects(monster.x, monster.y);
+    if (typeof createDeathEffects === 'function') {
+        createDeathEffects(monster.x, monster.y);
+    }
 
-    // Enhanced Death effect - Dissolve, rise, and fade
-    scene.tweens.add({
-        targets: monster,
-        alpha: 0,
-        y: monster.y - 50, // "Ghostly" rise
-        scale: 1.5, // Expand as it fades
-        duration: 800,
-        ease: 'Cubic.out',
-        onComplete: () => {
-            // Ensure cleanup
+    // Use ProceduralMonster animation
+    if (typeof ProceduralMonster !== 'undefined' && typeof ProceduralMonster.playDeathAnimation === 'function') {
+        const scene = game.scene.scenes[0];
+        const animScene = monster.scene || scene;
+
+        // Optional: Add a flash effect before death animation
+        if (monster.setTintFill) {
+            monster.setTintFill(0xffffff); // White flash
+            // Clear tint after 150ms to continue the animation with original colors
+            animScene.time.delayedCall(150, () => {
+                if (monster && monster.active && monster.clearTint) {
+                    monster.clearTint();
+                }
+            });
+        }
+
+        ProceduralMonster.playDeathAnimation(animScene, monster, () => {
             if (monster && monster.active) {
                 monster.destroy();
             }
-        }
-    });
-
-    // If it's a sprite, we can add a second "dissolve" layer with a tween on the frame or tint
-    if (monster.setTintFill) {
-        monster.setTintFill(0xffffff);
+        });
+    } else {
+        // Fallback: Enhanced Death effect - Dissolve, rise, and fade
         scene.tweens.add({
             targets: monster,
             alpha: 0,
-            duration: 400,
+            y: monster.y - 50, // "Ghostly" rise
+            scale: 1.5, // Expand as it fades
+            duration: 1000,
+            ease: 'Cubic.out',
             onComplete: () => {
-                if (monster.clearTint) monster.clearTint();
+                // Ensure cleanup
+                if (monster && monster.active) {
+                    monster.destroy();
+                }
             }
         });
     }
@@ -10367,6 +10353,7 @@ function openShop(npc) {
     UIManager.closeDialog(); // Also close dialog if open
 
     shopVisible = true;
+    if (window.UIManager) window.UIManager.shopVisible = true;
     currentShopNPC = npc; // Set current merchant
     createShopUI(npc);
 }
@@ -11137,6 +11124,7 @@ function closeShop() {
     }
 
     shopVisible = false;
+    if (window.UIManager) window.UIManager.shopVisible = false;
     currentShopNPC = null;
     console.log('🛒 Shop closed');
 }
@@ -11157,13 +11145,20 @@ function openBuildingUI(building) {
 
     switch (building.type) {
         case 'inn':
-            createInnUI();
+            if (window.InnUI) window.InnUI.open();
             break;
         case 'blacksmith':
-            createBlacksmithUI();
+            // Redirect to new ForgeUI
+            if (window.ForgeUI) {
+                window.ForgeUI.open();
+            } else {
+                console.warn('ForgeUI not found!');
+            }
+            buildingPanelVisible = false;
+            currentBuilding = null;
             break;
         case 'tavern':
-            createTavernUI();
+            if (window.TavernUI) window.TavernUI.open();
             break;
         case 'market':
             // Market uses shop system (Merchant Lysa), so just show a message
@@ -11216,56 +11211,26 @@ function openBuildingUI(building) {
  * Close building UI
  */
 function closeBuildingUI() {
-    if (buildingPanel) {
-        // Destroy all UI elements
-        if (buildingPanel.bg && buildingPanel.bg.active) buildingPanel.bg.destroy();
-        if (buildingPanel.title && buildingPanel.title.active) buildingPanel.title.destroy();
-        if (buildingPanel.closeText && buildingPanel.closeText.active) buildingPanel.closeText.destroy();
+    // Close new UI modules
+    if (window.InnUI) window.InnUI.close();
+    if (window.TavernUI) window.TavernUI.close();
+    if (window.ForgeUI) window.ForgeUI.close();
 
-        // Destroy buttons
+    // Legacy cleanup (if any other buildings use the generic panel)
+    if (buildingPanel) {
+        if (buildingPanel.bg) buildingPanel.bg.destroy();
+        if (buildingPanel.title) buildingPanel.title.destroy();
+        if (buildingPanel.closeText) buildingPanel.closeText.destroy();
+
         if (buildingPanel.buttons) {
             buildingPanel.buttons.forEach(btn => {
-                // Common elements
-                if (btn.bg && btn.bg.active) btn.bg.destroy();
-                if (btn.text && btn.text.active) btn.text.destroy();
-
-                // Tavern-specific: destroy item button elements
-                if (btn.sprite && btn.sprite.active) btn.sprite.destroy();
-                if (btn.name && btn.name.active) btn.name.destroy();
-                if (btn.price && btn.price.active) btn.price.destroy();
-                if (btn.buyBg && btn.buyBg.active) btn.buyBg.destroy();
-                if (btn.buyText && btn.buyText.active) btn.buyText.destroy();
-
-                // Blacksmith-specific: destroy slot elements
-                if (btn.label && btn.label.active) btn.label.destroy();
-                if (btn.emptyText && btn.emptyText.active) btn.emptyText.destroy();
-                if (btn.upgradeBg && btn.upgradeBg.active) btn.upgradeBg.destroy();
-                if (btn.upgradeText && btn.upgradeText.active) btn.upgradeText.destroy();
+                if (btn.bg) btn.bg.destroy();
+                if (btn.text) btn.text.destroy();
             });
         }
 
-        // Destroy tavern-specific item buttons
-        if (buildingPanel.itemButtons) {
-            buildingPanel.itemButtons.forEach(itemBtn => {
-                if (itemBtn.bg && itemBtn.bg.active) itemBtn.bg.destroy();
-                if (itemBtn.sprite && itemBtn.sprite.active) itemBtn.sprite.destroy();
-                if (itemBtn.name && itemBtn.name.active) itemBtn.name.destroy();
-                if (itemBtn.price && itemBtn.price.active) itemBtn.price.destroy();
-                if (itemBtn.buyBg && itemBtn.buyBg.active) itemBtn.buyBg.destroy();
-                if (itemBtn.buyText && itemBtn.buyText.active) itemBtn.buyText.destroy();
-            });
-        }
-
-        // Destroy text elements
         if (buildingPanel.textElements) {
             buildingPanel.textElements.forEach(elem => {
-                if (elem && elem.active) elem.destroy();
-            });
-        }
-
-        // Destroy other elements (for blacksmith, etc.)
-        if (buildingPanel.otherElements) {
-            buildingPanel.otherElements.forEach(elem => {
                 if (elem && elem.active) elem.destroy();
             });
         }
@@ -11278,489 +11243,21 @@ function closeBuildingUI() {
     console.log('🏠 Building UI closed');
 }
 
+
+
 /**
  * Create Inn UI - Restore HP/mana, save game
  */
-function createInnUI() {
-    const scene = game.scene.scenes[0];
-    const gameWidth = 1024;
-    const gameHeight = 768;
-    const panelWidth = 500;
-    const panelHeight = 400;
-    const centerX = gameWidth / 2;
-    const centerY = gameHeight / 2;
 
-    // Background panel
-    const bg = scene.add.rectangle(centerX, centerY, panelWidth, panelHeight, 0x1a1a1a, 0.95)
-        .setScrollFactor(0).setDepth(400).setStrokeStyle(3, 0x8B4513);
 
-    // Title
-    const title = scene.add.text(centerX, centerY - 150, "The Cozy Inn", {
-        fontSize: '28px',
-        fill: '#ffffff',
-        fontStyle: 'bold'
-    }).setScrollFactor(0).setDepth(401).setOrigin(0.5, 0.5);
 
-    // Close text
-    const closeText = scene.add.text(centerX + panelWidth / 2 - 20, centerY - panelHeight / 2 + 20, 'Press F to Close', {
-        fontSize: '14px',
-        fill: '#aaaaaa'
-    }).setScrollFactor(0).setDepth(401).setOrigin(1, 0);
-
-    // Welcome message
-    const welcomeText = scene.add.text(centerX, centerY - 80, 'Welcome, traveler! Rest and save your progress.', {
-        fontSize: '16px',
-        fill: '#cccccc',
-        wordWrap: { width: panelWidth - 40 }
-    }).setScrollFactor(0).setDepth(401).setOrigin(0.5, 0.5);
-
-    // Current stats display
-    const statsText = scene.add.text(centerX, centerY - 20,
-        `HP: ${playerStats.hp}/${playerStats.maxHp} | Mana: ${playerStats.mana}/${playerStats.maxMana} | Gold: ${playerStats.gold}`, {
-        fontSize: '14px',
-        fill: '#ffffff'
-    }).setScrollFactor(0).setDepth(401).setOrigin(0.5, 0.5);
-
-    // Rest button (restore HP/mana for gold)
-    const restCost = 50;
-    const restButtonBg = scene.add.rectangle(centerX - 100, centerY + 60, 180, 50, 0x4a4a4a, 1)
-        .setScrollFactor(0).setDepth(401).setStrokeStyle(2, 0x8B4513)
-        .setInteractive({ useHandCursor: true });
-
-    const restButtonText = scene.add.text(centerX - 100, centerY + 60, `Rest (${restCost} Gold)`, {
-        fontSize: '16px',
-        fill: '#ffffff',
-        fontStyle: 'bold'
-    }).setScrollFactor(0).setDepth(402).setOrigin(0.5, 0.5);
-
-    const restAction = () => {
-        if (playerStats.gold >= restCost) {
-            if (playerStats.hp < playerStats.maxHp || playerStats.mana < playerStats.maxMana) {
-                playerStats.gold -= restCost;
-                playerStats.hp = playerStats.maxHp;
-                playerStats.mana = playerStats.maxMana;
-                updatePlayerStats();
-                statsText.setText(`HP: ${playerStats.hp}/${playerStats.maxHp} | Mana: ${playerStats.mana}/${playerStats.maxMana} | Gold: ${playerStats.gold}`);
-                showDamageNumber(player.x, player.y - 40, 'Fully Restored!', 0x00ff00);
-                addChatMessage('Restored HP and Mana', 0x00ff00, '💤');
-            } else {
-                showDamageNumber(player.x, player.y - 40, 'Already at full health!', 0xffff00);
-            }
-        } else {
-            showDamageNumber(player.x, player.y - 40, 'Not enough gold!', 0xff0000);
-        }
-    };
-
-    restButtonBg.on('pointerdown', restAction);
-    restButtonText.setInteractive({ useHandCursor: true });
-    restButtonText.on('pointerdown', restAction);
-
-    // Hover effects for rest button
-    restButtonBg.on('pointerover', () => {
-        restButtonBg.setFillStyle(0x5a5a5a, 1);
-    });
-    restButtonBg.on('pointerout', () => {
-        restButtonBg.setFillStyle(0x4a4a4a, 1);
-    });
-
-    // Save button
-    const saveButtonBg = scene.add.rectangle(centerX + 100, centerY + 60, 180, 50, 0x4a4a4a, 1)
-        .setScrollFactor(0).setDepth(401).setStrokeStyle(2, 0x8B4513)
-        .setInteractive({ useHandCursor: true });
-
-    const saveButtonText = scene.add.text(centerX + 100, centerY + 60, 'Save Game', {
-        fontSize: '16px',
-        fill: '#ffffff',
-        fontStyle: 'bold'
-    }).setScrollFactor(0).setDepth(402).setOrigin(0.5, 0.5);
-
-    const saveAction = () => {
-        saveGame();
-        showDamageNumber(player.x, player.y - 40, 'Game Saved!', 0x00ff00);
-        addChatMessage('Game saved successfully', 0x00ff00, '💾');
-    };
-
-    saveButtonBg.on('pointerdown', saveAction);
-    saveButtonText.setInteractive({ useHandCursor: true });
-    saveButtonText.on('pointerdown', saveAction);
-
-    // Hover effects for save button
-    saveButtonBg.on('pointerover', () => {
-        saveButtonBg.setFillStyle(0x5a5a5a, 1);
-    });
-    saveButtonBg.on('pointerout', () => {
-        saveButtonBg.setFillStyle(0x4a4a4a, 1);
-    });
-
-    buildingPanel = {
-        bg: bg,
-        title: title,
-        closeText: closeText,
-        buttons: [
-            { bg: restButtonBg, text: restButtonText },
-            { bg: saveButtonBg, text: saveButtonText }
-        ],
-        textElements: [welcomeText, statsText]
-    };
-}
-
-/**
- * Create Blacksmith UI - Upgrade/enchant equipment
- */
-function createBlacksmithUI() {
-    const scene = game.scene.scenes[0];
-    const gameWidth = 1024;
-    const gameHeight = 768;
-    const panelWidth = 600;
-    const panelHeight = 500;
-    const centerX = gameWidth / 2;
-    const centerY = gameHeight / 2;
-
-    // Background panel
-    const bg = scene.add.rectangle(centerX, centerY, panelWidth, panelHeight, 0x1a1a1a, 0.95)
-        .setScrollFactor(0).setDepth(400).setStrokeStyle(3, 0x696969);
-
-    // Title
-    const title = scene.add.text(centerX, centerY - 200, "Blacksmith's Forge", {
-        fontSize: '28px',
-        fill: '#ffffff',
-        fontStyle: 'bold'
-    }).setScrollFactor(0).setDepth(401).setOrigin(0.5, 0.5);
-
-    // Close text
-    const closeText = scene.add.text(centerX + panelWidth / 2 - 20, centerY - panelHeight / 2 + 20, 'Press F to Close', {
-        fontSize: '14px',
-        fill: '#aaaaaa'
-    }).setScrollFactor(0).setDepth(401).setOrigin(1, 0);
-
-    // Welcome message
-    const welcomeText = scene.add.text(centerX, centerY - 140, 'I can upgrade your equipment for a price.', {
-        fontSize: '16px',
-        fill: '#cccccc',
-        wordWrap: { width: panelWidth - 40 }
-    }).setScrollFactor(0).setDepth(401).setOrigin(0.5, 0.5);
-
-    // Equipment display area
-    const equipmentY = centerY - 40;
-    const slotSize = 60;
-    const slotSpacing = 80;
-    const startX = centerX - (slotSpacing * 2);
-
-    const equipmentSlots = ['weapon', 'armor', 'helmet'];
-    const slotButtons = [];
-
-    equipmentSlots.forEach((slotType, index) => {
-        const slotX = startX + (index * slotSpacing);
-        const equippedItem = playerStats.equipment[slotType];
-
-        // Slot background
-        const slotBg = scene.add.rectangle(slotX, equipmentY, slotSize, slotSize, 0x333333, 1)
-            .setScrollFactor(0).setDepth(401).setStrokeStyle(2, 0x666666);
-
-        // Slot label
-        const slotLabel = scene.add.text(slotX, equipmentY + 40, slotType.toUpperCase(), {
-            fontSize: '12px',
-            fill: '#aaaaaa'
-        }).setScrollFactor(0).setDepth(401).setOrigin(0.5, 0.5);
-
-        if (equippedItem) {
-            // Show equipped item
-            const itemSprite = scene.add.sprite(slotX, equipmentY, `item_${slotType}`);
-            itemSprite.setScrollFactor(0).setDepth(402).setScale(0.6);
-
-            // Upgrade button
-            const upgradeCost = Math.floor(equippedItem.price * 0.3) || 100;
-            const upgradeButtonBg = scene.add.rectangle(slotX, equipmentY + 80, 100, 30, 0x4a4a4a, 1)
-                .setScrollFactor(0).setDepth(401).setStrokeStyle(1, 0x8B4513)
-                .setInteractive({ useHandCursor: true });
-
-            const upgradeButtonText = scene.add.text(slotX, equipmentY + 80, `Upgrade\n${upgradeCost}G`, {
-                fontSize: '11px',
-                fill: '#ffffff',
-                align: 'center'
-            }).setScrollFactor(0).setDepth(402).setOrigin(0.5, 0.5);
-
-            const upgradeAction = () => {
-                if (playerStats.gold >= upgradeCost) {
-                    playerStats.gold -= upgradeCost;
-
-                    // Store old values for feedback
-                    const oldAttack = equippedItem.attackPower || 0;
-                    const oldDefense = equippedItem.defense || 0;
-
-                    // Increase item stats by 10%
-                    if (equippedItem.attackPower) {
-                        equippedItem.attackPower = Math.floor(equippedItem.attackPower * 1.1);
-                    }
-                    if (equippedItem.defense) {
-                        equippedItem.defense = Math.floor(equippedItem.defense * 1.1);
-                    }
-
-                    // Also increase maxHp, speed, and other stats if they exist
-                    if (equippedItem.maxHp) {
-                        equippedItem.maxHp = Math.floor(equippedItem.maxHp * 1.1);
-                    }
-                    if (equippedItem.speed) {
-                        equippedItem.speed = Math.floor(equippedItem.speed * 1.1);
-                    }
-
-                    updatePlayerStats();
-                    updateEquipment();
-
-                    // Show detailed upgrade message
-                    let upgradeMsg = `${equippedItem.name} Upgraded!`;
-                    if (oldAttack > 0 && equippedItem.attackPower) {
-                        upgradeMsg += ` Attack: ${oldAttack} → ${equippedItem.attackPower}`;
-                    }
-                    if (oldDefense > 0 && equippedItem.defense) {
-                        upgradeMsg += ` Defense: ${oldDefense} → ${equippedItem.defense}`;
-                    }
-                    showDamageNumber(player.x, player.y - 40, upgradeMsg, 0x00ff00);
-                    addChatMessage(`${equippedItem.name} upgraded (+10% stats)`, 0x00ff00, '⚒️');
-
-                    // Update button cost
-                    const newCost = Math.floor(equippedItem.price * 0.3) || 100;
-                    upgradeButtonText.setText(`Upgrade\n${newCost}G`);
-
-                    // Refresh the blacksmith UI to show updated stats
-                    // Close and reopen to refresh
-                    closeBuildingUI();
-                    setTimeout(() => {
-                        if (currentBuilding && currentBuilding.type === 'blacksmith') {
-                            createBlacksmithUI();
-                        }
-                    }, 50);
-                } else {
-                    showDamageNumber(player.x, player.y - 40, 'Not enough gold!', 0xff0000);
-                }
-            };
-
-            upgradeButtonBg.on('pointerdown', upgradeAction);
-            upgradeButtonText.setInteractive({ useHandCursor: true });
-            upgradeButtonText.on('pointerdown', upgradeAction);
-
-            slotButtons.push({ bg: slotBg, label: slotLabel, sprite: itemSprite, upgradeBg: upgradeButtonBg, upgradeText: upgradeButtonText });
-        } else {
-            // Empty slot
-            const emptyText = scene.add.text(slotX, equipmentY, 'Empty', {
-                fontSize: '12px',
-                fill: '#666666'
-            }).setScrollFactor(0).setDepth(402).setOrigin(0.5, 0.5);
-
-            slotButtons.push({ bg: slotBg, label: slotLabel, emptyText: emptyText });
-        }
-    });
-
-    buildingPanel = {
-        bg: bg,
-        title: title,
-        closeText: closeText,
-        buttons: slotButtons,
-        textElements: [welcomeText]
-    };
-}
 
 /**
  * Create Tavern UI - Buy consumables, hear rumors
  */
-function createTavernUI() {
-    const scene = game.scene.scenes[0];
-    const gameWidth = 1024;
-    const gameHeight = 768;
-    const panelWidth = 500;
-    const panelHeight = 400;
-    const centerX = gameWidth / 2;
-    const centerY = gameHeight / 2;
 
-    // Background panel
-    const bg = scene.add.rectangle(centerX, centerY, panelWidth, panelHeight, 0x1a1a1a, 0.95)
-        .setScrollFactor(0).setDepth(400).setStrokeStyle(3, 0x654321);
 
-    // Title
-    const title = scene.add.text(centerX, centerY - 150, "The Rusty Tankard", {
-        fontSize: '28px',
-        fill: '#ffffff',
-        fontStyle: 'bold'
-    }).setScrollFactor(0).setDepth(401).setOrigin(0.5, 0.5);
 
-    // Close text
-    const closeText = scene.add.text(centerX + panelWidth / 2 - 20, centerY - panelHeight / 2 + 20, 'Press F to Close', {
-        fontSize: '14px',
-        fill: '#aaaaaa'
-    }).setScrollFactor(0).setDepth(401).setOrigin(1, 0);
-
-    // Welcome message
-    const welcomeText = scene.add.text(centerX, centerY - 80, 'Welcome! What can I get for you?', {
-        fontSize: '16px',
-        fill: '#cccccc',
-        wordWrap: { width: panelWidth - 40 }
-    }).setScrollFactor(0).setDepth(401).setOrigin(0.5, 0.5);
-
-    // Consumables for sale
-    const consumables = [
-        { name: 'Health Potion', price: 25, type: 'consumable', healAmount: 50 },
-        { name: 'Mana Potion', price: 20, type: 'consumable', manaAmount: 30 }
-    ];
-
-    const itemY = centerY - 20;
-    const itemSpacing = 80;
-    const startX = centerX - 100;
-    const itemButtons = [];
-
-    consumables.forEach((item, index) => {
-        const itemX = startX + (index * itemSpacing);
-
-        // Item display
-        const itemBg = scene.add.rectangle(itemX, itemY, 70, 70, 0x333333, 1)
-            .setScrollFactor(0).setDepth(401).setStrokeStyle(2, 0x654321);
-
-        const spriteKey = (item.name === 'Mana Potion') ? 'mana_potion' : 'item_consumable';
-        const itemSprite = scene.add.sprite(itemX, itemY, spriteKey);
-        itemSprite.setScrollFactor(0).setDepth(402).setScale(0.7);
-
-        // Item name
-        const itemName = scene.add.text(itemX, itemY + 50, item.name, {
-            fontSize: '12px',
-            fill: '#ffffff'
-        }).setScrollFactor(0).setDepth(401).setOrigin(0.5, 0.5);
-
-        // Price
-        const priceText = scene.add.text(itemX, itemY + 65, `${item.price} Gold`, {
-            fontSize: '11px',
-            fill: '#ffd700'
-        }).setScrollFactor(0).setDepth(401).setOrigin(0.5, 0.5);
-
-        // Buy button
-        const buyButtonBg = scene.add.rectangle(itemX, itemY + 95, 60, 25, 0x4a4a4a, 1)
-            .setScrollFactor(0).setDepth(401).setStrokeStyle(1, 0x654321)
-            .setInteractive({ useHandCursor: true });
-
-        const buyButtonText = scene.add.text(itemX, itemY + 95, 'Buy', {
-            fontSize: '12px',
-            fill: '#ffffff'
-        }).setScrollFactor(0).setDepth(402).setOrigin(0.5, 0.5);
-
-        const buyAction = () => {
-            if (playerStats.gold >= item.price) {
-                // Check if we can stack with existing consumable
-                let stacked = false;
-                if (item.type === 'consumable' && item.name) {
-                    console.log(`🛒 Buying ${item.name}, looking for existing stack...`);
-                    console.log(`   Inventory consumables:`, playerStats.inventory
-                        .filter(i => i.type === 'consumable')
-                        .map(i => `${i.name} (qty:${i.quantity || 1})`));
-
-                    const existingStack = playerStats.inventory.find(i =>
-                        i.type === 'consumable' && i.name === item.name
-                    );
-                    if (existingStack) {
-                        console.log(`   Found stack: ${existingStack.name} (qty:${existingStack.quantity || 1})`);
-                        existingStack.quantity = (existingStack.quantity || 1) + 1;
-                        stacked = true;
-                        console.log(`   After increment: qty=${existingStack.quantity}`);
-                    } else {
-                        console.log(`   No existing stack found for "${item.name}"`);
-                    }
-                }
-
-                if (!stacked) {
-                    if (playerStats.inventory.length >= 30) { // Max inventory size
-                        showDamageNumber(player.x, player.y - 40, 'Inventory full!', 0xff0000);
-                        return;
-                    }
-                    const newItem = { ...item, id: `consumable_${Date.now()}_${Math.random()}`, quantity: 1 };
-                    playerStats.inventory.push(newItem);
-                }
-
-                playerStats.gold -= item.price;
-                updatePlayerStats();
-                updatePotionSlots(); // Update potion slot quantities
-                showDamageNumber(player.x, player.y - 40, `Bought ${item.name}!`, 0x00ff00);
-                addChatMessage(`Bought ${item.name}`, 0x00ff00, '🍺');
-            } else {
-                showDamageNumber(player.x, player.y - 40, 'Not enough gold!', 0xff0000);
-            }
-        };
-
-        buyButtonBg.on('pointerdown', buyAction);
-        buyButtonText.setInteractive({ useHandCursor: true });
-        buyButtonText.on('pointerdown', buyAction);
-
-        // Hover effects
-        buyButtonBg.on('pointerover', () => {
-            buyButtonBg.setFillStyle(0x5a5a5a, 1);
-        });
-        buyButtonBg.on('pointerout', () => {
-            buyButtonBg.setFillStyle(0x4a4a4a, 1);
-        });
-
-        itemButtons.push({ bg: itemBg, sprite: itemSprite, name: itemName, price: priceText, buyBg: buyButtonBg, buyText: buyButtonText });
-    });
-
-    // Rumors button
-    const rumorButtonBg = scene.add.rectangle(centerX, centerY + 120, 200, 40, 0x4a4a4a, 1)
-        .setScrollFactor(0).setDepth(401).setStrokeStyle(2, 0x654321)
-        .setInteractive({ useHandCursor: true });
-
-    const rumorButtonText = scene.add.text(centerX, centerY + 120, 'Hear Rumors (Free)', {
-        fontSize: '14px',
-        fill: '#ffffff',
-        fontStyle: 'bold'
-    }).setScrollFactor(0).setDepth(402).setOrigin(0.5, 0.5);
-
-    const rumors = [
-        'I heard there\'s a powerful weapon hidden in the deepest dungeon...',
-        'The monsters have been more aggressive lately. Be careful out there!',
-        'Some say there\'s a secret passage behind the blacksmith\'s shop.',
-        'A legendary adventurer once lived in this town. Their treasure is still out there somewhere...'
-    ];
-
-    // Create rumor display text (initially hidden)
-    const rumorDisplayText = scene.add.text(centerX, centerY + 60, '', {
-        fontSize: '14px',
-        fill: '#ffff00',
-        wordWrap: { width: panelWidth - 60 },
-        align: 'center',
-        fontStyle: 'italic'
-    }).setScrollFactor(0).setDepth(403).setOrigin(0.5, 0.5);
-    rumorDisplayText.setVisible(false);
-
-    const rumorAction = () => {
-        const randomRumor = rumors[Math.floor(Math.random() * rumors.length)];
-        rumorDisplayText.setText(randomRumor);
-        rumorDisplayText.setVisible(true);
-        addChatMessage(randomRumor, 0xffff00, '💬');
-
-        // Hide after 5 seconds
-        scene.time.delayedCall(5000, () => {
-            if (rumorDisplayText && rumorDisplayText.active) {
-                rumorDisplayText.setVisible(false);
-            }
-        });
-    };
-
-    rumorButtonBg.on('pointerdown', rumorAction);
-    rumorButtonText.setInteractive({ useHandCursor: true });
-    rumorButtonText.on('pointerdown', rumorAction);
-
-    // Hover effects
-    rumorButtonBg.on('pointerover', () => {
-        rumorButtonBg.setFillStyle(0x5a5a5a, 1);
-    });
-    rumorButtonBg.on('pointerout', () => {
-        rumorButtonBg.setFillStyle(0x4a4a4a, 1);
-    });
-
-    buildingPanel = {
-        bg: bg,
-        title: title,
-        closeText: closeText,
-        buttons: [...itemButtons, { bg: rumorButtonBg, text: rumorButtonText }],
-        textElements: [welcomeText, rumorDisplayText],
-        // Tavern-specific: store item buttons for proper cleanup
-        itemButtons: itemButtons
-    };
-}
 
 // ============================================
 // SAVE/LOAD SYSTEM
@@ -14225,6 +13722,22 @@ function spawnMonster(x, y, type, hpOverride, attackOverride, xpOverride, isBoss
         // Add Hover Effect
         if (typeof window.enableHoverEffect === 'function') {
             window.enableHoverEffect(monster, scene);
+        }
+
+        // Add Tooltip Listeners (if not already added by MonsterRenderer)
+        if (!monster.getData('isMethod2')) {
+            monster.on('pointerover', () => {
+                // console.log('🖱️ Mouse over monster (spawnMonster):', monster.monsterType);
+                if (window.UIManager && window.UIManager.showMonsterTooltip) {
+                    window.UIManager.showMonsterTooltip(monster, monster.x, monster.y);
+                }
+            });
+
+            monster.on('pointerout', () => {
+                if (window.UIManager && window.UIManager.hideTooltip) {
+                    window.UIManager.hideTooltip();
+                }
+            });
         }
 
         if (isBoss) {

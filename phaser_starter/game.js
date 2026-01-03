@@ -185,8 +185,8 @@ let settingsKey;
 let settingsKey2; // Was not there but safe
 // Load music preference from localStorage; default to true (ON)
 window.musicEnabled = localStorage.getItem('musicEnabled') !== 'false';
-window.musicVolume = parseFloat(localStorage.getItem('musicVolume') || '0.5');
-window.sfxVolume = parseFloat(localStorage.getItem('sfxVolume') || '0.7');
+window.musicVolume = localStorage.getItem('musicVolume') ? parseFloat(localStorage.getItem('musicVolume')) : 0.5;
+window.sfxVolume = localStorage.getItem('sfxVolume') ? parseFloat(localStorage.getItem('sfxVolume')) : 0.7;
 
 // Background music (tracks)
 window.villageMusic = null;
@@ -1118,7 +1118,7 @@ function preload() {
     this.load.audio('hit_player', 'assets/audio/hit_player.mp3');
     this.load.audio('monster_die', 'assets/audio/monster_die.mp3');
     this.load.audio('item_pickup', 'assets/audio/item_pickup.wav');
-    this.load.audio('level_up', 'assets/audio/level_up.wav');
+    this.load.audio('level_up', 'assets/audio/level-up.mp3');
     this.load.audio('fireball_cast', 'assets/audio/fireball_cast.wav');
     this.load.audio('heal_cast', 'assets/audio/heal_cast.wav');
 
@@ -5800,6 +5800,20 @@ function createWeaponSwingTrail(x, y, direction, quality = 'Common') {
         });
     }
 
+    // Debug Cheat: Ctrl+Alt+K to Level Up
+    this.input.keyboard.on('keydown', (event) => {
+        // Check for K key (case insensitive logic just in case, though event.key is usually reliable)
+        if ((event.key === 'k' || event.key === 'K') && event.ctrlKey && event.altKey) {
+            console.log('🔧 Shortcut Detected: Ctrl+Alt+K');
+            if (window.cheatLevelUp) {
+                console.log('🔧 Executing cheatLevelUp...');
+                window.cheatLevelUp();
+            } else {
+                console.error('❌ window.cheatLevelUp is not defined!');
+            }
+        }
+    });
+
     // Create main swing line (bright line following the arc)
     const lineGraphics = scene.add.graphics();
     lineGraphics.lineStyle(3, qualityColor, 0.9);
@@ -6372,6 +6386,11 @@ function updateUI() {
     } catch (e) {
         console.error("Error in updateUI:", e);
     }
+
+    // Check for deferred level ups
+    if (typeof checkPendingLevelUp === 'function') {
+        checkPendingLevelUp();
+    }
 }
 
 /**
@@ -6424,14 +6443,107 @@ function checkLevelUp() {
     }
 
     if (leveledUp) {
-        showDamageNumber(player.x, player.y - 40, 'LEVEL UP!', 0x00ffff);
-        addChatMessage(`Level Up! Now Level ${stats.level}`, 0x00ffff, '⭐');
-        addChatMessage('HP & Mana Restored!', 0x00ff00, '💚');
+        // Check if any UI is open
+        if (dialogVisible || shopVisible || inventoryVisible || settingsVisible || buildingPanelVisible || questVisible) {
+            console.log('⏳ Level Up Queued (UI Open)');
+            window.pendingLevelUp = true;
+            window.pendingLevelUpStats = { level: stats.level }; // store for display
+        } else {
+            createLevelUpEffect(stats.level);
+        }
 
-        // UQE: Emit level up event
+        // UQE: Emit level up event (Always emit to update quests logic)
         if (typeof uqe !== 'undefined') {
             uqe.eventBus.emit(UQE_EVENTS.LEVEL_UP, { level: stats.level });
-            uqe.update(); // Check for quest completion
+            uqe.update();
+        }
+    }
+}
+
+/**
+ * Trigger visual and audio effects for Level Up
+ */
+function createLevelUpEffect(newLevel) {
+    const scene = game.scene.scenes[0];
+    if (!scene) return;
+
+    // 1. Get Audio Duration for Sync
+    let duration = 2500; // Default fallback (ms)
+
+    // Check if audio exists and get duration
+    if (scene.cache.audio.exists('level_up')) {
+        const audioData = scene.cache.audio.get('level_up');
+        // WebAudio buffer has .duration property in seconds
+        if (audioData && audioData.duration) {
+            duration = audioData.duration * 1000;
+        }
+    }
+
+    console.log(`🎵 Level Up Effect Sync: ${duration.toFixed(0)}ms`);
+
+    // 2. Sound
+    playSound('level_up');
+
+    // 3. Floating Text
+    const levelText = scene.add.text(player.x, player.y - 60, 'LEVEL UP!', {
+        fontSize: '32px',
+        fill: '#00ffff',
+        stroke: '#000000',
+        strokeThickness: 6,
+        fontStyle: 'bold'
+    }).setOrigin(0.5).setDepth(2000);
+
+    // Animate Text (Match Audio Duration)
+    scene.tweens.add({
+        targets: levelText,
+        y: player.y - 120, // Float higher
+        alpha: { from: 1, to: 0 },
+        scaleX: 1.5,
+        scaleY: 1.5,
+        duration: duration,
+        ease: 'Quad.easeOut',
+        onComplete: () => levelText.destroy()
+    });
+
+    // 4. Particle Explosion (Gold/Cyan)
+    const particleConfig = {
+        speed: { min: 100, max: 250 },
+        angle: { min: 0, max: 360 },
+        scale: { start: 0.7, end: 0 },
+        blendMode: 'ADD',
+        lifespan: Math.min(duration, 1500), // Particles fade slightly faster than full audio tail
+        gravityY: 50,
+        quantity: 30
+    };
+
+    let texture = 'gui_gem_socket'; // Reuse existing
+    if (!scene.textures.exists(texture)) texture = 'fireball_effect'; // Fallback
+
+    const emitter = scene.add.particles(0, 0, texture, particleConfig);
+    emitter.setPosition(player.x, player.y);
+    emitter.explode(40);
+
+    // Destroy emitter after audio finishes
+    setTimeout(() => emitter.destroy(), duration + 100);
+
+    // 5. Chat Message
+    addChatMessage(`Level Up! Now Level ${newLevel}`, 0x00ffff, '⭐');
+    addChatMessage('HP & Mana Restored!', 0x00ff00, '💚');
+}
+
+// Global Cheat for Testing
+window.cheatLevelUp = function () {
+    window.addXp(getXPNeededForLevel(playerStats.level) - playerStats.xp + 1);
+};
+
+// Check for pending level ups
+function checkPendingLevelUp() {
+    if (window.pendingLevelUp) {
+        if (!dialogVisible && !shopVisible && !inventoryVisible && !settingsVisible && !buildingPanelVisible && !questVisible) {
+            console.log('✅ Triggering Queued Level Up');
+            createLevelUpEffect(window.pendingLevelUpStats ? window.pendingLevelUpStats.level : playerStats.level);
+            window.pendingLevelUp = false;
+            window.pendingLevelUpStats = null;
         }
     }
 }
@@ -13297,7 +13409,7 @@ function playSound(soundName) {
         // Check if sound exists in cache
         if (scene.cache.audio.exists(soundName)) {
             // Play sound with volume - creates a new instance each time
-            scene.sound.play(soundName, { volume: window.sfxVolume || 0.7 });
+            scene.sound.play(soundName, { volume: (typeof window.sfxVolume !== 'undefined') ? window.sfxVolume : 0.7 });
             console.log(`🔊 Playing: ${soundName}`); // Debug logging
         } else {
             // Sound not in cache
@@ -13330,7 +13442,7 @@ function initializeSounds() {
             // Check if audio is in cache (loaded successfully)
             if (scene.cache.audio.exists(soundName)) {
                 // Create sound object for later use
-                soundEffects[soundName] = scene.sound.add(soundName, { volume: window.sfxVolume || 0.7 });
+                soundEffects[soundName] = scene.sound.add(soundName, { volume: (typeof window.sfxVolume !== 'undefined') ? window.sfxVolume : 0.7 });
                 console.log(`  ✅ Loaded: ${soundName}`);
             } else {
                 console.log(`  ⚠️ Not in cache: ${soundName}`);
@@ -13838,7 +13950,7 @@ function updateAssetsWindow() {
         { key: 'hit_player', path: 'assets/audio/hit_player.mp3' },
         { key: 'monster_die', path: 'assets/audio/monster_die.mp3' },
         { key: 'item_pickup', path: 'assets/audio/item_pickup.wav' },
-        { key: 'level_up', path: 'assets/audio/level_up.wav' },
+        { key: 'level_up', path: 'assets/audio/level-up.mp3' },
         { key: 'fireball_cast', path: 'assets/audio/fireball_cast.wav' },
         { key: 'heal_cast', path: 'assets/audio/heal_cast.wav' }
     ];

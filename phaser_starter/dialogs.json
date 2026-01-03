@@ -171,22 +171,6 @@
                 "text": "Welcome to my shop! I have the finest wares in the village. Are you looking to buy something, or perhaps you could help me with a business favor?",
                 "choices": [
                     {
-                        "text": "I can gather items for you",
-                        "isQuest": true,
-                        "action": "quest_accept_side",
-                        "questId": "quest_002",
-                        "next": "start",
-                        "condition": "quest_available:quest_002"
-                    },
-                    {
-                        "text": "I can help you with gold",
-                        "isQuest": true,
-                        "action": "quest_accept_side",
-                        "questId": "quest_004",
-                        "next": "start",
-                        "condition": "quest_available:quest_004"
-                    },
-                    {
                         "text": "I'd like to browse your wares",
                         "next": "shop"
                     },

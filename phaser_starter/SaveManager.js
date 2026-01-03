@@ -55,7 +55,10 @@ window.SaveManager = {
 
                 // Settings/Meta
                 settings: {
-                    difficulty: window.GameState.currentDifficulty
+                    difficulty: window.GameState.currentDifficulty,
+                    musicVolume: window.musicVolume,
+                    sfxVolume: window.sfxVolume,
+                    musicEnabled: window.musicEnabled
                 }
             };
 
@@ -117,6 +120,22 @@ window.SaveManager = {
             // Restore Difficulty
             if (data.settings && data.settings.difficulty && window.GameState) {
                 window.GameState.currentDifficulty = data.settings.difficulty;
+            }
+
+            // Restore Audio Settings
+            if (data.settings) {
+                if (typeof data.settings.musicVolume !== 'undefined') {
+                    if (window.updateMusicVolume) window.updateMusicVolume(data.settings.musicVolume);
+                    else window.musicVolume = data.settings.musicVolume;
+                }
+                if (typeof data.settings.sfxVolume !== 'undefined') {
+                    if (window.updateSFXVolume) window.updateSFXVolume(data.settings.sfxVolume);
+                    else window.sfxVolume = data.settings.sfxVolume;
+                }
+                if (typeof data.settings.musicEnabled !== 'undefined') {
+                    if (window.toggleMusic) window.toggleMusic(data.settings.musicEnabled);
+                    else window.musicEnabled = data.settings.musicEnabled;
+                }
             }
 
             return data;

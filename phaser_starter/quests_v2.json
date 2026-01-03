@@ -503,6 +503,7 @@
             "giver": "Captain Thorne",
             "step": 1,
             "requires": "main_01_020",
+            "autoAccept": true,
             "objectives": [
                 {
                     "id": "talk_thorne_intro",
@@ -672,7 +673,7 @@
         "main_02_006": {
             "id": "main_02_006",
             "title": "Confrontation",
-            "description": "The traitor's mercenaries are blocking the path! Defeat them to clear the way.",
+            "description": "The traitor's mercenaries (Orcs) have been spotted roaming the Wilderness. Defeat 5 Orcs to thin their numbers and clear the way.",
             "giver": "Captain Thorne",
             "step": 6,
             "requires": "main_02_005",
@@ -681,7 +682,7 @@
                     "id": "defeat_mercenaries",
                     "type": "kill",
                     "monsterId": "procedural_orc",
-                    "label": "Defeat Mercenaries",
+                    "label": "Defeat Orc Mercenaries",
                     "target": 5
                 }
             ],

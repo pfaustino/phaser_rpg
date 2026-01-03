@@ -2239,10 +2239,7 @@ function create() {
                 playerStats.gold += quest.rewards.gold;
                 addChatMessage(`Gained ${quest.rewards.gold} Gold from quest`, 0xffd700, '💰');
             }
-            if (quest.rewards.gold) {
-                playerStats.gold += quest.rewards.gold;
-                addChatMessage(`Gained ${quest.rewards.gold} Gold from quest`, 0xffd700, '💰');
-            }
+
 
             // Explicitly verify level up status (Respecting the block we just set)
             // We replaced 'updatePlayerStats()' with explicit calls to ensure control

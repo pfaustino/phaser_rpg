@@ -36,11 +36,7 @@ window.TavernUI = {
             this.destroyUI();
         }
 
-        // Remove keyboard listeners
-        const scene = window.game.scene.scenes[0];
-        if (scene && scene.input && scene.input.keyboard) {
-            scene.input.keyboard.off('keydown-F', this.handleCloseInput, this);
-        }
+        // Listener removal not needed (handled globally)
 
         // Notify game that building UI is closed (maintain compatibility)
         if (typeof window.buildingPanelVisible !== 'undefined') {
@@ -62,13 +58,7 @@ window.TavernUI = {
     createUI: function () {
         const scene = window.game.scene.scenes[0];
 
-        // Add keyboard listeners
-        if (scene && scene.input && scene.input.keyboard) {
-            // Remove any existing listeners first to avoid duplicates
-            scene.input.keyboard.off('keydown-F', this.handleCloseInput, this);
-
-            scene.input.keyboard.on('keydown-F', this.handleCloseInput, this);
-        }
+        // Keyboard listener removed - handled globally by game.js triggerWorldInteraction
 
         const width = scene.cameras.main.width;
         const height = scene.cameras.main.height;

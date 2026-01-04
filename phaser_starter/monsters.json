@@ -892,7 +892,8 @@
                 "spawnAmount": [
                     1,
                     1
-                ]
+                ],
+                "isBoss": true
             },
             "appearance": {
                 "baseSize": 64,
@@ -1136,7 +1137,8 @@
                 "spawnAmount": [
                     1,
                     1
-                ]
+                ],
+                "isBoss": true
             },
             "appearance": {
                 "baseSize": 36,
@@ -1246,7 +1248,8 @@
                 "spawnAmount": [
                     1,
                     2
-                ]
+                ],
+                "isBoss": true
             },
             "appearance": {
                 "baseSize": 40,

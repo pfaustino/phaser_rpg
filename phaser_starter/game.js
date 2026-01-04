@@ -3059,7 +3059,7 @@ function create() {
         .setDepth(30000);
 
     // Version Number
-    this.add.text(this.scale.width - 10, 10, 'v0.9.182', {
+    this.add.text(this.scale.width - 10, 10, 'v0.9.183', {
         fontFamily: 'Arial',
         fontSize: '16px',
         color: '#ffffff',

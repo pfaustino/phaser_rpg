@@ -39,5 +39,19 @@
         "interactionRadius": 60,
         "interactionType": "quest_trigger",
         "tint": 11163135
+    },
+    {
+        "id": "ritual_altar",
+        "name": "Dark Ritual Altar",
+        "map": "procedural_only",
+        "x": 0,
+        "y": 0,
+        "spriteKey": "obelisk",
+        "spritePath": "assets/images/obelisk-old.png",
+        "width": 64,
+        "height": 128,
+        "interactionRadius": 60,
+        "interactionType": "quest_trigger",
+        "tint": 13369548
     }
 ]

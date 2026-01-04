@@ -134,6 +134,7 @@ const ItemManager = {
 
         loadCategory('questItems');
         loadCategory('consumables');
+        loadCategory('interactableSprites'); // Load obelisk and other interactable sprites
 
         // Load Weapon Sprites (using special key format: weapon_[type])
         if (this.definitions.weaponTypes) {

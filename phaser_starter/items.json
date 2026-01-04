@@ -1,4 +1,11 @@
 {
+    "interactableSprites": {
+        "obelisk": {
+            "name": "Ritual Altar",
+            "sprite": "assets/images/obelisk.png",
+            "spriteKey": "obelisk"
+        }
+    },
     "questItems": {
         "echo_shard": {
             "name": "Echo Shard",

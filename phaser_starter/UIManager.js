@@ -120,6 +120,116 @@ window.UIManager = {
         this.createSettingsUI();
     },
 
+    // --- Save/Load Modal ---
+    saveLoadModal: null,
+
+    showSaveLoadModal: function (mode) { // mode: 'save' or 'load'
+        if (this.saveLoadModal) this.destroySaveLoadModal();
+        this.closeAllInterfaces(); // Close other windows
+
+        const scene = game.scene.scenes[0];
+        const centerX = scene.cameras.main.width / 2;
+        const centerY = scene.cameras.main.height / 2;
+        const width = 600;
+        const height = 500;
+
+        const bg = scene.add.rectangle(centerX, centerY, width, height, 0x1a1a1a, 0.95)
+            .setScrollFactor(0).setDepth(20000).setStrokeStyle(3, mode === 'save' ? 0x00ff00 : 0x4444ff)
+            .setInteractive(); // Block input
+
+        const titleText = mode === 'save' ? 'SAVE GAME' : 'LOAD GAME';
+        const titleColor = mode === 'save' ? '#00ff00' : '#aaaaff';
+
+        const title = scene.add.text(centerX, centerY - height / 2 + 30, titleText, {
+            fontSize: '32px', fill: titleColor, fontStyle: 'bold'
+        }).setScrollFactor(0).setDepth(20001).setOrigin(0.5);
+
+        const closeBtn = scene.add.text(centerX + width / 2 - 20, centerY - height / 2 + 20, 'X', {
+            fontSize: '24px', fill: '#ffffff'
+        }).setScrollFactor(0).setDepth(20001).setOrigin(0.5)
+            .setInteractive({ useHandCursor: true });
+
+        closeBtn.on('pointerdown', () => this.destroySaveLoadModal());
+
+        this.saveLoadModal = { bg, title, closeBtn, elements: [] };
+
+        // Render Slots
+        const startY = centerY - height / 2 + 80;
+        const gap = 70;
+
+        for (let i = 1; i <= 5; i++) {
+            const y = startY + (i - 1) * gap;
+            this.createSlotEntry(scene, centerX, y, i, mode);
+        }
+    },
+
+    createSlotEntry: function (scene, x, y, slot, mode) {
+        const width = 500;
+        const height = 60;
+        const meta = window.SaveManager.getSlotMeta(slot);
+
+        // Slot Background
+        const bg = scene.add.rectangle(x, y, width, height, 0x333333, 0.9)
+            .setScrollFactor(0).setDepth(20001).setInteractive({ useHandCursor: true })
+            .setStrokeStyle(1, 0x666666);
+
+        // Slot Number
+        const numText = scene.add.text(x - width / 2 + 20, y, `Slot ${slot}`, {
+            fontSize: '20px', fill: '#ffffff', fontStyle: 'bold'
+        }).setScrollFactor(0).setDepth(20002).setOrigin(0, 0.5);
+
+        // Info Text
+        let infoStr = "Empty";
+        let subInfoStr = "";
+
+        if (meta) {
+            const date = new Date(meta.timestamp).toLocaleString();
+            infoStr = `Lvl ${meta.info.level || '?'} - ${meta.info.map}`;
+            subInfoStr = date;
+        }
+
+        const infoText = scene.add.text(x, y - 10, infoStr, {
+            fontSize: '18px', fill: meta ? '#ffff00' : '#888888'
+        }).setScrollFactor(0).setDepth(20002).setOrigin(0.5, 0.5);
+
+        const subText = scene.add.text(x, y + 15, subInfoStr, {
+            fontSize: '12px', fill: '#aaaaaa'
+        }).setScrollFactor(0).setDepth(20002).setOrigin(0.5, 0.5);
+
+        // Action
+        bg.on('pointerdown', () => {
+            if (mode === 'save') {
+                // Confirm overwrite if exists
+                if (meta && !confirm(`Overwrite Slot ${slot}?`)) return;
+
+                window.SaveManager.saveGame(slot);
+                this.destroySaveLoadModal();
+            } else {
+                if (!meta) {
+                    if (typeof playSound === 'function') playSound('ui_error');
+                    return;
+                }
+                window.loadGame(slot);
+            }
+        });
+
+        // Hover effect
+        bg.on('pointerover', () => bg.setStrokeStyle(2, 0xffffff));
+        bg.on('pointerout', () => bg.setStrokeStyle(1, 0x666666));
+
+        this.saveLoadModal.elements.push(bg, numText, infoText, subText);
+    },
+
+    destroySaveLoadModal: function () {
+        if (this.saveLoadModal) {
+            if (this.saveLoadModal.bg) this.saveLoadModal.bg.destroy();
+            if (this.saveLoadModal.title) this.saveLoadModal.title.destroy();
+            if (this.saveLoadModal.closeBtn) this.saveLoadModal.closeBtn.destroy();
+            if (this.saveLoadModal.elements) this.saveLoadModal.elements.forEach(e => e.destroy());
+            this.saveLoadModal = null;
+        }
+    },
+
     createSettingsUI: function () {
         const scene = game.scene.scenes[0];
         const centerX = scene.cameras.main.width / 2;
@@ -278,7 +388,7 @@ window.UIManager = {
         }).setScrollFactor(0).setDepth(10002).setOrigin(0.5);
 
         saveBtnBg.on('pointerdown', () => {
-            if (typeof window.saveGame === 'function') window.saveGame();
+            this.showSaveLoadModal('save');
             if (typeof playSound === 'function') playSound('menu_select');
         });
         this.settingsPanel.elements.push(saveBtnBg, saveBtnText);
@@ -293,10 +403,7 @@ window.UIManager = {
         }).setScrollFactor(0).setDepth(10002).setOrigin(0.5);
 
         loadBtnBg.on('pointerdown', () => {
-            if (typeof window.loadGame === 'function') {
-                this.toggleSettings(); // Close menu
-                window.loadGame();
-            }
+            this.showSaveLoadModal('load');
             if (typeof playSound === 'function') playSound('menu_select');
         });
         this.settingsPanel.elements.push(loadBtnBg, loadBtnText);
@@ -311,11 +418,9 @@ window.UIManager = {
         }).setScrollFactor(0).setDepth(10002).setOrigin(0.5);
 
         newGameBtnBg.on('pointerdown', () => {
-            if (typeof window.resetGame === 'function') {
-                window.resetGame();
-            } else if (confirm("Are you sure? This will DELETE your save file!")) {
-                localStorage.clear();
-                location.reload();
+            if (confirm("Start a New Game? Unsaved progress will be lost.")) {
+                localStorage.removeItem('rpg_load_on_start'); // Ensure clean start
+                window.resetGame ? window.resetGame() : location.reload();
             }
         });
         this.settingsPanel.elements.push(newGameBtnBg, newGameBtnText);

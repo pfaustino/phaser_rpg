@@ -744,7 +744,7 @@
         "main_02_009": {
             "id": "main_02_009",
             "title": "Breaking the Gate",
-            "description": "The stronghold gate is heavily guarded. Defeat 4 Elite Guards to breach the defenses.",
+            "description": "The stronghold gate is heavily guarded. Defeat 4 Elite Guards at the Traitor's Camp in the Wilderness to breach the defenses.",
             "giver": "Captain Thorne",
             "step": 9,
             "requires": "main_02_008",
@@ -828,7 +828,7 @@
         "main_02_013": {
             "id": "main_02_013",
             "title": "Dark Rituals",
-            "description": "Malagor was channeling power to Vex. Destroy 5 Ritual Altars in the dungeon to weaken the General.",
+            "description": "Malagor was channeling dark energy to General Vex using ancient altars. Search the Traitor's Stronghold (Level 2) for these Ritual Altars and interact with them to destroy the connection. Look for glowing runes.",
             "giver": "Mage Elara",
             "step": 13,
             "requires": "main_02_012",

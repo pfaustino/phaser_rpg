@@ -1011,9 +1011,303 @@
             }
         },
         {
+            "id": "procedural_orc",
+            "name": "Orc Grunt",
+            "proceduralConfig": {
+                "scale": 4
+            },
+            "stats": {
+                "hp": 60,
+                "attack": 10,
+                "speed": 40,
+                "xp": 30,
+                "spawnAmount": [
+                    2,
+                    3
+                ]
+            },
+            "appearance": {
+                "baseSize": 40,
+                "layers": [
+                    {
+                        "name": "body",
+                        "type": "shape",
+                        "shape": "rect",
+                        "width": 36,
+                        "height": 40,
+                        "color": "#3A6013",
+                        "z": 10
+                    },
+                    {
+                        "name": "belt",
+                        "type": "shape",
+                        "shape": "rect",
+                        "width": 38,
+                        "height": 8,
+                        "color": "#442200",
+                        "offset": {
+                            "x": 0,
+                            "y": 10
+                        },
+                        "z": 11
+                    },
+                    {
+                        "name": "head",
+                        "type": "shape",
+                        "shape": "circle",
+                        "radius": 14,
+                        "color": "#3A6013",
+                        "offset": {
+                            "x": 0,
+                            "y": -22
+                        },
+                        "z": 20
+                    },
+                    {
+                        "name": "eye_l",
+                        "type": "shape",
+                        "shape": "circle",
+                        "radius": 2,
+                        "color": "#FF0000",
+                        "offset": {
+                            "x": -5,
+                            "y": -25
+                        },
+                        "z": 30
+                    },
+                    {
+                        "name": "eye_r",
+                        "type": "shape",
+                        "shape": "circle",
+                        "radius": 2,
+                        "color": "#FF0000",
+                        "offset": {
+                            "x": 5,
+                            "y": -25
+                        },
+                        "z": 30
+                    }
+                ],
+                "animations": {
+                    "idle": {
+                        "type": "pulse",
+                        "property": "scaleY",
+                        "to": 1.02,
+                        "duration": 1500
+                    },
+                    "walk": {
+                        "type": "slide",
+                        "speed": 0.8
+                    }
+                }
+            }
+        },
+        {
+            "id": "malagor_boss",
+            "name": "Malagor the Betrayer",
+            "proceduralConfig": {
+                "scale": 5
+            },
+            "stats": {
+                "hp": 2000,
+                "attack": 45,
+                "speed": 55,
+                "xp": 1000,
+                "spawnAmount": [
+                    1,
+                    1
+                ]
+            },
+            "appearance": {
+                "baseSize": 40,
+                "layers": [
+                    {
+                        "name": "aura",
+                        "type": "shape",
+                        "shape": "circle",
+                        "radius": 25,
+                        "color": "#550000",
+                        "alpha": 0.4,
+                        "z": 0
+                    },
+                    {
+                        "name": "body",
+                        "type": "shape",
+                        "shape": "rect",
+                        "width": 40,
+                        "height": 45,
+                        "color": "#552200",
+                        "z": 10
+                    },
+                    {
+                        "name": "armor",
+                        "type": "shape",
+                        "shape": "rect",
+                        "width": 42,
+                        "height": 30,
+                        "color": "#333333",
+                        "offset": {
+                            "x": 0,
+                            "y": -5
+                        },
+                        "z": 11
+                    },
+                    {
+                        "name": "head",
+                        "type": "shape",
+                        "shape": "circle",
+                        "radius": 16,
+                        "color": "#552200",
+                        "offset": {
+                            "x": 0,
+                            "y": -25
+                        },
+                        "z": 20
+                    },
+                    {
+                        "name": "eye_l",
+                        "type": "shape",
+                        "shape": "circle",
+                        "radius": 3,
+                        "color": "#FFFF00",
+                        "offset": {
+                            "x": -6,
+                            "y": -28
+                        },
+                        "z": 30
+                    },
+                    {
+                        "name": "eye_r",
+                        "type": "shape",
+                        "shape": "circle",
+                        "radius": 3,
+                        "color": "#FFFF00",
+                        "offset": {
+                            "x": 6,
+                            "y": -28
+                        },
+                        "z": 30
+                    }
+                ],
+                "animations": {
+                    "idle": {
+                        "type": "pulse",
+                        "property": "scaleY",
+                        "to": 1.05,
+                        "duration": 1000
+                    },
+                    "walk": {
+                        "type": "slide",
+                        "speed": 0.7
+                    }
+                }
+            }
+        },
+        {
+            "id": "general_vex",
+            "name": "General Vex",
+            "proceduralConfig": {
+                "scale": 6
+            },
+            "stats": {
+                "hp": 4000,
+                "attack": 70,
+                "speed": 65,
+                "xp": 2500,
+                "spawnAmount": [
+                    1,
+                    1
+                ]
+            },
+            "appearance": {
+                "baseSize": 40,
+                "layers": [
+                    {
+                        "name": "aura",
+                        "type": "shape",
+                        "shape": "circle",
+                        "radius": 30,
+                        "color": "#8800FF",
+                        "alpha": 0.5,
+                        "z": 0
+                    },
+                    {
+                        "name": "body",
+                        "type": "shape",
+                        "shape": "rect",
+                        "width": 45,
+                        "height": 50,
+                        "color": "#000000",
+                        "z": 10
+                    },
+                    {
+                        "name": "plate",
+                        "type": "shape",
+                        "shape": "rect",
+                        "width": 47,
+                        "height": 35,
+                        "color": "#440088",
+                        "offset": {
+                            "x": 0,
+                            "y": -5
+                        },
+                        "z": 11
+                    },
+                    {
+                        "name": "head",
+                        "type": "shape",
+                        "shape": "circle",
+                        "radius": 18,
+                        "color": "#220044",
+                        "offset": {
+                            "x": 0,
+                            "y": -28
+                        },
+                        "z": 20
+                    },
+                    {
+                        "name": "eye_l",
+                        "type": "shape",
+                        "shape": "ellipse",
+                        "width": 8,
+                        "height": 4,
+                        "color": "#00FFFF",
+                        "offset": {
+                            "x": -7,
+                            "y": -30
+                        },
+                        "z": 30
+                    },
+                    {
+                        "name": "eye_r",
+                        "type": "shape",
+                        "shape": "ellipse",
+                        "width": 8,
+                        "height": 4,
+                        "color": "#00FFFF",
+                        "offset": {
+                            "x": 7,
+                            "y": -30
+                        },
+                        "z": 30
+                    }
+                ],
+                "animations": {
+                    "idle": {
+                        "type": "float",
+                        "range": 5,
+                        "duration": 2000
+                    },
+                    "walk": {
+                        "type": "slide",
+                        "speed": 1.0
+                    }
+                }
+            }
+        },
+        {
             "id": "procedural_orc_captain",
             "name": "Orc Captain",
-            "generationType": "mask_based",
             "proceduralConfig": {
                 "scale": 5
             },
@@ -1125,7 +1419,6 @@
         {
             "id": "procedural_traitor_lieutenant",
             "name": "Traitor Lt.",
-            "generationType": "mask_based",
             "proceduralConfig": {
                 "scale": 4
             },
@@ -1236,7 +1529,6 @@
         {
             "id": "procedural_elite_guard",
             "name": "Elite Guard",
-            "generationType": "mask_based",
             "proceduralConfig": {
                 "scale": 4
             },
@@ -1317,8 +1609,8 @@
             }
         },
         {
-            "id": "malagor_boss",
-            "name": "Malagor",
+            "id": "malagor_boss_LEGACY",
+            "name": "Malagor (Legacy)",
             "generationType": "mask_based",
             "proceduralConfig": {
                 "scale": 5

@@ -89,6 +89,14 @@ const MapManager = {
     spawnInteractables(mapName) {
         if (!this.scene) return;
 
+        // IMPORTANT: Skip for dungeons - they use spawnDungeonInteractables() instead.
+        // This function clears interactables[], which would wipe dungeon altars.
+        // Dungeon interactables (ritual_altar etc) are spawned procedurally at line ~1145.
+        if (mapName === 'dungeon' || this.currentMap === 'dungeon') {
+            return;
+        }
+
+
         // Clear existing
         this.interactables.forEach(obj => {
             if (obj.sprite) obj.sprite.destroy();
@@ -101,6 +109,7 @@ const MapManager = {
             console.warn('⚠️ [MapManager] interactables.json not loaded');
             return;
         }
+
 
         const mapObjects = allInteractables.filter(obj => obj.map === mapName);
         console.log(`🗿 [MapManager] Spawning ${mapObjects.length} interactables for ${mapName}`);
@@ -949,7 +958,7 @@ const MapManager = {
                 if (showCamp) {
                     const dMarker = scene.add.rectangle(dx, dy, tileSize * 2, tileSize * 2, 0xff0000, 0.8).setDepth(3).setStrokeStyle(2, 0xffffff);
                     const dText = scene.add.text(dx, dy, 'TRAITOR\nCAMP', { fontSize: '11px', fill: '#ffffff', align: 'center', stroke: '#000000', strokeThickness: 3 }).setDepth(4).setOrigin(0.5);
-                    this.transitionMarkers.push({ x: dx, y: dy, radius: tileSize * 1.5, targetMap: 'wilderness', dungeonId: 'traitor_camp', dungeonLevel: 1, marker: dMarker, text: dText });
+                    this.transitionMarkers.push({ x: dx, y: dy, radius: tileSize * 1.5, targetMap: 'dungeon', dungeonId: 'traitor_camp', dungeonLevel: 1, marker: dMarker, text: dText });
                     const campZone = scene.add.zone(dx, dy, tileSize * 4, tileSize * 4);
                     scene.physics.add.existing(campZone, true);
                     scene.physics.add.overlap(player, campZone, () => {
@@ -1134,9 +1143,94 @@ const MapManager = {
                 pathfinder.initializeGrid(dungeon.mapData);
             }
 
+
+            // Spawn Dungeon Interactables
+            this.spawnDungeonInteractables(dungeonDef, level, dungeon, scene);
+
         } catch (e) {
             console.error("Error creating dungeon:", e);
             this.createWildernessMap();
+        }
+    },
+
+    /**
+     * Spawn Interactables for Dungeon
+     */
+    spawnDungeonInteractables(dungeonDef, level, dungeon, scene) {
+        if (!dungeonDef.interactables) return;
+
+        const interactables = dungeonDef.interactables.filter(i => level >= i.minLevel && level <= (i.maxLevel || 999));
+        if (interactables.length === 0) return;
+
+        console.log(`🗿 [DungeonInteract] Level ${level}. Defs found: ${dungeonDef.interactables.length}, Filtered: ${interactables.length}`);
+
+        for (const def of interactables) {
+            try {
+                const limit = def.limit || 5;
+                const chance = def.chance || 0.5;
+                let count = 0;
+
+                console.log(`   -> Attempting to spawn ${def.id} (Limit: ${limit}, Chance: ${chance})`);
+
+                for (let i = 0; i < limit; i++) {
+                    if (Math.random() > chance) continue;
+
+                    let planted = false;
+                    for (let a = 0; a < 20; a++) {
+                        const rx = Phaser.Math.Between(1, dungeon.width - 2);
+                        const ry = Phaser.Math.Between(1, dungeon.height - 2);
+
+                        if (dungeon.mapData[ry][rx] === 1) {
+                            const pixelX = rx * scene.tileSize + scene.tileSize / 2;
+                            const pixelY = ry * scene.tileSize + scene.tileSize / 2;
+
+                            // NOTE: Images/sprites don't render in spawnDungeonInteractables context
+                            // Using styled rectangles as visual (these work)
+                            // Main altar body (dark red)
+                            const visual = scene.add.rectangle(pixelX, pixelY, 24, 64, 0x8B0000).setDepth(8);
+                            // Top accent (lighter red)
+                            scene.add.rectangle(pixelX, pixelY - 24, 16, 16, 0xCC4444).setDepth(9);
+                            // Glow effect
+                            scene.add.circle(pixelX, pixelY, 28, 0xFF0000, 0.15).setDepth(7);
+
+                            const collisionBody = scene.add.rectangle(pixelX, pixelY, 32, 80, 0x000000, 0);
+                            scene.physics.add.existing(collisionBody, true);
+
+                            if (typeof player !== 'undefined' && player && player.body) {
+                                scene.physics.add.collider(player, collisionBody);
+                            }
+
+                            // Get the definition for interaction tracking
+                            const fullDefs = scene.cache.json.get('interactables') || [];
+                            const fullDef = fullDefs.find(obj => obj.id === def.id);
+
+                            if (fullDef) {
+                                visual.collisionBody = collisionBody;
+
+                                this.interactables.push({
+                                    definition: fullDef,
+                                    sprite: visual
+                                });
+
+
+                                planted = true;
+                                count++;
+                                break;
+                            } else {
+                                // Definition not found - destroy the shapes
+                                visual.destroy();
+                                collisionBody.destroy();
+                                console.warn(`[ALTAR] Definition for ${def.id} not found`);
+                            }
+                        }
+
+
+                    }
+                }
+                console.log(`   -> Spawned ${count} of ${def.id}`);
+            } catch (err) {
+                console.error(`   -> Error spawning ${def.id}:`, err);
+            }
         }
     },
 
@@ -1429,6 +1523,15 @@ const MapManager = {
         // Notify UQE if exists
         if (window.uqe && window.uqe.eventBus) {
             window.uqe.eventBus.emit('map_entered', { map: targetMap, level: level, dungeonId: dungeonId });
+
+            // Special Trigger for Traitor's Stronghold (Level 2)
+            if (dungeonId === 'traitor_camp' && level === 2) {
+                window.uqe.eventBus.emit('location_explored', { id: 'traitor_stronghold' });
+            }
+            // Special Trigger for Inner Sanctum (Level 3)
+            if (dungeonId === 'traitor_camp' && level === 3) {
+                window.uqe.eventBus.emit('location_explored', { id: 'inner_sanctum' });
+            }
         }
 
         // Restore weapon sprite (was destroyed by cleanup)

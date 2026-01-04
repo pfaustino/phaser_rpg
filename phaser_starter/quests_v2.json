@@ -849,7 +849,7 @@
         "main_02_014": {
             "id": "main_02_014",
             "title": "The Inner Sanctum",
-            "description": "The path to Vex is open. He stands before a tear in reality. Reach the Level 2 Stronghold to face him.",
+            "description": "The path to Vex is open. He stands before a tear in reality. Reach the Level 3 Stronghold to face him.",
             "giver": "Mage Elara",
             "step": 14,
             "requires": "main_02_013",

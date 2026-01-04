@@ -857,7 +857,7 @@
                 {
                     "id": "enter_sanctum",
                     "type": "explore_location",
-                    "locationId": "stronghold_inner_sanctum",
+                    "locationId": "inner_sanctum",
                     "label": "Enter Inner Sanctum",
                     "target": 1
                 }

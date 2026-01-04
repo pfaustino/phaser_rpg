@@ -135,6 +135,123 @@ function isQuestCompleted(id) {
 window.isQuestActive = isQuestActive;
 window.isQuestCompleted = isQuestCompleted;
 
+// ============================================
+// QUEST ID MIGRATION (v0.9.186)
+// ============================================
+const QUEST_ID_MIGRATION_MAP = {
+    // Side Story
+    'side_01_001': 'side_story_001',
+    // Kill (side_kill_xxx)
+    'quest_001': 'side_kill_001', 'quest_007': 'side_kill_002', 'quest_013': 'side_kill_003',
+    'quest_019': 'side_kill_004', 'quest_021': 'side_kill_005', 'quest_025': 'side_kill_006',
+    'quest_029': 'side_kill_007', 'quest_033': 'side_kill_008', 'quest_037': 'side_kill_009',
+    // Collect (side_collect_xxx)
+    'quest_002': 'side_collect_001', 'quest_008': 'side_collect_002', 'quest_014': 'side_collect_003',
+    'quest_020': 'side_collect_004', 'quest_024': 'side_collect_005', 'quest_028': 'side_collect_006',
+    'quest_032': 'side_collect_007', 'quest_036': 'side_collect_008', 'quest_040': 'side_collect_009',
+    // Level (side_level_xxx)
+    'quest_003': 'side_level_001', 'quest_009': 'side_level_002', 'quest_015': 'side_level_003',
+    'quest_041': 'side_level_004', 'quest_042': 'side_level_005', 'quest_043': 'side_level_006',
+    'quest_044': 'side_level_007',
+    // Gold (side_gold_xxx)
+    'quest_004': 'side_gold_001', 'quest_010': 'side_gold_002', 'quest_016': 'side_gold_003',
+    'quest_022': 'side_gold_004', 'quest_026': 'side_gold_005', 'quest_030': 'side_gold_006',
+    'quest_034': 'side_gold_007', 'quest_038': 'side_gold_008',
+    // Explore (side_explore_xxx)
+    'quest_005': 'side_explore_001', 'quest_011': 'side_explore_002', 'quest_017': 'side_explore_003',
+    // Survive (side_survive_xxx)
+    'quest_006': 'side_survive_001', 'quest_012': 'side_survive_002', 'quest_018': 'side_survive_003',
+    'quest_023': 'side_survive_004', 'quest_027': 'side_survive_005', 'quest_031': 'side_survive_006',
+    'quest_035': 'side_survive_007', 'quest_039': 'side_survive_008'
+};
+
+function executeQuestMigration() {
+    const MIGRATION_KEY = 'migration_v0_9_186';
+    if (localStorage.getItem(MIGRATION_KEY)) return;
+
+    console.log('🔄 STARTING QUEST ID MIGRATION...');
+    let migratedCount = 0;
+
+    // 1. Migrate localStorage 'playerStats'
+    const savedStatsStr = localStorage.getItem('playerStats');
+    if (savedStatsStr) {
+        try {
+            let stats = JSON.parse(savedStatsStr);
+            let meaningfulChange = false;
+
+            if (stats.quests) {
+                // Migrate Active
+                if (stats.quests.active) {
+                    stats.quests.active.forEach(q => {
+                        if (QUEST_ID_MIGRATION_MAP[q.id]) {
+                            console.log(`  > Migrating Active Quest: ${q.id} -> ${QUEST_ID_MIGRATION_MAP[q.id]}`);
+                            q.id = QUEST_ID_MIGRATION_MAP[q.id];
+                            meaningfulChange = true;
+                            migratedCount++;
+                        }
+                    });
+                }
+                // Migrate Completed
+                if (stats.quests.completed) {
+                    stats.quests.completed = stats.quests.completed.map(id => {
+                        if (QUEST_ID_MIGRATION_MAP[id]) {
+                            // console.log(`  > Migrating Completed Quest: ${id} -> ${QUEST_ID_MIGRATION_MAP[id]}`);
+                            migratedCount++;
+                            return QUEST_ID_MIGRATION_MAP[id];
+                        }
+                        return id;
+                    });
+                    meaningfulChange = true;
+                }
+            }
+
+            if (meaningfulChange) {
+                localStorage.setItem('playerStats', JSON.stringify(stats));
+                console.log('✅ playerStats migrated successfully.');
+            }
+        } catch (e) {
+            console.error('❌ Migration Error (playerStats):', e);
+        }
+    }
+
+    // 2. Migrate UQE State 'uqe_state'
+    const uqeStateStr = localStorage.getItem('uqe_state');
+    if (uqeStateStr) {
+        try {
+            let uqeState = JSON.parse(uqeStateStr);
+            let uqeChange = false;
+
+            if (uqeState.activeQuests) {
+                uqeState.activeQuests.forEach(q => {
+                    if (QUEST_ID_MIGRATION_MAP[q.id]) {
+                        q.id = QUEST_ID_MIGRATION_MAP[q.id];
+                        uqeChange = true;
+                    }
+                });
+            }
+            if (uqeState.completedQuests) {
+                uqeState.completedQuests.forEach(q => {
+                    if (QUEST_ID_MIGRATION_MAP[q.id]) {
+                        q.id = QUEST_ID_MIGRATION_MAP[q.id];
+                        uqeChange = true;
+                    }
+                });
+            }
+
+            if (uqeChange) {
+                localStorage.setItem('uqe_state', JSON.stringify(uqeState));
+                console.log('✅ uqe_state migrated successfully.');
+            }
+        } catch (e) {
+            console.error('❌ Migration Error (uqe_state):', e);
+        }
+    }
+
+    localStorage.setItem(MIGRATION_KEY, 'true');
+    console.log(`✨ Migration Complete. ${migratedCount} IDs updated.`);
+}
+
+
 // UI elements
 let hpBarBg, hpBar;
 let manaBarBg, manaBar;
@@ -3059,7 +3176,7 @@ function create() {
         .setDepth(30000);
 
     // Version Number
-    this.add.text(this.scale.width - 10, 10, 'v0.9.185', {
+    this.add.text(this.scale.width - 10, 10, 'v0.9.186', {
         fontFamily: 'Arial',
         fontSize: '16px',
         color: '#ffffff',

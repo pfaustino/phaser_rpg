@@ -20,8 +20,8 @@
                 "gold": 20
             }
         },
-        "side_01_001": {
-            "id": "side_01_001",
+        "side_story_001": {
+            "id": "side_story_001",
             "requires": "main_01_001",
             "title": "The Echo's Whisper",
             "description": "Blacksmith Brond has noticed strange vibrations coming from the wilderness. Investigate the area and gather Echo Shards from the crystalline growths.",
@@ -1028,8 +1028,8 @@
                 "gold": 325
             }
         },
-        "quest_001": {
-            "id": "quest_001",
+        "side_kill_001": {
+            "id": "side_kill_001",
             "requires": "main_01_001",
             "title": "First Steps",
             "description": "Kill 15 monsters to prove your worth.",
@@ -1048,8 +1048,8 @@
                 "gold": 25
             }
         },
-        "quest_002": {
-            "id": "quest_002",
+        "side_collect_001": {
+            "id": "side_collect_001",
             "requires": "main_01_001",
             "title": "Treasure Hunter",
             "description": "Collect items from defeated monsters to prove your resourcefulness.",
@@ -1068,8 +1068,8 @@
                 "gold": 15
             }
         },
-        "quest_003": {
-            "id": "quest_003",
+        "side_level_001": {
+            "id": "side_level_001",
             "requires": "main_01_001",
             "title": "Rising Power",
             "description": "Reach level 2 to unlock new abilities.",
@@ -1087,8 +1087,8 @@
                 "gold": 50
             }
         },
-        "quest_004": {
-            "id": "quest_004",
+        "side_gold_001": {
+            "id": "side_gold_001",
             "requires": "main_01_001",
             "title": "Gold Rush",
             "description": "Earn 75 gold from monster drops.",
@@ -1106,8 +1106,8 @@
                 "gold": 20
             }
         },
-        "quest_005": {
-            "id": "quest_005",
+        "side_explore_001": {
+            "id": "side_explore_001",
             "requires": "main_01_001",
             "title": "Explorer",
             "description": "Travel 1500 tiles across the map.",
@@ -1125,8 +1125,8 @@
                 "gold": 30
             }
         },
-        "quest_006": {
-            "id": "quest_006",
+        "side_survive_001": {
+            "id": "side_survive_001",
             "requires": "main_01_001",
             "title": "Survivor",
             "description": "Survive for 2 minutes without dying.",
@@ -1144,8 +1144,8 @@
                 "gold": 40
             }
         },
-        "quest_007": {
-            "id": "quest_007",
+        "side_kill_002": {
+            "id": "side_kill_002",
             "requires": "main_01_001",
             "title": "Monster Hunter",
             "description": "Defeat 15 monsters to earn the title of Hunter.",
@@ -1164,12 +1164,12 @@
                 "gold": 80
             }
         },
-        "quest_008": {
-            "id": "quest_008",
+        "side_collect_002": {
+            "id": "side_collect_002",
             "giver": "Merchant Lysa",
             "title": "Item Collector",
             "description": "Gather 6 items from your adventures.",
-            "requires": "quest_002",
+            "requires": "side_collect_001",
             "objectives": [
                 {
                     "id": "collect_items",
@@ -1184,12 +1184,12 @@
                 "gold": 40
             }
         },
-        "quest_009": {
-            "id": "quest_009",
+        "side_level_002": {
+            "id": "side_level_002",
             "giver": "Mage Elara",
             "title": "Level Up",
             "description": "Reach level 3 and grow stronger.",
-            "requires": "quest_003",
+            "requires": "side_level_001",
             "objectives": [
                 {
                     "id": "reach_level",
@@ -1203,12 +1203,12 @@
                 "gold": 75
             }
         },
-        "quest_010": {
-            "id": "quest_010",
+        "side_gold_002": {
+            "id": "side_gold_002",
             "giver": "Merchant Lysa",
             "title": "Wealth Accumulator",
             "description": "Amass 50 gold through your efforts.",
-            "requires": "quest_004",
+            "requires": "side_gold_001",
             "objectives": [
                 {
                     "id": "earn_gold",
@@ -1222,12 +1222,12 @@
                 "gold": 50
             }
         },
-        "quest_011": {
-            "id": "quest_011",
+        "side_explore_002": {
+            "id": "side_explore_002",
             "giver": "Elder Malik",
             "title": "Wanderer",
             "description": "Explore 1000 tiles of the world.",
-            "requires": "quest_005",
+            "requires": "side_explore_001",
             "objectives": [
                 {
                     "id": "travel_tiles",
@@ -1241,12 +1241,12 @@
                 "gold": 75
             }
         },
-        "quest_012": {
-            "id": "quest_012",
+        "side_survive_002": {
+            "id": "side_survive_002",
             "title": "Endurance Test",
             "description": "Survive for 5 minutes in the dangerous world.",
             "giver": "Captain Kael",
-            "requires": "quest_006",
+            "requires": "side_survive_001",
             "objectives": [
                 {
                     "id": "survive_time",
@@ -1260,12 +1260,12 @@
                 "gold": 100
             }
         },
-        "quest_013": {
-            "id": "quest_013",
+        "side_kill_003": {
+            "id": "side_kill_003",
             "giver": "Captain Thorne",
             "title": "Exterminator",
             "description": "Eliminate 10 monsters from the land.",
-            "requires": "quest_007",
+            "requires": "side_kill_002",
             "objectives": [
                 {
                     "id": "kill_any",
@@ -1280,12 +1280,12 @@
                 "gold": 90
             }
         },
-        "quest_014": {
-            "id": "quest_014",
+        "side_collect_003": {
+            "id": "side_collect_003",
             "giver": "Merchant Lysa",
             "title": "Hoarder",
             "description": "Collect 12 items for your inventory.",
-            "requires": "quest_008",
+            "requires": "side_collect_002",
             "objectives": [
                 {
                     "id": "collect_items",
@@ -1300,12 +1300,12 @@
                 "gold": 70
             }
         },
-        "quest_015": {
-            "id": "quest_015",
+        "side_level_003": {
+            "id": "side_level_003",
             "giver": "Mage Elara",
             "title": "Power Seeker",
             "description": "Achieve level 5 through experience.",
-            "requires": "quest_009",
+            "requires": "side_level_002",
             "objectives": [
                 {
                     "id": "reach_level",
@@ -1319,12 +1319,12 @@
                 "gold": 125
             }
         },
-        "quest_016": {
-            "id": "quest_016",
+        "side_gold_003": {
+            "id": "side_gold_003",
             "giver": "Merchant Lysa",
             "title": "Rich Beyond Measure",
             "description": "Accumulate 500 gold pieces.",
-            "requires": "quest_010",
+            "requires": "side_gold_002",
             "objectives": [
                 {
                     "id": "earn_gold",
@@ -1338,12 +1338,12 @@
                 "gold": 100
             }
         },
-        "quest_017": {
-            "id": "quest_017",
+        "side_explore_003": {
+            "id": "side_explore_003",
             "giver": "Elder Malik",
             "title": "World Traveler",
             "description": "Journey across 2000 tiles of terrain.",
-            "requires": "quest_011",
+            "requires": "side_explore_002",
             "objectives": [
                 {
                     "id": "travel_tiles",
@@ -1357,12 +1357,12 @@
                 "gold": 125
             }
         },
-        "quest_018": {
-            "id": "quest_018",
+        "side_survive_003": {
+            "id": "side_survive_003",
             "title": "Unstoppable",
             "description": "Survive for 10 minutes without falling.",
             "giver": "Captain Kael",
-            "requires": "quest_012",
+            "requires": "side_survive_002",
             "objectives": [
                 {
                     "id": "survive_time",
@@ -1376,12 +1376,12 @@
                 "gold": 150
             }
         },
-        "quest_019": {
-            "id": "quest_019",
+        "side_kill_004": {
+            "id": "side_kill_004",
             "giver": "Captain Thorne",
             "title": "Massacre",
             "description": "Slay 50 monsters in your path.",
-            "requires": "quest_013",
+            "requires": "side_kill_003",
             "objectives": [
                 {
                     "id": "kill_any",
@@ -1396,12 +1396,12 @@
                 "gold": 150
             }
         },
-        "quest_020": {
-            "id": "quest_020",
+        "side_collect_004": {
+            "id": "side_collect_004",
             "title": "Master Collector",
             "description": "Gather 24 items for your collection.",
             "giver": "Merchant Lysa",
-            "requires": "quest_014",
+            "requires": "side_collect_003",
             "objectives": [
                 {
                     "id": "collect_items",
@@ -1416,12 +1416,12 @@
                 "gold": 110
             }
         },
-        "quest_021": {
-            "id": "quest_021",
+        "side_kill_005": {
+            "id": "side_kill_005",
             "title": "Slayer",
             "description": "Defeat 100 monsters across the land.",
             "giver": "Captain Thorne",
-            "requires": "quest_019",
+            "requires": "side_kill_004",
             "objectives": [
                 {
                     "id": "kill_any",
@@ -1436,12 +1436,12 @@
                 "gold": 175
             }
         },
-        "quest_022": {
-            "id": "quest_022",
+        "side_gold_004": {
+            "id": "side_gold_004",
             "title": "Fortune Seeker",
             "description": "Amass 1000 gold pieces.",
             "giver": "Merchant Lysa",
-            "requires": "quest_016",
+            "requires": "side_gold_003",
             "objectives": [
                 {
                     "id": "earn_gold",
@@ -1455,12 +1455,12 @@
                 "gold": 125
             }
         },
-        "quest_023": {
-            "id": "quest_023",
+        "side_survive_004": {
+            "id": "side_survive_004",
             "title": "Ironclad",
             "description": "Survive for 15 minutes in the wilderness.",
             "giver": "Captain Kael",
-            "requires": "quest_018",
+            "requires": "side_survive_003",
             "objectives": [
                 {
                     "id": "survive_time",
@@ -1474,12 +1474,12 @@
                 "gold": 175
             }
         },
-        "quest_024": {
-            "id": "quest_024",
+        "side_collect_005": {
+            "id": "side_collect_005",
             "title": "Treasure Trove",
             "description": "Gather 36 items from your adventures.",
             "giver": "Merchant Lysa",
-            "requires": "quest_020",
+            "requires": "side_collect_004",
             "objectives": [
                 {
                     "id": "collect_items",
@@ -1494,12 +1494,12 @@
                 "gold": 140
             }
         },
-        "quest_025": {
-            "id": "quest_025",
+        "side_kill_006": {
+            "id": "side_kill_006",
             "title": "Destroyer",
             "description": "Eliminate 150 monsters.",
             "giver": "Captain Thorne",
-            "requires": "quest_021",
+            "requires": "side_kill_005",
             "objectives": [
                 {
                     "id": "kill_any",
@@ -1514,12 +1514,12 @@
                 "gold": 200
             }
         },
-        "quest_026": {
-            "id": "quest_026",
+        "side_gold_005": {
+            "id": "side_gold_005",
             "title": "Wealthy Adventurer",
             "description": "Accumulate 1500 gold.",
             "giver": "Merchant Lysa",
-            "requires": "quest_022",
+            "requires": "side_gold_004",
             "objectives": [
                 {
                     "id": "earn_gold",
@@ -1533,12 +1533,12 @@
                 "gold": 150
             }
         },
-        "quest_027": {
-            "id": "quest_027",
+        "side_survive_005": {
+            "id": "side_survive_005",
             "title": "Unyielding",
             "description": "Survive for 20 minutes without falling.",
             "giver": "Captain Kael",
-            "requires": "quest_023",
+            "requires": "side_survive_004",
             "objectives": [
                 {
                     "id": "survive_time",
@@ -1552,12 +1552,12 @@
                 "gold": 200
             }
         },
-        "quest_028": {
-            "id": "quest_028",
+        "side_collect_006": {
+            "id": "side_collect_006",
             "title": "Hoard Master",
             "description": "Collect 54 items.",
             "giver": "Merchant Lysa",
-            "requires": "quest_024",
+            "requires": "side_collect_005",
             "objectives": [
                 {
                     "id": "collect_items",
@@ -1572,12 +1572,12 @@
                 "gold": 175
             }
         },
-        "quest_029": {
-            "id": "quest_029",
+        "side_kill_007": {
+            "id": "side_kill_007",
             "title": "Annihilator",
             "description": "Defeat 120 monsters.",
             "giver": "Captain Thorne",
-            "requires": "quest_025",
+            "requires": "side_kill_006",
             "objectives": [
                 {
                     "id": "kill_any",
@@ -1592,12 +1592,12 @@
                 "gold": 250
             }
         },
-        "quest_030": {
-            "id": "quest_030",
+        "side_gold_006": {
+            "id": "side_gold_006",
             "title": "Merchant Prince",
             "description": "Amass 2000 gold pieces.",
             "giver": "Merchant Lysa",
-            "requires": "quest_026",
+            "requires": "side_gold_005",
             "objectives": [
                 {
                     "id": "earn_gold",
@@ -1611,12 +1611,12 @@
                 "gold": 200
             }
         },
-        "quest_031": {
-            "id": "quest_031",
+        "side_survive_006": {
+            "id": "side_survive_006",
             "title": "Immortal",
             "description": "Survive for over 30 minutes.",
             "giver": "Captain Kael",
-            "requires": "quest_027",
+            "requires": "side_survive_005",
             "objectives": [
                 {
                     "id": "survive_time",
@@ -1630,12 +1630,12 @@
                 "gold": 250
             }
         },
-        "quest_032": {
-            "id": "quest_032",
+        "side_collect_007": {
+            "id": "side_collect_007",
             "title": "Vault Keeper",
             "description": "Gather 80 items.",
             "giver": "Merchant Lysa",
-            "requires": "quest_028",
+            "requires": "side_collect_006",
             "objectives": [
                 {
                     "id": "collect_items",
@@ -1650,12 +1650,12 @@
                 "gold": 225
             }
         },
-        "quest_033": {
-            "id": "quest_033",
+        "side_kill_008": {
+            "id": "side_kill_008",
             "title": "Executioner",
             "description": "Slay 135 monsters.",
             "giver": "Captain Thorne",
-            "requires": "quest_029",
+            "requires": "side_kill_007",
             "objectives": [
                 {
                     "id": "kill_any",
@@ -1670,12 +1670,12 @@
                 "gold": 300
             }
         },
-        "quest_034": {
-            "id": "quest_034",
+        "side_gold_007": {
+            "id": "side_gold_007",
             "title": "Golden Dragon",
             "description": "Accumulate 2500 gold.",
             "giver": "Merchant Lysa",
-            "requires": "quest_030",
+            "requires": "side_gold_006",
             "objectives": [
                 {
                     "id": "earn_gold",
@@ -1689,12 +1689,12 @@
                 "gold": 250
             }
         },
-        "quest_035": {
-            "id": "quest_035",
+        "side_survive_007": {
+            "id": "side_survive_007",
             "title": "Eternal",
             "description": "Survive for 45 minutes.",
             "giver": "Captain Kael",
-            "requires": "quest_031",
+            "requires": "side_survive_006",
             "objectives": [
                 {
                     "id": "survive_time",
@@ -1708,12 +1708,12 @@
                 "gold": 300
             }
         },
-        "quest_036": {
-            "id": "quest_036",
+        "side_collect_008": {
+            "id": "side_collect_008",
             "title": "Legendary Collector",
             "description": "Amass 120 items.",
             "giver": "Merchant Lysa",
-            "requires": "quest_032",
+            "requires": "side_collect_007",
             "objectives": [
                 {
                     "id": "collect_items",
@@ -1728,12 +1728,12 @@
                 "gold": 275
             }
         },
-        "quest_037": {
-            "id": "quest_037",
+        "side_kill_009": {
+            "id": "side_kill_009",
             "title": "Legendary Hunter",
             "description": "Vanquish 200 monsters.",
             "giver": "Captain Thorne",
-            "requires": "quest_033",
+            "requires": "side_kill_008",
             "objectives": [
                 {
                     "id": "kill_any",
@@ -1748,12 +1748,12 @@
                 "gold": 375
             }
         },
-        "quest_038": {
-            "id": "quest_038",
+        "side_gold_008": {
+            "id": "side_gold_008",
             "title": "Midas Touch",
             "description": "Amass 3500 gold pieces.",
             "giver": "Merchant Lysa",
-            "requires": "quest_034",
+            "requires": "side_gold_007",
             "objectives": [
                 {
                     "id": "earn_gold",
@@ -1767,12 +1767,12 @@
                 "gold": 325
             }
         },
-        "quest_039": {
-            "id": "quest_039",
+        "side_survive_008": {
+            "id": "side_survive_008",
             "title": "Undying Legend",
             "description": "Survive for 60 minutes.",
             "giver": "Captain Kael",
-            "requires": "quest_035",
+            "requires": "side_survive_007",
             "objectives": [
                 {
                     "id": "survive_time",
@@ -1786,12 +1786,12 @@
                 "gold": 375
             }
         },
-        "quest_040": {
-            "id": "quest_040",
+        "side_collect_009": {
+            "id": "side_collect_009",
             "title": "Hoarder Supreme",
             "description": "Gather 180 items.",
             "giver": "Merchant Lysa",
-            "requires": "quest_036",
+            "requires": "side_collect_008",
             "objectives": [
                 {
                     "id": "collect_items",
@@ -1806,12 +1806,12 @@
                 "gold": 350
             }
         },
-        "quest_041": {
-            "id": "quest_041",
+        "side_level_004": {
+            "id": "side_level_004",
             "title": "Heroic Growth",
             "description": "Reach level 10 to prove your capability.",
             "giver": "Mage Elara",
-            "requires": "quest_015",
+            "requires": "side_level_003",
             "objectives": [
                 {
                     "id": "reach_level",
@@ -1825,12 +1825,12 @@
                 "gold": 750
             }
         },
-        "quest_042": {
-            "id": "quest_042",
+        "side_level_005": {
+            "id": "side_level_005",
             "title": "Paragon",
             "description": "Achieve level 15 and become a paragon of strength.",
             "giver": "Mage Elara",
-            "requires": "quest_041",
+            "requires": "side_level_004",
             "objectives": [
                 {
                     "id": "reach_level",
@@ -1844,12 +1844,12 @@
                 "gold": 2000
             }
         },
-        "quest_043": {
-            "id": "quest_043",
+        "side_level_006": {
+            "id": "side_level_006",
             "title": "Legendary Status",
             "description": "Reach level 20 to become a legend.",
             "giver": "Mage Elara",
-            "requires": "quest_042",
+            "requires": "side_level_005",
             "objectives": [
                 {
                     "id": "reach_level",
@@ -1863,12 +1863,12 @@
                 "gold": 5000
             }
         },
-        "quest_044": {
-            "id": "quest_044",
+        "side_level_007": {
+            "id": "side_level_007",
             "title": "Godlike",
             "description": "Reach level 25. Few mortals ever achieve this power.",
             "giver": "Mage Elara",
-            "requires": "quest_043",
+            "requires": "side_level_006",
             "objectives": [
                 {
                     "id": "reach_level",

@@ -26,3 +26,6 @@
 ## 5. Feature Development
 - **Reuse Before Build**: Unless specified, always assume that a seemingly new feature already exists and search first before writing code for it. When found, use that code. If not found, then of course write it.
 
+
+## 6. Version Control
+- **Automatic Versioning**: When committing, first modify the `game.js` version number string so that it is `v0.9.xxx` where `xxx` is the commit count (e.g., `git rev-list --count HEAD`). Update it to reflect the commit you are about to make (current count + 1).

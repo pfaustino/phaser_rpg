@@ -143,7 +143,7 @@ window.SaveManager = {
                     window.addChatMessage(`Game Saved (Slot ${slot}).`, 0x00ff00);
                 }
                 const scene = this.scene || (window.game && window.game.scene.scenes[0]);
-                if (scene && scene.sound && window.sfxVolume > 0) {
+                if (scene && scene.sound && window.sfxVolume > 0 && scene.cache.audio.exists('menu_select')) {
                     scene.sound.play('menu_select', { volume: window.sfxVolume });
                 }
             }

@@ -691,13 +691,329 @@
                 "gold": 300
             }
         },
+        "main_02_007": {
+            "id": "main_02_007",
+            "title": "Dark Orders",
+            "description": "The mercenaries were carrying encrypted orders signed by 'General Vex.' Collect 3 sets of orders from Orc Captains for Elara to decode.",
+            "giver": "Captain Thorne",
+            "step": 7,
+            "requires": "main_02_006",
+            "objectives": [
+                {
+                    "id": "collect_orders",
+                    "type": "collect",
+                    "itemId": "encrypted_orders",
+                    "label": "Collect Encrypted Orders",
+                    "target": 3,
+                    "monsterId": "procedural_orc_captain"
+                }
+            ],
+            "rewards": {
+                "xp": 650,
+                "gold": 325
+            }
+        },
+        "main_02_008": {
+            "id": "main_02_008",
+            "title": "The Hidden Path",
+            "description": "Elara decoded the orders. They reveal a hidden entrance beneath the Traitor's Camp. Find the Camp Key on a traitor lieutenant to access it.",
+            "giver": "Mage Elara",
+            "step": 8,
+            "requires": "main_02_007",
+            "objectives": [
+                {
+                    "id": "find_camp_key",
+                    "type": "collect",
+                    "itemId": "camp_key",
+                    "label": "Find Camp Key",
+                    "target": 1,
+                    "monsterId": "procedural_traitor_lieutenant"
+                }
+            ],
+            "rewards": {
+                "xp": 700,
+                "gold": 350
+            },
+            "removeItems": [
+                {
+                    "itemId": "encrypted_orders",
+                    "amount": "all"
+                }
+            ]
+        },
+        "main_02_009": {
+            "id": "main_02_009",
+            "title": "Breaking the Gate",
+            "description": "The stronghold gate is heavily guarded. Defeat 4 Elite Guards to breach the defenses.",
+            "giver": "Captain Thorne",
+            "step": 9,
+            "requires": "main_02_008",
+            "objectives": [
+                {
+                    "id": "defeat_elite_guards",
+                    "type": "kill",
+                    "monsterId": "procedural_elite_guard",
+                    "label": "Defeat Elite Guards",
+                    "target": 4
+                }
+            ],
+            "rewards": {
+                "xp": 750,
+                "gold": 375
+            }
+        },
+        "main_02_010": {
+            "id": "main_02_010",
+            "title": "Into the Wolf's Den",
+            "description": "The path is clear. Enter the Traitor's Stronghold dungeon to stop their plans.",
+            "giver": "Captain Thorne",
+            "step": 10,
+            "requires": "main_02_009",
+            "objectives": [
+                {
+                    "id": "enter_stronghold",
+                    "type": "explore_location",
+                    "label": "Enter Stronghold Dungeon",
+                    "locationId": "traitor_stronghold",
+                    "target": 1
+                }
+            ],
+            "rewards": {
+                "xp": 800,
+                "gold": 400
+            }
+        },
+        "main_02_011": {
+            "id": "main_02_011",
+            "title": "Stolen Supplies",
+            "description": "The traitor has been stealing town supplies. Recover 10 Stolen Crates from the dungeon.",
+            "giver": "Merchant Lysa",
+            "step": 11,
+            "requires": "main_02_010",
+            "objectives": [
+                {
+                    "id": "collect_crates",
+                    "type": "collect",
+                    "itemId": "stolen_crate",
+                    "label": "Recover Stolen Crates",
+                    "target": 10
+                }
+            ],
+            "rewards": {
+                "xp": 850,
+                "gold": 425
+            }
+        },
+        "main_02_012": {
+            "id": "main_02_012",
+            "title": "The Lieutenant",
+            "description": "Vex's lieutenant, Malagor, guards the inner sanctum. Defeat him to proceed.",
+            "giver": "Captain Thorne",
+            "step": 12,
+            "requires": "main_02_011",
+            "objectives": [
+                {
+                    "id": "defeat_malagor",
+                    "type": "kill",
+                    "monsterId": "malagor_boss",
+                    "label": "Defeat Malagor",
+                    "target": 1
+                }
+            ],
+            "rewards": {
+                "xp": 900,
+                "gold": 450
+            }
+        },
+        "main_02_013": {
+            "id": "main_02_013",
+            "title": "Dark Rituals",
+            "description": "Malagor was channeling power to Vex. Destroy 5 Ritual Altars in the dungeon to weaken the General.",
+            "giver": "Mage Elara",
+            "step": 13,
+            "requires": "main_02_012",
+            "objectives": [
+                {
+                    "id": "destroy_altars",
+                    "type": "interact",
+                    "targetObjectId": "ritual_altar",
+                    "label": "Destroy Ritual Altars",
+                    "target": 5
+                }
+            ],
+            "rewards": {
+                "xp": 950,
+                "gold": 475
+            }
+        },
+        "main_02_014": {
+            "id": "main_02_014",
+            "title": "The Inner Sanctum",
+            "description": "The path to Vex is open. He stands before a tear in reality. Reach the Level 2 Stronghold to face him.",
+            "giver": "Mage Elara",
+            "step": 14,
+            "requires": "main_02_013",
+            "objectives": [
+                {
+                    "id": "enter_sanctum",
+                    "type": "explore_location",
+                    "locationId": "stronghold_inner_sanctum",
+                    "label": "Enter Inner Sanctum",
+                    "target": 1
+                }
+            ],
+            "rewards": {
+                "xp": 1000,
+                "gold": 500
+            }
+        },
+        "main_02_015": {
+            "id": "main_02_015",
+            "title": "The General's Fall",
+            "description": "Vex reveals he was merely a pawn, promised power by the 'Void.' Defeat General Vex before he widens the tear.",
+            "giver": "Captain Thorne",
+            "step": 15,
+            "requires": "main_02_014",
+            "objectives": [
+                {
+                    "id": "defeat_vex",
+                    "type": "kill",
+                    "monsterId": "general_vex",
+                    "label": "Defeat General Vex",
+                    "target": 1
+                }
+            ],
+            "rewards": {
+                "xp": 1500,
+                "gold": 750
+            }
+        },
+        "main_02_016": {
+            "id": "main_02_016",
+            "title": "The Void Seal",
+            "description": "Vex falls, but the tear is unstable. Use the Shard of Resonance to seal it temporarily.",
+            "giver": "Mage Elara",
+            "step": 16,
+            "requires": "main_02_015",
+            "objectives": [
+                {
+                    "id": "seal_void_tear",
+                    "type": "interact",
+                    "targetObjectId": "void_tear",
+                    "label": "Seal the Void Tear",
+                    "target": 1
+                }
+            ],
+            "rewards": {
+                "xp": 1000,
+                "gold": 500
+            }
+        },
+        "main_02_017": {
+            "id": "main_02_017",
+            "title": "Recovering the Sigil",
+            "description": "Vex dropped a strange Sigil—the key to the true threat. Recover the Void Sigil.",
+            "giver": "Captain Thorne",
+            "step": 17,
+            "requires": "main_02_016",
+            "autoAccept": true,
+            "objectives": [
+                {
+                    "id": "pickup_sigil",
+                    "type": "collect",
+                    "itemId": "void_sigil",
+                    "label": "Pickup Void Sigil",
+                    "target": 1
+                }
+            ],
+            "rewards": {
+                "xp": 800,
+                "gold": 400
+            },
+            "assets": [
+                {
+                    "type": "image",
+                    "key": "item_void_sigil",
+                    "path": "assets/images/void-sigil.png"
+                }
+            ]
+        },
+        "main_02_018": {
+            "id": "main_02_018",
+            "title": "Return to Hearthwell",
+            "description": "Return to Thorne with the news of Vex's betrayal and death.",
+            "giver": "Captain Thorne",
+            "step": 18,
+            "requires": "main_02_017",
+            "objectives": [
+                {
+                    "id": "talk_thorne_vex_end",
+                    "type": "talk",
+                    "npcId": "Captain Thorne",
+                    "label": "Report Vex's Defeat",
+                    "target": 1
+                }
+            ],
+            "rewards": {
+                "xp": 1000,
+                "gold": 500
+            }
+        },
+        "main_02_019": {
+            "id": "main_02_019",
+            "title": "The Warning",
+            "description": "Show the Void Sigil to Mage Elara. She needs to examine it.",
+            "giver": "Captain Thorne",
+            "step": 19,
+            "requires": "main_02_018",
+            "objectives": [
+                {
+                    "id": "talk_elara_sigil",
+                    "type": "talk",
+                    "npcId": "Mage Elara",
+                    "label": "Show Sigil to Elara",
+                    "target": 1
+                }
+            ],
+            "rewards": {
+                "xp": 1000,
+                "gold": 0
+            },
+            "removeItems": [
+                {
+                    "itemId": "void_sigil",
+                    "amount": "all"
+                }
+            ]
+        },
+        "main_02_020": {
+            "id": "main_02_020",
+            "title": "Chapter Final",
+            "description": "The Void is coming. Complete Chapter 2 and prepare for the Void Dimension.",
+            "giver": "Mage Elara",
+            "step": 20,
+            "requires": "main_02_019",
+            "objectives": [
+                {
+                    "id": "complete_ch2",
+                    "type": "talk",
+                    "npcId": "Mage Elara",
+                    "label": "Complete Chapter 2",
+                    "target": 1
+                }
+            ],
+            "rewards": {
+                "xp": 2000,
+                "gold": 1000
+            }
+        },
         "main_03_001": {
             "id": "main_03_001",
             "title": "The Dark Seal",
             "description": "The traitor was seeking the Void Key. Speak to Elder Malik to secure the key before the enemy can regroup.",
             "giver": "Elder Malik",
             "step": 1,
-            "requires": "main_02_006",
+            "requires": "main_02_020",
             "objectives": [
                 {
                     "id": "talk_malik_key",

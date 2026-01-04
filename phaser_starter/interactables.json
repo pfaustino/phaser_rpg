@@ -25,5 +25,19 @@
         "interactionRadius": 50,
         "depth": 1,
         "interactionType": "forge"
+    },
+    {
+        "id": "temple_altar",
+        "name": "Ruined Altar",
+        "map": "wilderness",
+        "x": 55,
+        "y": 32,
+        "spriteKey": "obelisk",
+        "spritePath": "assets/images/obelisk.png",
+        "width": 64,
+        "height": 128,
+        "interactionRadius": 60,
+        "interactionType": "quest_trigger",
+        "tint": 11163135
     }
 ]

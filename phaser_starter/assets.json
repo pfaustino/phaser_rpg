@@ -15,7 +15,9 @@
         "item_consumable": "assets/images/item_consumable.png",
         "item_gold": "assets/images/gold_coin.png",
         "obelisk": "assets/images/obelisk.png",
-        "arrow": "assets/images/arrow.png"
+        "arrow": "assets/images/arrow.png",
+        "cinematic_ch1": "assets/images/cinematic_ch1.png",
+        "cinematic_ch2": "assets/images/cinematic_ch2.png"
     },
     "audio": {
         "bell_toll": "assets/audio/bell-toll-407826.mp3",

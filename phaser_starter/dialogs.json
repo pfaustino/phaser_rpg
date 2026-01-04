@@ -291,16 +291,12 @@
                 "text": "Excellent. Which path calls to you?\n\n🛡️ WARRIOR: High Health, Defense. Uses Swords & Heavy Armor.\n🗡️ ROGUE: High Speed, Crit. Uses Daggers & Light Armor.\n🔮 MAGE: High Mana, Spell Power. Uses Staves & Robes.",
                 "choices": [
                     {
-                        "text": "I choose the way of the Warrior",
-                        "action": "choose_class",
-                        "className": "Warrior",
-                        "next": "end_warrior"
+                        "text": "(Unavailable) Warrior",
+                        "next": "start"
                     },
                     {
-                        "text": "I will walk the shadows as a Rogue",
-                        "action": "choose_class",
-                        "className": "Rogue",
-                        "next": "end_rogue"
+                        "text": "(Unavailable) Rogue",
+                        "next": "start"
                     },
                     {
                         "text": "I seek the power of a Mage",

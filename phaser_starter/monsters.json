@@ -1008,6 +1008,501 @@
                     }
                 }
             }
+        },
+        {
+            "id": "procedural_orc_captain",
+            "name": "Orc Captain",
+            "generationType": "mask_based",
+            "proceduralConfig": {
+                "scale": 5
+            },
+            "stats": {
+                "hp": 120,
+                "attack": 15,
+                "speed": 35,
+                "xp": 50,
+                "spawnAmount": [
+                    1,
+                    1
+                ]
+            },
+            "appearance": {
+                "baseSize": 45,
+                "layers": [
+                    {
+                        "name": "body",
+                        "type": "shape",
+                        "shape": "rect",
+                        "width": 40,
+                        "height": 45,
+                        "color": "#3A6013",
+                        "z": 10
+                    },
+                    {
+                        "name": "armor",
+                        "type": "shape",
+                        "shape": "rect",
+                        "width": 42,
+                        "height": 30,
+                        "color": "#555555",
+                        "offset": {
+                            "x": 0,
+                            "y": 5
+                        },
+                        "z": 11
+                    },
+                    {
+                        "name": "head",
+                        "type": "shape",
+                        "shape": "circle",
+                        "radius": 16,
+                        "color": "#3A6013",
+                        "offset": {
+                            "x": 0,
+                            "y": -25
+                        },
+                        "z": 20
+                    },
+                    {
+                        "name": "helmet",
+                        "type": "shape",
+                        "shape": "triangle",
+                        "points": [
+                            0,
+                            -15,
+                            -18,
+                            5,
+                            18,
+                            5
+                        ],
+                        "color": "#444444",
+                        "offset": {
+                            "x": 0,
+                            "y": -35
+                        },
+                        "z": 21
+                    },
+                    {
+                        "name": "eye_l",
+                        "type": "shape",
+                        "shape": "circle",
+                        "radius": 3,
+                        "color": "#FF0000",
+                        "offset": {
+                            "x": -6,
+                            "y": -28
+                        },
+                        "z": 30
+                    },
+                    {
+                        "name": "eye_r",
+                        "type": "shape",
+                        "shape": "circle",
+                        "radius": 3,
+                        "color": "#FF0000",
+                        "offset": {
+                            "x": 6,
+                            "y": -28
+                        },
+                        "z": 30
+                    }
+                ],
+                "animations": {
+                    "idle": {
+                        "type": "pulse",
+                        "property": "scaleY",
+                        "to": 1.02,
+                        "duration": 1500
+                    },
+                    "walk": {
+                        "type": "slide",
+                        "speed": 0.7
+                    }
+                }
+            }
+        },
+        {
+            "id": "procedural_traitor_lieutenant",
+            "name": "Traitor Lt.",
+            "generationType": "mask_based",
+            "proceduralConfig": {
+                "scale": 4
+            },
+            "stats": {
+                "hp": 100,
+                "attack": 12,
+                "speed": 55,
+                "xp": 45,
+                "spawnAmount": [
+                    1,
+                    1
+                ]
+            },
+            "appearance": {
+                "baseSize": 36,
+                "layers": [
+                    {
+                        "name": "body",
+                        "type": "shape",
+                        "shape": "rect",
+                        "width": 30,
+                        "height": 36,
+                        "color": "#663333",
+                        "z": 10
+                    },
+                    {
+                        "name": "cloak",
+                        "type": "shape",
+                        "shape": "triangle",
+                        "points": [
+                            0,
+                            40,
+                            -20,
+                            -10,
+                            20,
+                            -10
+                        ],
+                        "color": "#220000",
+                        "offset": {
+                            "x": 0,
+                            "y": 5
+                        },
+                        "z": 5
+                    },
+                    {
+                        "name": "head",
+                        "type": "shape",
+                        "shape": "circle",
+                        "radius": 12,
+                        "color": "#FFCCAA",
+                        "offset": {
+                            "x": 0,
+                            "y": -20
+                        },
+                        "z": 20
+                    },
+                    {
+                        "name": "hood",
+                        "type": "shape",
+                        "shape": "circle",
+                        "radius": 14,
+                        "color": "#220000",
+                        "offset": {
+                            "x": 0,
+                            "y": -22
+                        },
+                        "z": 19
+                    },
+                    {
+                        "name": "eye_l",
+                        "type": "shape",
+                        "shape": "circle",
+                        "radius": 2,
+                        "color": "#000000",
+                        "offset": {
+                            "x": -4,
+                            "y": -20
+                        },
+                        "z": 30
+                    },
+                    {
+                        "name": "eye_r",
+                        "type": "shape",
+                        "shape": "circle",
+                        "radius": 2,
+                        "color": "#000000",
+                        "offset": {
+                            "x": 4,
+                            "y": -20
+                        },
+                        "z": 30
+                    }
+                ],
+                "animations": {
+                    "idle": {
+                        "type": "float",
+                        "range": 2,
+                        "duration": 2000
+                    },
+                    "walk": {
+                        "type": "slide",
+                        "speed": 1.2
+                    }
+                }
+            }
+        },
+        {
+            "id": "procedural_elite_guard",
+            "name": "Elite Guard",
+            "generationType": "mask_based",
+            "proceduralConfig": {
+                "scale": 4
+            },
+            "stats": {
+                "hp": 150,
+                "attack": 18,
+                "speed": 40,
+                "xp": 60,
+                "spawnAmount": [
+                    1,
+                    2
+                ]
+            },
+            "appearance": {
+                "baseSize": 40,
+                "layers": [
+                    {
+                        "name": "body",
+                        "type": "shape",
+                        "shape": "rect",
+                        "width": 34,
+                        "height": 40,
+                        "color": "#888888",
+                        "z": 10
+                    },
+                    {
+                        "name": "shield",
+                        "type": "shape",
+                        "shape": "rect",
+                        "width": 15,
+                        "height": 30,
+                        "color": "#444444",
+                        "offset": {
+                            "x": -20,
+                            "y": 0
+                        },
+                        "z": 15
+                    },
+                    {
+                        "name": "head",
+                        "type": "shape",
+                        "shape": "circle",
+                        "radius": 14,
+                        "color": "#888888",
+                        "offset": {
+                            "x": 0,
+                            "y": -22
+                        },
+                        "z": 20
+                    },
+                    {
+                        "name": "visor",
+                        "type": "shape",
+                        "shape": "rect",
+                        "width": 20,
+                        "height": 6,
+                        "color": "#000000",
+                        "offset": {
+                            "x": 0,
+                            "y": -22
+                        },
+                        "z": 21
+                    }
+                ],
+                "animations": {
+                    "idle": {
+                        "type": "pulse",
+                        "property": "scale",
+                        "to": 1.01,
+                        "duration": 1000
+                    },
+                    "walk": {
+                        "type": "slide",
+                        "speed": 0.8
+                    }
+                }
+            }
+        },
+        {
+            "id": "malagor_boss",
+            "name": "Malagor",
+            "generationType": "mask_based",
+            "proceduralConfig": {
+                "scale": 5
+            },
+            "stats": {
+                "hp": 500,
+                "attack": 25,
+                "speed": 45,
+                "xp": 500,
+                "spawnAmount": [
+                    1,
+                    1
+                ],
+                "isBoss": true
+            },
+            "appearance": {
+                "baseSize": 50,
+                "layers": [
+                    {
+                        "name": "robe",
+                        "type": "shape",
+                        "shape": "triangle",
+                        "points": [
+                            0,
+                            -30,
+                            -25,
+                            30,
+                            25,
+                            30
+                        ],
+                        "color": "#330066",
+                        "z": 10
+                    },
+                    {
+                        "name": "head",
+                        "type": "shape",
+                        "shape": "circle",
+                        "radius": 15,
+                        "color": "#DDBBFF",
+                        "offset": {
+                            "x": 0,
+                            "y": -35
+                        },
+                        "z": 20
+                    },
+                    {
+                        "name": "staff",
+                        "type": "shape",
+                        "shape": "rect",
+                        "width": 6,
+                        "height": 60,
+                        "color": "#664422",
+                        "offset": {
+                            "x": 30,
+                            "y": 0
+                        },
+                        "z": 15
+                    },
+                    {
+                        "name": "staff_gem",
+                        "type": "shape",
+                        "shape": "circle",
+                        "radius": 8,
+                        "color": "#FF00FF",
+                        "offset": {
+                            "x": 30,
+                            "y": -30
+                        },
+                        "z": 16
+                    },
+                    {
+                        "name": "aura",
+                        "type": "shape",
+                        "shape": "circle",
+                        "radius": 40,
+                        "color": "#AA00AA",
+                        "alpha": 0.3,
+                        "z": 5
+                    }
+                ],
+                "animations": {
+                    "idle": {
+                        "type": "float",
+                        "range": 5,
+                        "duration": 1500
+                    },
+                    "walk": {
+                        "type": "slide",
+                        "speed": 1.0
+                    }
+                }
+            }
+        },
+        {
+            "id": "general_vex",
+            "name": "General Vex",
+            "generationType": "mask_based",
+            "proceduralConfig": {
+                "scale": 6
+            },
+            "stats": {
+                "hp": 1000,
+                "attack": 40,
+                "speed": 60,
+                "xp": 2000,
+                "spawnAmount": [
+                    1,
+                    1
+                ],
+                "isBoss": true
+            },
+            "appearance": {
+                "baseSize": 60,
+                "layers": [
+                    {
+                        "name": "body",
+                        "type": "shape",
+                        "shape": "rect",
+                        "width": 50,
+                        "height": 60,
+                        "color": "#222222",
+                        "z": 10
+                    },
+                    {
+                        "name": "cape",
+                        "type": "shape",
+                        "shape": "triangle",
+                        "points": [
+                            0,
+                            -30,
+                            -40,
+                            40,
+                            40,
+                            40
+                        ],
+                        "color": "#550000",
+                        "z": 5
+                    },
+                    {
+                        "name": "head",
+                        "type": "shape",
+                        "shape": "circle",
+                        "radius": 20,
+                        "color": "#444444",
+                        "offset": {
+                            "x": 0,
+                            "y": -35
+                        },
+                        "z": 20
+                    },
+                    {
+                        "name": "sword",
+                        "type": "shape",
+                        "shape": "rect",
+                        "width": 10,
+                        "height": 80,
+                        "color": "#AA0000",
+                        "offset": {
+                            "x": -40,
+                            "y": 0
+                        },
+                        "z": 15
+                    },
+                    {
+                        "name": "void_energy",
+                        "type": "shape",
+                        "shape": "circle",
+                        "radius": 50,
+                        "color": "#000000",
+                        "alpha": 0.4,
+                        "z": 1
+                    }
+                ],
+                "animations": {
+                    "idle": {
+                        "type": "pulse",
+                        "property": "scale",
+                        "to": 1.1,
+                        "duration": 1000
+                    },
+                    "walk": {
+                        "type": "lunge",
+                        "distance": 10,
+                        "duration": 500
+                    }
+                }
+            }
         }
     ]
 }

@@ -418,6 +418,7 @@ function preload() {
     this.load.json('zoneData', 'zones.json');
     this.load.json('assets', 'assets.json');
     this.load.json('interactables', 'interactables.json');
+    this.load.json('cinematicData', 'cinematics.json');
     this.load.json('monsters', 'monsters.json');
     this.load.json('dungeonData', 'dungeons.json');
 
@@ -2207,6 +2208,13 @@ function create() {
         this.milestoneManager.init(this.cache.json.get('milestoneData'));
     }
 
+    // Initialize Cinematic Manager
+    this.cinematicManager = new CinematicManager(this);
+    window.cinematicManager = this.cinematicManager; // Expose for debugging
+    if (this.cache.json.exists('cinematicData')) {
+        this.cinematicManager.init(this.cache.json.get('cinematicData'));
+    }
+
     // Initialize Codex UI Keys
     if (window.setupLoreCodexKeys) {
         window.setupLoreCodexKeys(this);
@@ -3051,7 +3059,7 @@ function create() {
         .setDepth(30000);
 
     // Version Number
-    this.add.text(this.scale.width - 10, 10, 'v0.9.141', {
+    this.add.text(this.scale.width - 10, 10, 'v0.9.182', {
         fontFamily: 'Arial',
         fontSize: '16px',
         color: '#ffffff',
@@ -5909,19 +5917,7 @@ function createWeaponSwingTrail(x, y, direction, quality = 'Common') {
         });
     }
 
-    // Debug Cheat: Ctrl+Alt+K to Level Up
-    this.input.keyboard.on('keydown', (event) => {
-        // Check for K key (case insensitive logic just in case, though event.key is usually reliable)
-        if ((event.key === 'k' || event.key === 'K') && event.ctrlKey && event.altKey) {
-            console.log('🔧 Shortcut Detected: Ctrl+Alt+K');
-            if (window.cheatLevelUp) {
-                console.log('🔧 Executing cheatLevelUp...');
-                window.cheatLevelUp();
-            } else {
-                console.error('❌ window.cheatLevelUp is not defined!');
-            }
-        }
-    });
+
 
     // Create main swing line (bright line following the arc)
     const lineGraphics = scene.add.graphics();
@@ -13932,7 +13928,8 @@ function spawnInitialMonsters(mapWidth, mapHeight) {
         const uniqueBlueprints = Array.from(new Set(Object.values(monsterRenderer.monsterBlueprints)));
         uniqueBlueprints.forEach(bp => {
             // Include all (bosses might be filtered differently, but initial spawn is usually wilderness)
-            if (bp.id !== 'boss' && !bp.isBoss) {
+            // Fix: Check both top-level isBoss and nested stats.isBoss
+            if (bp.id !== 'boss' && !bp.isBoss && (!bp.stats || !bp.stats.isBoss)) {
                 monsterTypes.push({
                     name: bp.name,
                     id: bp.id,
@@ -16615,3 +16612,79 @@ window.QuestEvents = {
         stop: stopBacklashEvent
     }
 };
+
+// ==========================================
+// CLASS SELECTION & ABILITY SYSTEM
+// ==========================================
+
+/**
+ * Unlocks a new ability for the player
+ * @param {string} abilityName - The ID of the ability (e.g., 'ice_nova', 'fireball')
+ */
+function unlockAbility(abilityName) {
+    // Check if ability exists in definitions (optional safety)
+    // For now, we trust the ID.
+
+    // Initialize abilities object if missing
+    if (!playerStats.abilities) {
+        playerStats.abilities = {};
+    }
+
+    // Check if already unlocked
+    if (playerStats.abilities[abilityName]) {
+        console.log(`Ability ${abilityName} already unlocked.`);
+        return;
+    }
+
+    // Unlock it
+    playerStats.abilities[abilityName] = { lastUsed: 0 };
+    console.log(`✨ Ability Unlocked: ${abilityName}`);
+
+    // Notify Player
+    if (typeof addChatMessage === 'function') {
+        const displayName = abilityName.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+        addChatMessage(`Learned Ability: ${displayName}`, 0x00ffff, '✨');
+    }
+
+    if (typeof playSound === 'function') {
+        playSound('level_up');
+    }
+
+    // Trigger UI refresh if needed
+    if (typeof updateAbilityUI === 'function') {
+        updateAbilityUI();
+    }
+}
+window.unlockAbility = unlockAbility;
+
+/**
+ * Handle Class Selection
+ * @param {string} className - 'Warrior', 'Rogue', 'Mage'
+ */
+function chooseClass(className) {
+    console.log(`🛡️ Class Selected: ${className}`);
+
+    // Set Class
+    playerStats.class = className;
+
+    // Notify
+    if (typeof addChatMessage === 'function') {
+        addChatMessage(`You have chosen the path of the ${className}!`, 0xffd700, '🛡️');
+    }
+
+    // Grant Class-Specific Starting Abilities
+    if (className === 'Mage') {
+        unlockAbility('ice_nova');
+        // Fireball is explicitly NOT granted initially (per request)
+    } else if (className === 'Warrior') {
+        // Disabled for now
+    } else if (className === 'Rogue') {
+        // Disabled for now
+    }
+
+    // Save Game (to persist choice)
+    if (typeof saveGame === 'function') {
+        saveGame();
+    }
+}
+window.chooseClass = chooseClass;

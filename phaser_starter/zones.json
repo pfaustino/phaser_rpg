@@ -15,9 +15,9 @@
     {
         "id": "temple_ruins",
         "label": "Temple Ruins",
-        "x": 1120,
-        "y": 1120,
-        "radius": 100,
+        "x": 1760,
+        "y": 1024,
+        "radius": 150,
         "requiredObjectiveId": "collect_fragment",
         "onInteract": {
             "type": "composite",

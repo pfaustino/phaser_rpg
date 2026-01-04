@@ -36,6 +36,19 @@
             "rewards": {
                 "loreUnlock": "lore_ch1_intro"
             }
+        },
+        {
+            "id": "ms_chapter_3",
+            "name": "Into the Void",
+            "description": "Complete Chapter 2 and prepare to enter the Void.",
+            "trigger": {
+                "type": "quest_complete",
+                "questId": "main_02_020"
+            },
+            "rewards": {
+                "loreUnlock": "lore_ch3_intro",
+                "xp": 2000
+            }
         }
     ]
 }

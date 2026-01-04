@@ -53,5 +53,18 @@
         "interactionRadius": 60,
         "interactionType": "quest_trigger",
         "tint": 13369548
+    },
+    {
+        "id": "void_tear",
+        "name": "Void Tear",
+        "map": "procedural_only",
+        "x": 0,
+        "y": 0,
+        "spriteKey": "void_tear",
+        "spritePath": "assets/images/void-tear.png",
+        "width": 64,
+        "height": 64,
+        "interactionRadius": 80,
+        "interactionType": "quest_trigger"
     }
 ]

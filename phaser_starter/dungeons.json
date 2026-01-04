@@ -148,6 +148,13 @@
                     "maxLevel": 2,
                     "chance": 1.0,
                     "limit": 6
+                },
+                {
+                    "id": "void_tear",
+                    "minLevel": 3,
+                    "maxLevel": 3,
+                    "chance": 1.0,
+                    "limit": 1
                 }
             ],
             "bosses": [

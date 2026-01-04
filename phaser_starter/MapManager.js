@@ -1185,15 +1185,43 @@ const MapManager = {
                             const pixelY = ry * scene.tileSize + scene.tileSize / 2;
 
                             // NOTE: Images/sprites don't render in spawnDungeonInteractables context
-                            // Using styled rectangles as visual (these work)
-                            // Main altar body (dark red)
-                            const visual = scene.add.rectangle(pixelX, pixelY, 24, 64, 0x8B0000).setDepth(8);
-                            // Top accent (lighter red)
-                            scene.add.rectangle(pixelX, pixelY - 24, 16, 16, 0xCC4444).setDepth(9);
-                            // Glow effect
-                            scene.add.circle(pixelX, pixelY, 28, 0xFF0000, 0.15).setDepth(7);
+                            // Using styled shapes as visual (these work)
+                            let visual;
+                            let collisionBody;
 
-                            const collisionBody = scene.add.rectangle(pixelX, pixelY, 32, 80, 0x000000, 0);
+                            if (def.id === 'ritual_altar') {
+                                // Dark Ritual Altar - red themed
+                                visual = scene.add.rectangle(pixelX, pixelY, 24, 64, 0x8B0000).setDepth(8);
+                                scene.add.rectangle(pixelX, pixelY - 24, 16, 16, 0xCC4444).setDepth(9);
+                                scene.add.circle(pixelX, pixelY, 28, 0xFF0000, 0.15).setDepth(7);
+                                collisionBody = scene.add.rectangle(pixelX, pixelY, 32, 80, 0x000000, 0);
+                            } else if (def.id === 'void_tear') {
+                                // Void Tear - purple/void themed with pulsing effect
+                                // Outer glow
+                                const outerGlow = scene.add.circle(pixelX, pixelY, 40, 0x8800FF, 0.2).setDepth(6);
+                                // Inner void
+                                visual = scene.add.circle(pixelX, pixelY, 24, 0x220044).setDepth(8);
+                                visual.setStrokeStyle(4, 0xAA00FF);
+                                // Core
+                                const core = scene.add.circle(pixelX, pixelY, 10, 0x000000).setDepth(9);
+                                // Pulsing animation
+                                scene.tweens.add({
+                                    targets: [outerGlow, visual],
+                                    scaleX: 1.15,
+                                    scaleY: 1.15,
+                                    alpha: { from: 1, to: 0.7 },
+                                    duration: 800,
+                                    yoyo: true,
+                                    repeat: -1,
+                                    ease: 'Sine.easeInOut'
+                                });
+                                collisionBody = scene.add.rectangle(pixelX, pixelY, 48, 48, 0x000000, 0);
+                            } else {
+                                // Generic fallback - gray rectangle
+                                visual = scene.add.rectangle(pixelX, pixelY, 32, 32, 0x666666).setDepth(8);
+                                collisionBody = scene.add.rectangle(pixelX, pixelY, 32, 32, 0x000000, 0);
+                            }
+
                             scene.physics.add.existing(collisionBody, true);
 
                             if (typeof player !== 'undefined' && player && player.body) {
@@ -1220,9 +1248,10 @@ const MapManager = {
                                 // Definition not found - destroy the shapes
                                 visual.destroy();
                                 collisionBody.destroy();
-                                console.warn(`[ALTAR] Definition for ${def.id} not found`);
+                                console.warn(`[INTERACTABLE] Definition for ${def.id} not found`);
                             }
                         }
+
 
 
                     }

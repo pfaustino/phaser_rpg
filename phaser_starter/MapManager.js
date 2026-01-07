@@ -264,6 +264,7 @@ const MapManager = {
      * Create town map with streets, buildings, and NPCs
      */
     createTownMap() {
+        this.currentMap = 'town';
         const scene = this.scene;
         // Clear wall group
         if (this.wallGroup) this.wallGroup.clear(true, true);
@@ -684,6 +685,7 @@ const MapManager = {
      * Create wilderness map
      */
     createWildernessMap() {
+        this.currentMap = 'wilderness';
         const scene = this.scene;
         if (this.wallGroup) this.wallGroup.clear(true, true);
         const tileSize = 32;
@@ -986,7 +988,11 @@ const MapManager = {
     /**
      * Create Dungeon Map
      */
-    createDungeonMap(dungeonId, level) {
+    createDungeonMap(dungeonId, level = 1) {
+        this.currentMap = 'dungeon';
+        this.currentDungeonId = dungeonId;
+        this.dungeonLevel = level;
+
         const scene = this.scene;
         const tileSize = 32;
 

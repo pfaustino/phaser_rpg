@@ -1,8 +1,4 @@
-/**
- * UIManager.js
- * Handles all UI-related functionality including Inventory, Quest Log, Settings, and Dialogs.
- * Extracted from game.js to improve code organization.
- */
+console.log('✅ UIManager.js v0.9.188.0021 LOADED');
 
 window.UIManager = {
     // State Variables
@@ -483,19 +479,20 @@ window.UIManager = {
     // UTILS (Tooltip & Scrollbar)
     // ============================================
 
-    showTooltip: function (item, x, y, context = 'inventory') {
-
-        const scene = game.scene.scenes[0];
-        if (!item) return;
-
-        if (this.tooltipHideTimer) {
-            scene.time.removeEvent(this.tooltipHideTimer);
-            this.tooltipHideTimer = null;
-        }
-        this.hideTooltip(true);
+    /**
+     * Helper to generate tooltip text lines
+     */
+    getTooltipText: function (item, context = 'inventory', isComparison = false) {
+        if (!item) return '';
 
         let tooltipLines = [];
-        tooltipLines.push(item.name || 'Unknown Item');
+
+        // Header
+        // Header
+        tooltipLines.push(`${item.name}` || 'Unknown Item');
+        if (isComparison) {
+            tooltipLines[0] += ' (Equipped)';
+        }
 
         if (typeof calculateItemScore === 'function') {
             const score = calculateItemScore(item);
@@ -529,7 +526,8 @@ window.UIManager = {
             }
         }
 
-        if (context === 'inventory') {
+        // Instructions (only for main item, not comparison)
+        if (!isComparison && context === 'inventory') {
             const equippableTypes = ['weapon', 'armor', 'helmet', 'ring', 'amulet', 'boots', 'gloves', 'belt'];
             if (equippableTypes.includes(item.type)) {
                 tooltipLines.push('');
@@ -540,44 +538,230 @@ window.UIManager = {
             }
         }
 
-        const tooltipText = tooltipLines.join('\n');
-        const qualityColor = (window.QUALITY_COLORS && window.QUALITY_COLORS[item.quality]) ? window.QUALITY_COLORS[item.quality] : 0xffffff;
+        return tooltipLines.join('\n');
+    },
 
-        const text = scene.add.text(0, 0, tooltipText, {
+    /**
+     * Show tooltip for an item
+     */
+    showTooltip: function (item, x, y, context = 'inventory') {
+        window.debugTrace = 0.1;
+        try {
+            // Check 'this' context
+            if (!this) throw new Error("UIManager 'this' is undefined");
+            window.debugTrace = 0.2;
+
+            const scene = game.scene.scenes[0];
+            if (!scene) throw new Error("Scene not found");
+            window.debugTrace = 0.3;
+
+            if (!item) {
+                window.debugTrace = 0.4;
+                return;
+            }
+
+            // DEBUG: Track last hovered item type globally
+            if (typeof window !== 'undefined') {
+                window.lastHoveredType = item.type || 'undefined';
+            }
+            window.debugTrace = 0.5;
+
+            if (this.tooltipHideTimer) {
+                scene.time.removeEvent(this.tooltipHideTimer);
+                this.tooltipHideTimer = null;
+            }
+            window.debugTrace = 0.6;
+
+            this.hideTooltip(true);
+            window.debugTrace = 1; // After Hide
+
+            // Ensure tracking array exists
+            if (!this.activeTooltips) this.activeTooltips = [];
+
+            // --- 1. Main Tooltip ---
+            let mainTextStr = this.getTooltipText(item, context, false);
+            // Remove DEBUG prefix if it exists in getTooltipText (or just don't add it)
+            // (Assuming getTooltipText doesn't add it, but I added it previously. I'll check getTooltipText next)
+            window.debugTrace = 2; // Got Text
+
+            const qualityColor = (window.QUALITY_COLORS && window.QUALITY_COLORS[item.quality]) ? window.QUALITY_COLORS[item.quality] : 0xffffff;
+
+            const mainObj = this.createTooltipObject(scene, mainTextStr, x + 20, y + 20, qualityColor);
+            if (!mainObj) return; // Should not happen
+            window.debugTrace = 3; // Created Main
+
+            // Keep main tooltip on screen
+            const bounds = mainObj.text.getBounds();
+            // Check right edge
+            if (mainObj.text.x + bounds.width > scene.cameras.main.width) {
+                const newX = x - bounds.width - 20;
+                mainObj.text.setX(newX);
+                mainObj.bg.setX(newX + bounds.width / 2);
+            }
+            // Check bottom edge
+            if (mainObj.text.y + bounds.height > scene.cameras.main.height) {
+                const newY = y - bounds.height - 20;
+                mainObj.text.setY(newY);
+                mainObj.bg.setY(newY + bounds.height / 2);
+            }
+            window.debugTrace = 3.5;
+
+
+            this.currentTooltip = mainObj;
+
+            // --- 2. Comparison Tooltip ---
+            window.debugTrace = 4; // Start Comparison Logic
+            // Only if we are hovering a valid equipment type and NOT hovering the equipped item itself
+            const slotMapping = {
+                'sword': 'weapon',
+                'axe': 'weapon',
+                'mace': 'weapon',
+                'staff': 'weapon',
+                'bow': 'weapon',
+                'crossbow': 'weapon',
+                'dagger': 'weapon',
+                'weapon': 'weapon',
+                'armor': 'armor',
+                'helmet': 'helmet',
+                'ring': 'ring',
+                'amulet': 'amulet',
+                'boots': 'boots',
+                'gloves': 'gloves',
+                'belt': 'belt',
+                'shield': 'shield',
+                // Allow capital cases just in case
+                'Sword': 'weapon', 'Axe': 'weapon', 'Mace': 'weapon', 'Staff': 'weapon',
+                'Bow': 'weapon', 'Crossbow': 'weapon', 'Dagger': 'weapon',
+                'Weapon': 'weapon', 'Armor': 'armor', 'Helmet': 'helmet',
+                'Ring': 'ring', 'Amulet': 'amulet', 'Boots': 'boots',
+                'Gloves': 'gloves', 'Belt': 'belt', 'Shield': 'shield'
+            };
+
+            // Normalize type to lowercase for lookup
+            const typeLower = (item.type || '').toLowerCase().trim();
+            // Check both direct type (e.g. 'Sword') and lower cased (e.g. 'sword')
+            const slot = slotMapping[item.type] || slotMapping[typeLower];
+            window.debugTrace = 5; // Got Slot
+
+            // DEBUG: Export state for HUD
+            if (typeof window !== 'undefined') {
+                const equipment = window.GameState && window.GameState.playerStats ? window.GameState.playerStats.equipment : null;
+                const equippedItem = (equipment && slot) ? equipment[slot] : null;
+
+                window.debugTooltipState = {
+                    type: item.type,
+                    typeLower: typeLower,
+                    slot: slot || 'null',
+                    equippedName: equippedItem ? equippedItem.name : 'None',
+                    hasEquipment: !!equipment
+                };
+            }
+
+            if (slot) {
+                const equipment = window.GameState.playerStats.equipment;
+                const equippedItem = equipment ? equipment[slot] : null;
+
+                if (equippedItem && equippedItem !== item && equippedItem.id !== item.id) {
+                    const compTextStr = this.getTooltipText(equippedItem, context, true);
+                    const compColor = (window.QUALITY_COLORS && window.QUALITY_COLORS[equippedItem.quality]) ? window.QUALITY_COLORS[equippedItem.quality] : 0xaaaaaa;
+
+                    // Position: Attempt to place it to the Right of the main tooltip
+                    // If specific space not available, try Left.
+                    // Main Tooltip Final X/Y
+                    const mainX = mainObj.text.x;
+                    const mainY = mainObj.text.y;
+                    const mainW = mainObj.text.width;
+
+                    let compX = mainX + mainW + 20; // Default: Right
+                    let compY = mainY;
+
+                    const compObj = this.createTooltipObject(scene, compTextStr, compX, compY, compColor);
+
+                    const compBounds = compObj.text.getBounds();
+
+                    // If Right goes off-screen, move to Left of Main
+                    if (compX + compBounds.width > scene.cameras.main.width) {
+                        compX = mainX - compBounds.width - 20;
+                        compObj.text.setX(compX);
+                        compObj.bg.setX(compX + compBounds.width / 2);
+                    }
+
+                    this.comparisonTooltip = compObj;
+                }
+            }
+        } catch (e) {
+            console.error("CRASH in showTooltip:", e);
+            if (typeof window !== 'undefined') {
+                window.lastTooltipError = e.message;
+                window.debugTrace = 999;
+            }
+        }
+    },
+
+    createTooltipObject: function (scene, textStr, x, y, borderColor) {
+        // Remove [[DEBUG]] if present (just in case getTooltipText adds it)
+        textStr = textStr.replace('[[DEBUG]] ', '');
+
+        const text = scene.add.text(x, y, textStr, {
             fontSize: '14px',
             fill: '#ffffff',
             padding: { x: 10, y: 10 },
             wordWrap: { width: 220 }
-        }).setScrollFactor(0).setDepth(1001).setOrigin(0);
+        }).setScrollFactor(0).setDepth(10001).setOrigin(0);
 
         const bounds = text.getBounds();
-        let tx = x + 20;
-        let ty = y + 20;
+        const bg = scene.add.rectangle(x + bounds.width / 2, y + bounds.height / 2, bounds.width, bounds.height, 0x000000, 0.9)
+            .setScrollFactor(0).setDepth(9999).setStrokeStyle(2, borderColor);
 
-        if (tx + bounds.width > scene.cameras.main.width) tx = x - bounds.width - 20;
-        if (ty + bounds.height > scene.cameras.main.height) ty = y - bounds.height - 20;
+        // Ensure text is above bg
+        text.setDepth(10002);
 
-        text.setPosition(tx, ty);
+        const obj = { text, bg };
 
-        const bg = scene.add.rectangle(tx + bounds.width / 2, ty + bounds.height / 2, bounds.width, bounds.height, 0x000000, 0.9)
-            .setScrollFactor(0).setDepth(999).setStrokeStyle(2, qualityColor);
+        // Add to active tracking
+        if (!this.activeTooltips) this.activeTooltips = [];
+        this.activeTooltips.push(obj);
 
-        this.currentTooltip = { text, bg };
+        return obj;
     },
 
     hideTooltip: function (immediate = false) {
         const scene = game.scene.scenes[0];
         const performHide = () => {
-            if (this.currentTooltip) {
-                if (this.currentTooltip.text) this.currentTooltip.text.destroy();
-                if (this.currentTooltip.bg) this.currentTooltip.bg.destroy();
-                this.currentTooltip = null;
+            // console.log(`🛡️ hideTooltip called. Active count: ${this.activeTooltips ? this.activeTooltips.length : 0}`);
+
+            // Destroy ALL active tooltips
+            if (this.activeTooltips && this.activeTooltips.length > 0) {
+                this.activeTooltips.forEach((obj, index) => {
+                    try {
+                        if (obj.text && obj.text.destroy) obj.text.destroy();
+                        if (obj.bg && obj.bg.destroy) obj.bg.destroy();
+                    } catch (err) {
+                        console.error(`💥 Error destroying tooltip ${index}:`, err);
+                    }
+                });
+                // Clear array immediately
+                this.activeTooltips = [];
+            } else {
+                // Determine if we need to reset to be safe
+                this.activeTooltips = [];
             }
+
+            // Also clear explicit references just in case
+            this.currentTooltip = null;
+            this.comparisonTooltip = null;
         };
 
         if (immediate) {
+            // Cancel any pending timer
+            if (this.tooltipHideTimer) {
+                if (scene && scene.time) scene.time.removeEvent(this.tooltipHideTimer);
+                this.tooltipHideTimer = null;
+            }
             performHide();
         } else {
+            // If timer exists, let it run (debounce) - OR reset it?
+            // User moving mouse fast might trigger multiple outs.
             if (!this.tooltipHideTimer && scene && scene.time) {
                 this.tooltipHideTimer = scene.time.delayedCall(50, () => {
                     performHide();
@@ -1214,140 +1398,7 @@ window.UIManager = {
     // TOOLTIP SYSTEM (Monsters/Items)
     // ============================================
 
-    showTooltip: function (item, x, y, context = 'inventory') {
-        if (!window.game || !window.game.scene || !window.game.scene.scenes[0]) return;
-        const scene = window.game.scene.scenes[0];
 
-        // Clean up existing tooltip
-        this.hideTooltip();
-
-        // Safe check for item
-        if (!item) return;
-
-        // Create container
-        // Offset slightly to not cover the item entirely or cursor
-        const tooltipX = x + 20;
-        const tooltipY = y;
-
-        const tooltip = scene.add.container(tooltipX, tooltipY).setDepth(20000).setScrollFactor(0);
-        this.currentTooltip = tooltip;
-
-        const rarityColors = {
-            'Legendary': 0xffaa00,
-            'Epic': 0x9900cc,
-            'Rare': 0x0099ff,
-            'Common': 0xffffff
-        };
-        const rarityColor = rarityColors[item.quality] || 0xffffff;
-        const rarityHex = '#' + rarityColor.toString(16).padStart(6, '0');
-
-        // Text elements array to calculate height
-        const texts = [];
-        let currentY = 10;
-        const padding = 10;
-        const width = 220;
-
-        // 1. Name
-        const nameText = scene.add.text(width / 2, currentY, item.name, {
-            fontSize: '14px', fontFamily: 'Arial', fontStyle: 'bold', fill: '#ffffff',
-            wordWrap: { width: width - 20 }
-        }).setOrigin(0.5, 0);
-        tooltip.add(nameText);
-        texts.push(nameText);
-        currentY += nameText.height + 5;
-
-        // 2. Gear Score (if applicable) - approximate logic or reading from item? 
-        // Item Level is usually a good proxy if GS isn't explicit
-        if (item.itemLevel) {
-            const gsText = scene.add.text(width / 2, currentY, `Gear Score: ${item.itemLevel * 10 + 50}`, { // Dummy calc to match look
-                fontSize: '12px', fontFamily: 'Arial', fill: '#aaaaaa'
-            }).setOrigin(0.5, 0);
-            tooltip.add(gsText);
-            texts.push(gsText);
-            currentY += gsText.height + 2;
-        }
-
-        // 3. Quality
-        const qualityText = scene.add.text(width / 2, currentY, `Quality: ${item.quality}`, {
-            fontSize: '12px', fontFamily: 'Arial', fill: rarityHex
-        }).setOrigin(0.5, 0);
-        tooltip.add(qualityText);
-        texts.push(qualityText);
-        currentY += qualityText.height + 2;
-
-        // 4. Type
-        const typeText = scene.add.text(width / 2, currentY, `Type: ${item.type.charAt(0).toUpperCase() + item.type.slice(1)}`, {
-            fontSize: '12px', fontFamily: 'Arial', fill: '#aaaaaa'
-        }).setOrigin(0.5, 0);
-        tooltip.add(typeText);
-        texts.push(typeText);
-        currentY += typeText.height + 8;
-
-        // 5. Stats
-        const stats = [
-            { label: 'Attack', val: item.attackPower || item.attack, prefix: '+' },
-            { label: 'Defense', val: item.defense, prefix: '+' },
-            { label: 'Crit', val: item.critChance ? Math.round(item.critChance * 100) + '%' : null, prefix: '+' },
-            { label: 'Speed', val: item.speedBonus || item.speed, prefix: '+' },
-            { label: 'Health', val: item.maxHp || item.hpBonus, prefix: '+' }, // maxHp on item usually means bonus
-            { label: 'Lifesteal', val: item.lifesteal ? Math.round(item.lifesteal * 100) + '%' : null, prefix: '+' }
-        ];
-
-        stats.forEach(stat => {
-            if (stat.val) {
-                const statText = scene.add.text(padding + 10, currentY, `${stat.label}: ${stat.prefix}${stat.val}`, {
-                    fontSize: '12px', fontFamily: 'Arial', fill: '#dddddd'
-                }).setOrigin(0, 0);
-                tooltip.add(statText);
-                texts.push(statText);
-                currentY += statText.height + 2;
-            }
-        });
-
-        // 6. Description (if any)
-        if (item.description) {
-            currentY += 5;
-            const descText = scene.add.text(width / 2, currentY, item.description, {
-                fontSize: '11px', fontFamily: 'Arial', fill: '#aaaaaa', fontStyle: 'italic',
-                wordWrap: { width: width - 20 }, align: 'center'
-            }).setOrigin(0.5, 0);
-            tooltip.add(descText);
-            texts.push(descText);
-            currentY += descText.height + 5;
-        }
-
-        // 7. Hint
-        currentY += 10;
-        const hintText = scene.add.text(width / 2, currentY, 'Click to Equip', {
-            fontSize: '11px', fontFamily: 'Arial', fill: '#666666'
-        }).setOrigin(0.5, 0);
-        tooltip.add(hintText);
-        texts.push(hintText);
-        currentY += hintText.height + 10;
-
-        // Background (created last to know height, but added first via sendToBack... or just insert at 0?)
-        // Container add order matters for rendering. We should add bg first.
-        // We can use moveDown or just create it first (but we didn't know height).
-        // Best: create bg, then add all texts again? Or update bg size.
-        // Let's create bg now and send to back.
-        const bgHeight = currentY;
-        const bg = scene.add.rectangle(width / 2, bgHeight / 2, width, bgHeight, 0x000000, 0.9)
-            .setStrokeStyle(2, rarityColor);
-        tooltip.add(bg);
-        tooltip.sendToBack(bg);
-
-        // Ensure tooltip stays on screen
-        const camera = scene.cameras.main;
-        if (tooltipX + width / 2 > camera.width) {
-            tooltip.x = x - width - 20;
-        }
-        if (tooltipY + bgHeight / 2 > camera.height) {
-            tooltip.y = camera.height - bgHeight / 2 - 10;
-        }
-        if (tooltip.y - bgHeight / 2 < 0) {
-            tooltip.y = bgHeight / 2 + 10;
-        }
-    },
 
     showMonsterTooltip: function (monster, x, y) {
         if (!window.game || !window.game.scene || !window.game.scene.scenes[0]) return;

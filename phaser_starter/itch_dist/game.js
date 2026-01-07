@@ -45,6 +45,7 @@ console.log('🎮 GAME CONFIG CREATED - Preload function:', typeof preload);
 
 // Create the game instance
 const game = new Phaser.Game(config);
+window.game = game;
 
 console.log('🎮 PHASER GAME INSTANCE CREATED');
 
@@ -56,7 +57,20 @@ let map;
 // Global State Variables
 // (Moved to GameState.js)
 // (Moved to GameState.js: questTrackerEntries, lastPlayerX/Y, monsters, items, npcs, isGamePaused)
+// Global State Variables
+// (Moved to GameState.js)
+// (Moved to GameState.js: questTrackerEntries, lastPlayerX/Y, monsters, items, npcs, isGamePaused)
 let spaceKey;
+let regenTimerEvent = null;
+let hpRegenTimerEvent = null;
+let dialogDatabase = {};
+
+const ABILITY_DEFINITIONS = {
+    'fireball': { icon: 'fireball_effect', color: 0xff4400, manaCost: 10, cooldown: 1000 },
+    'heal': { icon: 'heal_effect', color: 0x00ff00, manaCost: 20, cooldown: 5000, healAmount: 50 },
+    'shield': { icon: 'shield_effect', color: 0x0088ff, manaCost: 15, cooldown: 8000 },
+    'ice_nova': { icon: 'ice_nova_effect', color: 0x00ffff, manaCost: 25, cooldown: 6000, damage: 40, aoe: true }
+};
 
 let questMarkers = new Map(); // Quest objective markers (key: targetId, value: {sprite, tween})
 let defenseSpawnerState = {
@@ -85,31 +99,34 @@ let specialZones = []; // Populated from zones.json
 // QUEST HELPERS (Global Bridge)
 // ============================================
 function isQuestActive(id) {
-    if (!id) return false;
+    if (!id || !playerStats || !playerStats.quests) return false;
 
-    // Legacy check
-    const legacyQuests = playerStats.quests.main.concat(playerStats.quests.active);
-    const legacyActive = legacyQuests.some(q => q.id === id);
+    // Legacy pool safety
+    const mainList = playerStats.quests.main || [];
+    const activeList = playerStats.quests.active || [];
+    const legacyQuests = mainList.concat(activeList);
+    const legacyActive = legacyQuests.some(q => q && q.id === id);
 
     // UQE check
     let uqeActive = false;
-    if (window.uqe) {
-        uqeActive = window.uqe.activeQuests.some(q => q.id === id);
+    if (window.uqe && window.uqe.activeQuests) {
+        uqeActive = window.uqe.activeQuests.some(q => q && q.id === id);
     }
 
     return legacyActive || uqeActive;
 }
 
 function isQuestCompleted(id) {
-    if (!id) return false;
+    if (!id || !playerStats || !playerStats.quests) return false;
 
     // Legacy check
-    const legacyCompleted = playerStats.quests.completed.includes(id);
+    const completedList = playerStats.quests.completed || [];
+    const legacyCompleted = completedList.includes(id);
 
     // UQE check
     let uqeCompleted = false;
-    if (window.uqe) {
-        uqeCompleted = window.uqe.completedQuests.some(q => q.id === id);
+    if (window.uqe && window.uqe.completedQuests) {
+        uqeCompleted = window.uqe.completedQuests.some(q => q && q.id === id);
     }
 
     return legacyCompleted || uqeCompleted;
@@ -119,6 +136,123 @@ function isQuestCompleted(id) {
 window.isQuestActive = isQuestActive;
 window.isQuestCompleted = isQuestCompleted;
 
+// ============================================
+// QUEST ID MIGRATION (v0.9.186)
+// ============================================
+const QUEST_ID_MIGRATION_MAP = {
+    // Side Story
+    'side_01_001': 'side_story_001',
+    // Kill (side_kill_xxx)
+    'quest_001': 'side_kill_001', 'quest_007': 'side_kill_002', 'quest_013': 'side_kill_003',
+    'quest_019': 'side_kill_004', 'quest_021': 'side_kill_005', 'quest_025': 'side_kill_006',
+    'quest_029': 'side_kill_007', 'quest_033': 'side_kill_008', 'quest_037': 'side_kill_009',
+    // Collect (side_collect_xxx)
+    'quest_002': 'side_collect_001', 'quest_008': 'side_collect_002', 'quest_014': 'side_collect_003',
+    'quest_020': 'side_collect_004', 'quest_024': 'side_collect_005', 'quest_028': 'side_collect_006',
+    'quest_032': 'side_collect_007', 'quest_036': 'side_collect_008', 'quest_040': 'side_collect_009',
+    // Level (side_level_xxx)
+    'quest_003': 'side_level_001', 'quest_009': 'side_level_002', 'quest_015': 'side_level_003',
+    'quest_041': 'side_level_004', 'quest_042': 'side_level_005', 'quest_043': 'side_level_006',
+    'quest_044': 'side_level_007',
+    // Gold (side_gold_xxx)
+    'quest_004': 'side_gold_001', 'quest_010': 'side_gold_002', 'quest_016': 'side_gold_003',
+    'quest_022': 'side_gold_004', 'quest_026': 'side_gold_005', 'quest_030': 'side_gold_006',
+    'quest_034': 'side_gold_007', 'quest_038': 'side_gold_008',
+    // Explore (side_explore_xxx)
+    'quest_005': 'side_explore_001', 'quest_011': 'side_explore_002', 'quest_017': 'side_explore_003',
+    // Survive (side_survive_xxx)
+    'quest_006': 'side_survive_001', 'quest_012': 'side_survive_002', 'quest_018': 'side_survive_003',
+    'quest_023': 'side_survive_004', 'quest_027': 'side_survive_005', 'quest_031': 'side_survive_006',
+    'quest_035': 'side_survive_007', 'quest_039': 'side_survive_008'
+};
+
+function executeQuestMigration() {
+    const MIGRATION_KEY = 'migration_v0_9_186';
+    if (localStorage.getItem(MIGRATION_KEY)) return;
+
+    console.log('🔄 STARTING QUEST ID MIGRATION...');
+    let migratedCount = 0;
+
+    // 1. Migrate localStorage 'playerStats'
+    const savedStatsStr = localStorage.getItem('playerStats');
+    if (savedStatsStr) {
+        try {
+            let stats = JSON.parse(savedStatsStr);
+            let meaningfulChange = false;
+
+            if (stats.quests) {
+                // Migrate Active
+                if (stats.quests.active) {
+                    stats.quests.active.forEach(q => {
+                        if (QUEST_ID_MIGRATION_MAP[q.id]) {
+                            console.log(`  > Migrating Active Quest: ${q.id} -> ${QUEST_ID_MIGRATION_MAP[q.id]}`);
+                            q.id = QUEST_ID_MIGRATION_MAP[q.id];
+                            meaningfulChange = true;
+                            migratedCount++;
+                        }
+                    });
+                }
+                // Migrate Completed
+                if (stats.quests.completed) {
+                    stats.quests.completed = stats.quests.completed.map(id => {
+                        if (QUEST_ID_MIGRATION_MAP[id]) {
+                            // console.log(`  > Migrating Completed Quest: ${id} -> ${QUEST_ID_MIGRATION_MAP[id]}`);
+                            migratedCount++;
+                            return QUEST_ID_MIGRATION_MAP[id];
+                        }
+                        return id;
+                    });
+                    meaningfulChange = true;
+                }
+            }
+
+            if (meaningfulChange) {
+                localStorage.setItem('playerStats', JSON.stringify(stats));
+                console.log('✅ playerStats migrated successfully.');
+            }
+        } catch (e) {
+            console.error('❌ Migration Error (playerStats):', e);
+        }
+    }
+
+    // 2. Migrate UQE State 'uqe_state'
+    const uqeStateStr = localStorage.getItem('uqe_state');
+    if (uqeStateStr) {
+        try {
+            let uqeState = JSON.parse(uqeStateStr);
+            let uqeChange = false;
+
+            if (uqeState.activeQuests) {
+                uqeState.activeQuests.forEach(q => {
+                    if (QUEST_ID_MIGRATION_MAP[q.id]) {
+                        q.id = QUEST_ID_MIGRATION_MAP[q.id];
+                        uqeChange = true;
+                    }
+                });
+            }
+            if (uqeState.completedQuests) {
+                uqeState.completedQuests.forEach(q => {
+                    if (QUEST_ID_MIGRATION_MAP[q.id]) {
+                        q.id = QUEST_ID_MIGRATION_MAP[q.id];
+                        uqeChange = true;
+                    }
+                });
+            }
+
+            if (uqeChange) {
+                localStorage.setItem('uqe_state', JSON.stringify(uqeState));
+                console.log('✅ uqe_state migrated successfully.');
+            }
+        } catch (e) {
+            console.error('❌ Migration Error (uqe_state):', e);
+        }
+    }
+
+    localStorage.setItem(MIGRATION_KEY, 'true');
+    console.log(`✨ Migration Complete. ${migratedCount} IDs updated.`);
+}
+
+
 // UI elements
 let hpBarBg, hpBar;
 let manaBarBg, manaBar;
@@ -126,6 +260,7 @@ let staminaBarBg, staminaBar;
 let xpBarBg, xpBar;
 let statsText;
 let goldText;
+let difficultyText = null; // Difficulty indicator display
 // damageNumbers moved to DamageSystem.js
 let comboText = null; // Combo counter display
 
@@ -169,43 +304,90 @@ let settingsKey;
 let settingsKey2; // Was not there but safe
 // Load music preference from localStorage; default to true (ON)
 window.musicEnabled = localStorage.getItem('musicEnabled') !== 'false';
+window.musicVolume = localStorage.getItem('musicVolume') ? parseFloat(localStorage.getItem('musicVolume')) : 0.5;
+window.sfxVolume = localStorage.getItem('sfxVolume') ? parseFloat(localStorage.getItem('sfxVolume')) : 0.7;
 
-// Background music
-let villageMusic = null;
-let wildernessMusic = null;
-let dungeonMusic = null;
+// Background music (tracks)
+window.villageMusic = null;
+window.wildernessMusic = null;
+window.dungeonMusic = null;
+
+/**
+ * Update global music volume
+ * @param {number} volume - 0.0 to 1.0
+ */
+window.updateMusicVolume = function (volume) {
+    console.log(`🔊 Updating Music Volume: ${volume.toFixed(2)}`);
+    window.musicVolume = volume;
+    localStorage.setItem('musicVolume', volume.toString());
+
+    // Update active tracks immediately
+    if (window.villageMusic) window.villageMusic.setVolume(volume);
+    if (window.wildernessMusic) window.wildernessMusic.setVolume(volume);
+    if (window.dungeonMusic) window.dungeonMusic.setVolume(volume);
+
+    // If volume > 0, ensure it's unmuted. 
+    if (volume > 0 && !window.musicEnabled) {
+        window.toggleMusic(true);
+    } else if (volume === 0 && window.musicEnabled) {
+        window.toggleMusic(false);
+    }
+};
+
+/**
+ * Update global SFX volume
+ * @param {number} volume - 0.0 to 1.0
+ */
+window.updateSFXVolume = function (volume) {
+    window.sfxVolume = volume;
+    localStorage.setItem('sfxVolume', volume.toString());
+};
 
 /**
  * Toggle music track muting
  * @param {boolean} enabled - Whether music should be enabled
  */
 window.toggleMusic = function (enabled) {
-    console.log(`🎵 Toggling music: ${enabled ? 'ON' : 'OFF'}`);
+    console.log(`🎵 Toggling music: ${enabled ? 'ON' : 'OFF'} (Global Volume: ${window.musicVolume})`);
 
-    // Toggle specific music tracks only (leave SFX alone)
-    if (villageMusic) {
-        if (enabled && !villageMusic.isPlaying) villageMusic.play();
-        villageMusic.setMute(!enabled);
+    window.musicEnabled = enabled;
+    localStorage.setItem('musicEnabled', enabled.toString());
+
+    // Update specific music tracks
+    if (window.villageMusic) {
+        if (enabled && !window.villageMusic.isPlaying) {
+            console.log('🎵 Resuming Village Music from toggleMusic');
+            window.villageMusic.play();
+        }
+        window.villageMusic.setMute(!enabled);
+        window.villageMusic.setVolume(window.musicVolume);
     }
 
-    if (wildernessMusic) {
-        if (enabled && !wildernessMusic.isPlaying) wildernessMusic.play();
-        wildernessMusic.setMute(!enabled);
+    if (window.wildernessMusic) {
+        if (enabled && !window.wildernessMusic.isPlaying) {
+            console.log('🎵 Resuming Wilderness Music from toggleMusic');
+            window.wildernessMusic.play();
+        }
+        window.wildernessMusic.setMute(!enabled);
+        window.wildernessMusic.setVolume(window.musicVolume);
     }
 
-    if (dungeonMusic) {
-        if (enabled && !dungeonMusic.isPlaying) dungeonMusic.play();
-        dungeonMusic.setMute(!enabled);
+    if (window.dungeonMusic) {
+        if (enabled && !window.dungeonMusic.isPlaying) {
+            console.log('🎵 Resuming Dungeon Music from toggleMusic');
+            window.dungeonMusic.play();
+        }
+        window.dungeonMusic.setMute(!enabled);
+        window.dungeonMusic.setVolume(window.musicVolume);
     }
 
-    // Also handle transition logic - if we are supposed to be playing something but it's stopped/muted
-    // Re-trigger music check for current map
-    if (enabled && typeof playBackgroundMusic === 'function' && typeof MapManager !== 'undefined') {
-        playBackgroundMusic(MapManager.currentMap); // Ensure the correct track is playing
+    // Refresh current track if enabled but nothing is assigned yet
+    if (enabled && typeof window.playBackgroundMusic === 'function' && typeof MapManager !== 'undefined') {
+        window.playBackgroundMusic(MapManager.currentMap);
 
-        // Also ensure scene isn't globally muted from previous fallback
         const scene = game.scene.scenes[0];
         if (scene && scene.sound) {
+            console.log('🔊 Ensuring main sound manager is unmuted');
             scene.sound.mute = false;
         }
     }
@@ -216,32 +398,58 @@ window.toggleMusic = function (enabled) {
  * @param {string} mapType - 'town', 'wilderness', 'dungeon'
  */
 window.playBackgroundMusic = function (mapType) {
-    if (!window.musicEnabled) return;
+    if (!window.musicEnabled) {
+        console.log('🎵 Music disabled, skipping playBackgroundMusic');
+        return;
+    }
 
-    // Stop all current music to ensure clean transitions
-    if (villageMusic && villageMusic.isPlaying) villageMusic.stop();
-    if (wildernessMusic && wildernessMusic.isPlaying) wildernessMusic.stop();
-    if (dungeonMusic && dungeonMusic.isPlaying) dungeonMusic.stop();
+    console.log(`🎵 playBackgroundMusic: ${mapType} (Vol: ${window.musicVolume})`);
+    if (typeof MapManager !== 'undefined') {
+        console.log(`🗺️ Current MapManager.currentMap: ${MapManager.currentMap}`);
+    }
+
+    // Stop other tracks
+    if (window.villageMusic && window.villageMusic.isPlaying && mapType !== 'town') window.villageMusic.stop();
+    if (window.wildernessMusic && window.wildernessMusic.isPlaying && mapType !== 'wilderness') window.wildernessMusic.stop();
+    if (window.dungeonMusic && window.dungeonMusic.isPlaying && !(['dungeon', 'tower_dungeon', 'temple_ruins'].includes(mapType))) window.dungeonMusic.stop();
 
     const scene = game.scene.scenes[0];
-    if (!scene || !scene.sound) return;
+    if (!scene || !scene.sound) {
+        console.warn('⚠️ playBackgroundMusic: No scene/sound manager');
+        return;
+    }
 
     try {
         if (mapType === 'town') {
-            if (!villageMusic) villageMusic = scene.sound.add('village_music', { loop: true, volume: 0.5 });
-            if (!villageMusic.isPlaying) villageMusic.play();
-            console.log('🎵 Playing Village Music');
+            if (!window.villageMusic) {
+                window.villageMusic = scene.sound.add('village_music', { loop: true, volume: window.musicVolume });
+                console.log('🎵 Added Village Music instance');
+            }
+            if (!window.villageMusic.isPlaying) {
+                window.villageMusic.play();
+                console.log('🎵 Playing Village Music');
+            }
         } else if (mapType === 'wilderness') {
-            if (!wildernessMusic) wildernessMusic = scene.sound.add('wilderness_music', { loop: true, volume: 0.4 });
-            if (!wildernessMusic.isPlaying) wildernessMusic.play();
-            console.log('🎵 Playing Wilderness Music');
+            if (!window.wildernessMusic) {
+                window.wildernessMusic = scene.sound.add('wilderness_music', { loop: true, volume: window.musicVolume });
+                console.log('🎵 Added Wilderness Music instance');
+            }
+            if (!window.wildernessMusic.isPlaying) {
+                window.wildernessMusic.play();
+                console.log('🎵 Playing Wilderness Music');
+            }
         } else if (mapType === 'dungeon' || mapType === 'tower_dungeon' || mapType === 'temple_ruins') {
-            if (!dungeonMusic) dungeonMusic = scene.sound.add('dungeon_music', { loop: true, volume: 0.5 });
-            if (!dungeonMusic.isPlaying) dungeonMusic.play();
-            console.log('🎵 Playing Dungeon Music');
+            if (!window.dungeonMusic) {
+                window.dungeonMusic = scene.sound.add('dungeon_music', { loop: true, volume: window.musicVolume });
+                console.log('🎵 Added Dungeon Music instance');
+            }
+            if (!window.dungeonMusic.isPlaying) {
+                window.dungeonMusic.play();
+                console.log('🎵 Playing Dungeon Music');
+            }
         }
     } catch (e) {
-        console.warn('❌ Error playing music:', e);
+        console.error('❌ playBackgroundMusic Error:', e);
     }
 };
 
@@ -320,13 +528,17 @@ function preload() {
     // this.load.json('questData', 'quests.json');
     this.load.json('questDataV2', 'quests_v2.json'); // UQE - Primary quest system
     // this.load.json('mainQuestData', 'main_quests.json'); // No longer used
-    this.load.audio('wind_effect', 'assets/audio/wind-sound-effect.mp3');
+    // wind_effect loaded from assets.json
 
     // Load Method 2 monster data
     this.load.json('monsterData', 'monsters.json');
     this.load.json('milestoneData', 'milestones.json');
     this.load.json('npcData', 'npc.json');
     this.load.json('zoneData', 'zones.json');
+    this.load.json('assets', 'assets.json');
+    this.load.json('interactables', 'interactables.json');
+    this.load.json('cinematicData', 'cinematics.json');
+    this.load.json('monsters', 'monsters.json');
     this.load.json('dungeonData', 'dungeons.json');
 
 
@@ -400,6 +612,24 @@ function preload() {
                     }
                 }
             });
+        }
+    });
+
+    // Dynamic Interactables Loader
+    this.load.on('filecomplete-json-interactables', (key, type, data) => {
+        console.log('✅ Interactables Data loaded! Loading interactable assets dynamically...');
+        if (Array.isArray(data)) {
+            data.forEach(interactable => {
+                // Load Sprite
+                if (interactable.spriteKey && interactable.spritePath) {
+                    if (!this.textures.exists(interactable.spriteKey)) {
+                        this.load.image(interactable.spriteKey, interactable.spritePath);
+                        console.log(`   + Loaded Interactable sprite: ${interactable.name} (${interactable.spriteKey})`);
+                    }
+                }
+            });
+            // Restart loader to pick up new assets added during callback
+            this.load.start();
         }
     });
 
@@ -525,10 +755,20 @@ function preload() {
     };
 
     // Track successful image loads (set up handlers BEFORE loading)
+    this.load.on('filecomplete-json-itemDefinitions', (key, type, data) => {
+        console.log('📦 items.json loaded, parsing definitions...');
+        ItemManager.definitions = data;
+        ItemManager.isLoaded = true;
+        ItemManager.loadAllSprites(this);
+    });
+
+    this.load.json('itemDefinitions', 'items.json');
+
     this.load.on('filecomplete-image-item_weapon', () => {
         this.customItemImagesLoaded.weapon = true;
         console.log('✅ Custom weapon image loaded');
     });
+
     this.load.on('filecomplete-image-item_armor', () => {
         this.customItemImagesLoaded.armor = true;
         console.log('✅ Custom armor image loaded');
@@ -557,389 +797,67 @@ function preload() {
         this.customItemImagesLoaded.ring = true;
         console.log('✅ Custom ring image loaded');
     });
+
     this.load.on('filecomplete-image-item_consumable', () => {
         this.customItemImagesLoaded.consumable = true;
         console.log('✅ Custom consumable image loaded');
     });
 
-    // Now load the images
-    this.load.image('item_weapon', 'assets/images/pixellab-medieval-short-sword-1765494973241.png');
-    // Weapon sprites for in-game display (48x48)
-    // For now, we'll use the same sprite for all weapons, but structure allows for weapon-specific sprites
-    this.load.image('weapon_sword', 'assets/images/pixellab-medieval-short-sword-1765494973241.png');
-    this.load.image('weapon_axe', 'assets/images/basic-axe.png');
-    this.load.image('weapon_bow', 'assets/images/basic-bow.png');
-    this.load.image('weapon_mace', 'assets/images/basic-mace.png');
-    this.load.image('weapon_dagger', 'assets/images/basic-dagger.png');
-    this.load.image('weapon_staff', 'assets/images/basic-staff.png');
-    this.load.image('weapon_crossbow', 'assets/images/basic-crossbow.png');
-    this.load.image('item_armor', 'assets/images/pixellab-medieval-cloth-chest-armor-1765494738527.png');
-    this.load.image('item_helmet', 'assets/images/pixellab-medieval-leather-helmet-1765494658638.png');
-    this.load.image('item_amulet', 'assets/images/pixellab-medieval-jeweled-amulet-1765494933856.png');
-    this.load.image('item_boots', 'assets/images/pixellab-medieval-leather-boots-1765494901812.png');
-    this.load.image('item_gloves', 'assets/images/pixellab-medieval-purple-cloth-gloves---1765494868593.png');
-    this.load.image('item_belt', 'assets/images/pixellab-medieval-belt---just-the-belt-1765494612990.png');
-    this.load.image('item_ring', 'assets/images/pixellab-golden-ring-1765494525925.png');
-    this.load.image('item_consumable', 'assets/images/pixellab-red-simple-health-potion-1765494342318.png');
-    this.load.image('mana_potion', 'assets/images/mana-potion.png');
-    this.load.image('character-fallen', 'assets/images/character-fallen.png');
-    // item_fragment and item_crystal are now loaded dynamically from quests_v2.json
-    this.load.audio('bell_toll', 'assets/audio/bell-toll-407826.mp3');
-
-    // Background Music
-    this.load.audio('village_music', 'assets/audio/music/Village_Hearth_FULL_SONG_MusicGPT.mp3');
-    this.load.audio('wilderness_music', 'assets/audio/music/Wilderness_of_Arcana_FULL_SONG_MusicGPT.mp3');
-    this.load.audio('dungeon_music', 'assets/audio/music/Dungeon_of_Arcana_FULL_SONG_MusicGPT.mp3');
-
-    // Load player and monster base images
-    this.load.image('player', 'assets/player.png');
-    this.load.image('monster', 'assets/monster.png');
-
-    // Load monster directional sprites (from PixelLab) - static images for fallback
-    // Goblin
-    this.load.image('monster_goblin_south', 'assets/animations/monster_goblin_south.png');
-    this.load.image('monster_goblin_north', 'assets/animations/monster_goblin_north.png');
-    this.load.image('monster_goblin_east', 'assets/animations/monster_goblin_east.png');
-    this.load.image('monster_goblin_west', 'assets/animations/monster_goblin_west.png');
-
-    // Orc
-    this.load.image('monster_orc_south', 'assets/animations/monster_orc_south.png');
-    this.load.image('monster_orc_north', 'assets/animations/monster_orc_north.png');
-    this.load.image('monster_orc_east', 'assets/animations/monster_orc_east.png');
-    this.load.image('monster_orc_west', 'assets/animations/monster_orc_west.png');
-
-    // Victory Images
-    this.load.image('victory_tower', 'assets/images/tower.png');
-    this.load.image('item_fragment', 'assets/images/artifact-fragment.png');
-
-    // Skeleton
-    this.load.image('monster_skeleton_south', 'assets/animations/monster_skeleton_south.png');
-    this.load.image('monster_skeleton_north', 'assets/animations/monster_skeleton_north.png');
-    this.load.image('monster_skeleton_east', 'assets/animations/monster_skeleton_east.png');
-    this.load.image('monster_skeleton_west', 'assets/animations/monster_skeleton_west.png');
-
-    // Slime
-    this.load.image('monster_slime_south', 'assets/animations/monster_slime_south.png');
-    this.load.image('monster_slime_north', 'assets/animations/monster_slime_north.png');
-    this.load.image('monster_slime_east', 'assets/animations/monster_slime_east.png');
-    this.load.image('monster_slime_west', 'assets/animations/monster_slime_west.png');
-
-    // Wolf
-    this.load.image('monster_wolf_south', 'assets/animations/monster_wolf_south.png');
-    this.load.image('monster_wolf_north', 'assets/animations/monster_wolf_north.png');
-    this.load.image('monster_wolf_east', 'assets/animations/monster_wolf_east.png');
-    this.load.image('monster_wolf_west', 'assets/animations/monster_wolf_west.png');
-
-    // Dragon
-    this.load.image('monster_dragon_south', 'assets/animations/monster_dragon_south.png');
-    this.load.image('monster_dragon_north', 'assets/animations/monster_dragon_north.png');
-    this.load.image('monster_dragon_east', 'assets/animations/monster_dragon_east.png');
-    this.load.image('monster_dragon_west', 'assets/animations/monster_dragon_west.png');
-
-    // Ghost
-    this.load.image('monster_ghost_south', 'assets/animations/monster_ghost_south.png');
-    this.load.image('monster_ghost_north', 'assets/animations/monster_ghost_north.png');
-    this.load.image('monster_ghost_east', 'assets/animations/monster_ghost_east.png');
-    this.load.image('monster_ghost_west', 'assets/animations/monster_ghost_west.png');
-
-    // Spider (quadruped version)
-    this.load.image('monster_spider_south', 'assets/animations/monster_spider_south.png');
-    this.load.image('monster_spider_north', 'assets/animations/monster_spider_north.png');
-    this.load.image('monster_spider_east', 'assets/animations/monster_spider_east.png');
-    this.load.image('monster_spider_west', 'assets/animations/monster_spider_west.png');
-
-    // Echo Mite (from PixelLab)
-    this.load.image('monster_echo_mite', 'assets/animations/monster_echo_mite_south.png');
-    this.load.image('monster_echo_mite_south', 'assets/animations/monster_echo_mite_south.png');
-    this.load.image('monster_echo_mite_north', 'assets/animations/monster_echo_mite_north.png');
-    this.load.image('monster_echo_mite_east', 'assets/animations/monster_echo_mite_east.png');
-    this.load.image('monster_echo_mite_west', 'assets/animations/monster_echo_mite_west.png');
-
-    // Echo Mite attack animations (64x64 frames)
-    this.load.spritesheet('monster_echo_mite_attack_south', 'assets/animations/monster-echo-mite-attack-south.png', {
-        frameWidth: 64,
-        frameHeight: 64
+    // Load Assets Manifest
+    this.load.on('filecomplete-json-assets', (key, type, data) => {
+        console.log('📦 assets.json loaded, processing...');
+        // Load Images
+        if (data.images) {
+            for (const [assetKey, path] of Object.entries(data.images)) {
+                if (!this.textures.exists(assetKey)) {
+                    this.load.image(assetKey, path);
+                }
+            }
+        }
+        // Load Audio
+        if (data.audio) {
+            for (const [assetKey, path] of Object.entries(data.audio)) {
+                this.load.audio(assetKey, path);
+            }
+        }
     });
-    this.load.spritesheet('monster_echo_mite_attack_north', 'assets/animations/monster-echo-mite-attack-north.png', {
-        frameWidth: 64,
-        frameHeight: 64
-    });
-    this.load.spritesheet('monster_echo_mite_attack_east', 'assets/animations/monster-echo-mite-attack-east.png', {
-        frameWidth: 64,
-        frameHeight: 64
-    });
-    this.load.spritesheet('monster_echo_mite_attack_west', 'assets/animations/monster-echo-mite-attack-west.png', {
-        frameWidth: 64,
-        frameHeight: 64
+    this.load.json('assets', 'assets.json');
+
+    // Load Monster Sprites from monsters.json
+    // Note: We already load 'monsters' JSON below, just need to hook into it
+    // Monster sprite loading removed in favor of procedural generation
+
+    // Load Weapon Sprites from items.json
+    // Hook into existing listener
+    this.load.on('filecomplete-json-itemDefinitions', (key, type, data) => {
+        // ... existing ItemManager setup ...
+
+        // Also load default weapon sprites
+        if (data.weaponTypes) {
+            Object.entries(data.weaponTypes).forEach(([type, def]) => {
+                if (def.defaultSprite) {
+                    // Key convention: `weapon_${type.toLowerCase()}`?
+                    // Existing: 'weapon_sword', 'weapon_axe'
+                    // Actually, 'defaultSprite' in items.json matches this convention?
+                    // No, items.json just has the path. We need to assign the key.
+                    // Existing game uses: `weapon_${weaponType.toLowerCase()}`
+                    const spriteKey = `weapon_${type.toLowerCase()}`;
+                    if (!this.textures.exists(spriteKey)) {
+                        this.load.image(spriteKey, def.defaultSprite);
+                    }
+                }
+            });
+        }
     });
 
-    // Load animated sprite sheets for walking (Goblin, Orc, Skeleton, Wolf, Dragon, Slime, Ghost, and Spider)
-    // Goblin walking animations (48x48 frames, 6 frames per direction)
-    this.load.spritesheet('monster_goblin_walk_south', 'assets/animations/monster_goblin_walk_south.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-    this.load.spritesheet('monster_goblin_walk_north', 'assets/animations/monster_goblin_walk_north.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-    this.load.spritesheet('monster_goblin_walk_east', 'assets/animations/monster_goblin_walk_east.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-    this.load.spritesheet('monster_goblin_walk_west', 'assets/animations/monster_goblin_walk_west.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
+    // Load Projectile Assets
+    // arrow loaded via assets.json
+    if (!this.textures.exists('fireball_effect')) {
+        this.load.image('fireball_effect', 'assets/images/fireball_effect.png');
+    }
 
-    // Goblin attack animations (48x48 frames)
-    this.load.spritesheet('monster_goblin_attack_south', 'assets/animations/monster_goblin_attack_south.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-    this.load.spritesheet('monster_goblin_attack_north', 'assets/animations/monster_goblin_attack_north.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-    this.load.spritesheet('monster_goblin_attack_east', 'assets/animations/monster_goblin_attack_east.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-    this.load.spritesheet('monster_goblin_attack_west', 'assets/animations/monster_goblin_attack_west.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-
-    // Orc walking animations (48x48 frames, 6 frames per direction)
-    this.load.spritesheet('monster_orc_walk_south', 'assets/animations/monster_orc_walk_south.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-    this.load.spritesheet('monster_orc_walk_north', 'assets/animations/monster_orc_walk_north.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-    this.load.spritesheet('monster_orc_walk_east', 'assets/animations/monster_orc_walk_east.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-    this.load.spritesheet('monster_orc_walk_west', 'assets/animations/monster_orc_walk_west.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-
-    // Orc attack animations (48x48 frames)
-    this.load.spritesheet('monster_orc_attack_south', 'assets/animations/monster_orc_attack_south.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-    this.load.spritesheet('monster_orc_attack_north', 'assets/animations/monster_orc_attack_north.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-    this.load.spritesheet('monster_orc_attack_east', 'assets/animations/monster_orc_attack_east.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-    this.load.spritesheet('monster_orc_attack_west', 'assets/animations/Orc-Attack-West.png', { frameWidth: 32, frameHeight: 32 });
-
-    // Skeleton walking animations (48x48 frames, 6 frames per direction)
-    this.load.spritesheet('monster_skeleton_walk_south', 'assets/animations/monster_skeleton_walk_south.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-    this.load.spritesheet('monster_skeleton_walk_north', 'assets/animations/monster_skeleton_walk_north.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-    this.load.spritesheet('monster_skeleton_walk_east', 'assets/animations/monster_skeleton_walk_east.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-    this.load.spritesheet('monster_skeleton_walk_west', 'assets/animations/monster_skeleton_walk_west.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-
-    // Skeleton attack animations (48x48 frames)
-    this.load.spritesheet('monster_skeleton_attack_south', 'assets/animations/monster_skeleton_attack_south.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-    this.load.spritesheet('monster_skeleton_attack_north', 'assets/animations/monster_skeleton_attack_north.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-    this.load.spritesheet('monster_skeleton_attack_east', 'assets/animations/monster_skeleton_attack_east.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-    this.load.spritesheet('monster_skeleton_attack_west', 'assets/animations/monster_skeleton_attack_west.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-
-    // Wolf walking animations (48x48 frames, 6 frames per direction)
-    this.load.spritesheet('monster_wolf_walk_south', 'assets/animations/monster_wolf_walk_south.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-    this.load.spritesheet('monster_wolf_walk_north', 'assets/animations/monster_wolf_walk_north.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-    this.load.spritesheet('monster_wolf_walk_east', 'assets/animations/monster_wolf_walk_east.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-    this.load.spritesheet('monster_wolf_walk_west', 'assets/animations/monster_wolf_walk_west.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-
-    // Wolf attack animations (48x48 frames)
-    this.load.spritesheet('monster_wolf_attack_south', 'assets/animations/monster_wolf_attack_south.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-    this.load.spritesheet('monster_wolf_attack_north', 'assets/animations/monster_wolf_attack_north.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-    this.load.spritesheet('monster_wolf_attack_east', 'assets/animations/monster_wolf_attack_east.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-    this.load.spritesheet('monster_wolf_attack_west', 'assets/animations/monster_wolf_attack_west.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-
-    // Dragon walking animations (48x48 frames, 6 frames per direction)
-    this.load.spritesheet('monster_dragon_walk_south', 'assets/animations/monster_dragon_walk_south.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-    this.load.spritesheet('monster_dragon_walk_north', 'assets/animations/monster_dragon_walk_north.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-    this.load.spritesheet('monster_dragon_walk_east', 'assets/animations/monster_dragon_walk_east.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-    this.load.spritesheet('monster_dragon_walk_west', 'assets/animations/monster_dragon_walk_west.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-
-    // Dragon attack animations (48x48 frames)
-    this.load.spritesheet('monster_dragon_attack_south', 'assets/animations/monster_dragon_attack_south.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-    this.load.spritesheet('monster_dragon_attack_north', 'assets/animations/monster_dragon_attack_north.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-    this.load.spritesheet('monster_dragon_attack_east', 'assets/animations/monster_dragon_attack_east.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-    this.load.spritesheet('monster_dragon_attack_west', 'assets/animations/monster_dragon_attack_west.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-
-    // Slime walking animations (48x48 frames, 6 frames per direction)
-    this.load.spritesheet('monster_slime_walk_south', 'assets/animations/monster_slime_walk_south.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-    this.load.spritesheet('monster_slime_walk_north', 'assets/animations/monster_slime_walk_north.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-    this.load.spritesheet('monster_slime_walk_east', 'assets/animations/monster_slime_walk_east.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-    this.load.spritesheet('monster_slime_walk_west', 'assets/animations/monster_slime_walk_west.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-
-    // Slime attack animations (48x48 frames)
-    this.load.spritesheet('monster_slime_attack_south', 'assets/animations/monster_slime_attack_south.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-    this.load.spritesheet('monster_slime_attack_north', 'assets/animations/monster_slime_attack_north.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-    this.load.spritesheet('monster_slime_attack_east', 'assets/animations/monster_slime_attack_east.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-    this.load.spritesheet('monster_slime_attack_west', 'assets/animations/monster_slime_attack_west.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-
-    // Ghost walking animations (48x48 frames, 6 frames per direction)
-    this.load.spritesheet('monster_ghost_walk_south', 'assets/animations/monster_ghost_walk_south.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-    this.load.spritesheet('monster_ghost_walk_north', 'assets/animations/monster_ghost_walk_north.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-    this.load.spritesheet('monster_ghost_walk_east', 'assets/animations/monster_ghost_walk_east.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-    this.load.spritesheet('monster_ghost_walk_west', 'assets/animations/monster_ghost_walk_west.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-
-    // Ghost attack animations (48x48 frames)
-    this.load.spritesheet('monster_ghost_attack_south', 'assets/animations/monster_ghost_attack_south.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-    this.load.spritesheet('monster_ghost_attack_north', 'assets/animations/monster_ghost_attack_north.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-    this.load.spritesheet('monster_ghost_attack_east', 'assets/animations/monster_ghost_attack_east.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-    this.load.spritesheet('monster_ghost_attack_west', 'assets/animations/monster_ghost_attack_west.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-
-    // Spider walking animations (48x48 frames, 6 frames per direction)
-    this.load.spritesheet('monster_spider_walk_south', 'assets/animations/monster_spider_walk_south.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-    this.load.spritesheet('monster_spider_walk_north', 'assets/animations/monster_spider_walk_north.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-    this.load.spritesheet('monster_spider_walk_east', 'assets/animations/monster_spider_walk_east.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
-    this.load.spritesheet('monster_spider_walk_west', 'assets/animations/monster_spider_walk_west.png', {
-        frameWidth: 48,
-        frameHeight: 48
-    });
+    // Legacy/Hardcoded Spritesheets (complex configs not yet moved to JSON)
+    // Hardcoded monster spritesheets removed in favor of procedural generation
 
     this.load.image('dirt', 'assets/tiles/tile_floor_dirt.png');
     this.load.image('stone', 'assets/tiles/tile_floor_stone.png');
@@ -952,6 +870,7 @@ function preload() {
     this.load.image('dungeon_entrance', 'assets/dungeon_entrance.png');
     this.load.text('dungeon_floor_metadata', 'assets/tiles/dungeon/dungeon_floor_metadata.json');
     this.load.text('dungeon_wall_metadata', 'assets/tiles/dungeon/dungeon_wall_metadata.json');
+    this.load.image('forge', 'assets/images/forge.png');
 
     // Generate fallback graphics AFTER preload completes
     // This prevents "texture key already in use" errors
@@ -1302,14 +1221,16 @@ function preload() {
 
     // Ability effect sprites
     // Fireball effect (orange/red circle)
-    this.add.graphics()
-        .fillStyle(0xff4400)
-        .fillCircle(16, 16, 12)
-        .fillStyle(0xffff00)
-        .fillCircle(16, 16, 8)
-        .fillStyle(0xffffff)
-        .fillCircle(16, 16, 4)
-        .generateTexture('fireball_effect', 32, 32);
+    if (!this.textures.exists('fireball_effect')) {
+        this.add.graphics()
+            .fillStyle(0xff4400)
+            .fillCircle(16, 16, 12)
+            .fillStyle(0xffff00)
+            .fillCircle(16, 16, 8)
+            .fillStyle(0xffffff)
+            .fillCircle(16, 16, 4)
+            .generateTexture('fireball_effect', 32, 32);
+    }
 
     // Heal effect (green cross/circle)
     this.add.graphics()
@@ -1330,6 +1251,18 @@ function preload() {
         .fillCircle(16, 16, 12)
         .generateTexture('shield_effect', 32, 32);
 
+    // Ice Nova effect (cyan burst with white center)
+    this.add.graphics()
+        .fillStyle(0x00ffff)
+        .fillCircle(16, 16, 14)
+        .fillStyle(0x88ffff)
+        .fillCircle(16, 16, 10)
+        .fillStyle(0xffffff)
+        .fillCircle(16, 16, 5)
+        .lineStyle(2, 0x00ccff)
+        .strokeCircle(16, 16, 14)
+        .generateTexture('ice_nova_effect', 32, 32);
+
     // Load sound files (optional - will work without them)
     // Note: Phaser will show warnings if files don't exist, but won't crash
     this.load.audio('attack_swing', 'assets/audio/sword-slice.mp3');
@@ -1337,7 +1270,7 @@ function preload() {
     this.load.audio('hit_player', 'assets/audio/hit_player.mp3');
     this.load.audio('monster_die', 'assets/audio/monster_die.mp3');
     this.load.audio('item_pickup', 'assets/audio/item_pickup.wav');
-    this.load.audio('level_up', 'assets/audio/level_up.wav');
+    this.load.audio('level_up', 'assets/audio/level-up.mp3');
     this.load.audio('fireball_cast', 'assets/audio/fireball_cast.wav');
     this.load.audio('heal_cast', 'assets/audio/heal_cast.wav');
 
@@ -1391,20 +1324,7 @@ function preload() {
     console.log('📢 Attempting to load sound files from assets/audio/');
 
     // Sound Effects
-    this.load.audio('attack', 'assets/audio/attack_swing.wav');
-    this.load.audio('fireball', 'assets/audio/fireball_cast.wav');
-    this.load.audio('ice_nova_sound', 'assets/audio/ice-nova.mp3');
-    this.load.audio('heal', 'assets/audio/heal_cast.wav'); // Used for potions too
-    this.load.audio('hit_monster', 'assets/audio/hit_monster.mp3');
-    this.load.audio('hit_player', 'assets/audio/hit_player.mp3');
-    this.load.audio('item_pickup', 'assets/audio/item_pickup.wav');
-    this.load.audio('level_up', 'assets/audio/level-up.mp3'); // or level_up.wav
-    this.load.audio('monster_die', 'assets/audio/monster_die.mp3');
-    this.load.audio('new_quest', 'assets/audio/new-quest.mp3');
-    this.load.audio('quest_complete', 'assets/audio/quest-completed.mp3');
-    this.load.audio('quest_accept', 'assets/audio/accepter.mp3');
-    this.load.audio('quest_decline', 'assets/audio/quick-beep-high-to-low.mp3');
-    this.load.audio('gold_pickup', 'assets/audio/gold-pickup.mp3');
+    // Audio loaded from assets.json
 
     // Verify loading
     this.load.on('filecomplete-audio-attack', () => console.log('✅ Loaded attack sound'));
@@ -1425,140 +1345,134 @@ function preload() {
     console.log('💡 To use real images: uncomment image loading lines in preload() and add assets/ folder');
 }
 
-
-
 /**
- * Create Mana Fluxes for the "Mana Instability" quest
+ * Generalized Dynamic Spawning Manager
+ * Handles objectives that require objects to appear near the player.
  */
-function createManaFluxes() {
-    const scene = game.scene.scenes[0];
-    const width = scene.mapWidth || 40;
-    const height = scene.mapHeight || 40;
+const DynamicSpawnManager = {
+    activeSpawnNodes: [], // Each node: { objective, sprite, id }
 
-    // Create 3-5 fluxes at random locations
-    const numFluxes = Phaser.Math.Between(3, 5);
-    const locations = [];
+    update(scene) {
+        if (!window.uqe || !player) return;
 
-    for (let i = 0; i < numFluxes; i++) {
-        locations.push({
-            x: Phaser.Math.Between(5, width - 5),
-            y: Phaser.Math.Between(5, height - 5)
+        // 1. Identify all active DynamicSpawnObjectives
+        const activeObjectives = [];
+        window.uqe.activeQuests.forEach(quest => {
+            quest.objectives.forEach(obj => {
+                if (obj.type === 'dynamic_spawn' && !obj.completed) {
+                    activeObjectives.push(obj);
+                }
+            });
         });
-    }
 
-    locations.forEach((loc, index) => {
-        const x = loc.x * 32;
-        const y = loc.y * 32;
+        // 2. Cleanup nodes for objectives that are no longer active/needed
+        for (let i = this.activeSpawnNodes.length - 1; i >= 0; i--) {
+            const node = this.activeSpawnNodes[i];
+            const isStillNeeded = activeObjectives.includes(node.objective);
 
-        // Visual: Purple glow/particle
-        // Use a simple circle if no particle texture, or 'flare' if avail
-        // We'll use a tinted rock or existing sprite if possible, or just a circle
+            if (!isStillNeeded || !node.sprite.active) {
+                if (node.sprite) node.sprite.destroy();
+                this.activeSpawnNodes.splice(i, 1);
+            }
+        }
 
-        // Using a particle emitter would be nice, but simple sprite is safer for now
-        // We'll use a small circle graphic
-        const flux = scene.add.circle(x, y, 10, 0xAA00FF, 0.7);
-        flux.setDepth(5);
+        // 3. Process each objective
+        activeObjectives.forEach(obj => {
+            const config = obj.spawnConfig;
+            const myNodes = this.activeSpawnNodes.filter(n => n.objective === obj);
 
-        // Add a pulsing tween
+            // Spawn new nodes if below max
+            if (myNodes.length < (config.maxNodes || 5)) {
+                if (Math.random() < (config.spawnRate || 0.02)) {
+                    this.spawnNode(scene, obj);
+                }
+            }
+
+            // Collection check
+            for (let i = this.activeSpawnNodes.length - 1; i >= 0; i--) {
+                const node = this.activeSpawnNodes[i];
+                if (node.objective !== obj) continue;
+
+                const dist = Phaser.Math.Distance.Between(player.x, player.y, node.sprite.x, node.sprite.y);
+                if (dist < 40) { // Collection radius
+                    // Visual feedback
+                    showDamageNumber(player.x, player.y - 40, `+1 ${obj.label}`, config.color || 0x00ffff);
+                    if (typeof playSound === 'function') playSound('item_pickup');
+
+                    // Emit collection event
+                    window.uqe.eventBus.emit('item_pickup', {
+                        id: obj.itemId,
+                        type: 'quest_item',
+                        amount: 1
+                    });
+
+                    // Cleanup
+                    node.sprite.destroy();
+                    this.activeSpawnNodes.splice(i, 1);
+                }
+            }
+        });
+    },
+
+    spawnNode(scene, objective) {
+        const config = objective.spawnConfig;
+        const radius = config.radius || 300;
+
+        let x, y;
+        let found = false;
+
+        // Retry loop using MapManager's safe location check
+        for (let i = 0; i < 50; i++) {
+            const angle = Math.random() * Math.PI * 2;
+            const dist = 100 + Math.random() * (radius - 100);
+            const tx = player.x + Math.cos(angle) * dist;
+            const ty = player.y + Math.sin(angle) * dist;
+
+            if (MapManager.isLocationSafe(tx, ty, 32)) {
+                x = tx;
+                y = ty;
+                found = true;
+                break;
+            }
+        }
+
+        if (!found) return null;
+
+        let visual;
+        if (config.visualType === 'circle') {
+            visual = scene.add.circle(x, y, 10, config.color || 0xff00ff);
+        } else {
+            // Default to star
+            visual = scene.add.star(x, y, 5, 10, 20, config.color || 0x00ffff);
+        }
+
+        visual.setDepth(5);
+        scene.physics.add.existing(visual);
+        if (visual.body) {
+            visual.body.setImmovable(true);
+            visual.body.setAllowGravity(false);
+        }
+
+        // Pulse animation
         scene.tweens.add({
-            targets: flux,
-            scale: 1.5,
-            alpha: 0.4,
-            duration: 1000,
+            targets: visual,
+            scale: { from: 1, to: 1.3 },
+            alpha: { from: 0.7, to: 1 },
+            duration: 800,
             yoyo: true,
             repeat: -1
         });
 
-        // Add an inner core
-        const core = scene.add.circle(x, y, 5, 0xFFFFFF, 0.9);
-        core.setDepth(6);
+        const node = {
+            objective: objective,
+            sprite: visual,
+            id: 'spawn_' + Date.now() + '_' + Math.random()
+        };
 
-        manaFluxes.push({
-            id: `flux_${index}`,
-            x: x,
-            y: y,
-            sprite: flux,
-            core: core,
-            active: true
-        });
-    });
-
-    console.log('✨ Created 3 Mana Fluxes');
-}
-
-/**
- * Check for interaction with Mana Fluxes
- */
-function checkManaFluxInteraction() {
-    // Only allow if quest "Mana Instability" (main_01_007) is active
-    // We check via UQE or legacy
-    updateAmbientZoneAudio();
-
-    let questActive = false;
-    if (window.uqe) {
-        // Check if quest is in active list
-        // uqe.activeQuests is usually a map or array
-        // We can use the global helper or check uqe state
-        if (window.uqe.isQuestActive) {
-            questActive = window.uqe.isQuestActive('main_01_007');
-        } else if (window.isQuestActive) {
-            questActive = window.isQuestActive('main_01_007');
-        }
+        this.activeSpawnNodes.push(node);
+        return node;
     }
-
-    if (!questActive) return false;
-
-    const scene = game.scene.scenes[0];
-    const interactionRadius = 60;
-
-    for (const flux of manaFluxes) {
-        if (!flux.active) continue;
-
-        const distance = Phaser.Math.Distance.Between(player.x, player.y, flux.x, flux.y);
-
-        if (distance < interactionRadius) {
-            // Stabilize it!
-            flux.active = false;
-
-            // Visual feedback
-            flux.sprite.setFillStyle(0x00FFFF); // Turn blue (stabilized)
-            flux.core.setFillStyle(0x0088FF);
-
-            // Pulse burst
-            const burst = scene.add.circle(flux.x, flux.y, 5, 0x00FFFF, 1);
-            scene.tweens.add({
-                targets: burst,
-                scale: 5,
-                alpha: 0,
-                duration: 500,
-                onComplete: () => burst.destroy()
-            });
-
-            // Message
-            showDamageNumber(player.x, player.y - 40, "Flux Stabilized!", 0x00FFFF);
-            addChatMessage("You stabilized the Mana Flux!", 0x00FFFF, "✨");
-            // playSound('level_up'); // Optional
-
-            // UQE Event
-            if (window.uqe && window.uqe.eventBus) {
-                // Emit event that matches the quest objective
-                // Objective looked for 'stabilized_flux' item pickup or similar
-
-                // We'll emit 'item_pickup' with 'stabilized_flux'
-                window.uqe.eventBus.emit('item_pickup', { id: 'stabilized_flux', amount: 1 });
-
-                // Also emit a specific custom event just in case
-                window.uqe.eventBus.emit('mana_flux_stabilized', { id: flux.id });
-
-                console.log('⚡ Emitted item_pickup: stabilized_flux');
-            }
-
-            return true; // Handled interaction
-        }
-    }
-
-    return false;
-}
+};
 
 /**
  * Check for interaction with Special Zones (e.g. Town Square Investigation)
@@ -1578,6 +1492,18 @@ function checkZoneInteraction() {
     let interacted = false;
 
     specialZones.forEach(zone => {
+        // Resolve dynamic location if available
+        let zoneX = zone.x;
+        let zoneY = zone.y;
+
+        if (game.scene.scenes[0] && game.scene.scenes[0].mapManager) {
+            const dynamicLoc = game.scene.scenes[0].mapManager.getLocationXY(zone.id);
+            if (dynamicLoc) {
+                zoneX = dynamicLoc.x;
+                zoneY = dynamicLoc.y;
+            }
+        }
+
         // Only check if objective is active (or if zone is always active)
         let isActive = zone.alwaysActive || false;
 
@@ -1593,7 +1519,7 @@ function checkZoneInteraction() {
         }
 
         if (isActive) {
-            const dist = Phaser.Math.Distance.Between(player.x, player.y, zone.x, zone.y);
+            const dist = Phaser.Math.Distance.Between(player.x, player.y, zoneX, zoneY);
             if (dist <= zone.radius && !interacted) {
                 // Interaction radius met
                 if (window.uqe) {
@@ -1748,6 +1674,7 @@ function spawnDungeonMonsters() {
                     if (mDef.minLevel && MapManager.dungeonLevel < mDef.minLevel) return;
 
                     dungeonMonsterTypes.push({
+                        id: mDef.id, // Ensure ID is passed for blueprint lookup
                         ...baseStats,
                         chance: mDef.chance || 1.0,
                         spawnAmount: mDef.spawnAmount || [1, 2]
@@ -1788,6 +1715,8 @@ function spawnDungeonMonsters() {
                         speed: bp.stats.speed,
                         xp: bp.stats.xp,
                         textureKey: bp.id,
+                        generationType: bp.generationType, // Pass generation type for spawnMonster
+                        proceduralConfig: bp.proceduralConfig, // Pass procedural config
                         isProcedural: true,
                         spawnAmount: bp.stats.spawnAmount || selectedType.spawnAmount
                     };
@@ -1879,16 +1808,24 @@ function spawnBossMonster(x, y, level) {
     // For now, let's randomly decide or try to find a "Boss" type blueprint
     const hasBossBlueprint = monsterRenderer && (monsterRenderer.monsterBlueprints[bossId] || monsterRenderer.monsterBlueprints['Boss']);
 
-    // 50/50 chance to be procedural if a blueprint exists
-    const useProcedural = hasBossBlueprint && Math.random() < 0.5;
+    // Always use procedural for bosses if a blueprint exists
+    const useProcedural = hasBossBlueprint;
+
+    // Use blueprint stats if available, otherwise fallback to level scaling
+    const bp = monsterRenderer && (monsterRenderer.monsterBlueprints[bossId]);
+
+    const baseHp = (bp && bp.stats) ? bp.stats.hp : (100 + (level * 50));
+    const baseAttack = (bp && bp.stats) ? bp.stats.attack : (15 + (level * 5));
+    const baseXp = (bp && bp.stats) ? bp.stats.xp : (50 + (level * 25));
 
     const bossTypeData = {
         name: bossName,
+        id: bossId, // Include ID for blueprint lookup
         textureKey: textureKey,
-        hp: 100 + (level * 50),
-        attack: 15 + (level * 5),
+        hp: baseHp,
+        attack: baseAttack,
         speed: 80,
-        xp: 50 + (level * 25),
+        xp: baseXp,
         isProcedural: useProcedural,
         monsterType: bossId // Store type
     };
@@ -2108,10 +2045,6 @@ function showVictoryCinematic(scene, imageKey, loreText) {
 
     btn.on('pointerdown', () => {
         console.log('🖱️ Continue Button Clicked!');
-        closeCinematic();
-    });
-    btnText.setInteractive({ useHandCursor: true }).on('pointerdown', () => {
-        console.log('🖱️ Continue Text Clicked!');
         closeCinematic();
     });
 
@@ -2349,6 +2282,32 @@ function dropBossLoot(x, y, level) {
 function create() {
     console.log('🚀 CREATE FUNCTION CALLED - Starting tileset processing');
 
+    // [New] Check for Save Load Request (from Reload)
+    const shouldLoad = localStorage.getItem('rpg_load_on_start');
+    if (shouldLoad === 'true' && window.SaveManager) {
+        localStorage.removeItem('rpg_load_on_start');
+        const loadSlot = parseInt(localStorage.getItem('rpg_load_slot')) || 1;
+        console.log(`📂 Loading Game from Slot ${loadSlot} (Start-up)...`);
+
+        const saveState = window.SaveManager.loadGame(loadSlot);
+        if (saveState) {
+            // Restore World State (Before MapManager.init uses defaults)
+            if (saveState.world && window.MapManager) {
+                if (saveState.world.currentMap) window.MapManager.currentMap = saveState.world.currentMap;
+                if (saveState.world.dungeonId) window.MapManager.currentDungeonId = saveState.world.dungeonId;
+                if (saveState.world.dungeonLevel) window.MapManager.dungeonLevel = saveState.world.dungeonLevel;
+
+                // Position overrides (MapManager usually reads lastPlayerX/Y)
+                if (saveState.world.playerX) window.lastPlayerX = saveState.world.playerX;
+                if (saveState.world.playerY) window.lastPlayerY = saveState.world.playerY;
+
+                console.log(`   -> Map set to: ${saveState.world.currentMap}`);
+            }
+            // Note: PlayerStats (XP, Items) are already restored by SaveManager.loadGame() 
+            // modifying the global GameState.playerStats object.
+        }
+    }
+
     // Initialize Map Manager
     if (typeof MapManager !== 'undefined') {
         MapManager.init(this);
@@ -2357,8 +2316,12 @@ function create() {
         console.error('❌ MapManager not found!');
     }
 
+    // Disable context menu for Right-Click attacks
+    this.input.mouse.disableContextMenu();
+
     // Initialize procedural monster renderer (Method 2)
     monsterRenderer = new MonsterRenderer(this);
+    window.monsterRenderer = monsterRenderer;
     if (this.cache.json.exists('monsterData')) {
         monsterRenderer.init(this.cache.json.get('monsterData'));
     }
@@ -2378,6 +2341,21 @@ function create() {
             if (typeof initController === 'function') {
                 initController(this);
             }
+        });
+    }
+
+    // Initialize Projectile Manager (Ranged Combat)
+    if (typeof ProjectileManager !== 'undefined') {
+        window.projectileManager = new ProjectileManager(this);
+        window.projectileManager.init();
+        console.log('✅ ProjectileManager initialized');
+
+        // Right Click Listener Removed
+        // Spacebar Listener for Ranged Attack
+        this.input.keyboard.on('keydown-SPACE', () => {
+            if (window.UIManager && window.UIManager.isAnyWindowOpen()) return;
+            console.log('⌨️ Spacebar pressed');
+            playerAttack(this.time.now);
         });
     }
 
@@ -2414,6 +2392,13 @@ function create() {
         this.milestoneManager.init(this.cache.json.get('milestoneData'));
     }
 
+    // Initialize Cinematic Manager
+    this.cinematicManager = new CinematicManager(this);
+    window.cinematicManager = this.cinematicManager; // Expose for debugging
+    if (this.cache.json.exists('cinematicData')) {
+        this.cinematicManager.init(this.cache.json.get('cinematicData'));
+    }
+
     // Initialize Codex UI Keys
     if (window.setupLoreCodexKeys) {
         window.setupLoreCodexKeys(this);
@@ -2427,11 +2412,15 @@ function create() {
         // Merge quests from both sources
         const allQuests = { ...v2Data.quests };
 
-        uqe.init(allQuests);
+        window.uqe.init(allQuests);
 
         // Handle V2 Quest Completion
-        uqe.eventBus.on(UQE_EVENTS.QUEST_COMPLETED, (quest) => {
+        window.uqe.eventBus.on(UQE_EVENTS.QUEST_COMPLETED, (quest) => {
             console.log(`🎁 [UQE Bridge] Handling completion for: ${quest.title}`);
+
+            // BLOCK LEVEL UP EFFECT temporarily
+            // This prevents the level up animation from playing BEFORE the quest dialog opens
+            window.blockLevelUpEffect = true;
 
             // Give Rewards
             if (quest.rewards.xp) {
@@ -2442,7 +2431,12 @@ function create() {
                 playerStats.gold += quest.rewards.gold;
                 addChatMessage(`Gained ${quest.rewards.gold} Gold from quest`, 0xffd700, '💰');
             }
-            updatePlayerStats();
+
+
+            // Explicitly verify level up status (Respecting the block we just set)
+            // We replaced 'updatePlayerStats()' with explicit calls to ensure control
+            checkLevelUp();
+            updateUI();
 
             // Always update the tracker HUD to remove the completed quest
             updateQuestTrackerHUD();
@@ -2453,6 +2447,13 @@ function create() {
             // Deferred logic is now handled by the queue system automatically
             console.log('✅ Queueing quest completion dialog');
             queueDialog('QUEST_COMPLETED', quest);
+
+            // Release the block after a short delay to allow dialog to open
+            setTimeout(() => {
+                window.blockLevelUpEffect = false;
+                // Force a check in case it's still pending but dialog is somehow closed (safety)
+                if (typeof checkPendingLevelUp === 'function') checkPendingLevelUp();
+            }, 500);
         });
 
         // Handle Objective Progress HUD - WoW-style persistent tracker
@@ -2482,10 +2483,12 @@ function create() {
                 window.UIManager.showQuestToast(quest.title, "Quest Accepted", false);
             }
 
-            // Special Handler: Resonant Frequencies (main_01_005)
-            if (quest.id === 'main_01_005') {
-                if (typeof startResonantFrequenciesEvent === 'function') {
-                    startResonantFrequenciesEvent();
+            // Data-Driven Quest Start Events
+            const def = window.uqe.allDefinitions[quest.id];
+            if (def && def.startEvent && window.QuestEvents && window.QuestEvents[def.startEvent]) {
+                console.log(`▶️ Triggering Start Event: ${def.startEvent}`);
+                if (typeof window.QuestEvents[def.startEvent].start === 'function') {
+                    window.QuestEvents[def.startEvent].start();
                 }
             }
 
@@ -2503,16 +2506,20 @@ function create() {
                 window.UIManager.showQuestToast(quest.title, "Quest Completed!", true);
             }
 
-            // Special Handler: Stop Resonant Frequencies
-            if (quest.id === 'main_01_005') {
-                if (typeof stopResonantFrequenciesEvent === 'function') {
-                    stopResonantFrequenciesEvent();
+            // Data-Driven Quest Stop Events
+            const defStop = window.uqe.allDefinitions[quest.id];
+            if (defStop && defStop.stopEvent && window.QuestEvents && window.QuestEvents[defStop.stopEvent]) {
+                console.log(`⏹️ Triggering Stop Event: ${defStop.stopEvent}`);
+                if (typeof window.QuestEvents[defStop.stopEvent].stop === 'function') {
+                    window.QuestEvents[defStop.stopEvent].stop();
                 }
             }
 
             // 1. Grant Rewards (XP and Gold)
             if (quest.rewards) {
+                console.log(`🎁 [Rewards Debug] Inspecting rewards for ${quest.id}:`, quest.rewards);
                 if (quest.rewards.xp) {
+                    console.log(`   granting ${quest.rewards.xp} XP (Type: ${typeof quest.rewards.xp})`);
                     addXp(quest.rewards.xp);
                     console.log(`   + Awarded ${quest.rewards.xp} XP`);
                 }
@@ -2596,8 +2603,11 @@ function create() {
             const def = data.definition;
             addChatMessage(`New Quest Available: ${def.title}`, 0x00ffff, '📜');
 
-            // Queue the popup/preview
-            queueDialog('QUEST_AVAILABLE', def);
+            // Queue the popup/preview ONLY if there is no specific giver (auto-popup)
+            // If there is a giver, the player must go talk to them.
+            if (!def.giver) {
+                queueDialog('QUEST_AVAILABLE', def);
+            }
         });
 
         // Initialize starter quests for new games (if no UQE quests active yet)
@@ -2628,12 +2638,41 @@ function create() {
         MapManager.loadDungeonTilesets();
     }
 
-    // Start with town map
-    // Create initial map
-    if (typeof MapManager !== 'undefined') {
-        MapManager.createTownMap();
-    } else {
-        console.error('❌ MapManager not defined!');
+    // Start with town map or loaded map
+    let loadedFromSave = false;
+    if (window.SaveManager) {
+        window.SaveManager.init(this);
+        if (localStorage.getItem('rpg_load_on_start') === 'true') {
+            localStorage.removeItem('rpg_load_on_start');
+            const data = window.SaveManager.loadGame();
+            if (data && data.world) {
+                loadedFromSave = true;
+                window.savedPlayerX = data.world.playerX;
+                window.savedPlayerY = data.world.playerY;
+
+                const map = data.world.currentMap || 'town';
+                console.log(`💾 Loading map from save: ${map}`);
+
+                if (typeof MapManager !== 'undefined') {
+                    if (map === 'wilderness') {
+                        MapManager.createWildernessMap();
+                    } else if (map === 'dungeon') {
+                        MapManager.createDungeonMap(data.world.dungeonId || 'tower_dungeon', data.world.dungeonLevel || 1);
+                    } else {
+                        MapManager.createTownMap();
+                    }
+                }
+            }
+        }
+    }
+
+    if (!loadedFromSave) {
+        // Create initial map
+        if (typeof MapManager !== 'undefined') {
+            MapManager.createTownMap();
+        } else {
+            console.error('❌ MapManager not defined!');
+        }
     }
 
     // Start village music on initial load
@@ -2761,6 +2800,20 @@ function create() {
     }
 
     player = this.physics.add.sprite(400, 300, playerTexture);
+    // Expose player globally for MapManager and other systems
+    window.player = player;
+    this.player = player;
+
+    // Restore saved position if loaded
+    if (typeof window.savedPlayerX !== 'undefined') {
+        player.x = window.savedPlayerX;
+        player.y = window.savedPlayerY;
+        console.log(`📍 Player position restored to (${player.x}, ${player.y})`);
+
+        // Clear temp vars
+        window.savedPlayerX = undefined;
+        window.savedPlayerY = undefined;
+    }
 
     // Scale player to 64x64 (source is 48x48, so scale = 64/48 = 1.333...)
     player.setScale(64 / 48);
@@ -2917,62 +2970,14 @@ function create() {
     // Create ability bar
     createAbilityBar();
 
-    // Set up input (like pygame keyboard)
-    cursors = this.input.keyboard.createCursorKeys();
-
-    // Add WASD keys
-    this.wasd = this.input.keyboard.addKeys('W,S,A,D');
-
-    // Add Spacebar for attack
-    spaceKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
-
-    // Add 'I' key for inventory - REMOVED
-    // inventoryKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.I);
-
-    // Add 'E' key for equipment
-    equipmentKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.E);
-
-    // Add 'Q' key for quest log
-    questKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.Q);
-
-    // Add F8 for Visual Debugging (Input Hit Areas)
+    // --- SYSTEM KEYS ---
+    // Debug Key (F8) - Kept separate from controller system for now (System shortcut)
     this.debugKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.F8);
-
-    // Add 'F' key for interaction
-    interactKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.F);
-
-    // Add 'ESC' key for settings
-    settingsKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ESC);
-
-    // Add save/load keys
-    this.saveKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.F6);
-    this.loadKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.F9);
-
-    // Add 'H' key for help/controls toggle
-    this.helpKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.H);
-
-    // Add ability keys (1, 2, 3) and potion keys (4, 5)
-    this.abilityOneKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ONE);
-    this.abilityTwoKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.TWO);
-    this.abilityThreeKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.THREE);
-    this.potionFourKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.FOUR);
-    this.potionFiveKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.FIVE);
-
-    // Ensure keyboard triggers cast abilities/potions (Restoring functionality)
-    this.input.keyboard.on('keydown-ONE', () => { if (window.useAbility) window.useAbility(1); });
-    this.input.keyboard.on('keydown-TWO', () => { if (window.useAbility) window.useAbility(2); });
-    this.input.keyboard.on('keydown-THREE', () => { if (window.useAbility) window.useAbility(3); });
-    this.input.keyboard.on('keydown-FOUR', () => { if (window.useAbility) window.useAbility(4); });
-    this.input.keyboard.on('keydown-FIVE', () => { if (window.usePotion) window.usePotion('health'); });
-    this.input.keyboard.on('keydown-SIX', () => { if (window.usePotion) window.usePotion('mana'); });
-
-    // Add CTRL+A for assets window
-    assetsKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A);
+    // CTRL Key (Modifier) - Kept for advanced debug combos if needed
     this.ctrlKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.CTRL);
 
-    // Add CTRL+M for grass debug window
-    grassDebugKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.M);
-    console.log('✅ Grass debug key (M) initialized:', grassDebugKey);
+    console.log('✅ System keys initialized (F8, CTRL)');
+
 
     // Initialize Controller System
     if (typeof loadControllerConfig === 'function') {
@@ -3004,19 +3009,154 @@ function create() {
     // Initialize sounds after assets load
     initializeSounds();
 
-    // Unlock audio on first user interaction (browser requirement)
+    // Unlock on any key press or click
     const unlockAudio = () => {
         if (!audioUnlocked && this.sound) {
             this.sound.play('fireball_cast', { volume: 0 }); // Silent play to unlock
             this.sound.stopByKey('fireball_cast');
             audioUnlocked = true;
             console.log('🔓 Audio context unlocked');
+
+            // Trigger music if it should be playing
+            if (window.musicEnabled && typeof MapManager !== 'undefined') {
+                playBackgroundMusic(MapManager.currentMap);
+            }
         }
     };
 
-    // Unlock on any key press or click
     this.input.keyboard.on('keydown', unlockAudio);
-    this.input.on('pointerdown', unlockAudio);
+    // --- COMBAT & INTERACTION INPUT ---
+    this.input.on('pointerdown', (pointer) => {
+        // Unlock audio context on any interaction
+        unlockAudio();
+
+        // BLOCK INPUT IF UI IS OPEN
+        if (window.UIManager && window.UIManager.isAnyWindowOpen()) {
+            return;
+        }
+
+        if (pointer.rightButtonDown()) {
+            // FIRE PROJECTILE (Ranged Attack)
+            if (typeof playerAttack === 'function') {
+                // Determine target angle using camera-relative world coordinates
+                const worldPoint = pointer.positionToCamera(this.cameras.main);
+                const angle = Phaser.Math.Angle.Between(player.x, player.y, worldPoint.x, worldPoint.y);
+                playerAttack(this.time.now, true, angle);
+            }
+        } else {
+            // --- LONG PRESS INTERACTION LOGIC (Mobile Support) ---
+            if (!this.longPressTimer) {
+                // Visual feedback: Scaling circle
+                this.longPressFeedback = this.add.circle(pointer.x, pointer.y, 10, 0xffffff, 0.5)
+                    .setScrollFactor(0).setDepth(10000); // UI depth
+
+                this.tweens.add({
+                    targets: this.longPressFeedback,
+                    scale: 3,
+                    alpha: 0,
+                    duration: 600
+                });
+
+                this.longPressTimer = this.time.delayedCall(600, () => {
+                    console.log('👆 Long Press Detected: Triggering Interaction');
+                    if (this.longPressFeedback) {
+                        this.longPressFeedback.destroy();
+                        this.longPressFeedback = null;
+                    }
+                    this.longPressTimer = null;
+
+                    // Trigger "F" / Interact
+                    if (typeof triggerWorldInteraction === 'function') {
+                        const handled = triggerWorldInteraction();
+                        if (handled) {
+                            // Stop movement immediately
+                            if (player && player.body) {
+                                player.body.setVelocity(0);
+                                if (player.targetDest) player.targetDest = null;
+                            }
+                            // Clear click-to-move flags to prevent update loop from resuming movement
+                            if (this.isMovingToClick) this.isMovingToClick = false;
+                            if (this.clickMoveTarget) this.clickMoveTarget = null;
+                        } else {
+                            // Only show feedback if we really mean to interact (long press completed)
+                            if (typeof showDamageNumber === 'function') {
+                                showDamageNumber(player.x, player.y - 40, "No interaction nearby", 0xcccccc);
+                            }
+                        }
+                    }
+                });
+
+                // Store start position
+                this.longPressStart = { x: pointer.x, y: pointer.y };
+            }
+        }
+    });
+
+    this.input.on('pointermove', (pointer) => {
+        // Cancel long press if moved significantly (drag)
+        if (this.longPressTimer && this.longPressStart) {
+            const dist = Phaser.Math.Distance.Between(pointer.x, pointer.y, this.longPressStart.x, this.longPressStart.y);
+            if (dist > 20) { // 20px tolerance
+                this.longPressTimer.remove();
+                this.longPressTimer = null;
+                if (this.longPressFeedback) {
+                    this.longPressFeedback.destroy();
+                    this.longPressFeedback = null;
+                }
+            }
+        }
+    });
+
+    this.input.on('pointerup', (pointer) => {
+        // BLOCK INPUT IF UI IS OPEN
+        if (window.UIManager && window.UIManager.isAnyWindowOpen()) {
+            // Ensure timer is cleared anyway to prevent stuck states
+            if (this.longPressTimer) {
+                this.longPressTimer.remove();
+                this.longPressTimer = null;
+                if (this.longPressFeedback) {
+                    this.longPressFeedback.destroy();
+                    this.longPressFeedback = null;
+                }
+            }
+            return;
+        }
+        // Cancel long press on release
+        if (this.longPressTimer) {
+            this.longPressTimer.remove();
+            this.longPressTimer = null;
+            if (this.longPressFeedback) {
+                this.longPressFeedback.destroy();
+                this.longPressFeedback = null;
+            }
+        }
+
+        // --- TAP TO FIRE LOGIC (Mobile) ---
+        // Calculate duration and distance
+        const duration = pointer.upTime - pointer.downTime;
+        const dist = pointer.getDistance();
+
+        const tapDuration = (typeof controllerConfig !== 'undefined' && controllerConfig.touch) ? controllerConfig.touch.tapDuration : 200;
+        const dragThreshold = (typeof controllerConfig !== 'undefined' && controllerConfig.touch) ? controllerConfig.touch.dragThreshold : 20;
+
+        // Check if it's a tap and NOT interacting with UI or entities (which block propagation usually, but just in case)
+        if (duration < tapDuration && dist < dragThreshold) {
+
+            const equippedWeapon = playerStats.equipment.weapon;
+            const weaponType = equippedWeapon ? (equippedWeapon.weaponType || 'Sword') : 'Sword';
+            const isRanged = ['Bow', 'Crossbow', 'Staff'].includes(weaponType);
+
+            if (isRanged && typeof playerAttack === 'function') {
+                // Calculate angle
+                const worldPoint = pointer.positionToCamera(this.cameras.main);
+                const angle = Phaser.Math.Angle.Between(player.x, player.y, worldPoint.x, worldPoint.y);
+
+                // Attack
+                playerAttack(this.time.now, true, angle);
+                console.log('📱 Tap-to-Fire triggered');
+            }
+        }
+    });
 
     // Handle clicks on interactive objects (Monsters, NPCs)
     // Initialize click tracking variables
@@ -3103,7 +3243,7 @@ function create() {
         .setDepth(30000);
 
     // Version Number
-    this.add.text(this.scale.width - 10, 10, 'v0.9.141', {
+    this.add.text(this.scale.width - 10, 10, 'v0.9.186', {
         fontFamily: 'Arial',
         fontSize: '16px',
         color: '#ffffff',
@@ -3117,6 +3257,67 @@ function create() {
 }
 
 /**
+ * Check for NPC Interaction
+ * Iterate through active NPCs and trigger dialog if close enough
+ */
+function checkNPCInteraction() {
+    if (!window.npcs || window.npcs.length === 0) return false;
+
+    // Use player position
+    const px = player.x;
+    const py = player.y;
+    const interactionRadius = 60; // 60px range
+
+    let closestNPC = null;
+    let minDst = interactionRadius;
+
+    // Find closest NPC
+    window.npcs.forEach(npc => {
+        if (!npc.active) return;
+        const dist = Phaser.Math.Distance.Between(px, py, npc.x, npc.y);
+        if (dist <= minDst) {
+            minDst = dist;
+            closestNPC = npc;
+        }
+    });
+
+    if (closestNPC) {
+        console.log(`💬 Interacting with NPC: ${closestNPC.name} (${closestNPC.id})`);
+
+        // Emit UQE Event (Crucial for generic quest triggers like 'talk_thorne_return')
+        if (window.uqe) {
+            // Try ID from definition first, then instance ID
+            const eventId = (closestNPC.definition ? closestNPC.definition.id : closestNPC.id) || closestNPC.name.toLowerCase().replace(' ', '_');
+            window.uqe.eventBus.emit('NPC_TALK', { id: eventId, name: closestNPC.name });
+            console.log(`   -> Emitted NPC_TALK for ${eventId}`);
+        }
+
+        // Open Dialog UI
+        // Try known dialog function names (startDialog, showDialog, openDialog)
+        const dialogId = closestNPC.dialogId || (closestNPC.definition ? closestNPC.definition.dialogId : null);
+
+        if (dialogId) {
+            if (typeof startDialog === 'function') {
+                startDialog(dialogId, closestNPC.name);
+                return true;
+            } else if (typeof showDialog === 'function') {
+                showDialog(dialogId, closestNPC.name);
+                return true;
+            } else if (typeof openDialog === 'function') {
+                openDialog(dialogId, closestNPC.name);
+                return true;
+            } else {
+                console.warn(`⚠️ Dialog function missing! Cannot open dialog '${dialogId}' for ${closestNPC.name}`);
+                if (typeof addChatMessage === 'function') addChatMessage(`${closestNPC.name}: (Dialog System Unavailable)`, 0xffff00);
+            }
+        }
+        return true; // Interaction handled (even if UI failed)
+    }
+
+    return false;
+}
+
+/**
  * Handle World Interaction (F Key / Controller A)
  * Returns true if an interaction occurred (blocking other actions)
  */
@@ -3127,6 +3328,56 @@ function triggerWorldInteraction() {
     // Check for zone interactions (Quests)
     if (typeof checkZoneInteraction === 'function' && checkZoneInteraction()) {
         return true;
+    }
+
+    // Check Data-Driven Interactables
+    if (MapManager.interactables && MapManager.interactables.length > 0) {
+        let closestObj = null;
+        let minDst = 9999;
+
+        for (const obj of MapManager.interactables) {
+            if (!obj.sprite) continue;
+            const dist = Phaser.Math.Distance.Between(player.x, player.y, obj.sprite.x, obj.sprite.y);
+            const radius = obj.definition.interactionRadius || 60;
+
+            if (dist < radius && dist < minDst) {
+                minDst = dist;
+                closestObj = obj;
+            }
+        }
+
+        if (closestObj) {
+            if (closestObj.definition.interactionType === 'forge') {
+                if (window.ForgeUI) window.ForgeUI.toggle();
+                return true;
+            }
+
+            if (window.uqe && window.uqe.eventBus) {
+                // Emit generic interact_object event
+                window.uqe.eventBus.emit('interact_object', {
+                    id: closestObj.definition.id,
+                    type: closestObj.definition.interactionType
+                });
+            }
+
+            // Destroy one-time interactables (like altars) after interaction
+            if (closestObj.definition.interactionType === 'quest_trigger') {
+                // Destroy visual
+                if (closestObj.sprite) {
+                    // Also destroy any related shapes (glow, accent)
+                    if (closestObj.sprite.collisionBody) closestObj.sprite.collisionBody.destroy();
+                    closestObj.sprite.destroy();
+                }
+                // Remove from array
+                const idx = MapManager.interactables.indexOf(closestObj);
+                if (idx > -1) MapManager.interactables.splice(idx, 1);
+            }
+
+            // Feedback
+            if (typeof showDamageNumber === 'function') showDamageNumber(player.x, player.y - 50, "Altar Destroyed!", 0xff4444);
+            return true; // Interaction handled
+        }
+
     }
 
     // Check Mana Flux interactions first (closest priority)
@@ -3200,6 +3451,12 @@ function triggerWorldInteraction() {
         return true;
     }
 
+    // If Shop UI is open, close it
+    if (typeof shopVisible !== 'undefined' && shopVisible) {
+        if (typeof closeShop === 'function') closeShop();
+        return true;
+    }
+
     // Check MapManager.buildings first (in town), then NPCs
     if (typeof MapManager.currentMap !== 'undefined' && MapManager.currentMap === 'town') {
         if (typeof checkBuildingInteraction === 'function') {
@@ -3257,9 +3514,24 @@ window.triggerItemPickup = triggerItemPickup;
  * Update loop (like pygame game loop)
  */
 function update(time, delta) {
+    // Dynamic Quest Visuals (Check every frame, returns early if not needed)
+    if (typeof MapManager !== 'undefined' && MapManager.updateQuestZones) {
+        // Use active scene reference explicitly to avoid context issues with 'this'
+        const activeScene = (typeof game !== 'undefined' && game.scene && game.scene.scenes) ? game.scene.scenes[0] : this;
+        if (activeScene) MapManager.updateQuestZones(activeScene);
+    }
+
+    // DEBUG: SANITY CHECK
+    // Debug log disabled (too spammy)
+    // if (Math.random() < 0.01) console.log(`🔄 Update Loop Running...`);
     // Update Damage/Healing Numbers
     if (window.updateDamageNumbers) {
         window.updateDamageNumbers(time, delta);
+    }
+
+    // Update Projectile Manager (Priority Update)
+    if (window.projectileManager) {
+        window.projectileManager.update(time, delta);
     }
 
     // If game is paused (e.g. death dialog), stop all game logic
@@ -3298,8 +3570,18 @@ function update(time, delta) {
         handleGamepadInput();
     }
 
-    // Mana Instability Quest Update
-    updateManaFluxNodes();
+    // Update Projectiles
+    if (window.projectileManager) {
+        window.projectileManager.update(time, delta);
+    }
+
+    // Unified Dynamic Spawner (for fluxes, fireflies, etc)
+    DynamicSpawnManager.update(this);
+
+    // Ensure weapon sprite follows player every frame
+    if (typeof updateWeaponPosition === 'function') {
+        updateWeaponPosition();
+    }
 
     // Defense Quest Wave Spawner
     updateDefenseQuestSpawner(time);
@@ -3382,6 +3664,98 @@ function update(time, delta) {
     // Update attack speed indicator
     updateAttackSpeedIndicator();
 
+    // --- INPUT ACTIONS (Controller/Keyboard/Touch) ---
+    if (typeof isActionJustPressed === 'function') {
+        // Attack (SPACE / A Button / RT)
+        if (isActionJustPressed('attack') || isActionJustPressed('fire')) {
+            // Priority: Pickup items first
+            let pickupHandled = false;
+            if (typeof triggerItemPickup === 'function') {
+                pickupHandled = triggerItemPickup();
+            }
+
+            if (!pickupHandled) {
+                // Pass controller aim angle if available
+                let aimAngle = undefined;
+                if (typeof player.aimAngle !== 'undefined') {
+                    aimAngle = player.aimAngle;
+                }
+
+                if (typeof playerAttack === 'function') {
+                    // Check if we should use controller aim (active controller + right stick moved recently)
+                    // Or just always pass it if valid? 
+                    // Let's pass it - playerAttack (or ProjectileManager) should handle null/undefined by using mouse
+                    // Actually, let's explicit: if controller is active and we have an angle, use it.
+                    if (typeof player.aimAngle === 'number') {
+                        // Use stored aim angle (works for both sticky gamepad aim and mouse)
+                        playerAttack(this.time.now, true, player.aimAngle);
+                    } else {
+                        // Fallback to mouse pointer calculation if no angle stored
+                        playerAttack(this.time.now);
+                    }
+                }
+            }
+        }
+        // Interact
+        if (isActionJustPressed('interact')) {
+            if (typeof triggerWorldInteraction === 'function') triggerWorldInteraction();
+        }
+
+        // UI Toggles
+        if (window.UIManager) {
+            if (isActionJustPressed('inventory')) {
+                if (typeof toggleEquipment === 'function') toggleEquipment();
+            }
+            if (isActionJustPressed('equipment')) {
+                if (typeof toggleEquipment === 'function') toggleEquipment();
+            }
+            if (isActionJustPressed('quests')) {
+                if (typeof toggleQuestLog === 'function') toggleQuestLog();
+                else if (window.UIManager && typeof window.UIManager.toggleQuestLog === 'function') window.UIManager.toggleQuestLog();
+            }
+            if (isActionJustPressed('settings')) {
+                if (typeof toggleSettings === 'function') toggleSettings();
+                else if (window.UIManager && typeof window.UIManager.toggleSettings === 'function') window.UIManager.toggleSettings();
+            }
+            if (isActionJustPressed('debug_assets') && this.ctrlKey && this.ctrlKey.isDown) {
+                if (typeof toggleAssetsWindow === 'function') toggleAssetsWindow();
+            }
+        }
+
+        // Help Toggle
+        if (isActionJustPressed('help')) {
+            if (this.controlsText) {
+                this.controlsExpanded = !this.controlsExpanded;
+                this.controlsText.setText(this.controlsExpanded ? this.controlsFullText : this.controlsShortText);
+            }
+        }
+
+        // Debug (CTRL+M)
+        if (isActionJustPressed('debug_grass') && this.ctrlKey && this.ctrlKey.isDown) {
+            if (typeof toggleGrassDebugWindow === 'function') toggleGrassDebugWindow();
+        }
+
+        // Abilities & Potions
+        if (window.useAbility) {
+            if (isActionJustPressed('ability1')) window.useAbility(1);
+            if (isActionJustPressed('ability2')) window.useAbility(2);
+            if (isActionJustPressed('ability3')) window.useAbility(3);
+            if (isActionJustPressed('ability4')) window.useAbility(4);
+        }
+        if (window.usePotion) {
+            if (isActionJustPressed('healthPotion')) window.usePotion('health');
+            if (isActionJustPressed('manaPotion')) window.usePotion('mana');
+        }
+
+        // Save/Load
+        if (isActionJustPressed('save') && typeof saveGame === 'function') {
+            saveGame();
+        }
+        if (isActionJustPressed('load') && typeof loadGame === 'function') {
+            loadGame();
+        }
+    }
+
     // Process dialog queue
     processDialogQueue();
 
@@ -3389,11 +3763,21 @@ function update(time, delta) {
     // Don't allow movement when shop/inventory/dialog/settings/building is open
 
     // Check if controller is providing input (don't reset if controller is active)
+    // Check for controller input state (not just velocity)
     const controllerActive = typeof isControllerConnected === 'function' && isControllerConnected();
-    const hasControllerMovement = controllerActive && (Math.abs(player.body.velocity.x) > 0 || Math.abs(player.body.velocity.y) > 0);
+    let controllerMoving = false;
+    if (controllerActive && typeof activeGamepad !== 'undefined' && activeGamepad && controllerConfig) {
+        const deadzone = controllerConfig.deadzone || 0.3;
+        // Check simple left stick deflection
+        const lx = activeGamepad.leftStick ? activeGamepad.leftStick.x : 0;
+        const ly = activeGamepad.leftStick ? activeGamepad.leftStick.y : 0;
+        if (Math.abs(lx) > deadzone || Math.abs(ly) > deadzone) {
+            controllerMoving = true;
+        }
+    }
 
-    // Only reset velocity if no controller movement
-    if (!hasControllerMovement) {
+    // Only reset velocity if NO controller input AND NO click movement
+    if (!controllerMoving && !this.isMovingToClick) {
         player.setVelocity(0);
     }
 
@@ -3407,24 +3791,25 @@ function update(time, delta) {
         let newDirection = player.facingDirection; // Default to current direction
 
         // Keyboard Movement supersedes mouse movement
-        if (cursors.left.isDown || this.wasd.A.isDown) {
+        // Using centralized controller check (supports WASD, Arrows, and rebinds)
+        if (typeof isActionActive === 'function' && isActionActive('move_left')) {
             player.setVelocityX(-speed);
             newDirection = 'west';
             moving = true;
             this.isMovingToClick = false; // Cancel click movement
-        } else if (cursors.right.isDown || this.wasd.D.isDown) {
+        } else if (typeof isActionActive === 'function' && isActionActive('move_right')) {
             player.setVelocityX(speed);
             newDirection = 'east';
             moving = true;
             this.isMovingToClick = false; // Cancel click movement
         }
 
-        if (cursors.up.isDown || this.wasd.W.isDown) {
+        if (typeof isActionActive === 'function' && isActionActive('move_up')) {
             player.setVelocityY(-speed);
             newDirection = 'north';
             moving = true;
             this.isMovingToClick = false; // Cancel click movement
-        } else if (cursors.down.isDown || this.wasd.S.isDown) {
+        } else if (typeof isActionActive === 'function' && isActionActive('move_down')) {
             player.setVelocityY(speed);
             newDirection = 'south';
             moving = true;
@@ -3437,16 +3822,6 @@ function update(time, delta) {
         // Check for click input to set target
         // We use pointer down to set the target (works for click and drag/hold)
         if (pointer.isDown && pointer.button === 0) {
-            // DEBUG: Log everything under the pointer
-            const debugHitTest = this.input.hitTestPointer(pointer);
-            if (debugHitTest.length > 0) {
-                console.log('🖱️ Pointer Down Hit Test Results:', debugHitTest.length, 'objects');
-                debugHitTest.forEach((obj, idx) => {
-                    console.log(`   [${idx}] Type: ${obj.type}, Depth: ${obj.depth}, Interactive: ${obj.input ? obj.input.enabled : 'N/A'}, Name: ${obj.name}`);
-                });
-            } else {
-                console.log('🖱️ Pointer Down: No objects detected under cursor');
-            }
 
             // Robust UI Check: Block if cursor is over any high-depth object (UI > 100)
             const hitObjects = this.input.hitTestPointer(pointer);
@@ -3499,7 +3874,6 @@ function update(time, delta) {
 
                     // Monster click priority - set target entity and move to attack
                     if (clickedMonster) {
-                        console.log('⚔️ Monster clicked:', clickedMonster.name || clickedMonster.monsterId);
                         this.clickTargetEntity = clickedMonster;
                         this.clickMoveTarget = { x: clickedMonster.x, y: clickedMonster.y };
                         this.isMovingToClick = true;
@@ -3509,7 +3883,6 @@ function update(time, delta) {
 
                     // NPC click priority
                     if (clickedNPC) {
-                        console.log('💬 NPC clicked:', clickedNPC.name || clickedNPC.npcId);
                         this.clickTargetEntity = clickedNPC;
                         this.clickMoveTarget = { x: clickedNPC.x, y: clickedNPC.y };
                         this.isMovingToClick = true;
@@ -3519,7 +3892,6 @@ function update(time, delta) {
 
                     // Item click priority
                     if (clickedItem) {
-                        console.log('🎒 Item clicked:', clickedItem.itemData ? clickedItem.itemData.name : 'Unknown');
                         this.clickTargetEntity = clickedItem;
                         this.clickMoveTarget = { x: clickedItem.x, y: clickedItem.y };
                         this.isMovingToClick = true;
@@ -3528,7 +3900,6 @@ function update(time, delta) {
                     }
 
                     // No entity clicked - process as click-to-move
-                    console.log('Movement Triggered. WindowsOpen:', isAnyWindowOpen(), 'LastCloseDelta:', this.time.now - (this.lastWindowCloseTime || 0));
 
                     // Set target position
                     this.clickMoveTarget = { x: pointer.worldX, y: pointer.worldY };
@@ -4224,131 +4595,26 @@ function update(time, delta) {
         }
     }
 
-    // Player attack or item pickup (Spacebar)
-    // Player attack or item pickup (Spacebar)
-    // Priority: Pick up items if nearby, otherwise attack
-    if (Phaser.Input.Keyboard.JustDown(spaceKey)) {
-        // Try pickup first
-        if (!triggerItemPickup()) {
-            playerAttack(time);
-        }
-    }
-
     // Get scene reference (used for multiple things below)
     const scene = game.scene.scenes[0];
 
-    // Ability keys (1, 2, 3)
-    if (Phaser.Input.Keyboard.JustDown(scene.abilityOneKey)) {
-        castAbility('heal', time);
-    }
-    if (Phaser.Input.Keyboard.JustDown(scene.abilityTwoKey)) {
-        castAbility('fireball', time);
-    }
-    if (Phaser.Input.Keyboard.JustDown(scene.abilityThreeKey)) {
-        castAbility('shield', time);
-    }
-
-    // Potion keys (4, 5)
-    if (scene.potionFourKey && Phaser.Input.Keyboard.JustDown(scene.potionFourKey)) {
-        usePotion('health');
-    }
-    if (scene.potionFiveKey && Phaser.Input.Keyboard.JustDown(scene.potionFiveKey)) {
-        usePotion('mana');
-    }
+    // Ability/Potion keys handled by Central Input System now (above)
 
     // Update ability cooldowns
     updateAbilityCooldowns(time);
 
-    // Toggle inventory (I key) - REMOVED
-    // if (Phaser.Input.Keyboard.JustDown(inventoryKey)) {
-    //     toggleInventory();
-    // }
+    // Update Projectile Manager - MOVED TO TOP
 
-    // Toggle equipment (E key) - always check, even when panel is open
-    if (equipmentKey && Phaser.Input.Keyboard.JustDown(equipmentKey)) {
-        toggleEquipment();
-    }
+    // Legacy Input Checks Removed (Moved to Central Input System)
 
-    // Update inventory if visible
-    if (inventoryVisible) {
+    // Restore UI Updates (Required per frame)
+    if (typeof inventoryVisible !== 'undefined' && inventoryVisible && typeof updateInventory === 'function') {
         updateInventory();
     }
-
-    // Update equipment if visible
-    if (equipmentVisible) {
+    if (typeof equipmentVisible !== 'undefined' && equipmentVisible && typeof updateEquipment === 'function') {
         updateEquipment();
     }
 
-    // Toggle quest log (Q key)
-    if (Phaser.Input.Keyboard.JustDown(questKey)) {
-        toggleQuestLog();
-    }
-
-    // ESC key - close any open interface
-    if (settingsKey && Phaser.Input.Keyboard.JustDown(settingsKey)) {
-        // Check if any interface is open (including dialogs, building panels, and quest modals)
-        const anyInterfaceOpen = inventoryVisible || equipmentVisible || questVisible || shopVisible || settingsVisible || dialogVisible || buildingPanelVisible || questCompletedModal || newQuestModal;
-
-        if (anyInterfaceOpen) {
-            // Close all interfaces - don't open settings
-            closeAllInterfaces();
-            // Also close dialog and building panel if they're open
-            // (closeDialog() and closeBuildingUI() will set their visibility flags)
-            if (dialogVisible) {
-                closeDialog(); // This sets dialogVisible = false internally
-            }
-            if (buildingPanelVisible) {
-                closeBuildingUI(); // This sets buildingPanelVisible = false internally
-            }
-            // Quest modals have their own ESC handlers that will close them
-            // We just need to prevent Settings from opening
-        } else {
-            // Only open settings if NO interface is open
-            toggleSettings();
-        }
-    }
-
-    // Interaction (F key)
-    if (Phaser.Input.Keyboard.JustDown(interactKey)) {
-        if (shopVisible) {
-            closeShop();
-        } else {
-            triggerWorldInteraction();
-        }
-    }
-
-    // Assets window (CTRL+A)
-    if (Phaser.Input.Keyboard.JustDown(assetsKey) && scene.ctrlKey.isDown) {
-        toggleAssetsWindow();
-    }
-
-    // Grass debug window (CTRL+M)
-    if (grassDebugKey && scene.ctrlKey) {
-        if (Phaser.Input.Keyboard.JustDown(grassDebugKey) && scene.ctrlKey.isDown) {
-            console.log('🔍 CTRL+M pressed!');
-            toggleGrassDebugWindow();
-        }
-    } else {
-        // Debug: log if keys aren't initialized
-        if (!grassDebugKey) console.warn('⚠️ grassDebugKey not initialized');
-        if (!scene.ctrlKey) console.warn('⚠️ scene.ctrlKey not initialized');
-    }
-
-    // Save/Load
-    if (Phaser.Input.Keyboard.JustDown(scene.saveKey)) {
-        saveGame();
-    }
-    if (Phaser.Input.Keyboard.JustDown(scene.loadKey)) {
-        loadGame();
-    }
-
-    // Toggle controls (H key) - switch between short and full text
-    if (Phaser.Input.Keyboard.JustDown(scene.helpKey)) {
-        if (scene.controlsText) {
-            scene.controlsExpanded = !scene.controlsExpanded;
-            scene.controlsText.setText(scene.controlsExpanded ? scene.controlsFullText : scene.controlsShortText);
-        }
-    }
 
     // Toggle Debug Visualization (F8)
     if (scene.debugKey && Phaser.Input.Keyboard.JustDown(scene.debugKey)) {
@@ -4431,34 +4697,42 @@ function update(time, delta) {
         const monstersNeeded = MAX_MONSTERS - monsters.length;
 
         // Use data-driven monster types if available
-        let monsterTypes = [
-            { name: 'Goblin', textureKey: 'monster_goblin', hp: 30, attack: 5, speed: 50, xp: 10, isProcedural: false, spawnAmount: [1, 3] },
-            { name: 'Orc', textureKey: 'monster_orc', hp: 50, attack: 8, speed: 40, xp: 20, isProcedural: false, spawnAmount: [1, 2] },
-            { name: 'Skeleton', textureKey: 'monster_skeleton', hp: 25, attack: 6, speed: 60, xp: 15, isProcedural: false, spawnAmount: [1, 2] },
-            { name: 'Spider', textureKey: 'monster_spider', hp: 20, attack: 4, speed: 70, xp: 8, isProcedural: false, spawnAmount: [3, 5] },
-            { name: 'Slime', textureKey: 'monster_slime', hp: 15, attack: 3, speed: 30, xp: 5, isProcedural: false, spawnAmount: [2, 4] },
-            { name: 'Wolf', textureKey: 'monster_wolf', hp: 40, attack: 7, speed: 65, xp: 18, isProcedural: false, spawnAmount: [2, 3] },
-            { name: 'Dragon', textureKey: 'monster_dragon', hp: 80, attack: 12, speed: 35, xp: 40, isProcedural: false, spawnAmount: [1, 1] },
-            { name: 'Echo Mite', id: 'procedural_echo_mite', textureKey: 'monster_echo_mite', hp: 15, attack: 3, speed: 60, xp: 5, isProcedural: false, spawnAmount: [2, 4] },
-            { name: 'Ghost', textureKey: 'monster_ghost', hp: 35, attack: 6, speed: 55, xp: 12, isProcedural: false, spawnAmount: [1, 2] }
-        ];
+        // Use data-driven monster types if available
+        let monsterTypes = [];
 
         if (monsterRenderer && Object.keys(monsterRenderer.monsterBlueprints).length > 0) {
             const uniqueBlueprints = Array.from(new Set(Object.values(monsterRenderer.monsterBlueprints)));
-
             uniqueBlueprints.forEach(bp => {
-                monsterTypes.push({
-                    name: bp.name,
-                    id: bp.id,
-                    hp: bp.stats.hp,
-                    attack: bp.stats.attack,
-                    speed: bp.stats.speed,
-                    xp: bp.stats.xp,
-                    textureKey: bp.id,
-                    isProcedural: true,
-                    spawnAmount: bp.stats.spawnAmount || [1, 1]
-                });
+                // Filter for wilderness-appropriate monsters if needed, for now include all non-boss
+                if (bp.id !== 'boss' && !bp.isBoss) {
+                    monsterTypes.push({
+                        name: bp.name,
+                        id: bp.id,
+                        hp: bp.stats.hp,
+                        attack: bp.stats.attack,
+                        speed: bp.stats.speed,
+                        xp: bp.stats.xp,
+                        textureKey: bp.id,
+                        generationType: bp.generationType,
+                        proceduralConfig: bp.proceduralConfig,
+                        isProcedural: true,
+                        spawnAmount: bp.stats.spawnAmount || [1, 1]
+                    });
+                }
             });
+        } else {
+            // Fallback to hardcoded list (UPDATED to be procedural)
+            monsterTypes = [
+                { name: 'Goblin', id: 'procedural_goblin', generationType: 'mask_based', textureKey: 'monster_goblin', hp: 30, attack: 5, speed: 50, xp: 10, isProcedural: true, spawnAmount: [1, 3] },
+                { name: 'Orc', id: 'procedural_orc', generationType: 'mask_based', textureKey: 'monster_orc', hp: 50, attack: 8, speed: 40, xp: 20, isProcedural: true, spawnAmount: [1, 2] },
+                { name: 'Skeleton', id: 'procedural_skeleton', generationType: 'mask_based', textureKey: 'monster_skeleton', hp: 25, attack: 6, speed: 60, xp: 15, isProcedural: true, spawnAmount: [1, 2] },
+                { name: 'Spider', id: 'procedural_spider', generationType: 'mask_based', textureKey: 'monster_spider', hp: 20, attack: 4, speed: 70, xp: 8, isProcedural: true, spawnAmount: [3, 5] },
+                { name: 'Slime', id: 'procedural_slime', generationType: 'cellular_automata', textureKey: 'monster_slime', hp: 15, attack: 3, speed: 30, xp: 5, isProcedural: true, spawnAmount: [2, 4] },
+                { name: 'Wolf', id: 'procedural_wolf', generationType: 'mask_based', textureKey: 'monster_wolf', hp: 40, attack: 7, speed: 65, xp: 18, isProcedural: true, spawnAmount: [2, 3] },
+                { name: 'Dragon', id: 'procedural_dragon', generationType: 'mask_based', textureKey: 'monster_dragon', hp: 80, attack: 12, speed: 35, xp: 40, isProcedural: true, spawnAmount: [1, 1] },
+                { name: 'Ghost', id: 'procedural_ghost', generationType: 'cellular_automata', textureKey: 'monster_ghost', hp: 35, attack: 6, speed: 55, xp: 12, isProcedural: true, spawnAmount: [1, 2] },
+                { name: 'Echo_Mite', id: 'procedural_echo_mite', generationType: 'cellular_automata', textureKey: 'monster_echo_mite', hp: 15, attack: 3, speed: 60, xp: 5, isProcedural: true, spawnAmount: [2, 4] }
+            ];
         }
 
         // Spawn monsters away from player (using pack spawning)
@@ -4649,8 +4923,7 @@ function update(time, delta) {
         // Monster attack player if in range
 
 
-        // Update monster HP bar position and visibility
-        if (monster.hpBarBg && monster.hpBar && monster.active) {
+        if (monster.hpBarBg && monster.hpBar && monster.active && !monster.isDead) {
             const offsetY = -24; // Position above monster sprite
             monster.hpBarBg.x = monster.x;
             monster.hpBarBg.y = monster.y + offsetY;
@@ -4676,6 +4949,12 @@ function update(time, delta) {
             monster.hpBarBg.setVisible(showBar);
             monster.hpBar.setVisible(showBar);
             if (monster.levelLabel) monster.levelLabel.setVisible(showBar);
+        } else if (monster.isDead && (monster.hpBar || monster.hpBarBg)) {
+            console.warn(`🧟 ZOMBIE UI DETECTED for ${monster.id}! isDead=${monster.isDead}, Active=${monster.active}, hpBar=${!!monster.hpBar}`);
+            // Emergency cleanup
+            if (monster.hpBarBg) { monster.hpBarBg.destroy(); monster.hpBarBg = null; }
+            if (monster.hpBar) { monster.hpBar.destroy(); monster.hpBar = null; }
+            if (monster.levelLabel) { monster.levelLabel.destroy(); monster.levelLabel = null; }
         }
 
         // Remove dead monsters
@@ -4703,9 +4982,22 @@ function update(time, delta) {
 /**
  * Handle monster death (XP, quests, loot, animations)
  */
-function handleMonsterDeath(monster) {
-    if (!monster || monster.isDead) return;
+// --- Handle Monster Death ---
+window.handleMonsterDeath = function (monster) {
+    if (!monster) return;
+    console.log(`💀 handleMonsterDeath CALLED for ${monster.id || 'unknown'} (Dead? ${monster.isDead})`);
+
+    if (monster.isDead) {
+        console.warn(`💀 ...monster already marked dead. Skipping logic?`);
+        return;
+    }
     monster.isDead = true;
+
+    // Destroy HP bars and level label IMMEDIATELY to prevent lingering
+    console.log(`🗑️ Destroying UI for ${monster.id}`);
+    if (monster.hpBarBg) { monster.hpBarBg.destroy(); monster.hpBarBg = null; }
+    if (monster.hpBar) { monster.hpBar.destroy(); monster.hpBar = null; }
+    if (monster.levelLabel) { monster.levelLabel.destroy(); monster.levelLabel = null; }
 
     const scene = game.scene.scenes[0];
 
@@ -4742,40 +5034,56 @@ function handleMonsterDeath(monster) {
         onBossDefeated(MapManager.dungeonLevel, monster.x, monster.y);
     }
 
-    // Destroy HP bars and level label
-    if (monster.hpBarBg) monster.hpBarBg.destroy();
-    if (monster.hpBar) monster.hpBar.destroy();
-    if (monster.levelLabel) monster.levelLabel.destroy();
+
 
     // Play death animation & particles
-    playMonsterDeathAnimation(monster);
-    createDeathEffects(monster.x, monster.y);
+    if (typeof createDeathEffects === 'function') {
+        createDeathEffects(monster.x, monster.y);
+    }
 
-    // Enhanced Death effect - Dissolve, rise, and fade
-    scene.tweens.add({
-        targets: monster,
-        alpha: 0,
-        y: monster.y - 50, // "Ghostly" rise
-        scale: 1.5, // Expand as it fades
-        duration: 800,
-        ease: 'Cubic.out',
-        onComplete: () => {
-            // Ensure cleanup
+    // Use ProceduralMonster animation
+    // Disable interactions immediately upon death to prevent "stuck" tooltips
+    if (monster.disableInteractive) {
+        monster.disableInteractive();
+    }
+    if (window.UIManager && window.UIManager.hideTooltip) {
+        window.UIManager.hideTooltip(true); // Force hide immediately
+    }
+
+    if (typeof ProceduralMonster !== 'undefined' && typeof ProceduralMonster.playDeathAnimation === 'function') {
+        const scene = game.scene.scenes[0];
+        const animScene = monster.scene || scene;
+
+        // Optional: Add a flash effect before death animation
+        if (monster.setTintFill) {
+            monster.setTintFill(0xffffff); // White flash
+            // Clear tint after 150ms to continue the animation with original colors
+            animScene.time.delayedCall(150, () => {
+                if (monster && monster.active && monster.clearTint) {
+                    monster.clearTint();
+                }
+            });
+        }
+
+        ProceduralMonster.playDeathAnimation(animScene, monster, () => {
             if (monster && monster.active) {
                 monster.destroy();
             }
-        }
-    });
-
-    // If it's a sprite, we can add a second "dissolve" layer with a tween on the frame or tint
-    if (monster.setTintFill) {
-        monster.setTintFill(0xffffff);
+        });
+    } else {
+        // Fallback: Enhanced Death effect - Dissolve, rise, and fade
         scene.tweens.add({
             targets: monster,
             alpha: 0,
-            duration: 400,
+            y: monster.y - 50, // "Ghostly" rise
+            scale: 1.5, // Expand as it fades
+            duration: 1000,
+            ease: 'Cubic.out',
             onComplete: () => {
-                if (monster.clearTint) monster.clearTint();
+                // Ensure cleanup
+                if (monster && monster.active) {
+                    monster.destroy();
+                }
             }
         });
     }
@@ -4821,14 +5129,99 @@ function handleMonsterDeath(monster) {
 /**
  * Player attack function
  */
-function playerAttack(time) {
+function playerAttack(time, isRightClick = false, aimAngle = null) {
     const stats = playerStats;
     const scene = game.scene.scenes[0];
+
+    // Fallback for time if called without args
+    if (!time) time = scene.time.now;
 
     // Check cooldown
     if (time - stats.lastAttackTime < stats.attackCooldown) {
         return;
     }
+
+    // Ranged/Secondary Attack Check
+    // If weapon has a projectile, treat as ranged attack by default
+    // Helper to get fresh definition (in case equipped item is stale)
+    const equippedWeapon = (stats.equipment && stats.equipment.weapon) ? stats.equipment.weapon : {};
+    console.log('⚔️ [DEBUG] playerAttack: Equipped:', equippedWeapon);
+    console.log('⚔️ [DEBUG] playerAttack: Definitions available?', !!(ItemManager && ItemManager.definitions));
+    if (equippedWeapon.weaponType) {
+        console.log('⚔️ [DEBUG] playerAttack: Definition for ' + equippedWeapon.weaponType + ':', ItemManager.definitions.weaponTypes[equippedWeapon.weaponType]);
+    }
+    let projectileType = equippedWeapon.projectile;
+    let projectileSpeed = equippedWeapon.projectileSpeed;
+    let projectileRange = equippedWeapon.range;
+
+    // Try to lookup from ItemManager if properties are missing
+    if (!projectileType && equippedWeapon.weaponType && ItemManager.definitions && ItemManager.definitions.weaponTypes) {
+        const def = ItemManager.definitions.weaponTypes[equippedWeapon.weaponType];
+        if (def && def.projectile) {
+            projectileType = def.projectile;
+            projectileSpeed = def.projectileSpeed;
+            projectileRange = def.range;
+            console.log(`🔄 Refreshed weapon data from definitions: ${projectileType}`);
+        }
+    }
+
+    if (projectileType) {
+        let angle;
+        let targetX, targetY;
+
+        if (aimAngle !== null) {
+            angle = aimAngle;
+            // Calculate dummy target for facing direction logic
+            targetX = player.x + Math.cos(angle) * 100;
+            targetY = player.y + Math.sin(angle) * 100;
+        } else {
+            targetX = scene.input.activePointer.worldX;
+            targetY = scene.input.activePointer.worldY;
+            angle = Phaser.Math.Angle.Between(player.x, player.y, targetX, targetY);
+        }
+
+        const fired = window.projectileManager.fireProjectile(
+            { x: player.x, y: player.y },
+            angle,
+            {
+                projectileType: projectileType,
+                speed: projectileSpeed,
+                range: projectileRange,
+                damage: stats.attack || 10,
+                critChance: stats.critChance || 0.05
+            }
+        );
+
+        if (fired) {
+            stats.lastAttackTime = time;
+
+            // Update facing direction even for ranged
+            if (Math.abs(targetX - player.x) > Math.abs(targetY - player.y)) {
+                player.facingDirection = targetX > player.x ? 'east' : 'west';
+            } else {
+                player.facingDirection = targetY > player.y ? 'south' : 'north';
+            }
+            const walkTextureKey = `player_walk_${player.facingDirection}`;
+            if (scene.textures.exists(walkTextureKey)) {
+                player.setTexture(walkTextureKey);
+            }
+
+            return; // EXIT FUNCTION - DO NOT DO MELEE ATTACK
+        }
+        // Optional: Face direction
+        if (Math.abs(targetX - player.x) > Math.abs(targetY - player.y)) {
+            player.facingDirection = targetX > player.x ? 'east' : 'west';
+        } else {
+            player.facingDirection = targetY > player.y ? 'south' : 'north';
+        }
+        // Update texture to face direction
+        const walkTextureKey = `player_walk_${player.facingDirection}`;
+        if (scene.textures.exists(walkTextureKey)) {
+            player.setTexture(walkTextureKey);
+        }
+        return; // Skip melee swing
+    }
+
 
     // Combo tracking - check if within combo window
     const timeSinceLastAttack = time - stats.lastAttackTime;
@@ -4843,7 +5236,7 @@ function playerAttack(time) {
     stats.comboTimer = 0; // Reset combo timer
 
     // Get weapon quality for trail color
-    const equippedWeapon = stats.equipment.weapon;
+    // equippedWeapon is already defined at start of function
     const weaponQuality = equippedWeapon ? (equippedWeapon.quality || 'Common') : 'Common';
     const weaponType = equippedWeapon ? (equippedWeapon.weaponType || 'Sword') : 'Sword';
 
@@ -4976,12 +5369,16 @@ function playerAttack(time) {
     }
 }
 
+
+
 /**
  * Monster attack player
  */
 function monsterAttackPlayer(monster, time) {
-    // 0. Safety/Pause Check
-    if ((typeof isGamePaused !== 'undefined' && isGamePaused) || !monster || !monster.active) {
+    // 0. Safety/Invulnerability/Pause Check
+    if ((typeof isGamePaused !== 'undefined' && isGamePaused) ||
+        !monster || !monster.active ||
+        (playerStats && playerStats.isInvulnerable)) {
         return;
     }
 
@@ -5215,6 +5612,7 @@ function updateWeaponSprite() {
     updateWeaponPosition();
     console.log(`✅ Weapon sprite updated: ${weaponType} (${weaponKey})`);
 }
+window.updateWeaponSprite = updateWeaponSprite;
 
 /**
  * Update weapon sprite position based on player facing direction
@@ -5231,93 +5629,184 @@ function updateWeaponPosition() {
     const equippedWeapon = playerStats.equipment.weapon;
     const weaponType = equippedWeapon ? (equippedWeapon.weaponType || 'Sword') : 'Sword';
 
-    const offsetX = 0;
-    const offsetY = 0;
+    // --- DATA DRIVEN POSITIONING SYSTEM ---
 
-    // Position weapon relative to player based on facing direction
-    // Adjust these offsets to position the weapon correctly
-    let x = player.x + offsetX;
-    let y = player.y + offsetY;
-
-    // Adjust position based on direction (weapon appears in front of player)
-    switch (facingDirection) {
-        case 'north':
-            y -= 20; // Weapon above player
-            break;
-        case 'south':
-            y += 8; // Weapon closer to player (hand level, not too far below)
-            x -= 8; // Offset left so handle aligns with character's right hand
-            break;
-        case 'east':
-            if (weaponType === 'Mace') {
-                x += 12; // Mace closer to player's hand (reduced from 20)
-                y -= 4; // Slightly higher to align handle with hand
-            } else {
-                x += 20; // Weapon to the right
-            }
-            break;
-        case 'west':
-            if (weaponType === 'Mace') {
-                x -= 12; // Mace closer to player's hand (reduced from 20)
-                y -= 4; // Slightly higher to align handle with hand
-            } else {
-                x -= 20; // Weapon to the left
-            }
-            break;
+    // 1. Get Weapon Definition
+    let weaponDef = null;
+    if (typeof ItemManager !== 'undefined' && ItemManager.definitions && ItemManager.definitions.weaponTypes) {
+        weaponDef = ItemManager.definitions.weaponTypes[weaponType];
     }
 
-    weaponSprite.x = x;
-    weaponSprite.y = y;
+    // 2. Determine Pivot Point (Origin)
+    // Default to bottom-center (0.5, 1.0) which assumes handle is at bottom
+    let originX = 0.5;
+    let originY = 1.0;
 
-    // Set rotation and flip based on direction (skip during animation)
-    // Origin point is where the handle is (fulcrum for rotation)
-    if (!skipRotation) {
+    if (weaponDef && weaponDef.pivotPoint) {
+        // Convert pixel coordinates (relative to 64x64 grid) to normalized 0-1 origin
+        originX = weaponDef.pivotPoint.x / 64;
+        originY = weaponDef.pivotPoint.y / 64;
+    }
+
+    // 3. Determine Render Offset (Global adjustment)
+    let renderOffsetX = 0;
+    let renderOffsetY = 0;
+
+    if (weaponDef && weaponDef.renderOffset) {
+        renderOffsetX = weaponDef.renderOffset.x || 0;
+        renderOffsetY = weaponDef.renderOffset.y || 0;
+    }
+
+    // Determine if weapon is ranged (Data-driven)
+    // Checks for 'projectile' property OR specific actions in the definition
+    const isRanged = weaponDef ?
+        (!!weaponDef.projectile || weaponDef.action === 'shoot' || weaponDef.action === 'cast') :
+        ['Bow', 'Crossbow', 'Staff'].includes(weaponType);
+
+    // --- RANGED WEAPON LOGIC ---
+    if (isRanged && !skipRotation) {
+        // Ranged weapons aim at cursor/gamepad stick
+        let angle = 0;
+
+        // Check Controller Aim (Right Stick)
+        if (typeof isControllerConnected === 'function' && isControllerConnected()) {
+            // Access controller directly if available (or via wrapper)
+            if (activeGamepad && (Math.abs(activeGamepad.rightStick.x) > 0.1 || Math.abs(activeGamepad.rightStick.y) > 0.1)) {
+                angle = Math.atan2(activeGamepad.rightStick.y, activeGamepad.rightStick.x);
+                if (player) player.aimAngle = angle; // Ensure we keep it sync'd
+            } else if (player && typeof player.aimAngle === 'number') {
+                // Stick is idle, use last known aim angle (prevents snap to mouse)
+                angle = player.aimAngle;
+            } else {
+                // Fallback to mouse only if no previous aim
+                const scene = game.scene.scenes[0];
+                const pointer = scene.input.activePointer;
+                const worldPoint = pointer.positionToCamera(scene.cameras.main);
+                angle = Phaser.Math.Angle.Between(player.x, player.y, worldPoint.x, worldPoint.y);
+            }
+        } else {
+            // Mouse Aim
+            const scene = game.scene.scenes[0];
+            const pointer = scene.input.activePointer;
+            const worldPoint = pointer.positionToCamera(scene.cameras.main);
+            angle = Phaser.Math.Angle.Between(player.x, player.y, worldPoint.x, worldPoint.y);
+            if (player) player.aimAngle = angle; // Save mouse aim too
+        }
+
+        // Snap to 10 degrees (approx 0.1745 rad)
+        const snap = Phaser.Math.DegToRad(10);
+        angle = Math.round(angle / snap) * snap;
+
+        // Apply Rotation
+        // Default offset is +90 degrees (assuming sprite points UP by default)
+        // Can be overridden by rotationOffset in items.json
+        let rotationOffset = Phaser.Math.DegToRad(90);
+        if (weaponDef && typeof weaponDef.rotationOffset === 'number') {
+            rotationOffset = Phaser.Math.DegToRad(weaponDef.rotationOffset);
+        }
+
+        // Determines Flip
+        let shouldFlip = false;
+        if (Math.abs(angle) > Math.PI / 2 && Math.abs(rotationOffset) < 0.8) {
+            shouldFlip = true;
+        }
+        weaponSprite.setFlipY(shouldFlip);
+        weaponSprite.setFlipX(false);
+
+        // Apply Rotation with Offset
+        // If flipped, we often need to invert the offset because the sprite's "clockwise" bias becomes "counter-clockwise"
+        const appliedOffset = shouldFlip ? -rotationOffset : rotationOffset;
+        weaponSprite.rotation = angle + appliedOffset;
+
+        // Position: Orbit 20px around player center
+        weaponSprite.x = player.x + Math.cos(angle) * 20;
+        weaponSprite.y = player.y + Math.sin(angle) * 20;
+
+        // Apply Origin
+        weaponSprite.setOrigin(originX, originY);
+
+        // No FlipX for ranged usually
+        weaponSprite.setFlipX(false);
+
+    } else {
+        // --- MELEE WEAPON LOGIC (Legay/Standard) ---
+
+        // 4. Calculate Position (Player Center + Render Offset)
+        let x = player.x + renderOffsetX;
+        let y = player.y + renderOffsetY;
+
+        // 5. Apply Directional Logic
         switch (facingDirection) {
             case 'north':
-                weaponSprite.setFlipX(false);
-                weaponSprite.rotation = -Math.PI / 2; // Point up
-                // Handle is at bottom of sprite (which is left when rotated -90°)
-                weaponSprite.setOrigin(1.0, 1.0); // Right edge, bottom (handle position)
+                y -= 20;
                 break;
             case 'south':
-                weaponSprite.setFlipX(false);
-                weaponSprite.rotation = Math.PI / 2; // Point down (90° clockwise)
-                // Keep same origin as East (handle at bottom)
-                // When rotated 90°, handle moves to left side, blade points down
-                weaponSprite.setOrigin(0.5, 1.0); // Center horizontally, bottom (handle position)
+                y += 8;
+                x -= 8;
                 break;
             case 'east':
-                weaponSprite.setFlipX(false); // Normal orientation (sword on right)
-                weaponSprite.rotation = 0; // Point right
-                // Handle is at bottom of sprite
-                weaponSprite.setOrigin(0.5, 1.0); // Center horizontally, bottom (handle)
+                x += 20;
                 break;
             case 'west':
-                weaponSprite.setFlipX(true); // Flip horizontally (sword on left, right-side up)
-                weaponSprite.rotation = 0; // No rotation, just flipped
-                // Handle is at bottom of sprite
-                weaponSprite.setOrigin(0.5, 1.0); // Center horizontally, bottom (handle)
+                x -= 20;
                 break;
         }
-    } else {
-        // During animation, only update origin and flip (not rotation)
-        switch (facingDirection) {
-            case 'north':
-                weaponSprite.setFlipX(false);
-                weaponSprite.setOrigin(1.0, 1.0);
-                break;
-            case 'south':
-                weaponSprite.setFlipX(false);
-                weaponSprite.setOrigin(0.5, 1.0);
-                break;
-            case 'east':
-                weaponSprite.setFlipX(false);
-                weaponSprite.setOrigin(0.5, 1.0);
-                break;
-            case 'west':
-                weaponSprite.setFlipX(true);
-                weaponSprite.setOrigin(0.5, 1.0);
-                break;
+
+        weaponSprite.x = x;
+        weaponSprite.y = y;
+
+        // 6. Apply Rotation and Origin
+        if (!skipRotation) {
+            weaponSprite.setOrigin(originX, originY);
+
+            // Start with base mirror settings
+            let doFlipX = weaponDef && weaponDef.mirrorX === true;
+            let doFlipY = weaponDef && weaponDef.mirrorY === true;
+
+            let rotationDegrees = 0;
+
+            switch (facingDirection) {
+                case 'north':
+                    if (weaponDef && typeof weaponDef.rotationNorth !== 'undefined') rotationDegrees = weaponDef.rotationNorth;
+                    else rotationDegrees = -90;
+
+                    if (weaponDef && typeof weaponDef.flipNorth !== 'undefined') doFlipX = weaponDef.flipNorth;
+                    break;
+                case 'south':
+                    if (weaponDef && typeof weaponDef.rotationSouth !== 'undefined') rotationDegrees = weaponDef.rotationSouth;
+                    else rotationDegrees = 90;
+
+                    if (weaponDef && typeof weaponDef.flipSouth !== 'undefined') doFlipX = weaponDef.flipSouth;
+                    break;
+                case 'east':
+                    if (weaponDef && typeof weaponDef.rotationEast !== 'undefined') rotationDegrees = weaponDef.rotationEast;
+                    else rotationDegrees = 0;
+
+                    if (weaponDef && typeof weaponDef.flipEast !== 'undefined') doFlipX = weaponDef.flipEast;
+                    break;
+                case 'west':
+                    if (weaponDef && typeof weaponDef.rotationWest !== 'undefined') {
+                        rotationDegrees = weaponDef.rotationWest;
+                    } else {
+                        rotationDegrees = 180; // Default pure rotation
+                    }
+
+                    if (weaponDef && typeof weaponDef.flipWest !== 'undefined') {
+                        doFlipX = weaponDef.flipWest;
+                    }
+                    else if (!weaponDef || typeof weaponDef.rotationWest === 'undefined') {
+                        doFlipX = !doFlipX;
+                        rotationDegrees = 0;
+                    }
+                    break;
+            }
+
+            weaponSprite.setFlipX(doFlipX);
+            weaponSprite.setFlipY(doFlipY);
+            weaponSprite.rotation = Phaser.Math.DegToRad(rotationDegrees);
+        } else {
+            // Animation state - maintain origin
+            weaponSprite.setOrigin(originX, originY);
         }
     }
 }
@@ -5336,24 +5825,50 @@ function animateWeaponStrike(direction, weaponType = 'Sword') {
     const scene = game.scene.scenes[0];
 
     // Get base rotation and flip state for direction FIRST
+    // Get base rotation and flip state for direction FIRST
     let baseRotation = 0;
     let isFlipped = false;
+
+    // Get Weapon Definition
+    let weaponDef = null;
+    if (typeof ItemManager !== 'undefined' && ItemManager.definitions && ItemManager.definitions.weaponTypes) {
+        weaponDef = ItemManager.definitions.weaponTypes[weaponType];
+    }
+
     switch (direction) {
         case 'north':
-            baseRotation = -Math.PI / 2;
-            isFlipped = false;
+            if (weaponDef && typeof weaponDef.rotationNorth !== 'undefined') baseRotation = Phaser.Math.DegToRad(weaponDef.rotationNorth);
+            else baseRotation = -Math.PI / 2;
+
+            if (weaponDef && typeof weaponDef.flipNorth !== 'undefined') isFlipped = weaponDef.flipNorth;
             break;
+
         case 'south':
-            baseRotation = Math.PI / 2;
-            isFlipped = false;
+            if (weaponDef && typeof weaponDef.rotationSouth !== 'undefined') baseRotation = Phaser.Math.DegToRad(weaponDef.rotationSouth);
+            else baseRotation = Math.PI / 2;
+
+            if (weaponDef && typeof weaponDef.flipSouth !== 'undefined') isFlipped = weaponDef.flipSouth;
             break;
+
         case 'east':
-            baseRotation = 0;
-            isFlipped = false;
+            if (weaponDef && typeof weaponDef.rotationEast !== 'undefined') baseRotation = Phaser.Math.DegToRad(weaponDef.rotationEast);
+            else baseRotation = 0;
+
+            if (weaponDef && typeof weaponDef.flipEast !== 'undefined') isFlipped = weaponDef.flipEast;
             break;
+
         case 'west':
-            baseRotation = 0;
-            isFlipped = true; // Flip horizontally for west
+            if (weaponDef && typeof weaponDef.rotationWest !== 'undefined') {
+                baseRotation = Phaser.Math.DegToRad(weaponDef.rotationWest);
+            } else {
+                baseRotation = 0; // Default when flipping
+            }
+
+            if (weaponDef && typeof weaponDef.flipWest !== 'undefined') {
+                isFlipped = weaponDef.flipWest;
+            } else if (!weaponDef || typeof weaponDef.rotationWest === 'undefined') {
+                isFlipped = true; // Legacy fallback
+            }
             break;
     }
 
@@ -5364,7 +5879,7 @@ function animateWeaponStrike(direction, weaponType = 'Sword') {
     // The skipRotation flag will prevent it from resetting rotation during animation
     updateWeaponPosition();
 
-    console.log(`🎬 Animating weapon strike: ${weaponType} facing ${direction}`);
+    console.log(`🎬 Animating weapon strike: ${weaponType} facing ${direction} `);
     console.log(`   Base rotation: ${baseRotation} (${(baseRotation * 180 / Math.PI).toFixed(1)}°)`);
 
     // Set initial flip state
@@ -5373,6 +5888,11 @@ function animateWeaponStrike(direction, weaponType = 'Sword') {
     // Different animation styles based on weapon type
     if (weaponType === 'Bow' || weaponType === 'Crossbow') {
         // Ranged weapons: Pull back animation
+
+        // Apply calculated rotation/flip immediately so it respects the new data
+        weaponSprite.rotation = baseRotation;
+        weaponSprite.setFlipX(isFlipped);
+
         const pullBackDistance = 10;
         let pullX = weaponSprite.x;
         let pullY = weaponSprite.y;
@@ -5408,6 +5928,7 @@ function animateWeaponStrike(direction, weaponType = 'Sword') {
                     duration: 50,
                     ease: 'Power3',
                     onComplete: () => {
+                        weaponSprite.isAnimating = false; // Fix: Reset animation flag
                         updateWeaponPosition();
                     }
                 });
@@ -5483,7 +6004,8 @@ function animateWeaponStrike(direction, weaponType = 'Sword') {
             const progress = stepAngles[currentStep];
             const targetRotation = swingStart + (swingEnd - swingStart) * progress;
 
-            console.log(`   Step ${currentStep + 1}/5: ${(targetRotation * 180 / Math.PI).toFixed(1)}° (${(progress * 100).toFixed(0)}%)`);
+            console.log(`   Step ${currentStep + 1} /5: ${(targetRotation * 180 / Math.PI).toFixed(1)
+                }° (${(progress * 100).toFixed(0)}%)`);
 
             // Animate to this step
             scene.tweens.add({
@@ -5594,6 +6116,8 @@ function createWeaponSwingTrail(x, y, direction, quality = 'Common') {
             }
         });
     }
+
+
 
     // Create main swing line (bright line following the arc)
     const lineGraphics = scene.add.graphics();
@@ -5781,12 +6305,12 @@ function addChatMessage(text, color = 0xffffff, icon = '') {
 
     const scene = game.scene.scenes[0];
     const timestamp = new Date().toLocaleTimeString();
-    const displayText = icon ? `${icon} ${text}` : text;
+    const displayText = icon ? `${icon} ${text} ` : text;
 
     // Create message text
-    const messageText = scene.add.text(0, 0, `[${timestamp}] ${displayText}`, {
+    const messageText = scene.add.text(0, 0, `[${timestamp}] ${displayText} `, {
         fontSize: '11px',
-        fill: `#${color.toString(16).padStart(6, '0')}`,
+        fill: `#${color.toString(16).padStart(6, '0')} `,
         wordWrap: { width: systemChatBox.width - 15 }
     }).setOrigin(0, 0);
 
@@ -5892,10 +6416,10 @@ function addChatMessage(text, color = 0xffffff, icon = '') {
     if (!systemChatBox || !systemChatBox.container) return;
 
     const scene = game.scene.scenes[0];
-    const fullText = icon ? `${icon} ${text}` : text;
-    const colorHex = `#${color.toString(16).padStart(6, '0')}`;
+    const fullText = icon ? `${icon} ${text} ` : text;
+    const colorHex = `#${color.toString(16).padStart(6, '0')} `;
 
-    console.log(`💬 Chat: ${fullText}`);
+    console.log(`💬 Chat: ${fullText} `);
 
     // Create text object
     const msgText = scene.add.text(systemChatBox.padding, 0, fullText, {
@@ -6069,7 +6593,7 @@ function updateAttackSpeedIndicator() {
     }
 
     const speedPercent = Math.round(comboAttackSpeedBonus * 100);
-    attackSpeedIndicator.setText(`⚡ Attack Speed +${speedPercent}%`);
+    attackSpeedIndicator.setText(`⚡ Attack Speed + ${speedPercent}% `);
 
     // Pulse effect (only if not already tweening)
     if (!attackSpeedIndicator.speedTween) {
@@ -6089,16 +6613,14 @@ function updateAttackSpeedIndicator() {
  */
 /**
  * Calculate total XP needed to reach the NEXT level
- * Curve: 400 * Level + 100 * Level^2 (Steepened to slow down leveling)
+ * Curve: 500 * Level + 250 * Level^2 (Significantly steeper to prevent over-leveling)
  * Example:
- * Lvl 1->2: 500 XP
- * Lvl 2->3: 1200 XP (Total 1700)
- * Lvl 3->4: 2100 XP (Total 3800)
- * Lvl 4->5: 3200 XP (Total 7000)
- * Lvl 5->6: 4500 XP (Total 11500)
+ * Lvl 1->2: 750 XP
+ * Lvl 19->20: ~100k XP
+ * Lvl 34->35: ~300k XP
  */
 function getXPNeededForLevel(level) {
-    return 400 * level + 100 * Math.pow(level, 2);
+    return 500 * level + 250 * Math.pow(level, 2);
 }
 
 /**
@@ -6130,9 +6652,9 @@ function updateUI() {
         if (Math.random() < 0.01) {
             // Only log occasionally
             if (isNaN(manaPercent) || manaPercent < 0) {
-                console.error(`[UI Error] Invalid mana percent: ${manaPercent}, Mana: ${stats.mana}, Max: ${stats.maxMana}`);
+                console.error(`[UI Error] Invalid mana percent: ${manaPercent}, Mana: ${stats.mana}, Max: ${stats.maxMana} `);
             } else {
-                // console.log(`[UI Debug] Mana: ${stats.mana}/${stats.maxMana} (${(manaPercent * 100).toFixed(1)}%), Width: ${manaBar.width}`);
+                // console.log(`[UI Debug]Mana: ${ stats.mana }/${stats.maxMana} (${(manaPercent * 100).toFixed(1)}%), Width: ${manaBar.width}`);
             }
         }
 
@@ -6169,6 +6691,11 @@ function updateUI() {
     } catch (e) {
         console.error("Error in updateUI:", e);
     }
+
+    // Check for deferred level ups
+    if (typeof checkPendingLevelUp === 'function') {
+        checkPendingLevelUp();
+    }
 }
 
 /**
@@ -6178,9 +6705,21 @@ function updateUI() {
 function addXp(amount) {
     if (!amount || amount <= 0) return;
 
+    // Safety check for NaN or undefined XP
+    if (typeof playerStats.xp !== 'number' || isNaN(playerStats.xp)) {
+        console.warn('⚠️ [GameState] Fixed corrupted XP value (was NaN/undefined)');
+        playerStats.xp = 0;
+    }
+
+    // AUTO-REPAIR: Check if XP is lower than the minimum required for the current level
+    // This handles the "Level 19 with 0 XP" bug
+    const minXP = playerStats.level > 1 ? getXPNeededForLevel(playerStats.level - 1) : 0;
+    if (playerStats.xp < minXP) {
+        console.warn(`⚠️ [GameState] Detected XP Desync! Level ${playerStats.level} requires ${minXP} XP, but found ${playerStats.xp}. Repairing...`);
+        playerStats.xp = minXP;
+    }
+
     playerStats.xp += amount;
-    // Track total if needed (optional)
-    // playerStats.questStats.xpEarned = (playerStats.questStats.xpEarned || 0) + amount; 
 
     // Visual feedback
     showDamageNumber(player.x, player.y - 50, `+${amount} XP`, 0xb478ff, false, 'xp');
@@ -6221,14 +6760,124 @@ function checkLevelUp() {
     }
 
     if (leveledUp) {
-        showDamageNumber(player.x, player.y - 40, 'LEVEL UP!', 0x00ffff);
-        addChatMessage(`Level Up! Now Level ${stats.level}`, 0x00ffff, '⭐');
-        addChatMessage('HP & Mana Restored!', 0x00ff00, '💚');
+        // Check if any UI is open OR if explicitly blocked OR if dialogs are queued
+        // This covers the gap where a dialog is queued but not yet visible
+        const isQueueActive = (typeof dialogQueue !== 'undefined' && dialogQueue.length > 0);
 
-        // UQE: Emit level up event
+        if (isAnyWindowOpen() || window.blockLevelUpEffect || isQueueActive) {
+            console.log('⏳ Level Up Queued (UI Open, Blocked, or Dialog Queued)');
+            window.pendingLevelUp = true;
+            window.pendingLevelUpStats = { level: stats.level }; // store for display
+        } else {
+            createLevelUpEffect(stats.level);
+        }
+
+        // UQE: Emit level up event (Always emit to update quests logic)
         if (typeof uqe !== 'undefined') {
             uqe.eventBus.emit(UQE_EVENTS.LEVEL_UP, { level: stats.level });
-            uqe.update(); // Check for quest completion
+            uqe.update();
+        }
+    }
+}
+
+/**
+ * Trigger visual and audio effects for Level Up
+ */
+function createLevelUpEffect(newLevel) {
+    const scene = game.scene.scenes[0];
+    if (!scene) return;
+
+    // 1. Get Audio Duration for Sync
+    let duration = 2500; // Default fallback (ms)
+
+    // Check if audio exists and get duration
+    if (scene.cache.audio.exists('level_up')) {
+        const audioData = scene.cache.audio.get('level_up');
+        // WebAudio buffer has .duration property in seconds
+        if (audioData && audioData.duration) {
+            duration = audioData.duration * 1000;
+        }
+    }
+
+    console.log(`🎵 Level Up Effect Sync: ${duration.toFixed(0)}ms`);
+
+    // Guard: Prevent playing if blocked or UI open (Double check)
+    if (window.blockLevelUpEffect || (typeof isAnyWindowOpen === 'function' && isAnyWindowOpen()) || (typeof dialogQueue !== 'undefined' && dialogQueue.length > 0)) {
+        console.log('🛑 Level Up Effect BLOCKED (Safety Guard)');
+        window.pendingLevelUp = true;
+        // Ensure stats are saved for the pending level up
+        if (!window.pendingLevelUpStats && playerStats) {
+            window.pendingLevelUpStats = { level: playerStats.level };
+        }
+        return;
+    }
+
+    // 2. Sound
+    playSound('level_up');
+
+    // 3. Floating Text
+    const levelText = scene.add.text(player.x, player.y - 60, 'LEVEL UP!', {
+        fontSize: '32px',
+        fill: '#00ffff',
+        stroke: '#000000',
+        strokeThickness: 6,
+        fontStyle: 'bold'
+    }).setOrigin(0.5).setDepth(2000);
+
+    // Animate Text (Match Audio Duration)
+    scene.tweens.add({
+        targets: levelText,
+        y: player.y - 120, // Float higher
+        alpha: { from: 1, to: 0 },
+        scaleX: 1.5,
+        scaleY: 1.5,
+        duration: duration,
+        ease: 'Quad.easeOut',
+        onComplete: () => levelText.destroy()
+    });
+
+    // 4. Particle Explosion (Gold/Cyan)
+    const particleConfig = {
+        speed: { min: 100, max: 250 },
+        angle: { min: 0, max: 360 },
+        scale: { start: 0.7, end: 0 },
+        blendMode: 'ADD',
+        lifespan: Math.min(duration, 1500), // Particles fade slightly faster than full audio tail
+        gravityY: 50,
+        quantity: 30
+    };
+
+    let texture = 'gui_gem_socket'; // Reuse existing
+    if (!scene.textures.exists(texture)) texture = 'fireball_effect'; // Fallback
+
+    const emitter = scene.add.particles(0, 0, texture, particleConfig);
+    emitter.setPosition(player.x, player.y);
+    emitter.explode(40);
+
+    // Destroy emitter after audio finishes
+    setTimeout(() => emitter.destroy(), duration + 100);
+
+    // 5. Chat Message
+    addChatMessage(`Level Up! Now Level ${newLevel}`, 0x00ffff, '⭐');
+    addChatMessage('HP & Mana Restored!', 0x00ff00, '💚');
+}
+
+// Global Cheat for Testing
+window.cheatLevelUp = function () {
+    window.addXp(getXPNeededForLevel(playerStats.level) - playerStats.xp + 1);
+};
+
+// Check for pending level ups
+function checkPendingLevelUp() {
+    if (window.pendingLevelUp) {
+        // Only trigger if NO windows are open, NOT blocked, and NO dialogs queued
+        const isQueueActive = (typeof dialogQueue !== 'undefined' && dialogQueue.length > 0);
+
+        if (!isAnyWindowOpen() && !window.blockLevelUpEffect && !isQueueActive) {
+            console.log('✅ Triggering Queued Level Up');
+            createLevelUpEffect(window.pendingLevelUpStats ? window.pendingLevelUpStats.level : playerStats.level);
+            window.pendingLevelUp = false;
+            window.pendingLevelUpStats = null;
         }
     }
 }
@@ -6251,9 +6900,16 @@ function spawnQuestItem(x, y, itemData) {
     const item = itemData;
 
     // Determine sprite key
-    let spriteKey = 'item_consumable';
-    if (item.id === 'crystal_shard' || item.id === 'echo_shard') spriteKey = 'item_crystal';
-    else if (item.id === 'artifact_fragment') spriteKey = 'item_fragment';
+    // Determine sprite key
+    let spriteKey = ItemManager.getSpriteKey(item);
+
+
+
+    // Safety: Verify texture exists
+    if (!scene.textures.exists(spriteKey)) {
+        console.warn(`⚠️ spawnQuestItem texture not found: ${spriteKey}, falling back`);
+        spriteKey = 'item_consumable';
+    }
 
     const itemSprite = scene.add.sprite(x, y, spriteKey);
     itemSprite.setDepth(8);
@@ -6354,26 +7010,14 @@ function dropItemsFromMonster(x, y, monsterXP = 10) {
     if (droppedItem) {
         const item = droppedItem;
         // Create item sprite on ground
-        let spriteKey = 'item_gold';
-        if (item.type === 'weapon') spriteKey = 'item_weapon';
-        else if (item.type === 'armor') spriteKey = 'item_armor';
-        else if (item.type === 'helmet') spriteKey = 'item_helmet';
-        else if (item.type === 'ring') spriteKey = 'item_ring';
-        else if (item.type === 'amulet') spriteKey = 'item_amulet';
-        else if (item.type === 'boots') spriteKey = 'item_boots';
-        else if (item.type === 'gloves') spriteKey = 'item_gloves';
-        else if (item.type === 'belt') spriteKey = 'item_belt';
+        // Create item sprite on ground
+        let spriteKey = ItemManager.getSpriteKey(item);
 
-        else if (item.type === 'consumable') {
-            spriteKey = (item.name === 'Mana Potion') ? 'mana_potion' : 'item_consumable';
-        }
-        else if (item.type === 'quest_item') {
-            // Use specific sprite for quest items based on ID
-            // Map item ID to sprite key: crystal_shard -> item_crystal
-            if (item.id === 'crystal_shard') spriteKey = 'item_crystal';
-            else if (item.id === 'echo_shard') spriteKey = 'item_crystal';
-            else if (item.id === 'artifact_fragment') spriteKey = 'item_fragment';
-            else spriteKey = 'item_consumable'; // Fallback
+
+        // Safety: Verify texture exists
+        if (!scene.textures.exists(spriteKey)) {
+            console.warn(`⚠️ Ground item texture not found: ${spriteKey}, falling back`);
+            spriteKey = 'item_consumable';
         }
 
         const itemSprite = scene.add.sprite(x, y, spriteKey);
@@ -6596,25 +7240,29 @@ function pickupItem(item, index) {
         console.log(`📦 Adding item to inventory: ${item.name} (type: ${item.type})`);
         console.log(`   Before: ${playerStats.inventory.length} items`);
 
-        // Check if this is a stackable consumable
+        // Check if this is a stackable consumable or shard
         let stacked = false;
-        if (item.type === 'consumable' && item.name) {
+        const isStackable = ItemManager.isStackable(item);
+
+
+        if (isStackable && item.name) {
             // Find existing stack of same item
             const existingStack = playerStats.inventory.find(i =>
-                i.type === 'consumable' && i.name === item.name
+                (i.type === item.type) && i.name === item.name && (item.id ? i.id === item.id : true)
             );
             if (existingStack) {
-                existingStack.quantity = (existingStack.quantity || 1) + 1;
+                existingStack.quantity = (existingStack.quantity || 1) + (item.quantity || 1);
                 stacked = true;
                 console.log(`   Stacked with existing: now x${existingStack.quantity}`);
             }
         }
 
         if (!stacked) {
-            // Set initial quantity for consumables
-            if (item.type === 'consumable') {
+            // Set initial quantity for stackable items
+            if (isStackable) {
                 item.quantity = item.quantity || 1;
             }
+
             playerStats.inventory.push(item);
         }
 
@@ -6678,29 +7326,10 @@ function destroySettingsUI() {
     UIManager.destroySettingsUI();
 }
 
-function toggleInventory() {
-    UIManager.toggleInventory();
-}
+// NOTE: toggleInventory, createInventoryUI, updateInventoryItems removed
+// The standalone Inventory UI has been deprecated in favor of the Equipment panel.
+// Equipment panel (E key / D-pad UP) now shows both equipment and inventory.
 
-/**
- * Create inventory UI panel
- */
-/**
- * Create inventory UI panel
- */
-function createInventoryUI() {
-    UIManager.createInventoryUI();
-}
-
-/**
- * Update inventory items display
- */
-/**
- * Update inventory items display
- */
-function updateInventoryItems() {
-    UIManager.updateInventoryItems();
-}
 
 /**
  * showTooltip - Unified tooltip system
@@ -7056,10 +7685,75 @@ function createEquipmentUI() {
     dividerGraphics.setScrollFactor(0).setDepth(301);
     const divider = dividerGraphics;
 
-    // Define scrollable area dimensions first
-    const inventoryStartY = 90; // Start below title (reduced for less padding)
-    const inventoryEndY = gameHeight - 20; // Leave some space at bottom
-    const inventoryVisibleHeight = inventoryEndY - inventoryStartY;
+    // Initialize current tab safely
+    let currentTab = 'all';
+    if (typeof equipmentPanel !== 'undefined' && equipmentPanel && equipmentPanel.currentTab) {
+        currentTab = equipmentPanel.currentTab;
+    }
+
+    // Clean up existing UI if present (prevents ghost items and stuck tooltips)
+    if (typeof equipmentPanel !== 'undefined' && equipmentPanel) {
+        destroyEquipmentUI();
+        // Since destroyEquipmentUI sets equipmentVisible = false? No, checking logic...
+        // destroyEquipmentUI usually assumes we are closing it. 
+        // But we want to keep it open.
+        // Let's make sure we restore visibility if destroyEquipmentUI toggles it or if toggleEquipment logic interferes.
+        // Actually destroyEquipmentUI() does NOT touch equipmentVisible. It just cleans up.
+        // But wait, toggleEquipment uses equipmentVisible to decide whether to call destroyEquipmentUI.
+        // HERE inside createEquipmentUI, we definitely want it visible.
+        equipmentVisible = true; // Ensure it stays true
+    }
+
+    // Tab definitions
+    const tabs = [
+        { id: 'all', label: 'All' },
+        { id: 'weapon', label: 'Weapons' },
+        { id: 'armor', label: 'Armor' },
+        { id: 'accessory', label: 'Access.' }, // Accessories (includes belts)
+        { id: 'consumable', label: 'Items' }   // Consumables
+    ];
+
+    // Create tabs at the top of right panel
+    const tabWidth = (panelWidth - 20) / tabs.length;
+    const tabHeight = 30;
+    const tabY = 70; // Position below title
+
+    // Adjust inventory start Y to account for tabs
+    const inventoryStartY = 120; // Lowered to make room for tabs
+
+    // Local array to hold tab elements before equipmentPanel is initialized
+    const tabElements = [];
+
+    tabs.forEach((tab, index) => {
+        const tabX = rightPanelX - panelWidth / 2 + 10 + index * tabWidth + tabWidth / 2;
+
+        // Tab background (highlight active)
+        const isActive = currentTab === tab.id;
+        const tabColor = isActive ? 0x00aaff : 0x333333;
+        const tabAlpha = isActive ? 0.8 : 0.6;
+
+        const tabBg = scene.add.rectangle(tabX, tabY, tabWidth - 4, tabHeight, tabColor, tabAlpha)
+            .setScrollFactor(0).setDepth(302).setInteractive({ useHandCursor: true });
+
+        // Tab text
+        const tabText = scene.add.text(tabX, tabY, tab.label, {
+            fontSize: '12px',
+            fill: '#ffffff',
+            fontStyle: isActive ? 'bold' : 'normal'
+        }).setScrollFactor(0).setDepth(303).setOrigin(0.5, 0.5);
+
+        // Store tab elements for cleanup
+        tabElements.push(tabBg);
+        tabElements.push(tabText);
+
+        // Tab click handler
+        tabBg.on('pointerdown', () => {
+            if (typeof equipmentPanel !== 'undefined' && equipmentPanel) {
+                equipmentPanel.currentTab = tab.id;
+            }
+            createEquipmentUI();
+        });
+    });
 
     // Create scrollable container for inventory items
     // Container starts higher to show first items fully when scrollPosition = minScroll
@@ -7074,6 +7768,9 @@ function createEquipmentUI() {
 
     // Create mask for the scrollable area (visible area in right panel)
     // Start mask well above inventoryStartY to prevent clipping of first row
+    const inventoryEndY = gameHeight - 20; // Leave some space at bottom
+    const inventoryVisibleHeight = inventoryEndY - inventoryStartY;
+
     const maskTopOffset = 40; // Increased further to show entire first row sprites
     const inventoryMask = scene.make.graphics();
     inventoryMask.fillStyle(0xffffff);
@@ -7100,10 +7797,15 @@ function createEquipmentUI() {
         visibleHeight: inventoryVisibleHeight
     });
 
+    // Update global reference (merging safely if needed, but we usually overwrite)
+    // Preserve currentTab if we are re-creating
+    // const currentTab = equipmentPanel.currentTab; // Use local variable from top instead
+
     equipmentPanel = {
         leftBg: leftBg,
         rightBg: rightBg,
         divider: divider,
+        currentTab: currentTab,
         leftTitle: scene.add.text(leftPanelX, 30, 'EQUIPMENT', {
             fontSize: '24px',
             fill: '#ffffff',
@@ -7126,8 +7828,10 @@ function createEquipmentUI() {
         scrollbar: scrollbar,
         inventoryStartY: inventoryStartY,
         inventoryVisibleHeight: inventoryVisibleHeight,
-        containerOffset: containerOffset, // Store offset so it's accessible in updateEquipmentInventoryItems
-        minScroll: minScroll
+        containerOffset: containerOffset,
+        minScroll: minScroll,
+        minScroll: minScroll,
+        tabs: tabElements // Persist tabs
     };
 
 
@@ -7167,39 +7871,32 @@ function updateEquipmentSlots() {
     const slotSize = 80;
     const startY = 150; // Start below title (increased from 120 to 150 for more padding)
 
-    // Equipment slots in a grid layout (2 columns for better fit)
-    const slotsPerRow = 2;
-    const slotSpacing = 120;
-    const rowSpacing = 140;
-    const startX = leftPanelX - slotSpacing / 2;
+    // Equipment slots in a grid layout (3 columns for better fit)
+    const slotSpacing = 110;
+    const rowSpacing = 150;
 
-    // Row 1: Helmet, Amulet
-    const helmetSlot = createEquipmentSlot('helmet', startX, startY, slotSize);
-    equipmentPanel.slots.helmet = helmetSlot;
+    // Grid coordinates relative to center
+    const col0 = leftPanelX - slotSpacing;
+    const col1 = leftPanelX;
+    const col2 = leftPanelX + slotSpacing;
 
-    const amuletSlot = createEquipmentSlot('amulet', startX + slotSpacing, startY, slotSize);
-    equipmentPanel.slots.amulet = amuletSlot;
+    // Row 1: Helmet, Amulet, Armor
+    equipmentPanel.slots.helmet = createEquipmentSlot('helmet', col0, startY, slotSize);
+    equipmentPanel.slots.amulet = createEquipmentSlot('amulet', col1, startY, slotSize);
+    equipmentPanel.slots.armor = createEquipmentSlot('armor', col2, startY, slotSize);
 
-    // Row 2: Armor, Weapon
-    const armorSlot = createEquipmentSlot('armor', startX, startY + rowSpacing, slotSize);
-    equipmentPanel.slots.armor = armorSlot;
+    // Row 2: Weapon, Gloves, Ring
+    const row2Y = startY + rowSpacing;
+    equipmentPanel.slots.weapon = createEquipmentSlot('weapon', col0, row2Y, slotSize);
+    equipmentPanel.slots.gloves = createEquipmentSlot('gloves', col1, row2Y, slotSize);
+    equipmentPanel.slots.ring = createEquipmentSlot('ring', col2, row2Y, slotSize);
 
-    const weaponSlot = createEquipmentSlot('weapon', startX + slotSpacing, startY + rowSpacing, slotSize);
-    equipmentPanel.slots.weapon = weaponSlot;
-
-    // Row 3: Gloves, Ring
-    const glovesSlot = createEquipmentSlot('gloves', startX, startY + rowSpacing * 2, slotSize);
-    equipmentPanel.slots.gloves = glovesSlot;
-
-    const ringSlot = createEquipmentSlot('ring', startX + slotSpacing, startY + rowSpacing * 2, slotSize);
-    equipmentPanel.slots.ring = ringSlot;
-
-    // Row 4: Belt, Boots
-    const beltSlot = createEquipmentSlot('belt', startX, startY + rowSpacing * 3, slotSize);
-    equipmentPanel.slots.belt = beltSlot;
-
-    const bootsSlot = createEquipmentSlot('boots', startX + slotSpacing, startY + rowSpacing * 3, slotSize);
-    equipmentPanel.slots.boots = bootsSlot;
+    // Row 3: Belt, Boots (Centered)
+    const row3Y = startY + rowSpacing * 2;
+    const row3Left = leftPanelX - slotSpacing / 2;
+    const row3Right = leftPanelX + slotSpacing / 2;
+    equipmentPanel.slots.belt = createEquipmentSlot('belt', row3Left, row3Y, slotSize);
+    equipmentPanel.slots.boots = createEquipmentSlot('boots', row3Right, row3Y, slotSize);
 
     // Show current stats with bonuses at bottom of left panel
     const statsY = 660;
@@ -7311,12 +8008,61 @@ function updateEquipmentInventoryItems() {
         ? equipmentPanel.inventoryStartY
         : 100; // Default fallback
 
-    // Show all inventory items (not just equippable ones)
-    const inventoryItems = playerStats.inventory;
+    // Filter and Sort inventory items
+    const currentTab = equipmentPanel.currentTab || 'all';
+
+    // 1. Filter
+    let inventoryItems = playerStats.inventory.filter(item => {
+        if (currentTab === 'all') return true;
+
+        if (currentTab === 'weapon') {
+            return item.type === 'weapon';
+        }
+
+        if (currentTab === 'armor') {
+            return ['armor', 'helmet', 'boots', 'gloves'].includes(item.type);
+        }
+
+        if (currentTab === 'accessory') {
+            // Belts are accessories now
+            return ['ring', 'amulet', 'belt'].includes(item.type);
+        }
+
+        if (currentTab === 'consumable') {
+            return item.type === 'consumable' || item.type === 'quest_item';
+        }
+
+        return true;
+    });
+
+    // 2. Sort
+    inventoryItems.sort((a, b) => {
+        // Sort by type first
+        const typeOrder = ['weapon', 'armor', 'helmet', 'boots', 'gloves', 'belt', 'amulet', 'ring', 'consumable', 'quest_item'];
+        const typeA = typeOrder.indexOf(a.type);
+        const typeB = typeOrder.indexOf(b.type);
+
+        if (typeA !== typeB) {
+            return typeA - typeB;
+        }
+
+        // Sort by quality (Legendary > Epic > Rare > Common)
+        const qualityOrder = { 'Legendary': 3, 'Epic': 2, 'Rare': 1, 'Common': 0 };
+        const qA = qualityOrder[a.quality] || 0;
+        const qB = qualityOrder[b.quality] || 0;
+
+        if (qA !== qB) {
+            return qB - qA; // Higher quality first
+        }
+
+        // Sort by name
+        return a.name.localeCompare(b.name);
+    });
+
 
     if (inventoryItems.length === 0) {
         const rightPanelXValue = equipmentPanel.rightBg ? equipmentPanel.rightBg.x : 768;
-        const emptyText = scene.add.text(rightPanelXValue, 200, 'Inventory is empty', {
+        const emptyText = scene.add.text(rightPanelXValue, 200, 'No items in this category', {
             fontSize: '16px',
             fill: '#888888',
             fontStyle: 'italic'
@@ -7357,7 +8103,7 @@ function updateEquipmentInventoryItems() {
     console.log(`   Container exists: ${!!equipmentPanel.inventoryContainer}, active: ${equipmentPanel.inventoryContainer?.active}`);
 
     inventoryItems.forEach((item, index) => {
-        console.log(`  - Equipment panel item ${index}: ${item.name} (type: ${item.type})`);
+        // console.log(`  - Equipment panel item ${index}: ${item.name} (type: ${item.type})`); // Reduced log spam
         const row = Math.floor(index / itemsPerRow);
         const col = index % itemsPerRow;
         const x = startX + col * (itemSize + spacing);
@@ -7376,25 +8122,10 @@ function updateEquipmentInventoryItems() {
             } else {
                 spriteKey = 'item_weapon'; // Fallback
             }
-        } else if (item.type === 'armor') spriteKey = 'item_armor';
-        else if (item.type === 'helmet') spriteKey = 'item_helmet';
-        else if (item.type === 'ring') spriteKey = 'item_ring';
-        else if (item.type === 'amulet') spriteKey = 'item_amulet';
-        else if (item.type === 'boots') spriteKey = 'item_boots';
-        else if (item.type === 'gloves') spriteKey = 'item_gloves';
-        else if (item.type === 'belt') spriteKey = 'item_belt';
-        else if (item.type === 'consumable') spriteKey = (item.name === 'Mana Potion') ? 'mana_potion' : 'item_consumable';
-        else if (item.type === 'gold') spriteKey = 'item_gold';
-        else if (item.type === 'quest_item') {
-            // Specific mapping for quest items
-            if (item.id === 'crystal_shard') spriteKey = 'item_crystal';
-            else if (item.id === 'artifact_fragment') spriteKey = 'item_fragment';
-            else spriteKey = 'item_consumable';
+        } else {
+            spriteKey = ItemManager.getSpriteKey(item);
         }
-        else {
-            // Use default item sprite for unknown types
-            spriteKey = 'item_weapon'; // Fallback
-        }
+
 
         // Create item sprite with background (add to container)
         // Note: Items in container use relative coordinates, and container has setScrollFactor(0)
@@ -7427,7 +8158,7 @@ function updateEquipmentInventoryItems() {
         // Add all items to container
         equipmentPanel.inventoryContainer.add([itemBg, itemSprite, borderRect, itemNameText]);
 
-        console.log(`   Added item ${index} to container at relative position (${x}, ${y})`);
+        // console.log(`   Added item ${index} to container at relative position (${x}, ${y})`);
 
         // Make clickable - equip if equippable, otherwise show tooltip
         const isEquippable = equippableTypes.includes(item.type);
@@ -7478,7 +8209,7 @@ function updateEquipmentInventoryItems() {
     if (equipmentPanel.inventoryContainer) {
         if (equipmentPanel.maskGeometry) {
             equipmentPanel.inventoryContainer.setMask(equipmentPanel.maskGeometry);
-            console.log(`📦 Mask applied to container`);
+            // console.log(`📦 Mask applied to container`);
         } else {
             console.warn(`⚠️ No maskGeometry found for equipment panel container`);
         }
@@ -7500,20 +8231,14 @@ function updateEquipmentInventoryItems() {
         // Position container: at minScroll (-40), container is at inventoryStartY - containerOffset - (-40)
         // Container position is managed by setScrollPosition, but we ensure it's initialized correctly
         equipmentPanel.inventoryContainer.y = inventoryStartY - containerOffset;
-        console.log(`📦 Equipment panel container positioned at (${equipmentPanel.inventoryContainer.x}, ${equipmentPanel.inventoryContainer.y})`);
-        console.log(`   startY: ${inventoryStartY}, offset: ${containerOffset}, rightPanelX: ${rightPanelXValue}`);
-        console.log(`   Container children count: ${equipmentPanel.inventoryContainer.list.length}`);
-        if (equipmentPanel.inventoryContainer.list.length > 0) {
-            const firstChild = equipmentPanel.inventoryContainer.list[0];
-            console.log(`   First child position: (${firstChild.x}, ${firstChild.y}), visible: ${firstChild.visible}`);
-        }
+
+        // console.log(`📦 Equipment panel container positioned at (${equipmentPanel.inventoryContainer.x}, ${equipmentPanel.inventoryContainer.y})`);
     }
 
     // Force container to be visible and active
     if (equipmentPanel.inventoryContainer) {
         equipmentPanel.inventoryContainer.setVisible(true);
         equipmentPanel.inventoryContainer.setActive(true);
-        console.log(`📦 Container visibility: visible=${equipmentPanel.inventoryContainer.visible}, active=${equipmentPanel.inventoryContainer.active}`);
     }
 
     // Update scrollbar visibility and size
@@ -7709,6 +8434,14 @@ function destroyEquipmentUI() {
             equipmentPanel.statsText.destroy();
         }
 
+        // Destroy Tabs
+        if (equipmentPanel.tabs) {
+            equipmentPanel.tabs.forEach(tabElem => {
+                if (tabElem && tabElem.active) tabElem.destroy();
+            });
+            equipmentPanel.tabs = [];
+        }
+
         // Destroy all slot elements including backgrounds
         Object.values(equipmentPanel.slots).forEach(slot => {
             if (slot.bg && slot.bg.active) {
@@ -7866,9 +8599,13 @@ function initializeQuests() {
  * Check quest progress and complete quests
  */
 function checkQuestProgress() {
+    if (!playerStats || !playerStats.quests) return;
+
     // Check main quests
-    for (let i = playerStats.quests.main.length - 1; i >= 0; i--) {
-        const quest = playerStats.quests.main[i];
+    const mainQuests = playerStats.quests.main || [];
+    for (let i = mainQuests.length - 1; i >= 0; i--) {
+        const quest = mainQuests[i];
+        if (!quest) continue;
         const index = i;
         // Update progress using QuestManager
         if (questManager) {
@@ -7887,8 +8624,10 @@ function checkQuestProgress() {
     }
 
     // Check side quests
-    for (let i = playerStats.quests.active.length - 1; i >= 0; i--) {
-        const quest = playerStats.quests.active[i];
+    const activeQuests = playerStats.quests.active || [];
+    for (let i = activeQuests.length - 1; i >= 0; i--) {
+        const quest = activeQuests[i];
+        if (!quest) continue;
         const index = i;
         // Update progress using QuestManager
         if (questManager) {
@@ -9383,7 +10122,10 @@ function checkNPCInteraction() {
 /**
  * Dialog database - loaded from dialogs.json
  */
-let dialogDatabase = {};
+/**
+ * Dialog database - loaded from dialogs.json
+ */
+// dialogDatabase declared globally
 
 /**
  * Load dialogs from JSON file
@@ -9588,9 +10330,8 @@ function startDialog(npc) {
         const uqeActiveIds = uqe.activeQuests.map(q => q.id);
 
         // Get all quests for this NPC from UQE definitions
-        // Skip Merchant Lysa - she has a custom 'About that favor...' sub-menu
         const npcQuests = Object.values(uqe.allDefinitions).filter(q =>
-            q.giver === npc.name && npc.name !== 'Merchant Lysa'
+            q.giver === npc.name
         );
 
         // 1. Inject STATUS requests for ACTIVE quests given by this NPC
@@ -10080,18 +10821,18 @@ function closeDialog() {
  * Shop inventory (items available for purchase)
  */
 const shopInventory = [
-    { type: 'weapon', name: 'Iron Sword', quality: 'Common', attackPower: 5, price: 50 },
-    { type: 'weapon', name: 'Steel Blade', quality: 'Uncommon', attackPower: 8, price: 100 },
-    { type: 'armor', name: 'Leather Armor', quality: 'Common', defense: 3, price: 40 },
-    { type: 'armor', name: 'Chain Mail', quality: 'Uncommon', defense: 5, price: 80 },
-    { type: 'helmet', name: 'Iron Helmet', quality: 'Common', defense: 2, price: 30 },
-    { type: 'helmet', name: 'Steel Helmet', quality: 'Uncommon', defense: 4, price: 60 },
-    { type: 'ring', name: 'Bronze Ring', quality: 'Common', attackPower: 1, defense: 1, price: 40 },
-    { type: 'ring', name: 'Silver Ring', quality: 'Uncommon', attackPower: 3, defense: 2, price: 80 },
-    { type: 'amulet', name: 'Copper Amulet', quality: 'Common', defense: 2, maxHp: 10, price: 50 },
-    { type: 'amulet', name: 'Gold Amulet', quality: 'Uncommon', defense: 4, maxHp: 20, price: 100 },
-    { type: 'boots', name: 'Leather Boots', quality: 'Common', defense: 1, speed: 5, price: 25 },
-    { type: 'boots', name: 'Steel Boots', quality: 'Uncommon', defense: 3, speed: 10, price: 50 },
+    { type: 'weapon', name: 'Iron Sword', quality: 'Common', attackPower: 5, price: 50, itemLevel: 5 },
+    { type: 'weapon', name: 'Steel Blade', quality: 'Uncommon', attackPower: 8, price: 100, itemLevel: 10 },
+    { type: 'armor', name: 'Leather Armor', quality: 'Common', defense: 3, price: 40, itemLevel: 5 },
+    { type: 'armor', name: 'Chain Mail', quality: 'Uncommon', defense: 5, price: 80, itemLevel: 10 },
+    { type: 'helmet', name: 'Iron Helmet', quality: 'Common', defense: 2, price: 30, itemLevel: 5 },
+    { type: 'helmet', name: 'Steel Helmet', quality: 'Uncommon', defense: 4, price: 60, itemLevel: 10 },
+    { type: 'ring', name: 'Bronze Ring', quality: 'Common', attackPower: 1, defense: 1, price: 40, itemLevel: 5 },
+    { type: 'ring', name: 'Silver Ring', quality: 'Uncommon', attackPower: 3, defense: 2, price: 80, itemLevel: 10 },
+    { type: 'amulet', name: 'Copper Amulet', quality: 'Common', defense: 2, maxHp: 10, price: 50, itemLevel: 5 },
+    { type: 'amulet', name: 'Gold Amulet', quality: 'Uncommon', defense: 4, maxHp: 20, price: 100, itemLevel: 10 },
+    { type: 'boots', name: 'Leather Boots', quality: 'Common', defense: 1, speed: 5, price: 25, itemLevel: 5 },
+    { type: 'boots', name: 'Steel Boots', quality: 'Uncommon', defense: 3, speed: 10, price: 50, itemLevel: 10 },
     { type: 'consumable', name: 'Health Potion', quality: 'Common', healAmount: 50, price: 20 },
     { type: 'consumable', name: 'Mana Potion', quality: 'Common', manaAmount: 30, price: 20 }
 ];
@@ -10118,8 +10859,8 @@ function chooseClass(className) {
         playerStats.baseDefense = 10;
 
         // Starting Gear
-        playerStats.equipment.weapon = { name: 'Rusty Sword', quality: 'Common', attackPower: 5, type: 'weapon' };
-        playerStats.equipment.armor = { name: 'Worn Chainmail', quality: 'Common', defense: 4, type: 'armor' };
+        playerStats.equipment.weapon = { name: 'Rusty Sword', quality: 'Common', attackPower: 5, type: 'weapon', itemLevel: 1 };
+        playerStats.equipment.armor = { name: 'Worn Chainmail', quality: 'Common', defense: 4, type: 'armor', itemLevel: 1 };
 
     } else if (className === 'Rogue') {
         playerStats.maxHp = 100;
@@ -10184,6 +10925,7 @@ function openShop(npc) {
     UIManager.closeDialog(); // Also close dialog if open
 
     shopVisible = true;
+    if (window.UIManager) window.UIManager.shopVisible = true;
     currentShopNPC = npc; // Set current merchant
     createShopUI(npc);
 }
@@ -10220,7 +10962,7 @@ function createShopUI(npc) {
     const divider = dividerGraphics;
 
     // --- Right Panel: Player Inventory ---
-    const inventoryStartY = 100;
+    const inventoryStartY = 150; // Increased to 150 to make room for tabs
     const inventoryEndY = gameHeight - 20;
     const inventoryVisibleHeight = inventoryEndY - inventoryStartY;
     const inventoryContainerOffset = 60;
@@ -10308,7 +11050,9 @@ function createShopUI(npc) {
         inventoryContainerOffset: inventoryContainerOffset,
         minScroll: -30,
         shopMask: shopMask,
-        inventoryMask: inventoryMask
+        inventoryMask: inventoryMask,
+        currentTab: 'all', // Initialize tab
+        tabs: [] // Store tab objects
     };
 
 
@@ -10320,8 +11064,79 @@ function createShopUI(npc) {
         fontStyle: 'bold'
     }).setScrollFactor(0).setDepth(401).setOrigin(0, 0);
 
+    createShopTabs(); // Create tabs
     updateShopItems();
     updateShopInventoryItems();
+}
+
+/**
+ * Create shop tabs (Player Inventory side)
+ */
+function createShopTabs() {
+    const scene = game.scene.scenes[0];
+    if (!shopPanel) return;
+
+    // Clear existing tabs
+    if (shopPanel.tabs) {
+        shopPanel.tabs.forEach(t => {
+            if (t.bg) t.bg.destroy();
+            if (t.text) t.text.destroy();
+        });
+    }
+    shopPanel.tabs = [];
+
+    // Tab definitions
+    const tabs = [
+        { id: 'all', label: 'All' },
+        { id: 'weapon', label: 'Weapons' },
+        { id: 'armor', label: 'Armor' },
+        { id: 'accessory', label: 'Access.' },
+        { id: 'consumable', label: 'Items' }
+    ];
+
+    const panelWidth = shopPanel.rightBg.width;
+    const rightPanelX = shopPanel.rightBg.x;
+    const tabWidth = (panelWidth - 20) / tabs.length;
+    const tabHeight = 30;
+    const tabY = 70; // Position below title
+
+    const currentTab = shopPanel.currentTab || 'all';
+
+    tabs.forEach((tab, index) => {
+        const tabX = rightPanelX - panelWidth / 2 + 10 + index * tabWidth + tabWidth / 2;
+
+        // Tab background
+        const isActive = currentTab === tab.id;
+        const tabColor = isActive ? 0x00aaff : 0x333333;
+        const tabAlpha = isActive ? 0.8 : 0.6;
+
+        const tabBg = scene.add.rectangle(tabX, tabY, tabWidth - 4, tabHeight, tabColor, tabAlpha)
+            .setScrollFactor(0).setDepth(402).setInteractive({ useHandCursor: true });
+
+        // Tab text
+        const tabText = scene.add.text(tabX, tabY, tab.label, {
+            fontSize: '12px',
+            fill: '#ffffff',
+            fontStyle: isActive ? 'bold' : 'normal'
+        }).setScrollFactor(0).setDepth(403).setOrigin(0.5, 0.5);
+
+        // Click handler
+        tabBg.on('pointerdown', () => {
+            shopPanel.currentTab = tab.id;
+            createShopTabs(); // Refresh tabs (highlight)
+            updateShopInventoryItems(); // Refresh list
+        });
+
+        // Hover effects
+        tabBg.on('pointerover', () => {
+            if (shopPanel.currentTab !== tab.id) tabBg.setFillStyle(0x444444);
+        });
+        tabBg.on('pointerout', () => {
+            if (shopPanel.currentTab !== tab.id) tabBg.setFillStyle(0x333333);
+        });
+
+        shopPanel.tabs.push({ bg: tabBg, text: tabText });
+    });
 }
 
 /**
@@ -10567,11 +11382,13 @@ function buyItem(item, price) {
     // Hide any tooltips before refreshing
     hideTooltip(true);
 
-    // Check if we can stack with existing consumable
+    // Check if we can stack with existing consumable or shard
     let stacked = false;
-    if (item.type === 'consumable' && item.name) {
+    const isShard = (item.type === 'quest_item' && ['crystal_shard', 'echo_shard', 'shard_resonance'].includes(item.id));
+
+    if ((item.type === 'consumable' || isShard) && item.name) {
         const existingStack = playerStats.inventory.find(i =>
-            i.type === 'consumable' && i.name === item.name
+            (i.type === item.type) && i.name === item.name && (i.id === item.id || !isShard)
         );
         if (existingStack) {
             existingStack.quantity = (existingStack.quantity || 1) + 1;
@@ -10589,8 +11406,8 @@ function buyItem(item, price) {
         // Create item copy for inventory
         const purchasedItem = {
             ...item,
-            id: `shop_${Date.now()}_${Math.random()}`,
-            quantity: item.type === 'consumable' ? 1 : undefined
+            id: isShard ? item.id : `shop_${Date.now()}_${Math.random()}`,
+            quantity: (item.type === 'consumable' || isShard) ? 1 : undefined
         };
         playerStats.inventory.push(purchasedItem);
     }
@@ -10638,7 +11455,41 @@ function updateShopInventoryItems() {
     }
 
     const rightPanelX = shopPanel.rightBg.x;
-    const inventoryItems = playerStats.inventory;
+
+    // Filter items based on current tab
+    const currentTab = shopPanel.currentTab || 'all';
+    const inventoryItems = playerStats.inventory.filter(item => {
+        if (currentTab === 'all') return true;
+        if (currentTab === 'weapon') return item.type === 'weapon';
+        if (currentTab === 'armor') return ['armor', 'helmet', 'boots', 'gloves', 'belt'].includes(item.type);
+        if (currentTab === 'accessory') return ['ring', 'amulet'].includes(item.type);
+        if (currentTab === 'consumable') return ['consumable', 'quest_item'].includes(item.type);
+        return true;
+    });
+
+    // Sort inventory items to match Equipment UI behavior
+    inventoryItems.sort((a, b) => {
+        // Sort by type first
+        const typeOrder = ['weapon', 'armor', 'helmet', 'boots', 'gloves', 'belt', 'amulet', 'ring', 'consumable', 'quest_item'];
+        const typeA = typeOrder.indexOf(a.type);
+        const typeB = typeOrder.indexOf(b.type);
+
+        if (typeA !== typeB) {
+            return typeA - typeB;
+        }
+
+        // Sort by quality (Legendary > Epic > Rare > Common)
+        const qualityOrder = { 'Legendary': 3, 'Epic': 2, 'Rare': 1, 'Common': 0 };
+        const qA = qualityOrder[a.quality] || 0;
+        const qB = qualityOrder[b.quality] || 0;
+
+        if (qA !== qB) {
+            return qB - qA; // Higher quality first
+        }
+
+        // Sort by name
+        return a.name.localeCompare(b.name);
+    });
 
     if (inventoryItems.length === 0) {
         const emptyText = scene.add.text(rightPanelX, 200, 'Inventory is empty', {
@@ -10735,21 +11586,12 @@ function updateShopInventoryItems() {
             } else {
                 spriteKey = 'item_weapon'; // Fallback
             }
-        } else if (item.type === 'armor') spriteKey = 'item_armor';
-        else if (item.type === 'helmet') spriteKey = 'item_helmet';
-        else if (item.type === 'ring') spriteKey = 'item_ring';
-        else if (item.type === 'amulet') spriteKey = 'item_amulet';
-        else if (item.type === 'boots') spriteKey = 'item_boots';
-        else if (item.type === 'gloves') spriteKey = 'item_gloves';
-        else if (item.type === 'belt') spriteKey = 'item_belt';
-        else if (item.type === 'consumable') spriteKey = (item.name === 'Mana Potion') ? 'mana_potion' : 'item_consumable';
-        else if (item.type === 'gold') spriteKey = 'item_gold';
-        else if (item.type === 'quest_item') {
-            // Specific mapping for quest items
-            if (item.id === 'crystal_shard') spriteKey = 'item_crystal';
-            else if (item.id === 'artifact_fragment') spriteKey = 'item_fragment';
-            else spriteKey = 'item_consumable';
+        } else {
+            spriteKey = ItemManager.getSpriteKey(item);
         }
+
+
+
 
         // Create item sprite with background (add to container)
         const itemBg = scene.add.rectangle(x, y, itemSize, itemSize, 0x222222, 0.8)
@@ -10940,6 +11782,14 @@ function closeShop() {
             if (item.borderRect && item.borderRect.active) item.borderRect.destroy();
         });
 
+        // Destroy tabs
+        if (shopPanel.tabs) {
+            shopPanel.tabs.forEach(tab => {
+                if (tab.bg && tab.bg.active) tab.bg.destroy();
+                if (tab.text && tab.text.active) tab.text.destroy();
+            });
+        }
+
         // Destroy all inventory item elements (right panel)
         shopPanel.inventoryItems.forEach(item => {
             if (item.bg && item.bg.active) item.bg.destroy();
@@ -10961,6 +11811,7 @@ function closeShop() {
     }
 
     shopVisible = false;
+    if (window.UIManager) window.UIManager.shopVisible = false;
     currentShopNPC = null;
     console.log('🛒 Shop closed');
 }
@@ -10981,13 +11832,20 @@ function openBuildingUI(building) {
 
     switch (building.type) {
         case 'inn':
-            createInnUI();
+            if (window.InnUI) window.InnUI.open();
             break;
         case 'blacksmith':
-            createBlacksmithUI();
+            // Redirect to new ForgeUI
+            if (window.ForgeUI) {
+                window.ForgeUI.open();
+            } else {
+                console.warn('ForgeUI not found!');
+            }
+            buildingPanelVisible = false;
+            currentBuilding = null;
             break;
         case 'tavern':
-            createTavernUI();
+            if (window.TavernUI) window.TavernUI.open();
             break;
         case 'market':
             // Market uses shop system (Merchant Lysa), so just show a message
@@ -11040,56 +11898,26 @@ function openBuildingUI(building) {
  * Close building UI
  */
 function closeBuildingUI() {
-    if (buildingPanel) {
-        // Destroy all UI elements
-        if (buildingPanel.bg && buildingPanel.bg.active) buildingPanel.bg.destroy();
-        if (buildingPanel.title && buildingPanel.title.active) buildingPanel.title.destroy();
-        if (buildingPanel.closeText && buildingPanel.closeText.active) buildingPanel.closeText.destroy();
+    // Close new UI modules
+    if (window.InnUI) window.InnUI.close();
+    if (window.TavernUI) window.TavernUI.close();
+    if (window.ForgeUI) window.ForgeUI.close();
 
-        // Destroy buttons
+    // Legacy cleanup (if any other buildings use the generic panel)
+    if (buildingPanel) {
+        if (buildingPanel.bg) buildingPanel.bg.destroy();
+        if (buildingPanel.title) buildingPanel.title.destroy();
+        if (buildingPanel.closeText) buildingPanel.closeText.destroy();
+
         if (buildingPanel.buttons) {
             buildingPanel.buttons.forEach(btn => {
-                // Common elements
-                if (btn.bg && btn.bg.active) btn.bg.destroy();
-                if (btn.text && btn.text.active) btn.text.destroy();
-
-                // Tavern-specific: destroy item button elements
-                if (btn.sprite && btn.sprite.active) btn.sprite.destroy();
-                if (btn.name && btn.name.active) btn.name.destroy();
-                if (btn.price && btn.price.active) btn.price.destroy();
-                if (btn.buyBg && btn.buyBg.active) btn.buyBg.destroy();
-                if (btn.buyText && btn.buyText.active) btn.buyText.destroy();
-
-                // Blacksmith-specific: destroy slot elements
-                if (btn.label && btn.label.active) btn.label.destroy();
-                if (btn.emptyText && btn.emptyText.active) btn.emptyText.destroy();
-                if (btn.upgradeBg && btn.upgradeBg.active) btn.upgradeBg.destroy();
-                if (btn.upgradeText && btn.upgradeText.active) btn.upgradeText.destroy();
+                if (btn.bg) btn.bg.destroy();
+                if (btn.text) btn.text.destroy();
             });
         }
 
-        // Destroy tavern-specific item buttons
-        if (buildingPanel.itemButtons) {
-            buildingPanel.itemButtons.forEach(itemBtn => {
-                if (itemBtn.bg && itemBtn.bg.active) itemBtn.bg.destroy();
-                if (itemBtn.sprite && itemBtn.sprite.active) itemBtn.sprite.destroy();
-                if (itemBtn.name && itemBtn.name.active) itemBtn.name.destroy();
-                if (itemBtn.price && itemBtn.price.active) itemBtn.price.destroy();
-                if (itemBtn.buyBg && itemBtn.buyBg.active) itemBtn.buyBg.destroy();
-                if (itemBtn.buyText && itemBtn.buyText.active) itemBtn.buyText.destroy();
-            });
-        }
-
-        // Destroy text elements
         if (buildingPanel.textElements) {
             buildingPanel.textElements.forEach(elem => {
-                if (elem && elem.active) elem.destroy();
-            });
-        }
-
-        // Destroy other elements (for blacksmith, etc.)
-        if (buildingPanel.otherElements) {
-            buildingPanel.otherElements.forEach(elem => {
                 if (elem && elem.active) elem.destroy();
             });
         }
@@ -11102,489 +11930,21 @@ function closeBuildingUI() {
     console.log('🏠 Building UI closed');
 }
 
+
+
 /**
  * Create Inn UI - Restore HP/mana, save game
  */
-function createInnUI() {
-    const scene = game.scene.scenes[0];
-    const gameWidth = 1024;
-    const gameHeight = 768;
-    const panelWidth = 500;
-    const panelHeight = 400;
-    const centerX = gameWidth / 2;
-    const centerY = gameHeight / 2;
 
-    // Background panel
-    const bg = scene.add.rectangle(centerX, centerY, panelWidth, panelHeight, 0x1a1a1a, 0.95)
-        .setScrollFactor(0).setDepth(400).setStrokeStyle(3, 0x8B4513);
 
-    // Title
-    const title = scene.add.text(centerX, centerY - 150, "The Cozy Inn", {
-        fontSize: '28px',
-        fill: '#ffffff',
-        fontStyle: 'bold'
-    }).setScrollFactor(0).setDepth(401).setOrigin(0.5, 0.5);
 
-    // Close text
-    const closeText = scene.add.text(centerX + panelWidth / 2 - 20, centerY - panelHeight / 2 + 20, 'Press F to Close', {
-        fontSize: '14px',
-        fill: '#aaaaaa'
-    }).setScrollFactor(0).setDepth(401).setOrigin(1, 0);
-
-    // Welcome message
-    const welcomeText = scene.add.text(centerX, centerY - 80, 'Welcome, traveler! Rest and save your progress.', {
-        fontSize: '16px',
-        fill: '#cccccc',
-        wordWrap: { width: panelWidth - 40 }
-    }).setScrollFactor(0).setDepth(401).setOrigin(0.5, 0.5);
-
-    // Current stats display
-    const statsText = scene.add.text(centerX, centerY - 20,
-        `HP: ${playerStats.hp}/${playerStats.maxHp} | Mana: ${playerStats.mana}/${playerStats.maxMana} | Gold: ${playerStats.gold}`, {
-        fontSize: '14px',
-        fill: '#ffffff'
-    }).setScrollFactor(0).setDepth(401).setOrigin(0.5, 0.5);
-
-    // Rest button (restore HP/mana for gold)
-    const restCost = 50;
-    const restButtonBg = scene.add.rectangle(centerX - 100, centerY + 60, 180, 50, 0x4a4a4a, 1)
-        .setScrollFactor(0).setDepth(401).setStrokeStyle(2, 0x8B4513)
-        .setInteractive({ useHandCursor: true });
-
-    const restButtonText = scene.add.text(centerX - 100, centerY + 60, `Rest (${restCost} Gold)`, {
-        fontSize: '16px',
-        fill: '#ffffff',
-        fontStyle: 'bold'
-    }).setScrollFactor(0).setDepth(402).setOrigin(0.5, 0.5);
-
-    const restAction = () => {
-        if (playerStats.gold >= restCost) {
-            if (playerStats.hp < playerStats.maxHp || playerStats.mana < playerStats.maxMana) {
-                playerStats.gold -= restCost;
-                playerStats.hp = playerStats.maxHp;
-                playerStats.mana = playerStats.maxMana;
-                updatePlayerStats();
-                statsText.setText(`HP: ${playerStats.hp}/${playerStats.maxHp} | Mana: ${playerStats.mana}/${playerStats.maxMana} | Gold: ${playerStats.gold}`);
-                showDamageNumber(player.x, player.y - 40, 'Fully Restored!', 0x00ff00);
-                addChatMessage('Restored HP and Mana', 0x00ff00, '💤');
-            } else {
-                showDamageNumber(player.x, player.y - 40, 'Already at full health!', 0xffff00);
-            }
-        } else {
-            showDamageNumber(player.x, player.y - 40, 'Not enough gold!', 0xff0000);
-        }
-    };
-
-    restButtonBg.on('pointerdown', restAction);
-    restButtonText.setInteractive({ useHandCursor: true });
-    restButtonText.on('pointerdown', restAction);
-
-    // Hover effects for rest button
-    restButtonBg.on('pointerover', () => {
-        restButtonBg.setFillStyle(0x5a5a5a, 1);
-    });
-    restButtonBg.on('pointerout', () => {
-        restButtonBg.setFillStyle(0x4a4a4a, 1);
-    });
-
-    // Save button
-    const saveButtonBg = scene.add.rectangle(centerX + 100, centerY + 60, 180, 50, 0x4a4a4a, 1)
-        .setScrollFactor(0).setDepth(401).setStrokeStyle(2, 0x8B4513)
-        .setInteractive({ useHandCursor: true });
-
-    const saveButtonText = scene.add.text(centerX + 100, centerY + 60, 'Save Game', {
-        fontSize: '16px',
-        fill: '#ffffff',
-        fontStyle: 'bold'
-    }).setScrollFactor(0).setDepth(402).setOrigin(0.5, 0.5);
-
-    const saveAction = () => {
-        saveGame();
-        showDamageNumber(player.x, player.y - 40, 'Game Saved!', 0x00ff00);
-        addChatMessage('Game saved successfully', 0x00ff00, '💾');
-    };
-
-    saveButtonBg.on('pointerdown', saveAction);
-    saveButtonText.setInteractive({ useHandCursor: true });
-    saveButtonText.on('pointerdown', saveAction);
-
-    // Hover effects for save button
-    saveButtonBg.on('pointerover', () => {
-        saveButtonBg.setFillStyle(0x5a5a5a, 1);
-    });
-    saveButtonBg.on('pointerout', () => {
-        saveButtonBg.setFillStyle(0x4a4a4a, 1);
-    });
-
-    buildingPanel = {
-        bg: bg,
-        title: title,
-        closeText: closeText,
-        buttons: [
-            { bg: restButtonBg, text: restButtonText },
-            { bg: saveButtonBg, text: saveButtonText }
-        ],
-        textElements: [welcomeText, statsText]
-    };
-}
-
-/**
- * Create Blacksmith UI - Upgrade/enchant equipment
- */
-function createBlacksmithUI() {
-    const scene = game.scene.scenes[0];
-    const gameWidth = 1024;
-    const gameHeight = 768;
-    const panelWidth = 600;
-    const panelHeight = 500;
-    const centerX = gameWidth / 2;
-    const centerY = gameHeight / 2;
-
-    // Background panel
-    const bg = scene.add.rectangle(centerX, centerY, panelWidth, panelHeight, 0x1a1a1a, 0.95)
-        .setScrollFactor(0).setDepth(400).setStrokeStyle(3, 0x696969);
-
-    // Title
-    const title = scene.add.text(centerX, centerY - 200, "Blacksmith's Forge", {
-        fontSize: '28px',
-        fill: '#ffffff',
-        fontStyle: 'bold'
-    }).setScrollFactor(0).setDepth(401).setOrigin(0.5, 0.5);
-
-    // Close text
-    const closeText = scene.add.text(centerX + panelWidth / 2 - 20, centerY - panelHeight / 2 + 20, 'Press F to Close', {
-        fontSize: '14px',
-        fill: '#aaaaaa'
-    }).setScrollFactor(0).setDepth(401).setOrigin(1, 0);
-
-    // Welcome message
-    const welcomeText = scene.add.text(centerX, centerY - 140, 'I can upgrade your equipment for a price.', {
-        fontSize: '16px',
-        fill: '#cccccc',
-        wordWrap: { width: panelWidth - 40 }
-    }).setScrollFactor(0).setDepth(401).setOrigin(0.5, 0.5);
-
-    // Equipment display area
-    const equipmentY = centerY - 40;
-    const slotSize = 60;
-    const slotSpacing = 80;
-    const startX = centerX - (slotSpacing * 2);
-
-    const equipmentSlots = ['weapon', 'armor', 'helmet'];
-    const slotButtons = [];
-
-    equipmentSlots.forEach((slotType, index) => {
-        const slotX = startX + (index * slotSpacing);
-        const equippedItem = playerStats.equipment[slotType];
-
-        // Slot background
-        const slotBg = scene.add.rectangle(slotX, equipmentY, slotSize, slotSize, 0x333333, 1)
-            .setScrollFactor(0).setDepth(401).setStrokeStyle(2, 0x666666);
-
-        // Slot label
-        const slotLabel = scene.add.text(slotX, equipmentY + 40, slotType.toUpperCase(), {
-            fontSize: '12px',
-            fill: '#aaaaaa'
-        }).setScrollFactor(0).setDepth(401).setOrigin(0.5, 0.5);
-
-        if (equippedItem) {
-            // Show equipped item
-            const itemSprite = scene.add.sprite(slotX, equipmentY, `item_${slotType}`);
-            itemSprite.setScrollFactor(0).setDepth(402).setScale(0.6);
-
-            // Upgrade button
-            const upgradeCost = Math.floor(equippedItem.price * 0.3) || 100;
-            const upgradeButtonBg = scene.add.rectangle(slotX, equipmentY + 80, 100, 30, 0x4a4a4a, 1)
-                .setScrollFactor(0).setDepth(401).setStrokeStyle(1, 0x8B4513)
-                .setInteractive({ useHandCursor: true });
-
-            const upgradeButtonText = scene.add.text(slotX, equipmentY + 80, `Upgrade\n${upgradeCost}G`, {
-                fontSize: '11px',
-                fill: '#ffffff',
-                align: 'center'
-            }).setScrollFactor(0).setDepth(402).setOrigin(0.5, 0.5);
-
-            const upgradeAction = () => {
-                if (playerStats.gold >= upgradeCost) {
-                    playerStats.gold -= upgradeCost;
-
-                    // Store old values for feedback
-                    const oldAttack = equippedItem.attackPower || 0;
-                    const oldDefense = equippedItem.defense || 0;
-
-                    // Increase item stats by 10%
-                    if (equippedItem.attackPower) {
-                        equippedItem.attackPower = Math.floor(equippedItem.attackPower * 1.1);
-                    }
-                    if (equippedItem.defense) {
-                        equippedItem.defense = Math.floor(equippedItem.defense * 1.1);
-                    }
-
-                    // Also increase maxHp, speed, and other stats if they exist
-                    if (equippedItem.maxHp) {
-                        equippedItem.maxHp = Math.floor(equippedItem.maxHp * 1.1);
-                    }
-                    if (equippedItem.speed) {
-                        equippedItem.speed = Math.floor(equippedItem.speed * 1.1);
-                    }
-
-                    updatePlayerStats();
-                    updateEquipment();
-
-                    // Show detailed upgrade message
-                    let upgradeMsg = `${equippedItem.name} Upgraded!`;
-                    if (oldAttack > 0 && equippedItem.attackPower) {
-                        upgradeMsg += ` Attack: ${oldAttack} → ${equippedItem.attackPower}`;
-                    }
-                    if (oldDefense > 0 && equippedItem.defense) {
-                        upgradeMsg += ` Defense: ${oldDefense} → ${equippedItem.defense}`;
-                    }
-                    showDamageNumber(player.x, player.y - 40, upgradeMsg, 0x00ff00);
-                    addChatMessage(`${equippedItem.name} upgraded (+10% stats)`, 0x00ff00, '⚒️');
-
-                    // Update button cost
-                    const newCost = Math.floor(equippedItem.price * 0.3) || 100;
-                    upgradeButtonText.setText(`Upgrade\n${newCost}G`);
-
-                    // Refresh the blacksmith UI to show updated stats
-                    // Close and reopen to refresh
-                    closeBuildingUI();
-                    setTimeout(() => {
-                        if (currentBuilding && currentBuilding.type === 'blacksmith') {
-                            createBlacksmithUI();
-                        }
-                    }, 50);
-                } else {
-                    showDamageNumber(player.x, player.y - 40, 'Not enough gold!', 0xff0000);
-                }
-            };
-
-            upgradeButtonBg.on('pointerdown', upgradeAction);
-            upgradeButtonText.setInteractive({ useHandCursor: true });
-            upgradeButtonText.on('pointerdown', upgradeAction);
-
-            slotButtons.push({ bg: slotBg, label: slotLabel, sprite: itemSprite, upgradeBg: upgradeButtonBg, upgradeText: upgradeButtonText });
-        } else {
-            // Empty slot
-            const emptyText = scene.add.text(slotX, equipmentY, 'Empty', {
-                fontSize: '12px',
-                fill: '#666666'
-            }).setScrollFactor(0).setDepth(402).setOrigin(0.5, 0.5);
-
-            slotButtons.push({ bg: slotBg, label: slotLabel, emptyText: emptyText });
-        }
-    });
-
-    buildingPanel = {
-        bg: bg,
-        title: title,
-        closeText: closeText,
-        buttons: slotButtons,
-        textElements: [welcomeText]
-    };
-}
 
 /**
  * Create Tavern UI - Buy consumables, hear rumors
  */
-function createTavernUI() {
-    const scene = game.scene.scenes[0];
-    const gameWidth = 1024;
-    const gameHeight = 768;
-    const panelWidth = 500;
-    const panelHeight = 400;
-    const centerX = gameWidth / 2;
-    const centerY = gameHeight / 2;
 
-    // Background panel
-    const bg = scene.add.rectangle(centerX, centerY, panelWidth, panelHeight, 0x1a1a1a, 0.95)
-        .setScrollFactor(0).setDepth(400).setStrokeStyle(3, 0x654321);
 
-    // Title
-    const title = scene.add.text(centerX, centerY - 150, "The Rusty Tankard", {
-        fontSize: '28px',
-        fill: '#ffffff',
-        fontStyle: 'bold'
-    }).setScrollFactor(0).setDepth(401).setOrigin(0.5, 0.5);
 
-    // Close text
-    const closeText = scene.add.text(centerX + panelWidth / 2 - 20, centerY - panelHeight / 2 + 20, 'Press F to Close', {
-        fontSize: '14px',
-        fill: '#aaaaaa'
-    }).setScrollFactor(0).setDepth(401).setOrigin(1, 0);
-
-    // Welcome message
-    const welcomeText = scene.add.text(centerX, centerY - 80, 'Welcome! What can I get for you?', {
-        fontSize: '16px',
-        fill: '#cccccc',
-        wordWrap: { width: panelWidth - 40 }
-    }).setScrollFactor(0).setDepth(401).setOrigin(0.5, 0.5);
-
-    // Consumables for sale
-    const consumables = [
-        { name: 'Health Potion', price: 25, type: 'consumable', healAmount: 50 },
-        { name: 'Mana Potion', price: 20, type: 'consumable', manaAmount: 30 }
-    ];
-
-    const itemY = centerY - 20;
-    const itemSpacing = 80;
-    const startX = centerX - 100;
-    const itemButtons = [];
-
-    consumables.forEach((item, index) => {
-        const itemX = startX + (index * itemSpacing);
-
-        // Item display
-        const itemBg = scene.add.rectangle(itemX, itemY, 70, 70, 0x333333, 1)
-            .setScrollFactor(0).setDepth(401).setStrokeStyle(2, 0x654321);
-
-        const spriteKey = (item.name === 'Mana Potion') ? 'mana_potion' : 'item_consumable';
-        const itemSprite = scene.add.sprite(itemX, itemY, spriteKey);
-        itemSprite.setScrollFactor(0).setDepth(402).setScale(0.7);
-
-        // Item name
-        const itemName = scene.add.text(itemX, itemY + 50, item.name, {
-            fontSize: '12px',
-            fill: '#ffffff'
-        }).setScrollFactor(0).setDepth(401).setOrigin(0.5, 0.5);
-
-        // Price
-        const priceText = scene.add.text(itemX, itemY + 65, `${item.price} Gold`, {
-            fontSize: '11px',
-            fill: '#ffd700'
-        }).setScrollFactor(0).setDepth(401).setOrigin(0.5, 0.5);
-
-        // Buy button
-        const buyButtonBg = scene.add.rectangle(itemX, itemY + 95, 60, 25, 0x4a4a4a, 1)
-            .setScrollFactor(0).setDepth(401).setStrokeStyle(1, 0x654321)
-            .setInteractive({ useHandCursor: true });
-
-        const buyButtonText = scene.add.text(itemX, itemY + 95, 'Buy', {
-            fontSize: '12px',
-            fill: '#ffffff'
-        }).setScrollFactor(0).setDepth(402).setOrigin(0.5, 0.5);
-
-        const buyAction = () => {
-            if (playerStats.gold >= item.price) {
-                // Check if we can stack with existing consumable
-                let stacked = false;
-                if (item.type === 'consumable' && item.name) {
-                    console.log(`🛒 Buying ${item.name}, looking for existing stack...`);
-                    console.log(`   Inventory consumables:`, playerStats.inventory
-                        .filter(i => i.type === 'consumable')
-                        .map(i => `${i.name} (qty:${i.quantity || 1})`));
-
-                    const existingStack = playerStats.inventory.find(i =>
-                        i.type === 'consumable' && i.name === item.name
-                    );
-                    if (existingStack) {
-                        console.log(`   Found stack: ${existingStack.name} (qty:${existingStack.quantity || 1})`);
-                        existingStack.quantity = (existingStack.quantity || 1) + 1;
-                        stacked = true;
-                        console.log(`   After increment: qty=${existingStack.quantity}`);
-                    } else {
-                        console.log(`   No existing stack found for "${item.name}"`);
-                    }
-                }
-
-                if (!stacked) {
-                    if (playerStats.inventory.length >= 30) { // Max inventory size
-                        showDamageNumber(player.x, player.y - 40, 'Inventory full!', 0xff0000);
-                        return;
-                    }
-                    const newItem = { ...item, id: `consumable_${Date.now()}_${Math.random()}`, quantity: 1 };
-                    playerStats.inventory.push(newItem);
-                }
-
-                playerStats.gold -= item.price;
-                updatePlayerStats();
-                updatePotionSlots(); // Update potion slot quantities
-                showDamageNumber(player.x, player.y - 40, `Bought ${item.name}!`, 0x00ff00);
-                addChatMessage(`Bought ${item.name}`, 0x00ff00, '🍺');
-            } else {
-                showDamageNumber(player.x, player.y - 40, 'Not enough gold!', 0xff0000);
-            }
-        };
-
-        buyButtonBg.on('pointerdown', buyAction);
-        buyButtonText.setInteractive({ useHandCursor: true });
-        buyButtonText.on('pointerdown', buyAction);
-
-        // Hover effects
-        buyButtonBg.on('pointerover', () => {
-            buyButtonBg.setFillStyle(0x5a5a5a, 1);
-        });
-        buyButtonBg.on('pointerout', () => {
-            buyButtonBg.setFillStyle(0x4a4a4a, 1);
-        });
-
-        itemButtons.push({ bg: itemBg, sprite: itemSprite, name: itemName, price: priceText, buyBg: buyButtonBg, buyText: buyButtonText });
-    });
-
-    // Rumors button
-    const rumorButtonBg = scene.add.rectangle(centerX, centerY + 120, 200, 40, 0x4a4a4a, 1)
-        .setScrollFactor(0).setDepth(401).setStrokeStyle(2, 0x654321)
-        .setInteractive({ useHandCursor: true });
-
-    const rumorButtonText = scene.add.text(centerX, centerY + 120, 'Hear Rumors (Free)', {
-        fontSize: '14px',
-        fill: '#ffffff',
-        fontStyle: 'bold'
-    }).setScrollFactor(0).setDepth(402).setOrigin(0.5, 0.5);
-
-    const rumors = [
-        'I heard there\'s a powerful weapon hidden in the deepest dungeon...',
-        'The monsters have been more aggressive lately. Be careful out there!',
-        'Some say there\'s a secret passage behind the blacksmith\'s shop.',
-        'A legendary adventurer once lived in this town. Their treasure is still out there somewhere...'
-    ];
-
-    // Create rumor display text (initially hidden)
-    const rumorDisplayText = scene.add.text(centerX, centerY + 60, '', {
-        fontSize: '14px',
-        fill: '#ffff00',
-        wordWrap: { width: panelWidth - 60 },
-        align: 'center',
-        fontStyle: 'italic'
-    }).setScrollFactor(0).setDepth(403).setOrigin(0.5, 0.5);
-    rumorDisplayText.setVisible(false);
-
-    const rumorAction = () => {
-        const randomRumor = rumors[Math.floor(Math.random() * rumors.length)];
-        rumorDisplayText.setText(randomRumor);
-        rumorDisplayText.setVisible(true);
-        addChatMessage(randomRumor, 0xffff00, '💬');
-
-        // Hide after 5 seconds
-        scene.time.delayedCall(5000, () => {
-            if (rumorDisplayText && rumorDisplayText.active) {
-                rumorDisplayText.setVisible(false);
-            }
-        });
-    };
-
-    rumorButtonBg.on('pointerdown', rumorAction);
-    rumorButtonText.setInteractive({ useHandCursor: true });
-    rumorButtonText.on('pointerdown', rumorAction);
-
-    // Hover effects
-    rumorButtonBg.on('pointerover', () => {
-        rumorButtonBg.setFillStyle(0x5a5a5a, 1);
-    });
-    rumorButtonBg.on('pointerout', () => {
-        rumorButtonBg.setFillStyle(0x4a4a4a, 1);
-    });
-
-    buildingPanel = {
-        bg: bg,
-        title: title,
-        closeText: closeText,
-        buttons: [...itemButtons, { bg: rumorButtonBg, text: rumorButtonText }],
-        textElements: [welcomeText, rumorDisplayText],
-        // Tavern-specific: store item buttons for proper cleanup
-        itemButtons: itemButtons
-    };
-}
 
 // ============================================
 // SAVE/LOAD SYSTEM
@@ -11682,38 +12042,67 @@ function loadGame() {
         // Restore player stats
         Object.assign(playerStats, saveData.playerStats);
 
-        // Migrate: Consolidate consumables into stacks (for old saves with separate items)
+        // Sanitize Stats (Recover from NaN corruption)
+        if (typeof playerStats.maxHp !== 'number' || isNaN(playerStats.maxHp)) playerStats.maxHp = 100;
+        if (typeof playerStats.hp !== 'number' || isNaN(playerStats.hp)) playerStats.hp = playerStats.maxHp;
+
+        if (typeof playerStats.maxMana !== 'number' || isNaN(playerStats.maxMana)) playerStats.maxMana = 50;
+        if (typeof playerStats.mana !== 'number' || isNaN(playerStats.mana)) playerStats.mana = playerStats.maxMana;
+
+        if (typeof playerStats.xp !== 'number' || isNaN(playerStats.xp)) playerStats.xp = 0;
+        if (typeof playerStats.level !== 'number' || isNaN(playerStats.level)) playerStats.level = 1;
+
+        // Safety: Ensure quests structure is valid
+        if (!playerStats.quests || typeof playerStats.quests !== 'object' || Array.isArray(playerStats.quests)) {
+            playerStats.quests = {
+                main: [],
+                active: [],
+                completed: [],
+                available: []
+            };
+        } else {
+            playerStats.quests.main = playerStats.quests.main || [];
+            playerStats.quests.active = playerStats.quests.active || [];
+            playerStats.quests.completed = playerStats.quests.completed || [];
+            playerStats.quests.available = playerStats.quests.available || [];
+        }
+
+        // Migrate: Consolidate consumables and shards into stacks (for old saves with separate items)
         if (playerStats.inventory && playerStats.inventory.length > 0) {
             const consolidatedInventory = [];
-            const consumableStacks = {}; // Map name -> stacked item
+            const itemStacks = {}; // Map key -> stacked item
 
-            console.log('📦 Migration: Starting consumable consolidation...');
-            console.log('   Original inventory:', playerStats.inventory.map(i => `${i.name} (qty:${i.quantity || 1})`));
+            console.log('📦 Migration: Starting inventory consolidation...');
 
             playerStats.inventory.forEach(item => {
-                if (item.type === 'consumable' && item.name) {
-                    if (consumableStacks[item.name]) {
+                const isStackable = ItemManager.isStackable(item);
+
+                if (isStackable) {
+                    // Unique key for stacking - use ID if available, otherwise name
+                    const stackKey = item.id || item.name;
+
+
+                    if (itemStacks[stackKey]) {
                         // Add to existing stack
-                        const oldQty = consumableStacks[item.name].quantity || 1;
+                        const oldQty = itemStacks[stackKey].quantity || 1;
                         const addQty = item.quantity || 1;
-                        consumableStacks[item.name].quantity = oldQty + addQty;
-                        console.log(`   Stacked: ${item.name} (${oldQty} + ${addQty} = ${consumableStacks[item.name].quantity})`);
+                        itemStacks[stackKey].quantity = oldQty + addQty;
+                        console.log(`   Stacked: ${stackKey} (${oldQty} + ${addQty} = ${itemStacks[stackKey].quantity})`);
                     } else {
                         // Create new stack
                         item.quantity = item.quantity || 1;
-                        consumableStacks[item.name] = item;
+                        itemStacks[stackKey] = item;
                         consolidatedInventory.push(item);
-                        console.log(`   New stack: ${item.name} (qty:${item.quantity})`);
+                        console.log(`   New stack: ${stackKey} (qty:${item.quantity})`);
                     }
                 } else {
-                    // Non-consumable items stay as-is
+                    // Non-stackable items stay as-is
                     consolidatedInventory.push(item);
                 }
             });
 
             playerStats.inventory = consolidatedInventory;
-            console.log('   Final inventory:', playerStats.inventory.map(i => `${i.name} (qty:${i.quantity || 'N/A'})`));
-            console.log('📦 Migrated inventory: consolidated consumables into stacks');
+            console.log('📦 Migration complete: consolidated items into stacks');
         }
 
         // Restore UQE Quests
@@ -12099,6 +12488,35 @@ function showFallenDialog() {
                 isGamePaused = false;
 
                 showDamageNumber(player.x, player.y - 50, "Respawned!", 0xffff00);
+
+                // 4.5 Invulnerability Grace Period (3 seconds)
+                playerStats.isInvulnerable = true;
+                addChatMessage("Invincibility active (3s grace period)", 0xffff00, '✨');
+
+                // Visual feedback: Flash player
+                if (player && player.active) {
+                    const flashTween = scene.tweens.add({
+                        targets: player,
+                        alpha: 0.5,
+                        duration: 150,
+                        yoyo: true,
+                        repeat: 10 // ~3 seconds of flashing
+                    });
+
+                    scene.time.delayedCall(3000, () => {
+                        playerStats.isInvulnerable = false;
+                        if (player && player.active) {
+                            player.setAlpha(1);
+                            addChatMessage("Invincibility expired", 0xaaaaaa, '🛡️');
+                        }
+                    });
+                } else {
+                    // Fallback if player sprite missing
+                    scene.time.delayedCall(3000, () => {
+                        playerStats.isInvulnerable = false;
+                    });
+                }
+
                 console.log('✅ Respawn Complete');
 
                 // 5. Cleanup Fader (Chain a quick fade out for smoothness, or destroy)
@@ -12137,8 +12555,8 @@ function checkAutoLoad() {
 // REGENERATION SYSTEM
 // ============================================
 
-let regenTimerEvent = null;
-let hpRegenTimerEvent = null;
+// regenTimerEvent declared globally
+// hpRegenTimerEvent declared globally
 
 /**
  * Starts the passive regeneration loop
@@ -12220,46 +12638,7 @@ function startHpRegen() {
 /**
  * Ability definitions
  */
-const ABILITY_DEFINITIONS = {
-    heal: {
-        name: 'Heal',
-        manaCost: 20,
-        cooldown: 3000, // 3 seconds
-        healAmount: 30,
-        icon: 'heal_effect',
-        color: 0x00ff00,
-        description: 'Restores 30 HP'
-    },
-    fireball: {
-        name: 'Fireball',
-        manaCost: 15,
-        cooldown: 2000, // 2 seconds
-        damage: 25,
-        range: 150,
-        icon: 'fireball_effect',
-        color: 0xff4400,
-        description: 'Deals damage in a line'
-    },
-    ice_nova: {
-        name: 'Ice Nova',
-        manaCost: 20,
-        cooldown: 3000, // 3 seconds
-        damage: 15,
-        range: 150,
-        icon: 'fireball_effect', // Reusing effect sprite by color tinting
-        color: 0x00ffff,
-        description: 'Freezes enemies and deals damage'
-    },
-    shield: {
-        name: 'Shield',
-        manaCost: 30,
-        cooldown: 5000, // 5 seconds
-        duration: 3000,
-        icon: 'shield_effect',
-        color: 0xffd700,
-        description: 'Reduces damage taken'
-    }
-};
+
 
 /**
  * Create ability bar UI
@@ -12371,7 +12750,7 @@ function createAbilityBar() {
         fill: '#ff4444'
     }).setScrollFactor(0).setDepth(202).setOrigin(0.5, 0.5);
 
-    // Mana Potion slot (key 5)
+    // Mana Potion slot (key 6)
     const manaPotionX = potionStartX + abilitySpacing;
 
     const manaPotionBg = scene.add.rectangle(manaPotionX, abilityBarY, 60, 60, 0x222244, 0.9)
@@ -12555,12 +12934,24 @@ function castHeal() {
     playSound('heal_cast');
 
     // Effect: Heal player
-    const healAmount = ABILITY_DEFINITIONS.heal.healAmount;
+    // Safety check for ability definitions
+    const healDef = (typeof ABILITY_DEFINITIONS !== 'undefined' && ABILITY_DEFINITIONS.heal)
+        ? ABILITY_DEFINITIONS.heal
+        : { healAmount: 50 }; // Default fallback
+
+    const healAmount = healDef.healAmount || 50;
     const oldHp = playerStats.hp;
     playerStats.hp = Math.min(playerStats.maxHp, playerStats.hp + healAmount);
+
+    // Ensure HP is a valid number, recover from NaN if it happened
+    if (isNaN(playerStats.hp)) {
+        console.warn('⚠️ Player HP became NaN during heal! Resetting to MaxHP.');
+        playerStats.hp = playerStats.maxHp;
+    }
+
     const actualHeal = playerStats.hp - oldHp;
 
-    showDamageNumber(player.x, player.y - 30, `+${actualHeal}`, 0x00ff00, false);
+    showDamageNumber(player.x, player.y - 30, `+${Math.floor(actualHeal)}`, 0x00ff00, false);
 
     // Visual effect
     const particles = scene.add.particles(player.x, player.y, 'heal_effect', {
@@ -12577,6 +12968,407 @@ function castHeal() {
     });
 }
 
+// ============================================
+// ABILITY CAST FUNCTIONS
+// ============================================
+
+/**
+ * Cast Fireball - Shoots a fireball projectile at nearest enemy
+ */
+function castFireball() {
+    const scene = game.scene.scenes[0];
+    if (!scene || !player) return;
+
+    // Find nearest enemy
+    let nearestMonster = null;
+    let nearestDist = Infinity;
+    monsters.forEach(m => {
+        if (m && m.active) {
+            const dist = Phaser.Math.Distance.Between(player.x, player.y, m.x, m.y);
+            if (dist < nearestDist && dist < 400) {
+                nearestDist = dist;
+                nearestMonster = m;
+            }
+        }
+    });
+
+    // Visual effect: Create fireball projectile
+    const fireball = scene.add.circle(player.x, player.y, 12, 0xff4400).setDepth(100);
+    const glow = scene.add.circle(player.x, player.y, 18, 0xffff00, 0.4).setDepth(99);
+
+    if (nearestMonster) {
+        // Animate toward monster
+        scene.tweens.add({
+            targets: [fireball, glow],
+            x: nearestMonster.x,
+            y: nearestMonster.y,
+            duration: 300,
+            onComplete: () => {
+                // Explosion effect
+                const explosion = scene.add.circle(nearestMonster.x, nearestMonster.y, 5, 0xff6600);
+                explosion.setDepth(101);
+                scene.tweens.add({
+                    targets: explosion,
+                    scale: 4,
+                    alpha: 0,
+                    duration: 300,
+                    onComplete: () => explosion.destroy()
+                });
+
+                // Deal damage (assuming damageMonster exists)
+                if (typeof damageMonster === 'function') {
+                    damageMonster(nearestMonster, 30 + playerStats.level * 5);
+                }
+
+                fireball.destroy();
+                glow.destroy();
+            }
+        });
+    } else {
+        // No target - fire forward
+        const dir = player.facingDirection || 'south';
+        const targetX = player.x + (dir === 'east' ? 200 : dir === 'west' ? -200 : 0);
+        const targetY = player.y + (dir === 'south' ? 200 : dir === 'north' ? -200 : 0);
+
+        scene.tweens.add({
+            targets: [fireball, glow],
+            x: targetX,
+            y: targetY,
+            duration: 400,
+            onComplete: () => {
+                fireball.destroy();
+                glow.destroy();
+            }
+        });
+    }
+
+    // Sound
+    if (typeof playSound === 'function') playSound('fireball_cast');
+    addChatMessage('Fireball!', 0xff4400, '🔥');
+}
+
+/**
+ * Cast Heal - Restores player HP with visual effect
+ */
+function castHeal() {
+    const scene = game.scene.scenes[0];
+    if (!scene || !player) return;
+
+    const healAmount = 50 + playerStats.level * 10;
+    playerStats.hp = Math.min(playerStats.hp + healAmount, playerStats.maxHp);
+
+    // Green glow effect
+    const glow = scene.add.circle(player.x, player.y, 40, 0x00ff00, 0.4).setDepth(100);
+    scene.tweens.add({
+        targets: glow,
+        scale: 2,
+        alpha: 0,
+        duration: 800,
+        onComplete: () => glow.destroy()
+    });
+
+    // Rising plus signs
+    for (let i = 0; i < 5; i++) {
+        const plus = scene.add.text(
+            player.x + Phaser.Math.Between(-30, 30),
+            player.y,
+            '+',
+            { fontSize: '20px', fill: '#00ff00', fontStyle: 'bold' }
+        ).setDepth(101).setOrigin(0.5);
+
+        scene.tweens.add({
+            targets: plus,
+            y: player.y - 60,
+            alpha: 0,
+            delay: i * 100,
+            duration: 600,
+            onComplete: () => plus.destroy()
+        });
+    }
+
+    if (typeof playSound === 'function') playSound('heal_cast');
+    if (typeof showDamageNumber === 'function') {
+        showDamageNumber(player.x, player.y - 30, `+${healAmount} HP`, 0x00ff00);
+    }
+    addChatMessage(`Healed for ${healAmount} HP!`, 0x00ff00, '💚');
+    updateUI();
+}
+
+/**
+ * Cast Shield - Creates a protective particle barrier
+ */
+function castShield() {
+    const scene = game.scene.scenes[0];
+    if (!scene || !player) return;
+
+    // Play sound
+    if (typeof playSound === 'function') playSound('heal');
+
+    // Set invulnerability
+    playerStats.isInvulnerable = true;
+    const duration = 5000; // 5 seconds
+
+    // --- PARTICLE-BASED VISUAL EFFECTS ---
+
+    // Create orbiting shield particles
+    const particleCount = 8;
+    const orbitRadius = 50;
+    const particles = [];
+
+    for (let i = 0; i < particleCount; i++) {
+        const particle = scene.add.circle(player.x, player.y, 8, 0x00aaff, 0.8);
+        particle.setDepth(player.depth + 1);
+        particle.setStrokeStyle(2, 0x00ffff);
+        particle.baseAngle = (i / particleCount) * Math.PI * 2;
+        particles.push(particle);
+    }
+
+    // Central glow (soft, not geometric)
+    const glow = scene.add.circle(player.x, player.y, 40, 0x0088ff, 0.15);
+    glow.setDepth(player.depth);
+
+    // Sparkle emitter (continuous small particles)
+    let emitter = null;
+    if (scene.textures.exists('death_particle')) {
+        emitter = scene.add.particles(player.x, player.y, 'death_particle', {
+            speed: { min: 20, max: 50 },
+            lifespan: 600,
+            scale: { start: 0.8, end: 0 },
+            alpha: { start: 0.6, end: 0 },
+            quantity: 2,
+            frequency: 100,
+            emitZone: { type: 'edge', source: new Phaser.Geom.Circle(0, 0, orbitRadius), quantity: 16 },
+            blendMode: 'ADD',
+            tint: [0x00ffff, 0x0088ff, 0x00aaff]
+        });
+        emitter.setDepth(player.depth + 1);
+    }
+
+    // "SHIELD" text
+    const shieldText = scene.add.text(player.x, player.y - 60, '🛡️ PROTECTED', {
+        fontSize: '14px', fill: '#00ffff', fontStyle: 'bold', stroke: '#000', strokeThickness: 2
+    }).setOrigin(0.5).setDepth(player.depth + 2);
+
+    // Entrance burst
+    scene.cameras.main.flash(150, 0, 136, 255, false);
+
+    // Animation loop
+    let elapsed = 0;
+    const followEvent = scene.time.addEvent({
+        delay: 16,
+        loop: true,
+        callback: () => {
+            elapsed += 16;
+            const rotationSpeed = 0.003;
+
+            // Update orbiting particles
+            particles.forEach((p, idx) => {
+                const angle = p.baseAngle + elapsed * rotationSpeed;
+                p.x = player.x + Math.cos(angle) * orbitRadius;
+                p.y = player.y + Math.sin(angle) * orbitRadius;
+                // Pulse alpha
+                p.setAlpha(0.6 + Math.sin(elapsed * 0.01 + idx) * 0.3);
+            });
+
+            // Update glow and text position
+            glow.setPosition(player.x, player.y);
+            glow.setAlpha(0.15 + Math.sin(elapsed * 0.005) * 0.05);
+            shieldText.setPosition(player.x, player.y - 60);
+
+            // Update emitter position
+            if (emitter) emitter.setPosition(player.x, player.y);
+        }
+    });
+
+    // End shield after duration
+    scene.time.delayedCall(duration, () => {
+        playerStats.isInvulnerable = false;
+        followEvent.remove();
+
+        // Fade out all elements
+        particles.forEach(p => {
+            scene.tweens.add({
+                targets: p,
+                alpha: 0,
+                scale: 2,
+                duration: 300,
+                onComplete: () => p.destroy()
+            });
+        });
+
+        scene.tweens.add({
+            targets: [glow, shieldText],
+            alpha: 0,
+            duration: 300,
+            onComplete: () => {
+                glow.destroy();
+                shieldText.destroy();
+            }
+        });
+
+        if (emitter) {
+            emitter.stop();
+            scene.time.delayedCall(600, () => emitter.destroy());
+        }
+
+        addChatMessage('Shield faded.', 0x888888, '🛡️');
+    });
+
+    addChatMessage('Shield activated! (5s)', 0x00aaff, '🛡️');
+}
+
+/**
+ * Cast Ice Nova - AoE freeze/damage with dramatic expanding frost ring
+ */
+function castIceNova() {
+    const scene = game.scene.scenes[0];
+    if (!scene || !player) return;
+
+    // Play ice nova sound
+    try {
+        const iceNovaSound = scene.sound.add('ice_nova_sound');
+        iceNovaSound.play();
+        scene.time.delayedCall(2000, () => {
+            if (iceNovaSound && iceNovaSound.isPlaying) iceNovaSound.stop();
+        });
+    } catch (e) {
+        console.log('Ice Nova sound not loaded');
+    }
+
+    const damage = 40 + playerStats.level * 5;
+    const range = 200;
+
+    // --- VISUAL EFFECTS ---
+
+    // Central burst
+    const burst = scene.add.circle(player.x, player.y, 20, 0x00ffff, 0.8).setDepth(100);
+
+    // Expanding frost ring 1
+    const ring1 = scene.add.circle(player.x, player.y, 30, 0x00ffff, 0).setDepth(99);
+    ring1.setStrokeStyle(6, 0x88ffff);
+
+    // Expanding frost ring 2 (delayed)
+    const ring2 = scene.add.circle(player.x, player.y, 30, 0x00ccff, 0).setDepth(98);
+    ring2.setStrokeStyle(4, 0x00ffff);
+
+    // Expanding frost ring 3 (more delayed)
+    const ring3 = scene.add.circle(player.x, player.y, 30, 0xffffff, 0).setDepth(97);
+    ring3.setStrokeStyle(2, 0xaaffff);
+
+    // Central burst animation
+    scene.tweens.add({
+        targets: burst,
+        scale: 3,
+        alpha: 0,
+        duration: 400,
+        ease: 'Cubic.out',
+        onComplete: () => burst.destroy()
+    });
+
+    // Ring 1 expansion
+    scene.tweens.add({
+        targets: ring1,
+        scale: range / 30,
+        alpha: { from: 1, to: 0 },
+        duration: 600,
+        ease: 'Cubic.out',
+        onComplete: () => ring1.destroy()
+    });
+
+    // Ring 2 expansion (slight delay)
+    scene.tweens.add({
+        targets: ring2,
+        scale: range / 30,
+        alpha: { from: 0.8, to: 0 },
+        duration: 600,
+        delay: 100,
+        ease: 'Cubic.out',
+        onComplete: () => ring2.destroy()
+    });
+
+    // Ring 3 expansion (more delay)
+    scene.tweens.add({
+        targets: ring3,
+        scale: range / 30,
+        alpha: { from: 0.6, to: 0 },
+        duration: 600,
+        delay: 200,
+        ease: 'Cubic.out',
+        onComplete: () => ring3.destroy()
+    });
+
+    // Ice crystal particles
+    for (let i = 0; i < 12; i++) {
+        const angle = (i / 12) * Math.PI * 2;
+        const crystal = scene.add.star(player.x, player.y, 4, 5, 12, 0x00ffff).setDepth(101);
+        crystal.setAlpha(0.8);
+
+        scene.tweens.add({
+            targets: crystal,
+            x: player.x + Math.cos(angle) * range,
+            y: player.y + Math.sin(angle) * range,
+            alpha: 0,
+            angle: 180,
+            duration: 500,
+            ease: 'Cubic.out',
+            onComplete: () => crystal.destroy()
+        });
+    }
+
+    // Screen shake
+    scene.cameras.main.shake(300, 0.01);
+
+    // Camera tint flash
+    scene.cameras.main.flash(150, 0, 255, 255, false);
+
+    // Damage enemies in range
+    monsters.forEach(m => {
+        if (m && m.active) {
+            const dist = Phaser.Math.Distance.Between(player.x, player.y, m.x, m.y);
+            if (dist <= range) {
+                if (typeof damageMonster === 'function') {
+                    damageMonster(m, damage);
+                }
+
+                // Freeze visual on monster
+                const freeze = scene.add.circle(m.x, m.y, 20, 0x00ffff, 0.5).setDepth(50);
+                scene.tweens.add({
+                    targets: freeze,
+                    alpha: 0,
+                    duration: 1000,
+                    onComplete: () => freeze.destroy()
+                });
+
+                // Slow effect - use monster.speed directly (not stats.speed)
+                if (m.speed && !m.isFrozen) {
+                    m.originalSpeed = m.speed;
+                    m.speed *= 0.3; // 70% slow
+                    m.isFrozen = true;
+
+                    // Tint blue
+                    if (typeof m.setTint === 'function') {
+                        m.setTint(0x00ffff);
+                    }
+
+                    // Restore after 3 seconds
+                    scene.time.delayedCall(3000, () => {
+                        if (m && m.active) {
+                            m.speed = m.originalSpeed || 50;
+                            m.isFrozen = false;
+                            if (typeof m.clearTint === 'function') {
+                                m.clearTint();
+                            }
+                        }
+                    });
+                }
+            }
+        }
+    });
+
+    if (typeof playSound === 'function') playSound('ice_nova_cast');
+    addChatMessage(`Ice Nova! ${damage} damage in ${range} range!`, 0x00ffff, '❄️');
+}
+
 /**
  * Update Ability/Mana Bar UI
  */
@@ -12591,23 +13383,23 @@ function updateAbilityBar() {
 
 /**
  * Use an ability
- * @param {number} abilityIndex - 1, 2, or 3
+ * @param {number} abilityIndex - 1-based index matching hotbar position
  */
 window.useAbility = function (abilityIndex) {
     console.log(`[Ability Debug] useAbility called with index: ${abilityIndex}`);
-    // Implement ability logic here based on index
-    // 1: Heal
-    // 2: Fireball
-    // 3: Ice Nova
-    // 4: Shield
 
-    // Check if ability is unlocked or available (simplified for now)
-    const abilityName = abilityIndex === 1 ? 'heal' :
-        (abilityIndex === 2 ? 'fireball' :
-            (abilityIndex === 3 ? 'ice_nova' : 'shield'));
+    // Get ability name from ABILITY_DEFINITIONS by index order
+    const abilityNames = Object.keys(ABILITY_DEFINITIONS);
+    const arrayIndex = abilityIndex - 1; // Convert 1-based to 0-based
 
-    // Get definition directly
+    if (arrayIndex < 0 || arrayIndex >= abilityNames.length) {
+        console.warn(`[Ability Debug] Invalid ability index: ${abilityIndex}`);
+        return;
+    }
+
+    const abilityName = abilityNames[arrayIndex];
     const abilityDef = ABILITY_DEFINITIONS[abilityName];
+
     if (!abilityDef) {
         console.error(`[Ability Debug] Definition not found for ${abilityName} (index ${abilityIndex})`);
         return;
@@ -12620,19 +13412,23 @@ window.useAbility = function (abilityIndex) {
         return;
     }
 
-    /* 
-       Note: Actual ability implementation was likely here before. 
-       Re-implementing basic dispatch.
-    */
-
-    if (abilityIndex === 1) {
-        castHeal();
-    } else if (abilityIndex === 2) {
-        castFireball();
-    } else if (abilityIndex === 3) {
-        castIceNova();
-    } else if (abilityIndex === 4) {
-        castShield();
+    // Dispatch to the correct ability cast function
+    switch (abilityName) {
+        case 'fireball':
+            castFireball();
+            break;
+        case 'heal':
+            castHeal();
+            break;
+        case 'shield':
+            castShield();
+            break;
+        case 'ice_nova':
+            castIceNova();
+            break;
+        default:
+            console.warn(`[Ability Debug] No cast function for: ${abilityName}`);
+            return;
     }
 
     // Deduct mana
@@ -12645,7 +13441,7 @@ window.useAbility = function (abilityIndex) {
 
 /**
  * Trigger visual cooldown on ability bar
- * @param {number} abilityIndex - 1, 2, or 3
+ * @param {number} abilityIndex - 1-based index matching hotbar position
  */
 function triggerAbilityCooldown(abilityIndex) {
     if (!abilityBar) { console.warn('[Cooldown Debug] abilityBar missing'); return; }
@@ -12658,10 +13454,11 @@ function triggerAbilityCooldown(abilityIndex) {
     }
 
     console.log(`[Cooldown Debug] Triggering cooldown for ability ${abilityIndex}`);
-    const abilityName = abilityIndex === 1 ? 'heal' :
-        (abilityIndex === 2 ? 'fireball' :
-            (abilityIndex === 3 ? 'ice_nova' : 'shield'));
-    const cooldownDuration = ABILITY_DEFINITIONS[abilityName].cooldown;
+
+    // Get ability name from ABILITY_DEFINITIONS by index order
+    const abilityNames = Object.keys(ABILITY_DEFINITIONS);
+    const abilityName = abilityNames[abilityIndex - 1];
+    const cooldownDuration = ABILITY_DEFINITIONS[abilityName]?.cooldown || 1000;
 
     // Show overlay
     if (button.cooldownOverlay) {
@@ -12919,116 +13716,7 @@ function createFireballExplosion(x, y) {
     }
 }
 
-function castIceNova() {
-    // Define scene and other variables first
-    const scene = game.scene.scenes[0];
-    // Play sound with 2s duration limit
-    const iceNovaSound = scene.sound.add('ice_nova_sound');
-    iceNovaSound.play();
-    scene.time.delayedCall(2000, () => {
-        if (iceNovaSound && iceNovaSound.isPlaying) {
-            iceNovaSound.stop();
-        }
-    });
-    // END_SOUND_FIX
-
-    // ICE NOVA LOGIC: PBAOE (Point Blank Area of Effect)
-    const radius = 150;
-    let hitCount = 0;
-
-    monsters.forEach(monster => {
-        if (!monster || !monster.active || monster.hp <= 0) return;
-
-        const dist = Phaser.Math.Distance.Between(player.x, player.y, monster.x, monster.y);
-
-        if (dist <= radius) {
-            hitCount++;
-            const baseDamage = playerStats.attack * 1.5;
-            const damage = Math.floor(baseDamage * Phaser.Math.FloatBetween(0.8, 1.2));
-
-            monster.hp -= damage;
-            createHitEffects(monster.x, monster.y, false, 'ice');
-            showDamageNumber(monster.x, monster.y - 20, `-${damage}`, 0x00ffff, false, 'ice');
-
-            // "Freeze" / Slow effect (simulate by reducing speed temp)
-            if (monster.speed && !monster.isFrozen) {
-                monster.originalSpeed = monster.speed;
-                monster.speed *= 0.5;
-                monster.isFrozen = true;
-                // Tint blue
-                if (typeof monster.setTint === 'function') {
-                    monster.setTint(0x00ffff);
-                }
-
-                // Restore after 3 seconds
-                game.scene.scenes[0].time.delayedCall(3000, () => {
-                    if (monster && monster.active) {
-                        monster.speed = monster.originalSpeed || 50;
-                        monster.isFrozen = false;
-                        if (typeof monster.clearTint === 'function') {
-                            monster.clearTint();
-                        }
-                    }
-                });
-            }
-
-            if (monster.hp <= 0) {
-                handleMonsterDeath(monster);
-            }
-        }
-    });
-
-    addChatMessage(`Ice Nova froze ${hitCount} enemies!`, 0x00ffff);
-}
-
-function castShield() {
-    try {
-        // Use 'heal' sound as placeholder (shield_cast not loaded)
-        playSound('heal');
-
-        // SHIELD LOGIC: Temporary Health / Defense Buff
-        const healAmount = 20;
-        playerStats.hp = Math.min(playerStats.maxHp, playerStats.hp + healAmount);
-
-        if (player && player.active) {
-            showDamageNumber(player.x, player.y - 30, `+${healAmount} Shield`, 0xffff00);
-
-            // Add visual indicator (yellow circle)
-            const scene = game.scene.scenes[0];
-            const shieldSprite = scene.add.circle(player.x, player.y, 30, 0xffff00, 0.3);
-            shieldSprite.setDepth(player.depth + 1);
-
-            // Follow player for 5 seconds
-            const duration = 5000;
-            const startTime = scene.time.now;
-
-            const updateShield = () => {
-                if (!player || !player.active || !shieldSprite.active) {
-                    if (shieldSprite && shieldSprite.active) shieldSprite.destroy();
-                    scene.events.off('update', updateShield);
-                    return;
-                }
-
-                const elapsed = scene.time.now - startTime;
-                if (elapsed > duration) {
-                    shieldSprite.destroy();
-                    scene.events.off('update', updateShield);
-                    addChatMessage("Divine Shield faded.", 0xffff00);
-                    return;
-                }
-
-                shieldSprite.x = player.x;
-                shieldSprite.y = player.y;
-                shieldSprite.setAlpha(0.3 + Math.sin(elapsed / 200) * 0.1);
-            };
-
-            scene.events.on('update', updateShield);
-            addChatMessage("Divine Shield activated!", 0xffff00);
-        }
-    } catch (error) {
-        console.error("Error in castShield:", error);
-    }
-}
+// Note: castIceNova and castShield are defined earlier with enhanced visuals (around line 13057 and 13170)
 
 // Expose ability functions globally for controller
 window.usePotion = usePotion;
@@ -13076,7 +13764,12 @@ function processDialogQueue() {
 
     try {
         if (item.type === 'QUEST_COMPLETED') {
-            showQuestCompletedPopupEnhanced(item.data);
+            // Use standard popup if enhanced is missing
+            if (typeof showQuestCompletedPopupEnhanced === 'function') {
+                showQuestCompletedPopupEnhanced(item.data);
+            } else {
+                showQuestCompletedPopup(item.data);
+            }
             // Remove from queue ONLY after showing? 
             // Actually showQuestCompletedPopup creates a modal that blocks via questCompletedModal check
             // So we can remove it from queue now, and the next check will be blocked by the modal
@@ -13214,6 +13907,7 @@ function showQuestCompletedPopup(quest) {
 
     // Store as global blocker with destroy method
     window.questCompletedModal = {
+        visible: true, // Explicitly set for UIManager check
         closeBtn: closeBtnBg,
         destroy: () => {
             if (overlay) overlay.destroy();
@@ -13585,7 +14279,7 @@ function playSound(soundName) {
         // Check if sound exists in cache
         if (scene.cache.audio.exists(soundName)) {
             // Play sound with volume - creates a new instance each time
-            scene.sound.play(soundName, { volume: 0.7 });
+            scene.sound.play(soundName, { volume: (typeof window.sfxVolume !== 'undefined') ? window.sfxVolume : 0.7 });
             console.log(`🔊 Playing: ${soundName}`); // Debug logging
         } else {
             // Sound not in cache
@@ -13618,7 +14312,7 @@ function initializeSounds() {
             // Check if audio is in cache (loaded successfully)
             if (scene.cache.audio.exists(soundName)) {
                 // Create sound object for later use
-                soundEffects[soundName] = scene.sound.add(soundName, { volume: 0.7 });
+                soundEffects[soundName] = scene.sound.add(soundName, { volume: (typeof window.sfxVolume !== 'undefined') ? window.sfxVolume : 0.7 });
                 console.log(`  ✅ Loaded: ${soundName}`);
             } else {
                 console.log(`  ⚠️ Not in cache: ${soundName}`);
@@ -13716,34 +14410,43 @@ function createAssetsWindow() {
  */
 function spawnInitialMonsters(mapWidth, mapHeight) {
     // Use data-driven monster types if available from Method 2
-    let monsterTypes = [
-        { name: 'Goblin', textureKey: 'monster_goblin', hp: 30, attack: 5, speed: 50, xp: 10, isProcedural: false, spawnAmount: [1, 3] },
-        { name: 'Orc', textureKey: 'monster_orc', hp: 50, attack: 8, speed: 40, xp: 20, isProcedural: false, spawnAmount: [1, 2] },
-        { name: 'Skeleton', textureKey: 'monster_skeleton', hp: 25, attack: 6, speed: 60, xp: 15, isProcedural: false, spawnAmount: [1, 2] },
-        { name: 'Spider', textureKey: 'monster_spider', hp: 20, attack: 4, speed: 70, xp: 8, isProcedural: false, spawnAmount: [3, 5] },
-        { name: 'Slime', textureKey: 'monster_slime', hp: 15, attack: 3, speed: 30, xp: 5, isProcedural: false, spawnAmount: [2, 4] },
-        { name: 'Wolf', textureKey: 'monster_wolf', hp: 40, attack: 7, speed: 65, xp: 18, isProcedural: false, spawnAmount: [2, 3] },
-        { name: 'Dragon', textureKey: 'monster_dragon', hp: 80, attack: 12, speed: 35, xp: 40, isProcedural: false, spawnAmount: [1, 1] },
-        { name: 'Ghost', textureKey: 'monster_ghost', hp: 35, attack: 6, speed: 55, xp: 12, isProcedural: false, spawnAmount: [1, 2] },
-        { name: 'Echo_Mite', textureKey: 'monster_echo_mite', hp: 15, attack: 3, speed: 60, xp: 5, isProcedural: false, spawnAmount: [2, 4] }
-    ];
+    // Use data-driven monster types if available from Method 2
+    let monsterTypes = [];
 
     if (monsterRenderer && Object.keys(monsterRenderer.monsterBlueprints).length > 0) {
         const uniqueBlueprints = Array.from(new Set(Object.values(monsterRenderer.monsterBlueprints)));
-
         uniqueBlueprints.forEach(bp => {
-            monsterTypes.push({
-                name: bp.name,
-                id: bp.id,
-                hp: bp.stats.hp,
-                attack: bp.stats.attack,
-                speed: bp.stats.speed,
-                xp: bp.stats.xp,
-                textureKey: bp.id,
-                isProcedural: true,
-                spawnAmount: bp.stats.spawnAmount || [1, 1]
-            });
+            // Include all (bosses might be filtered differently, but initial spawn is usually wilderness)
+            // Fix: Check both top-level isBoss and nested stats.isBoss
+            if (bp.id !== 'boss' && !bp.isBoss && (!bp.stats || !bp.stats.isBoss)) {
+                monsterTypes.push({
+                    name: bp.name,
+                    id: bp.id,
+                    hp: bp.stats.hp,
+                    attack: bp.stats.attack,
+                    speed: bp.stats.speed,
+                    xp: bp.stats.xp,
+                    textureKey: bp.id,
+                    generationType: bp.generationType,
+                    proceduralConfig: bp.proceduralConfig,
+                    isProcedural: true,
+                    spawnAmount: bp.stats.spawnAmount || [1, 1]
+                });
+            }
         });
+    } else {
+        // Fallback to updated hardcoded list
+        monsterTypes = [
+            { name: 'Goblin', id: 'procedural_goblin', generationType: 'mask_based', textureKey: 'monster_goblin', hp: 30, attack: 5, speed: 50, xp: 10, isProcedural: true, spawnAmount: [1, 3] },
+            { name: 'Orc', id: 'procedural_orc', generationType: 'mask_based', textureKey: 'monster_orc', hp: 50, attack: 8, speed: 40, xp: 20, isProcedural: true, spawnAmount: [1, 2] },
+            { name: 'Skeleton', id: 'procedural_skeleton', generationType: 'mask_based', textureKey: 'monster_skeleton', hp: 25, attack: 6, speed: 60, xp: 15, isProcedural: true, spawnAmount: [1, 2] },
+            { name: 'Spider', id: 'procedural_spider', generationType: 'mask_based', textureKey: 'monster_spider', hp: 20, attack: 4, speed: 70, xp: 8, isProcedural: true, spawnAmount: [3, 5] },
+            { name: 'Slime', id: 'procedural_slime', generationType: 'cellular_automata', textureKey: 'monster_slime', hp: 15, attack: 3, speed: 30, xp: 5, isProcedural: true, spawnAmount: [2, 4] },
+            { name: 'Wolf', id: 'procedural_wolf', generationType: 'mask_based', textureKey: 'monster_wolf', hp: 40, attack: 7, speed: 65, xp: 18, isProcedural: true, spawnAmount: [2, 3] },
+            { name: 'Dragon', id: 'procedural_dragon', generationType: 'mask_based', textureKey: 'monster_dragon', hp: 80, attack: 12, speed: 35, xp: 40, isProcedural: true, spawnAmount: [1, 1] },
+            { name: 'Ghost', id: 'procedural_ghost', generationType: 'cellular_automata', textureKey: 'monster_ghost', hp: 35, attack: 6, speed: 55, xp: 12, isProcedural: true, spawnAmount: [1, 2] },
+            { name: 'Echo_Mite', id: 'procedural_echo_mite', generationType: 'cellular_automata', textureKey: 'monster_echo_mite', hp: 15, attack: 3, speed: 60, xp: 5, isProcedural: true, spawnAmount: [2, 4] }
+        ];
     }
 
     // Spawn monsters spread across entire map, avoiding player spawn area
@@ -13796,39 +14499,140 @@ function spawnMonster(x, y, type, hpOverride, attackOverride, xpOverride, isBoss
     const scene = game.scene.scenes[0];
     let monster;
 
-    // Check if we should use Method 2 (procedural blueprints)
-    const canUseMethod2 = monsterRenderer && (monsterRenderer.monsterBlueprints[type.name] || monsterRenderer.monsterBlueprints[type.name.toLowerCase()] || (type.id && monsterRenderer.monsterBlueprints[type.id]));
-
-    if (type.isProcedural && canUseMethod2) {
-        const blueprintId = type.id && monsterRenderer.monsterBlueprints[type.id] ? type.id :
-            (monsterRenderer.monsterBlueprints[type.name] ? type.name : type.name.toLowerCase());
-
-        console.log(`👾 Spawning Method 2 monster: ${type.name} (${blueprintId})`);
-        monster = monsterRenderer.createMonster(x, y, blueprintId);
-        monster.setData('isMethod2', true);
-        monster.setData('blueprintId', blueprintId);
-
-        if (monster) {
-            // Add name and stats for common game logic
-            monster.name = type.name;
-            monster.monsterId = type.id;
-            monster.monsterType = type.name.toLowerCase();
-            monster.blueprintId = blueprintId; // Crucial for animation skip check
-            monster.setDepth(5); // Ensure they appear above tiles
-            monster.stats = { ...type };
-
-            // Common properties initialized below the if/else
+    // Handle string type input (look up blueprint or default)
+    if (typeof type === 'string') {
+        const typeName = type;
+        // Try to find in monsterRenderer blueprints
+        if (monsterRenderer && monsterRenderer.monsterBlueprints) {
+            const bp = monsterRenderer.monsterBlueprints[typeName] ||
+                monsterRenderer.monsterBlueprints[typeName.toLowerCase()] ||
+                Object.values(monsterRenderer.monsterBlueprints).find(m => m.name.toLowerCase() === typeName.toLowerCase());
+            if (bp) {
+                type = {
+                    name: bp.name,
+                    id: bp.id,
+                    hp: bp.stats.hp,
+                    attack: bp.stats.attack,
+                    speed: bp.stats.speed,
+                    xp: bp.stats.xp,
+                    xp: bp.stats.xp,
+                    generationType: bp.generationType,
+                    proceduralConfig: bp.proceduralConfig,
+                    isProcedural: true // Assume blueprint ==> procedural (Method 2 or CA)
+                };
+            } else {
+                // Fallback if not found in blueprints
+                type = { name: typeName, textureKey: 'monster_' + typeName.toLowerCase() };
+            }
+        } else {
+            type = { name: typeName, textureKey: 'monster_' + typeName.toLowerCase() };
         }
-    } else {
-        // FALLBACK TO METHOD 1 (Spritesheets)
-        // Use directional sprite if available, otherwise fall back to old texture
-        const monsterType = type.name.toLowerCase();
-        const initialTexture = `monster_${monsterType}_south`; // Start facing south
-        const fallbackTexture = type.textureKey; // Old procedural texture
+    }
 
-        const textureToUse = scene.textures.exists(initialTexture) ? initialTexture : fallbackTexture;
-        monster = scene.physics.add.sprite(x, y, textureToUse);
-        monster.setDepth(5); // Monsters above tiles but below player
+    // Handle Object type input - ensure stats are populated from blueprints if missing
+    if (typeof type === 'object' && (!type.hp || !type.attack)) {
+        if (monsterRenderer && monsterRenderer.monsterBlueprints) {
+            // Try to look up by ID first, then Name
+            let bp = null;
+            if (type.id) bp = monsterRenderer.monsterBlueprints[type.id];
+            if (!bp && type.name) {
+                bp = monsterRenderer.monsterBlueprints[type.name] ||
+                    monsterRenderer.monsterBlueprints[type.name.toLowerCase()] ||
+                    Object.values(monsterRenderer.monsterBlueprints).find(m => m.name.toLowerCase() === type.name.toLowerCase());
+            }
+
+            if (bp) {
+                console.log(`🧬 Injecting data-driven stats for ${type.name || type.id}`);
+                // Inject stats if missing
+                if (type.hp === undefined && bp.stats.hp) type.hp = bp.stats.hp;
+                if (type.attack === undefined && bp.stats.attack) type.attack = bp.stats.attack;
+                if (type.speed === undefined && bp.stats.speed) type.speed = bp.stats.speed;
+                if (type.xp === undefined && bp.stats.xp) type.xp = bp.stats.xp;
+
+                // Also ensure procedural config matches if not set
+                if (type.generationType === undefined && bp.generationType) type.generationType = bp.generationType;
+                if (type.proceduralConfig === undefined && bp.proceduralConfig) type.proceduralConfig = bp.proceduralConfig;
+            }
+        }
+    }
+
+    // Generic Procedural Generation Check (Data-Driven)
+    if (type.generationType && type.generationType !== 'default') {
+        if (typeof ProceduralMonster !== 'undefined') {
+            // Pass generation type and config options
+            const textureKey = ProceduralMonster.generate(scene, type.monsterType || type.name, null, {
+                type: type.generationType,
+                ...type.proceduralConfig
+            });
+            monster = scene.physics.add.sprite(x, y, textureKey);
+            monster.setDepth(5);
+            monster.generationType = type.generationType; // Propagate to sprite
+            monster.isProcedural = true; // Mark as procedural
+            monster.stats = { ...type };
+            // Ensure basic stats if missing
+            if (!monster.stats.hp) monster.stats.hp = 15;
+            if (!monster.stats.attack) monster.stats.attack = 3;
+            if (!monster.stats.xp) monster.stats.xp = 5;
+            if (!monster.stats.speed) monster.stats.speed = 60;
+
+            // Go to common setup
+        }
+    }
+
+    // Check if we should use Method 2 (procedural blueprints)
+    if (!monster) {
+        if (type.id === 'procedural_beholder' || type.isProcedural) {
+            console.log(`👾 spawnMonster Check for ${type.name}:`, {
+                id: type.id,
+                isProcedural: type.isProcedural,
+                hasRenderer: !!monsterRenderer,
+                blueprintsCount: monsterRenderer ? Object.keys(monsterRenderer.monsterBlueprints).length : 0,
+                hasBlueprintId: monsterRenderer && type.id ? !!monsterRenderer.monsterBlueprints[type.id] : false
+            });
+        }
+        const canUseMethod2 = monsterRenderer && (monsterRenderer.monsterBlueprints[type.name] || monsterRenderer.monsterBlueprints[type.name.toLowerCase()] || (type.id && monsterRenderer.monsterBlueprints[type.id]));
+
+        if (type.isProcedural && canUseMethod2) {
+            const blueprintId = type.id && monsterRenderer.monsterBlueprints[type.id] ? type.id :
+                (monsterRenderer.monsterBlueprints[type.name] ? type.name : type.name.toLowerCase());
+
+            console.log(`👾 Spawning Method 2 monster: ${type.name} (${blueprintId})`);
+            monster = monsterRenderer.createMonster(x, y, blueprintId);
+
+            monster.setData('isMethod2', true);
+            monster.setData('blueprintId', blueprintId);
+
+            if (monster) {
+                // Add name and stats for common game logic
+                monster.name = type.name;
+                monster.monsterId = type.id;
+                monster.monsterType = type.name.toLowerCase();
+                monster.blueprintId = blueprintId; // Crucial for animation skip check
+                monster.setDepth(5); // Ensure they appear above tiles
+                monster.stats = { ...type };
+
+                // Common properties initialized below the if/else
+            }
+        } else {
+            // PROCEED WITH PROCEDURAL FALLBACK (Method 2 or Basic Shape)
+            // If no unique blueprint found, use a default texture/shape to ensure consistency
+            // instead of trying to load a sprite.
+
+            // Check if we have a texture, if not generate a simple placeholder
+            const fallbackKey = 'monster_placeholder_' + type.name;
+            if (!scene.textures.exists(fallbackKey)) {
+                const color = 0xFF0000; // Default red
+                const graphics = scene.make.graphics({ x: 0, y: 0, add: false });
+                graphics.fillStyle(color, 1);
+                graphics.fillRect(0, 0, 32, 32);
+                graphics.generateTexture(fallbackKey, 32, 32);
+            }
+
+            console.warn(`⚠️ No blueprint found for ${type.name}. Using default procedural placeholder.`);
+            monster = scene.physics.add.sprite(x, y, fallbackKey);
+            monster.setDepth(5);
+            monster.isProcedural = true;
+        }
     }
 
     if (monster) {
@@ -13841,13 +14645,45 @@ function spawnMonster(x, y, type, hpOverride, attackOverride, xpOverride, isBoss
         const diffSettings = window.Constants?.DIFFICULTY?.[difficulty] || { hpMult: 1, dmgMult: 1 };
         const monsterScaling = window.Constants?.MONSTER_SCALING || { hpPerLevel: 0.15, attackPerLevel: 0.10 };
 
-        // Calculate monster level from XP reward (level = floor(xp / 5), minimum 1)
-        const xpReward = xpOverride !== undefined ? xpOverride : (type.xp || 10);
-        const monsterLvl = Math.max(1, Math.floor(xpReward / 5));
+        // --- NEW DYNAMIC SCALING ---
+        // Get player level (default to 1)
+        const playerLevel = (window.playerStats && window.playerStats.level) ? window.playerStats.level : 1;
 
-        // Apply level-based scaling: +hpPerLevel% HP and +attackPerLevel% attack per level
-        const levelHpMult = 1 + (monsterLvl - 1) * monsterScaling.hpPerLevel;
-        const levelAtkMult = 1 + (monsterLvl - 1) * monsterScaling.attackPerLevel;
+        // Calculate monster level: Player Level +/- variance
+        // Regular: -1 to +1 (e.g. Player Lv12 -> Mon Lv11-13)
+        // Boss: +2 to +4
+        let levelVariance = Phaser.Math.Between(-1, 1);
+        if (isBoss) levelVariance = Phaser.Math.Between(2, 4);
+
+        // If overrides exist (Dungeon), respect them? 
+        // Actually, dungeon generation usually passes 'spawnMonsterScaled' which calls this.
+        // If 'hpOverride' is passed, we usually assume the level logic shouldn't mess up too much,
+        // BUT 'monsterLvl' is used for the label.
+
+        // We stick to dynamic scaling UNLESS inside a dungeon context where precise control might be needed?
+        // For now, let's apply dynamic scaling generally since 'spawnMonsterScaled' doesn't pass a level override explicitly yet.
+
+        const monsterLvl = Math.max(1, playerLevel + levelVariance);
+
+        // Scale XP Reward based on Level
+        // If xpOverride is provided, use it. Otherwise, scale base XP.
+        // Formula: BaseXP * (1 + (Level-1) * 0.2) -> 20% more XP per level
+        let finalXp = xpOverride !== undefined ? xpOverride : (type.xp || 10);
+
+        if (xpOverride === undefined) {
+            const baseXp = type.xp || 10;
+            // Scale linearly
+            finalXp = Math.floor(baseXp * (1 + (monsterLvl - 1) * 0.25));
+        }
+
+        const xpReward = finalXp;
+        // ---------------------------
+
+        // Level-based scaling: Apply ONLY if stats weren't manually overridden (pre-scaled for dungeons)
+        // This prevents "Double Scaling" where dungeon stats are multiplied by level again
+        const hasOverrides = (hpOverride !== undefined || attackOverride !== undefined);
+        const levelHpMult = hasOverrides ? 1 : (1 + (monsterLvl - 1) * monsterScaling.hpPerLevel);
+        const levelAtkMult = hasOverrides ? 1 : (1 + (monsterLvl - 1) * monsterScaling.attackPerLevel);
 
         // Apply both level scaling and difficulty multipliers to HP and attack
         const baseHp = hpOverride !== undefined ? hpOverride : type.hp;
@@ -13869,6 +14705,22 @@ function spawnMonster(x, y, type, hpOverride, attackOverride, xpOverride, isBoss
         // Add Hover Effect
         if (typeof window.enableHoverEffect === 'function') {
             window.enableHoverEffect(monster, scene);
+        }
+
+        // Add Tooltip Listeners (if not already added by MonsterRenderer)
+        if (!monster.getData('isMethod2')) {
+            monster.on('pointerover', () => {
+                // console.log('🖱️ Mouse over monster (spawnMonster):', monster.monsterType);
+                if (window.UIManager && window.UIManager.showMonsterTooltip) {
+                    window.UIManager.showMonsterTooltip(monster, monster.x, monster.y);
+                }
+            });
+
+            monster.on('pointerout', () => {
+                if (window.UIManager && window.UIManager.hideTooltip) {
+                    window.UIManager.hideTooltip();
+                }
+            });
         }
 
         if (isBoss) {
@@ -13904,10 +14756,8 @@ function spawnMonster(x, y, type, hpOverride, attackOverride, xpOverride, isBoss
         monster.hpBar = scene.add.rectangle(0, 0, monsterHpBarWidth - 2, monsterHpBarHeight - 2, 0xff0000)
             .setDepth(7).setOrigin(0, 0.5).setScrollFactor(1);
 
-        // Create level label (calculate level from XP reward using sqrt for balanced progression)
-        // This formula accounts for players doing side quests + main quests
-        // Results: 5xp→Lv2, 10xp→Lv3, 15xp→Lv3, 20xp→Lv4, 40xp→Lv6
-        const monsterLevel = Math.max(1, Math.ceil(Math.sqrt((monster.xpReward || 10) * 2)));
+        // Create level label (use already calculated monster.level)
+        const monsterLevel = monsterLvl;
         monster.level = monsterLevel;
         monster.levelLabel = scene.add.text(0, 0, `Lv${monsterLevel}`, {
             fontSize: '8px',
@@ -13971,7 +14821,7 @@ function updateAssetsWindow() {
         { key: 'hit_player', path: 'assets/audio/hit_player.mp3' },
         { key: 'monster_die', path: 'assets/audio/monster_die.mp3' },
         { key: 'item_pickup', path: 'assets/audio/item_pickup.wav' },
-        { key: 'level_up', path: 'assets/audio/level_up.wav' },
+        { key: 'level_up', path: 'assets/audio/level-up.mp3' },
         { key: 'fireball_cast', path: 'assets/audio/fireball_cast.wav' },
         { key: 'heal_cast', path: 'assets/audio/heal_cast.wav' }
     ];
@@ -14872,6 +15722,11 @@ function updateMonsterAnimation(monster, delta) {
         monster.animationState = newState;
         monster.isMoving = isMoving;
 
+        // Skip texture updates for procedural monsters (they use generated textures)
+        if (monster.isProcedural || (monster.stats && (monster.stats.isProcedural || monster.stats.generationType)) || monster.generationType) {
+            return;
+        }
+
         // Get monster type name (lowercase)
         const monsterType = (monster.monsterType || 'goblin').toLowerCase();
 
@@ -14925,7 +15780,13 @@ function playMonsterAttackAnimation(monster) {
 
     // Method 2 monsters (procedural) handle their own animations if needed, 
     // or use simpler visual cues for now.
-    if (monster.blueprintId || monster.getData('isMethod2')) return;
+    // Generic Procedural Monster Handling (Method 2 + Cellular Automata)
+    if (monster.blueprintId || monster.getData('isMethod2') || monster.isProcedural || (monster.stats && (monster.stats.isProcedural || monster.stats.generationType)) || monster.generationType) {
+        if (typeof ProceduralMonster !== 'undefined') {
+            ProceduralMonster.playAttackAnimation(scene, monster);
+        }
+        return;
+    }
 
     const monsterType = (monster.monsterType || 'goblin').toLowerCase();
 
@@ -15718,111 +16579,6 @@ function showQuestPreviewModalEnhanced(questId, onAccept, onDecline) {
     });
 }
 
-/**
- * Spawn a Mana Flux node
- */
-function spawnManaFlux(x, y) {
-    if (!x || !y) {
-        // Random position near player if not specified
-        const radius = 300;
-        const angle = Math.random() * Math.PI * 2;
-        const dist = 100 + Math.random() * (radius - 100);
-        x = player.x + Math.cos(angle) * dist;
-        y = player.y + Math.sin(angle) * dist;
-
-        // Keep within world bounds (simple check)
-        if (x < 50) x = 50;
-        if (y < 50) y = 50;
-        if (x > 3150) x = 3150; // Approx world size
-        if (y > 3150) y = 3150;
-    }
-
-    // Create visual representation - Pulsing Blue Star
-    const star = game.scene.scenes[0].add.star(x, y, 5, 10, 20, 0x00ffff);
-    star.setDepth(5); // Below player but above ground
-
-    // Add physics
-    game.scene.scenes[0].physics.add.existing(star);
-    star.body.setImmovable(true);
-    star.body.setAllowGravity(false); // Top down game, probably no gravity, but safety first
-
-    // Add pulse animation
-    game.scene.scenes[0].tweens.add({
-        targets: star,
-        scale: { from: 1, to: 1.3 },
-        alpha: { from: 0.7, to: 1 },
-        duration: 800,
-        yoyo: true,
-        repeat: -1
-    });
-
-    const flux = {
-        sprite: star,
-        id: 'mana_flux_' + Date.now() + '_' + Math.random()
-    };
-
-    manaFluxes.push(flux);
-    return flux;
-}
-
-/**
- * Update Mana Flux nodes (spawning and collection)
- */
-function updateManaFluxNodes() {
-    // Only active if quest main_01_007 is active
-    if (typeof isQuestActive !== 'function' || !isQuestActive('main_01_007')) {
-        // Cleanup if they exist but quest is not active
-        if (manaFluxes.length > 0) {
-            manaFluxes.forEach(flux => {
-                if (flux.sprite) flux.sprite.destroy();
-            });
-            manaFluxes = [];
-        }
-        return;
-    }
-
-    // Maintain a count of flux nodes around the player
-    const MAX_FLUX_NODES = 5;
-    if (manaFluxes.length < MAX_FLUX_NODES) {
-        // 2% chance per frame to spawn one if below cap
-        if (Math.random() < 0.02) {
-            spawnManaFlux();
-        }
-    }
-
-    // Check collision with player
-    for (let i = manaFluxes.length - 1; i >= 0; i--) {
-        const flux = manaFluxes[i];
-
-        if (!flux.sprite.active) {
-            manaFluxes.splice(i, 1);
-            continue;
-        }
-
-        // Simple distance check for collection
-        const dist = Phaser.Math.Distance.Between(player.x, player.y, flux.sprite.x, flux.sprite.y);
-
-        if (dist < 40) { // Collection radius
-            // Collect!
-            manaFluxes.splice(i, 1);
-            flux.sprite.destroy();
-
-            // Visual feedback
-            showDamageNumber(player.x, player.y - 40, "+1 Stabilized Flux", 0x00ffff);
-            playSound('item_pickup');
-
-            // Send UQE Event
-            if (window.uqe) {
-                window.uqe.eventBus.emit('item_pickup', {
-                    id: 'stabilized_flux',
-                    type: 'quest_item',
-                    amount: 1
-                });
-            }
-        }
-    }
-}
-
 // Defense Quest Wave Spawner State
 // let defenseSpawnerState = { ... }; // Moved to top of file
 
@@ -15875,15 +16631,14 @@ function updateDefenseQuestSpawner(time) {
         console.log(`🛡️ Spawning defense wave: ${toSpawn} Echo Mites`);
 
         // Echo Mite type for defense quest
+        // Echo Mite type for defense quest (Procedural)
         const miteType = {
-            id: 'mite',
-            name: 'Echo Mite',
-            hp: 15,
-            attack: 3,
-            speed: 60,
-            xp: 8,
-            textureKey: 'monster_mite',
-            isProcedural: false
+            id: 'procedural_echo_mite',
+            name: 'Echo_Mite', // Matches monsters.json
+            generationType: 'cellular_automata',
+            isProcedural: true,
+            // Stats will be loaded from monsters.json/blueprints via spawnMonster lookup
+            // provided we use the correct ID/Name
         };
 
         for (let i = 0; i < toSpawn; i++) {
@@ -16204,17 +16959,16 @@ function startResonantFrequenciesEvent() {
                     const spawnY = blacksmithY + Phaser.Math.Between(-100, 150);
 
                     // Echo Mite stats
+                    // Echo Mite stats (Procedural)
                     const miteType = {
-                        name: 'Echo Mite',
-                        textureKey: 'monster_echo_mite',
-                        hp: 35,
-                        attack: 7,
-                        speed: 80,
-                        xp: 15,
+                        id: 'procedural_echo_mite',
+                        name: 'Echo_Mite',
+                        generationType: 'cellular_automata',
+                        isProcedural: true,
                         spawnAmount: [1, 1]
                     };
 
-                    spawnMonster(spawnX, spawnY, miteType, miteType.hp, miteType.attack, miteType.xp);
+                    spawnMonster(spawnX, spawnY, miteType);
 
                     // Optional: Visual effect
                     if (scene.add) {
@@ -16244,3 +16998,182 @@ function stopResonantFrequenciesEvent() {
 // Expose globally
 window.startResonantFrequenciesEvent = startResonantFrequenciesEvent;
 window.stopResonantFrequenciesEvent = stopResonantFrequenciesEvent;
+
+// ==========================================
+// Quest Event: Survive the Backlash (main_01_016)
+// ==========================================
+var backlashEventTimer = null;
+
+function startBacklashEvent() {
+    console.log('⚡ STARTING Event: Obelisk Backlash');
+    const scene = game.scene.scenes[0];
+    if (!scene) return;
+
+    // Safety check: Remove existing timer
+    if (backlashEventTimer) {
+        backlashEventTimer.remove();
+        backlashEventTimer = null;
+    }
+
+    // Visual Effect: Camera Shake
+    scene.cameras.main.shake(500, 0.005);
+    if (typeof showDamageNumber === 'function') {
+        showDamageNumber(player.x, player.y - 50, "THE OBELISK DESTABILIZES!", 0xff0000);
+    }
+
+    // Timer: Runs every 1 second
+    backlashEventTimer = scene.time.addEvent({
+        delay: 1000,
+        loop: true,
+        callback: () => {
+            // 1. Emit Survival Time
+            if (window.uqe && window.uqe.eventBus) {
+                const eventName = (typeof UQE_EVENTS !== 'undefined') ? UQE_EVENTS.TIME_SURVIVED : 'time_survived';
+                window.uqe.eventBus.emit(eventName, { seconds: 1, id: 'survive_backlash' });
+            }
+
+            // Failsafe: Check if quest is still active
+            if (!window.isQuestActive('main_01_016')) {
+                console.warn('⚠️ Backlash Timer running but quest not active! stopping...');
+                stopBacklashEvent();
+                return;
+            }
+
+            // 2. Spawn Logic (Backlash Constructs near Obelisk)
+            // Obelisk is at 21, 21 -> 672, 672
+            if (MapManager.currentMap !== 'town') return;
+
+            const obeliskX = 21 * 32;
+            const obeliskY = 21 * 32;
+
+            // Aggressive Spawning: High chance (50%) per second
+            if (Math.random() < 0.5) {
+                const spawnX = obeliskX + Phaser.Math.Between(-200, 200);
+                const spawnY = obeliskY + Phaser.Math.Between(-200, 200);
+
+                // Use the generic spawnMonster function which handles lookup
+                // We pass the ID 'procedural_backlash' which should be in the blueprints
+                const monster = spawnMonster(spawnX, spawnY, 'procedural_backlash');
+
+                if (monster) {
+                    // Make them aggressive immediately
+                    monster.isAggressive = true;
+                    monster.aggroRange = 1000;
+                    // Visual spawn effect
+                    monster.setAlpha(0);
+                    monster.setScale(0);
+
+                    // Determine target scale from stats or default
+                    const targetScale = (monster.stats && monster.stats.proceduralConfig && monster.stats.proceduralConfig.scale) || 4;
+
+                    scene.tweens.add({
+                        targets: monster,
+                        alpha: 1,
+                        scale: targetScale,
+                        duration: 500
+                    });
+                }
+            }
+        }
+    });
+}
+
+function stopBacklashEvent() {
+    console.log('🛑 STOPPING Event: Obelisk Backlash');
+    if (backlashEventTimer) {
+        backlashEventTimer.remove();
+        backlashEventTimer = null;
+    }
+}
+window.startBacklashEvent = startBacklashEvent;
+window.stopBacklashEvent = stopBacklashEvent;
+
+// ==========================================
+// Quest Event Registry (Data-Driven Support)
+// ==========================================
+window.QuestEvents = {
+    "resonant_frequencies": {
+        start: startResonantFrequenciesEvent,
+        stop: stopResonantFrequenciesEvent
+    },
+    "backlash_event": {
+        start: startBacklashEvent,
+        stop: stopBacklashEvent
+    }
+};
+
+// ==========================================
+// CLASS SELECTION & ABILITY SYSTEM
+// ==========================================
+
+/**
+ * Unlocks a new ability for the player
+ * @param {string} abilityName - The ID of the ability (e.g., 'ice_nova', 'fireball')
+ */
+function unlockAbility(abilityName) {
+    // Check if ability exists in definitions (optional safety)
+    // For now, we trust the ID.
+
+    // Initialize abilities object if missing
+    if (!playerStats.abilities) {
+        playerStats.abilities = {};
+    }
+
+    // Check if already unlocked
+    if (playerStats.abilities[abilityName]) {
+        console.log(`Ability ${abilityName} already unlocked.`);
+        return;
+    }
+
+    // Unlock it
+    playerStats.abilities[abilityName] = { lastUsed: 0 };
+    console.log(`✨ Ability Unlocked: ${abilityName}`);
+
+    // Notify Player
+    if (typeof addChatMessage === 'function') {
+        const displayName = abilityName.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+        addChatMessage(`Learned Ability: ${displayName}`, 0x00ffff, '✨');
+    }
+
+    if (typeof playSound === 'function') {
+        playSound('level_up');
+    }
+
+    // Trigger UI refresh if needed
+    if (typeof updateAbilityUI === 'function') {
+        updateAbilityUI();
+    }
+}
+window.unlockAbility = unlockAbility;
+
+/**
+ * Handle Class Selection
+ * @param {string} className - 'Warrior', 'Rogue', 'Mage'
+ */
+function chooseClass(className) {
+    console.log(`🛡️ Class Selected: ${className}`);
+
+    // Set Class
+    playerStats.class = className;
+
+    // Notify
+    if (typeof addChatMessage === 'function') {
+        addChatMessage(`You have chosen the path of the ${className}!`, 0xffd700, '🛡️');
+    }
+
+    // Grant Class-Specific Starting Abilities
+    if (className === 'Mage') {
+        unlockAbility('ice_nova');
+        // Fireball is explicitly NOT granted initially (per request)
+    } else if (className === 'Warrior') {
+        // Disabled for now
+    } else if (className === 'Rogue') {
+        // Disabled for now
+    }
+
+    // Save Game (to persist choice)
+    if (typeof saveGame === 'function') {
+        saveGame();
+    }
+}
+window.chooseClass = chooseClass;

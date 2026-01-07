@@ -1,0 +1,22 @@
+{
+    "cinematics": [
+        {
+            "id": "cin_ch1_intro",
+            "title": "The Shattered Aegis",
+            "image": "cinematic_ch1",
+            "text": "For centuries, the Aegis has stood as a silent guardian, a barrier of pure resonance shielding our world from the void. But now, the song of protection falters.\n\nDeep beneath the peaceful village of Hearthwell, an ancient enemy stirs—the Echo Primordial. The earth trembles, and crystalline corruption bleeds from the depths.\n\nAs the shadows lengthen, a new hero must rise to restore the harmony before the silence takes us all.",
+            "duration": 8000,
+            "music": "village_music",
+            "trigger": "ms_game_start"
+        },
+        {
+            "id": "cin_ch2_intro",
+            "title": "The Discordant Wilds",
+            "image": "cinematic_ch2",
+            "text": "Hearthwell is safe, but the victory is fleeting. The tremors have ceased only to be replaced by a discordant hum rising from the wilderness.\n\nThe corruption has breached the town's borders, twisting the ancient forests into a nightmare of crystal and shadow. Captain Thorne reports strange energies pulsing from the ruins to the east.\n\nThe first shard was but a key; now you must venture into the unknown to find the lock. The Echo is listening... and it knows you are coming.",
+            "duration": 8000,
+            "music": "wilderness_music",
+            "trigger": "quest_complete:main_01_020"
+        }
+    ]
+}

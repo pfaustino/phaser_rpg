@@ -18,7 +18,11 @@ window.damageNumbers = []; // Array of {x, y, text, timer, color, textObject}
  * @param {string} type - 'physical', 'magical', 'healing', 'xp'
  */
 window.showDamageNumber = function (x, y, text, color, isCritical = false, type = 'physical') {
-    if (!window.game || !window.game.scene || !window.game.scene.scenes || window.game.scene.scenes.length === 0) return;
+    console.log(`DamageSystem: Showing ${text} at ${x},${y}`);
+    if (!window.game || !window.game.scene || !window.game.scene.scenes || window.game.scene.scenes.length === 0) {
+        console.warn('DamageSystem: No scene found!');
+        return;
+    }
     const scene = window.game.scene.scenes[0];
     if (!scene || !scene.add) return;
 
@@ -70,7 +74,7 @@ window.showDamageNumber = function (x, y, text, color, isCritical = false, type 
         x: x,
         y: y,
         text: displayText,
-        timer: isCritical ? 2.0 : 1.4, // Longer display for criticals
+        timer: isCritical ? 4.0 : 2.8, // Doubled duration (was 2.0/1.4)
         color: color,
         textObject: textObj,
         isCritical: isCritical,
@@ -106,7 +110,7 @@ window.updateDamageNumbers = function (time, delta) {
             dn.textObject.y = dn.y;
 
             // Fade out - use appropriate timer duration
-            const fadeDuration = dn.isCritical ? 2.0 : 1.4;
+            const fadeDuration = dn.isCritical ? 4.0 : 2.8;
             const alpha = Math.min(1, dn.timer / fadeDuration);
             dn.textObject.setAlpha(alpha);
 

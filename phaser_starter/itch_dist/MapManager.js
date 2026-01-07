@@ -10,7 +10,9 @@ const MapManager = {
     wallGroup: null, // Phaser StaticGroup
     transitionMarkers: [],
     questZones: {}, // Store quest interaction zones
+    displayMap: 'town',
     currentMap: 'town',
+    interactables: [], // Data-driven interactive objects
 
     // History State for Dungeon Returns
     lastMap: null,
@@ -33,6 +35,121 @@ const MapManager = {
 
     // Reference to the main scene
     scene: null,
+
+    /**
+     * Check if a pixel coordinate is in a safe location (not in a building, etc.)
+     * @param {number} x - Pixel X coordinate
+     * @param {number} y - Pixel Y coordinate
+     * @param {number} padding - Padding around obstacles (default 32)
+     * @returns {boolean}
+     */
+    isLocationSafe(x, y, padding = 32) {
+        // 1. Check world bounds
+        const scene = this.scene || game.scene.scenes[0];
+        if (!scene) return false;
+
+        const bounds = scene.physics.world.bounds;
+        if (x < padding || x > bounds.width - padding || y < padding || y > bounds.height - padding) {
+            return false;
+        }
+
+        // 2. Check buildings (Town Map)
+        if (this.currentMap === 'town' && this.buildings.length > 0) {
+            for (const b of this.buildings) {
+                if (x >= b.x - padding && x <= b.x + b.width + padding &&
+                    y >= b.y - padding && y <= b.y + b.height + padding) {
+                    return false;
+                }
+            }
+
+            // Avoid player spawn/center crossroads
+            const centerX = bounds.width / 2;
+            const centerY = bounds.height / 2;
+            if (Math.abs(x - centerX) < 96 && Math.abs(y - centerY) < 96) return false;
+        }
+
+        // 3. Check dungeon walls
+        if (this.currentMap === 'dungeon' && this.dungeonWalls.length > 0) {
+            // Very basic check - if it's in a wall tile
+            // In a better system we'd use grid lookups
+            for (const wall of this.dungeonWalls) {
+                if (Math.abs(x - wall.pixelX) < 32 && Math.abs(y - wall.pixelY) < 32) {
+                    return false;
+                }
+            }
+        }
+
+        return true;
+    },
+
+    /**
+     * Spawn interactables defined in interactables.json
+     * @param {string} mapName - Current map key
+     */
+    spawnInteractables(mapName) {
+        if (!this.scene) return;
+
+        // IMPORTANT: Skip for dungeons - they use spawnDungeonInteractables() instead.
+        // This function clears interactables[], which would wipe dungeon altars.
+        // Dungeon interactables (ritual_altar etc) are spawned procedurally at line ~1145.
+        if (mapName === 'dungeon' || this.currentMap === 'dungeon') {
+            return;
+        }
+
+
+        // Clear existing
+        this.interactables.forEach(obj => {
+            if (obj.sprite) obj.sprite.destroy();
+            if (obj.label) obj.label.destroy();
+        });
+        this.interactables = [];
+
+        const allInteractables = this.scene.cache.json.get('interactables');
+        if (!allInteractables) {
+            console.warn('⚠️ [MapManager] interactables.json not loaded');
+            return;
+        }
+
+
+        const mapObjects = allInteractables.filter(obj => obj.map === mapName);
+        console.log(`🗿 [MapManager] Spawning ${mapObjects.length} interactables for ${mapName}`);
+
+        mapObjects.forEach(def => {
+            const x = def.x * this.scene.tileSize;
+            const y = def.y * this.scene.tileSize;
+
+            // Create Sprite
+            let sprite;
+            if (this.scene.textures.exists(def.spriteKey)) {
+                sprite = this.scene.physics.add.staticImage(x, y, def.spriteKey);
+            } else {
+                // Fallback
+                sprite = this.scene.add.rectangle(x, y, 32, 64, 0x555555);
+                this.scene.physics.add.existing(sprite, true);
+            }
+
+            if (def.scale) sprite.setScale(def.scale);
+            if (def.width && def.height && sprite.body) {
+                sprite.body.setSize(def.width, def.height);
+                sprite.body.setOffset((sprite.width - def.width) / 2, (sprite.height - def.height) / 2);
+            }
+            // Ensure visible depth
+            sprite.setDepth(def.depth || 10);
+
+            // Label (optional)
+            /*
+            const label = this.scene.add.text(x, y - 40, def.name, {
+                fontSize: '12px', fill: '#ffffff', stroke: '#000000', strokeThickness: 2
+            }).setOrigin(0.5).setDepth(20);
+            */
+
+            this.interactables.push({
+                definition: def,
+                sprite: sprite,
+                // label: label
+            });
+        });
+    },
 
     init(scene) {
         this.scene = scene;
@@ -160,6 +277,7 @@ const MapManager = {
         // Clear existing buildings and markers
         this.buildings = [];
         this.transitionMarkers = [];
+        this.questZones = {}; // Clear old quest zones to prevent stale state
 
         // Ensure mana regen is running (assuming global function)
         if (typeof startManaRegen === 'function') startManaRegen();
@@ -226,9 +344,11 @@ const MapManager = {
         const entranceX = centerX * tileSize;
         const entranceY = (mapHeight - 7) * tileSize;
 
-        // Spawn Player at Village Center (20, 20)
-        const playerSpawnX = centerX * tileSize;
-        const playerSpawnY = centerY * tileSize;
+
+        // Spawn Player Near Exit (South)
+        // Use entrance coordinates but slightly north (so they aren't on the exit trigger immediately)
+        const playerSpawnX = entranceX;
+        const playerSpawnY = entranceY - 60; // 60px north of the trigger
 
         // Hardcoded Building Layout
         // Map is 40x40. Center is 20,20.
@@ -341,6 +461,7 @@ const MapManager = {
         scene.mapHeight = mapHeight;
         scene.tileSize = tileSize;
         scene.physics.world.setBounds(0, 0, mapWidth * tileSize, mapHeight * tileSize);
+        // scene.cameras.main.setBounds(0, 0, mapWidth * tileSize, mapHeight * tileSize);
 
         // Spawn Player
         if (typeof player !== 'undefined') {
@@ -351,60 +472,182 @@ const MapManager = {
         // Initialize NPCs (assuming global function)
         if (typeof initializeNPCs === 'function') initializeNPCs();
 
-        // Create Mana Fluxes (assuming global or we move it later)
-        if (typeof createManaFluxes === 'function') createManaFluxes();
+        // Generic Quest Zones - Visual & Trigger
+        this.updateQuestZones(scene);
 
-        // Strange Energy (MQ-01) - Visual & Trigger
-        // MOVED to (22, 18) to be clearly visible in the square, away from the Shop (13-20)
+        // Setup physics interactions for quest zones
+        this.setupQuestInteractions(scene, player);
+    },
 
-        // CHECK QUEST STATE: Only show if 'main_02_001' (Mysterious Arrival) is active
-        // This quest deals with the strange energy in the town square.
-        const energyQuestId = 'main_02_001';
-        const showEnergy = window.isQuestActive(energyQuestId);
 
-        if (showEnergy) {
-            const energyX = 22 * tileSize + 16;
-            const energyY = 18 * tileSize + 16;
 
-            // Particle Effect for Strange Energy
-            // 1. Ensure a texture exists for particles (using a simple generated graphic)
-            if (!scene.textures.exists('energy_particle')) {
-                const graphics = scene.make.graphics({ x: 0, y: 0, add: false });
-                graphics.fillStyle(0x00ffff, 1);
-                graphics.fillCircle(4, 4, 4); // 8x8 circle
-                graphics.generateTexture('energy_particle', 8, 8);
+    /**
+     * Check and spawn generic quest zones/effects based on active objectives
+     * @param {Phaser.Scene} scene
+     */
+    /**
+     * Resolve a semantic Location ID to runtime coordinates (X, Y)
+     * Checks Dungeons, Buildings, and other dynamic map markers.
+     */
+    getLocationXY(locationId) {
+        if (!locationId) return null;
+
+        // 1. Check Transition Markers (Dungeons, Exits)
+        const marker = this.transitionMarkers.find(m => m.dungeonId === locationId || m.targetMap === locationId || m.id === locationId);
+        if (marker) {
+            return { x: marker.x, y: marker.y };
+        }
+
+        // 2. Check Buildings (Town)
+        const building = this.buildings.find(b => b.type === locationId || b.id === locationId);
+        if (building) {
+            return { x: building.centerX, y: building.centerY };
+        }
+
+        return null;
+    },
+
+    updateQuestZones(scene) {
+        if (!window.uqe || !window.uqe.activeQuests) return;
+
+        // 1. Identify all currently active zones (Mark)
+        const activeZoneIds = new Set();
+
+        window.uqe.activeQuests.forEach(quest => {
+            if (!quest.objectives) return;
+            quest.objectives.forEach(obj => {
+                // Check definition first (where custom props live), then direct prop, then static fallback
+                let effect = (obj.definition && obj.definition.visualEffect) || obj.visualEffect;
+
+                if (!effect && window.uqe.allDefinitions && window.uqe.allDefinitions[quest.id]) {
+                    const staticQuest = window.uqe.allDefinitions[quest.id];
+                    const staticObj = staticQuest.objectives.find(o => o.id === obj.id);
+                    if (staticObj) effect = staticObj.visualEffect;
+                }
+
+                // Only process incomplete objectives with a visual effect
+                if (effect && !obj.completed) {
+                    const zoneId = (obj.definition && obj.definition.locationId) || obj.zoneId || obj.locationId || obj.id;
+                    activeZoneIds.add(zoneId);
+
+                    // Spawn if not exists
+                    if (!this.questZones[zoneId] || !this.questZones[zoneId].active) {
+                        // Resolve Coordinates Dynamically
+                        let worldX, worldY;
+                        const dynamicLoc = this.getLocationXY(zoneId);
+
+                        if (dynamicLoc) {
+                            worldX = dynamicLoc.x;
+                            worldY = dynamicLoc.y;
+                            // console.log(`📍 [QuestViz] Resolved dynamic location '${zoneId}' to ${worldX},${worldY}`);
+                        } else {
+                            // Fallback to static JSON coordinates
+                            const tx = (obj.definition && obj.definition.targetX !== undefined) ? obj.definition.targetX : obj.targetX;
+                            const ty = (obj.definition && obj.definition.targetY !== undefined) ? obj.definition.targetY : obj.targetY;
+
+                            if (tx !== undefined && ty !== undefined) {
+                                const tileSize = scene.tileSize || 32;
+                                worldX = tx * tileSize + 16;
+                                worldY = ty * tileSize + 16;
+                            }
+                        }
+
+                        if (worldX !== undefined && worldY !== undefined) {
+                            if (effect === 'strange_energy') {
+                                this.spawnStrangeEnergy(scene, worldX, worldY, zoneId);
+                            }
+                        }
+                    }
+                }
+            });
+        });
+
+
+        // 2. Remove stale zones (Sweep)
+        Object.keys(this.questZones).forEach(zoneId => {
+            if (!activeZoneIds.has(zoneId)) {
+                // Zone is no longer active (quest completed/objective finished)
+                const zone = this.questZones[zoneId];
+                if (zone) {
+                    // Destroy visuals
+                    if (zone._questVisuals) {
+                        if (zone._questVisuals.particles) zone._questVisuals.particles.destroy();
+                        if (zone._questVisuals.core) zone._questVisuals.core.destroy();
+                        if (zone._questVisuals.tweens) zone._questVisuals.tweens.forEach(t => t.remove());
+                    }
+                    // Destroy zone itself
+                    zone.destroy();
+                    console.log(`🧹 [MapManager] Cleaned up completed quest zone: ${zoneId}`);
+                }
+                delete this.questZones[zoneId];
             }
+        });
+    },
 
-            // 2. Create Emitter
-            const particles = scene.add.particles(energyX, energyY, 'energy_particle', {
-                speed: { min: 20, max: 60 },
-                angle: { min: 0, max: 360 },
-                scale: { start: 1.5, end: 0 }, // Larger particles
-                alpha: { start: 1, end: 0 },
-                lifespan: 1200,
-                frequency: 80, // More frequent
-                blendMode: 'ADD'
-            });
-            particles.setDepth(5); // Higher depth to sit above ground debris
+    /**
+     * Helper to spawn "Strange Energy" visual and zone
+     */
+    spawnStrangeEnergy(scene, x, y, zoneId) {
+        // 1. Ensure a texture exists for particles
+        if (!scene.textures.exists('energy_particle')) {
+            const graphics = scene.make.graphics({ x: 0, y: 0, add: false });
+            graphics.fillStyle(0x00ffff, 1);
+            graphics.fillCircle(4, 4, 4); // 8x8 circle
+            graphics.generateTexture('energy_particle', 8, 8);
+        }
 
-            // Inner core (Static anchor) - Larger and pulsing
-            const core = scene.add.circle(energyX, energyY, 10, 0x00ffff, 0.8).setDepth(6);
-            scene.tweens.add({
-                targets: core,
-                scaleX: 1.2,
-                scaleY: 1.2,
-                alpha: 0.5,
-                duration: 1000,
-                yoyo: true,
-                repeat: -1
-            });
+        // 2. Create Emitter
+        const particles = scene.add.particles(x, y, 'energy_particle', {
+            speed: { min: 20, max: 60 },
+            angle: { min: 0, max: 360 },
+            scale: { start: 1.5, end: 0 },
+            alpha: { start: 1, end: 0 },
+            lifespan: 1200,
+            frequency: 80,
+            blendMode: 'ADD',
+            emitting: true
+        });
+        particles.setDepth(5);
 
-            // Interactive Zone trigger
-            const energyZone = scene.add.zone(energyX, energyY, 64, 64); // Larger zone
-            scene.physics.add.existing(energyZone, true);
+        // Inner core
+        const core = scene.add.circle(x, y, 10, 0x00ffff, 0.8).setDepth(6);
+        // Store visuals for cleanup
+        const tween = scene.tweens.add({
+            targets: core,
+            scaleX: 1.2,
+            scaleY: 1.2,
+            alpha: 0.5,
+            duration: 1000,
+            yoyo: true,
+            repeat: -1
+        });
 
-            // Store for later interaction setup and indicators
-            this.questZones['strange_energy_zone'] = energyZone;
+        // Interactive Zone trigger
+        const energyZone = scene.add.zone(x, y, 64, 64);
+        scene.physics.add.existing(energyZone, true);
+
+        // Store for later interaction setup
+        energyZone._questVisuals = {
+            particles: particles,
+            core: core,
+            tweens: [tween]
+        };
+        this.questZones[zoneId] = energyZone;
+
+        // Immediate overlap setup if player exists
+        if (window.game && window.game.scene && window.game.scene.scenes[0]) {
+            const activeScene = window.game.scene.scenes[0];
+            // Try to find player in global scope or scene
+            const p = window.player || (activeScene.player);
+
+            if (p && p.body) {
+                scene.physics.add.overlap(p, energyZone, () => {
+                    if (window.uqe && window.uqe.eventBus) {
+                        const eventName = (typeof UQE_EVENTS !== 'undefined') ? UQE_EVENTS.LOCATION_EXPLORED : 'location_explored';
+                        window.uqe.eventBus.emit(eventName, { id: zoneId, zoneId: zoneId });
+                    }
+                });
+            }
         }
     },
 
@@ -420,26 +663,18 @@ const MapManager = {
             return;
         }
 
-        // Strange Energy (MQ-01)
-        const energyZone = this.questZones['strange_energy_zone'];
-        if (energyZone) {
-            console.log('🔹 [MapManager] Found strange_energy_zone. Active:', energyZone.active);
-            if (energyZone.body) console.log(`   Zone Body: x=${energyZone.body.x}, y=${energyZone.body.y}, w=${energyZone.body.width}, h=${energyZone.body.height}`);
-            else console.warn('⚠️ [MapManager] strange_energy_zone has NO physics body');
-
-            scene.physics.add.overlap(player, energyZone, () => {
-                console.log('⚡ [MapManager] Player overlapped strange energy!');
-                // Emit exploration event
-                if (window.uqe && window.uqe.eventBus) {
-                    const eventName = (typeof UQE_EVENTS !== 'undefined') ? UQE_EVENTS.LOCATION_EXPLORED : 'location_explored';
-                    console.log(`📡 [MapManager] Emitting ${eventName} for strange_energy_zone`);
-                    window.uqe.eventBus.emit(eventName, { id: 'strange_energy_zone', zoneId: 'strange_energy_zone' });
-                }
-            });
-            console.log('✅ [MapManager] Strange Energy interaction setup complete');
-        } else {
-            console.warn('⚠️ [MapManager] strange_energy_zone NOT FOUND in questZones');
-        }
+        // Generic Loop for all quest zones
+        Object.keys(this.questZones).forEach(zoneId => {
+            const zone = this.questZones[zoneId];
+            if (zone) {
+                scene.physics.add.overlap(player, zone, () => {
+                    if (window.uqe && window.uqe.eventBus) {
+                        const eventName = (typeof UQE_EVENTS !== 'undefined') ? UQE_EVENTS.LOCATION_EXPLORED : 'location_explored';
+                        window.uqe.eventBus.emit(eventName, { id: zoneId, zoneId: zoneId });
+                    }
+                });
+            }
+        });
 
         // Play Town Music
         if (typeof playBackgroundMusic === 'function') playBackgroundMusic('town');
@@ -450,16 +685,39 @@ const MapManager = {
      */
     createWildernessMap() {
         const scene = this.scene;
+        if (this.wallGroup) this.wallGroup.clear(true, true);
         const tileSize = 32;
-        const mapWidth = 50;
-        const mapHeight = 50;
+        const mapWidth = 60;
+        const mapHeight = 60;
+
+        // DEBUG: Map Size
+        console.log(`🗺️ Generating Wilderness Map: ${mapWidth}x${mapHeight}`);
+
+        // CORRUPTION CHECK (Chapter 2+) - Check ONCE
+        let isCorrupted = false;
+        try {
+            // Check if Chapter 1 Final Quest is complete (main_01_020)
+            const ch1Complete = (typeof window.isQuestCompleted === 'function' && window.isQuestCompleted('main_01_020')) ||
+                (window.uqe && window.uqe.completedQuests && window.uqe.completedQuests.some(q => q.id === 'main_01_020'));
+
+            // OR check if any Chapter 2 quest is ACTIVE (activeQuests contains id starting with main_02)
+            const ch2Active = window.uqe && window.uqe.activeQuests && window.uqe.activeQuests.some(q => q.id && q.id.startsWith('main_02'));
+
+            // Manual Override for Debugging: window.forceCorruption = true
+            const forceCorruption = window.forceCorruption === true;
+
+            isCorrupted = ch1Complete || ch2Active || forceCorruption;
+
+        } catch (err) {
+            console.error('Error checking corruption state:', err);
+        }
+        console.log(`🔮 Wilderness Corruption State: ${isCorrupted}`);
 
         /**
          * Local helper to draw a procedural flower using Graphics
-         * Draws 4-6 petals with a center and slight randomization
          */
         const drawProceduralFlower = (scene, x, y) => {
-            const colors = [0xff5555, 0x5555ff, 0xffff55, 0xff88ff, 0xffffff, 0xffaa00]; // Red, Blue, Yellow, Pink, White, Orange
+            const colors = [0xff5555, 0x5555ff, 0xffff55, 0xff88ff, 0xffffff, 0xffaa00];
             const color = Phaser.Utils.Array.GetRandom(colors);
             const petalCount = Phaser.Math.Between(4, 6);
             const size = Phaser.Math.Between(2, 4);
@@ -469,7 +727,6 @@ const MapManager = {
             const flowerGraphics = scene.add.graphics({ x: x + offsetX + 16, y: y + offsetY + 16 });
             flowerGraphics.setDepth(1);
 
-            // Draw petals
             flowerGraphics.fillStyle(color, 1);
             for (let i = 0; i < petalCount; i++) {
                 const angle = (i / petalCount) * Math.PI * 2;
@@ -478,11 +735,9 @@ const MapManager = {
                 flowerGraphics.fillCircle(px, py, size * 0.8);
             }
 
-            // Draw center
-            flowerGraphics.fillStyle(0xffdb19, 1); // Yellow center
+            flowerGraphics.fillStyle(0xffdb19, 1);
             flowerGraphics.fillCircle(0, 0, size * 0.5);
 
-            // Add a subtle stem/leaf dot
             flowerGraphics.fillStyle(0x2d5a27, 1);
             flowerGraphics.fillCircle(-size, size, 1.5);
 
@@ -491,23 +746,13 @@ const MapManager = {
 
         /**
          * Local helper to draw an Echo Crystal using Graphics
-         * Draws a geometric shard (diamond shape) with a pulsing violet/magenta aesthetic
          */
         const drawEchoCrystal = (scene, x, y) => {
             const crystalGraphics = scene.add.graphics({ x: x + 16, y: y + 16 });
             crystalGraphics.setDepth(2);
 
-            // Draw a geometric shard-like shape (Diamond/Octagon)
-            const points = [
-                { x: 0, y: -14 },  // Top
-                { x: 10, y: -4 },  // Upper Right
-                { x: 10, y: 4 },   // Lower Right
-                { x: 0, y: 14 },   // Bottom
-                { x: -10, y: 4 },  // Lower Left
-                { x: -10, y: -4 }  // Upper Left
-            ];
+            const points = [{ x: 0, y: -14 }, { x: 10, y: -4 }, { x: 10, y: 4 }, { x: 0, y: 14 }, { x: -10, y: 4 }, { x: -10, y: -4 }];
 
-            // Primary crystal body (Violet/Magenta)
             crystalGraphics.fillStyle(0x9d00ff, 0.8);
             crystalGraphics.beginPath();
             crystalGraphics.moveTo(points[0].x, points[0].y);
@@ -517,15 +762,12 @@ const MapManager = {
             crystalGraphics.closePath();
             crystalGraphics.fillPath();
 
-            // Inner core/glow
             crystalGraphics.fillStyle(0xff00ff, 0.6);
             crystalGraphics.fillCircle(0, 0, 6);
 
-            // Shimmer/Edge
             crystalGraphics.lineStyle(2, 0xffffff, 0.5);
             crystalGraphics.strokePath();
 
-            // Simple pulsing tween
             scene.tweens.add({
                 targets: crystalGraphics,
                 alpha: 0.5,
@@ -536,12 +778,11 @@ const MapManager = {
                 ease: 'Sine.easeInOut'
             });
 
-            // Add a point light if possible (Phaser 3.50+)
-            if (scene.lights && scene.lights.enabled) {
-                scene.lights.addLight(x + 16, y + 16, 100, 0xae00ff, 1);
-            }
+            // Light removed for performance optimization
+            // if (scene.lights && scene.lights.enabled) {
+            //    scene.lights.addLight(x + 16, y + 16, 100, 0xae00ff, 1);
+            // }
 
-            // Make crystal interactive
             crystalGraphics.setInteractive(new Phaser.Geom.Circle(0, 0, 20), Phaser.Geom.Circle.Contains);
             crystalGraphics.useHandCursor = true;
 
@@ -550,58 +791,40 @@ const MapManager = {
             }
 
             crystalGraphics.on('pointerdown', (pointer) => {
-                // Play harvest sound
                 if (typeof playSound === 'function') playSound('item_pickup');
-
-                // Show floating text
                 if (typeof showDamageNumber === 'function') {
                     showDamageNumber(x + 16, y, 'Resonating...', 0x9d00ff, false, 'magic');
                 }
 
-                // Chance to drop shard (100% if quest active, 20% otherwise)
                 const questActive = window.isQuestActive && (window.isQuestActive('side_01_001') || window.isQuestActive('main_01_004'));
                 if (questActive || Math.random() < 0.2) {
                     if (typeof dropItemsFromMonster === 'function') {
-                        // We use a manual drop for fixed quest item
-                        const shard = {
-                            id: 'echo_shard',
-                            type: 'quest_item',
-                            name: 'Echo Shard',
-                            quality: 'Uncommon',
-                            amount: 1
-                        };
-                        // Call global drop system or custom drop
+                        const shard = { id: 'echo_shard', type: 'quest_item', name: 'Echo Shard', quality: 'Uncommon', amount: 1 };
                         if (typeof spawnQuestItem === 'function') {
                             spawnQuestItem(x + 16, y + 16, shard);
                         } else {
-                            // Fallback: dropItemsFromMonster often has quest logic, but we want guaranteed drop
-                            // For now let's hope it handles it or we'll need to expose a better drop function
-                            console.log("💎 Echo Crystal harvested!");
-                            // If we can't find spawnQuestItem, we'll use a hack or just emit the event
-                            if (window.uqe) {
-                                window.uqe.eventBus.emit('UQE_EVENTS.ITEM_PICKUP', { id: 'echo_shard', type: 'quest_item', amount: 1 });
-                            }
+                            if (window.uqe) window.uqe.eventBus.emit('UQE_EVENTS.ITEM_PICKUP', { id: 'echo_shard', type: 'quest_item', amount: 1 });
                         }
                     }
                 }
 
-                // Chance to spawn an Echo Mite nearby
                 if (Math.random() < 0.4 && typeof spawnMonster === 'function') {
                     const scene = crystalGraphics.scene;
                     const offsetX = Phaser.Math.Between(-50, 50);
                     const offsetY = Phaser.Math.Between(-50, 50);
                     spawnMonster.call(scene, x + 16 + offsetX, y + 16 + offsetY, 'echo_mite');
                 }
-
-                // Destroy crystal
                 crystalGraphics.destroy();
             });
-
             return crystalGraphics;
         };
 
         this.buildings = [];
         this.transitionMarkers = [];
+
+        // Update World Bounds
+        scene.physics.world.setBounds(0, 0, mapWidth * tileSize, mapHeight * tileSize);
+        // scene.cameras.main.setBounds(0, 0, mapWidth * tileSize, mapHeight * tileSize);
 
         let useFrames = false;
         let grassFrameCount = 1;
@@ -613,14 +836,24 @@ const MapManager = {
             }
         }
 
-        // Clear dungeon walls (reusing for wilderness edge collision)
         this.dungeonWalls = [];
 
         for (let y = 0; y < mapHeight; y++) {
             for (let x = 0; x < mapWidth; x++) {
                 let tileType = 'grass';
                 const isEdge = x === 0 || x === mapWidth - 1 || y === 0 || y === mapHeight - 1;
+
+                // RUINS IN THE EAST
+                // Map width 60. Ruins should be ~50-58
+                const isRuins = x >= 50 && x <= 58 && y >= 28 && y <= 36;
+
                 if (isEdge) tileType = 'wall';
+                else if (isRuins) {
+                    tileType = 'stone';
+                    if (Math.random() < 0.3) tileType = 'wall';
+                    // Clear center for Altar interaction (55, 32)
+                    if (x >= 54 && x <= 56 && y >= 31 && y <= 33) tileType = 'stone';
+                }
                 else if (Math.random() < 0.1) tileType = 'dirt';
                 else if (Math.random() < 0.15) tileType = 'stone';
 
@@ -629,44 +862,42 @@ const MapManager = {
 
                 const scale = 32 / 96;
                 if (tileType === 'grass' && useFrames) {
-                    // Subtract 1 to avoid the __BASE frame if frameTotal > 1
                     const maxFrame = grassFrameCount > 1 ? grassFrameCount - 1 : 1;
                     const frameIndex = Math.floor(Math.random() * maxFrame);
-                    scene.add.image(x * tileSize, y * tileSize, 'grass', frameIndex)
+                    const img = scene.add.image(x * tileSize, y * tileSize, 'grass', frameIndex)
                         .setOrigin(0).setScale(scale).setDepth(0);
+                    if (isCorrupted) img.setTint(0xaa88cc);
                 } else {
                     const t = scene.add.image(x * tileSize, y * tileSize, tileType).setOrigin(0).setDepth(0);
-                    if (tileType === 'grass') t.setScale(scale);
+                    if (tileType === 'grass') {
+                        t.setScale(scale);
+                        if (isCorrupted) t.setTint(0xaa88cc);
+                    }
                 }
 
-                // Chance to add a procedural flower on grass tiles
-                if (tileType === 'grass' && !isEdge && Math.random() < 0.12) {
+                // Flowers
+                const flowerChance = isCorrupted ? 0.02 : 0.12;
+                if (tileType === 'grass' && !isEdge && Math.random() < flowerChance) {
                     drawProceduralFlower(scene, x * tileSize, y * tileSize);
                 }
 
-                // Chance to add an Echo Crystal on stone or dirt tiles
-                // More common if quest "The Echo's Whisper" is active or completed
+                // Crystals
                 const echoQuestActive = window.isQuestActive && (window.isQuestActive('echo_shard_intro') || window.isQuestActive('main_01_004'));
-                const crystalChance = echoQuestActive ? 0.05 : 0.01;
+                const baseCrystalChance = isCorrupted ? 0.06 : 0.01;
+                const crystalChance = echoQuestActive ? 0.05 : baseCrystalChance;
+                const canSpawnCrystal = (tileType === 'stone' || tileType === 'dirt') || (isCorrupted && tileType === 'grass');
 
-                if ((tileType === 'stone' || tileType === 'dirt') && !isEdge && Math.random() < crystalChance) {
+                if (canSpawnCrystal && !isEdge && Math.random() < crystalChance) {
                     drawEchoCrystal(scene, x * tileSize, y * tileSize);
                 }
 
-                // Add collision for edge walls
-                if (isEdge) {
-                    this.dungeonWalls.push({
-                        x: x * tileSize,
-                        y: y * tileSize,
-                        width: tileSize,
-                        height: tileSize
-                    });
-
-                    // Add to physics group for collision
+                // Collision
+                if (tileType === 'wall') {
+                    this.dungeonWalls.push({ x: x * tileSize, y: y * tileSize, width: tileSize, height: tileSize });
                     if (this.wallGroup) {
                         const pWall = this.wallGroup.create(x * tileSize + tileSize / 2, y * tileSize + tileSize / 2, null);
                         pWall.setSize(tileSize, tileSize);
-                        pWall.setVisible(false); // Invisible physics body
+                        pWall.setVisible(false);
                         pWall.setImmovable(true);
                     }
                 }
@@ -678,76 +909,60 @@ const MapManager = {
         const exitY = 2 * tileSize;
         const exitMarker = scene.add.rectangle(exitX, exitY, tileSize * 2, tileSize * 2, 0x00ff00, 0.5)
             .setDepth(3).setStrokeStyle(3, 0x00ff00);
-
         const returnText = scene.add.text(exitX, exitY, 'RETURN\nTO TOWN', { fontSize: '12px', fill: '#ffffff', align: 'center' })
             .setDepth(4).setOrigin(0.5);
-
         this.transitionMarkers.push({
             x: exitX, y: exitY, radius: tileSize * 1.5, targetMap: 'town', marker: exitMarker, text: returnText
         });
 
-        const numDungeons = 2; // Fixed to 2 for now (Tower + Temple)
-
+        const numDungeons = 3;
         for (let i = 0; i < numDungeons; i++) {
-            // Split map into sectors to ensure spacing
-            // Tower (i=0) in northern half, Temple (i=1) in southern half
             const minY = i === 0 ? 5 : Math.floor(mapHeight / 2) + 5;
             const maxY = i === 0 ? Math.floor(mapHeight / 2) - 5 : mapHeight - 6;
-
             const bx = Phaser.Math.Between(5, mapWidth - 6);
             const by = Phaser.Math.Between(minY, maxY);
             const dx = bx * tileSize;
             const dy = by * tileSize;
 
-            // Watchtower (Level 8+)
-            // Requirement: 'main_01_008' active or completed
+            // Watchtower
             if (i === 0) {
                 const towerReq = 'main_01_008';
-                // Check both legacy and UQE via global helper
                 let showTower = window.isQuestActive(towerReq) || window.isQuestCompleted(towerReq);
-
                 if (showTower) {
-                    const dMarker = scene.add.rectangle(dx, dy, tileSize * 2, tileSize * 2, 0x444444, 0.8)
-                        .setDepth(3).setStrokeStyle(2, 0xffffff);
-                    const dText = scene.add.text(dx, dy, 'WATCH\nTOWER', { fontSize: '11px', fill: '#ffffff', align: 'center', stroke: '#000000', strokeThickness: 3 })
-                        .setDepth(4).setOrigin(0.5);
-
-                    this.transitionMarkers.push({
-                        x: dx, y: dy, radius: tileSize * 1.5, targetMap: 'dungeon',
-                        dungeonId: 'tower_dungeon',
-                        dungeonLevel: 1, marker: dMarker, text: dText
-                    });
-
-                    // Emit exploration event if this is the active objective
-                    // Logic: If player is near marker, emit 'location_explored'
-                    // We'll add a separate checking loop or just assume finding it is enough?
-                    // Better: Add a zone or check in update loop. For now, add a zone.
+                    const dMarker = scene.add.rectangle(dx, dy, tileSize * 2, tileSize * 2, 0x444444, 0.8).setDepth(3).setStrokeStyle(2, 0xffffff);
+                    const dText = scene.add.text(dx, dy, 'WATCH\nTOWER', { fontSize: '11px', fill: '#ffffff', align: 'center', stroke: '#000000', strokeThickness: 3 }).setDepth(4).setOrigin(0.5);
+                    this.transitionMarkers.push({ x: dx, y: dy, radius: tileSize * 1.5, targetMap: 'dungeon', dungeonId: 'tower_dungeon', dungeonLevel: 1, marker: dMarker, text: dText });
                     const towerZone = scene.add.zone(dx, dy, tileSize * 4, tileSize * 4);
                     scene.physics.add.existing(towerZone, true);
-                    scene.physics.add.overlap(scene.player, towerZone, () => {
-                        if (window.uqe && window.uqe.eventBus) {
-                            window.uqe.eventBus.emit('location_explored', { id: 'watchtower' });
-                        }
+                    scene.physics.add.overlap(player, towerZone, () => {
+                        if (window.uqe && window.uqe.eventBus) window.uqe.eventBus.emit('location_explored', { id: 'watchtower' });
                     });
                 }
             }
 
-            // Temple Ruins (Level 12+)
-            // Requirement: 'main_02_003' active or completed
+            // Temple Ruins
             if (i === 1) {
                 const templeReq = 'main_02_003';
                 const showTemple = window.isQuestActive(templeReq) || window.isQuestCompleted(templeReq);
-
                 if (showTemple) {
-                    const dMarker = scene.add.rectangle(dx, dy, tileSize * 2, tileSize * 2, 0x0088ff, 0.8)
-                        .setDepth(3).setStrokeStyle(2, 0xffffff);
-                    const dText = scene.add.text(dx, dy, 'TEMPLE\nRUINS', { fontSize: '11px', fill: '#ffffff', align: 'center', stroke: '#000000', strokeThickness: 3 })
-                        .setDepth(4).setOrigin(0.5);
+                    const dMarker = scene.add.rectangle(dx, dy, tileSize * 2, tileSize * 2, 0x0088ff, 0.8).setDepth(3).setStrokeStyle(2, 0xffffff);
+                    const dText = scene.add.text(dx, dy, 'TEMPLE\nRUINS', { fontSize: '11px', fill: '#ffffff', align: 'center', stroke: '#000000', strokeThickness: 3 }).setDepth(4).setOrigin(0.5);
+                    this.transitionMarkers.push({ x: dx, y: dy, radius: tileSize * 1.5, targetMap: 'dungeon', dungeonId: 'temple_ruins', dungeonLevel: 1, marker: dMarker, text: dText });
+                }
+            }
 
-                    this.transitionMarkers.push({
-                        x: dx, y: dy, radius: tileSize * 1.5, targetMap: 'dungeon',
-                        dungeonId: 'temple_ruins',
-                        dungeonLevel: 1, marker: dMarker, text: dText
+            // Traitor's Camp
+            if (i === 2) {
+                const campReq = 'main_02_005';
+                const showCamp = window.isQuestActive(campReq) || window.isQuestCompleted(campReq);
+                if (showCamp) {
+                    const dMarker = scene.add.rectangle(dx, dy, tileSize * 2, tileSize * 2, 0xff0000, 0.8).setDepth(3).setStrokeStyle(2, 0xffffff);
+                    const dText = scene.add.text(dx, dy, 'TRAITOR\nCAMP', { fontSize: '11px', fill: '#ffffff', align: 'center', stroke: '#000000', strokeThickness: 3 }).setDepth(4).setOrigin(0.5);
+                    this.transitionMarkers.push({ x: dx, y: dy, radius: tileSize * 1.5, targetMap: 'dungeon', dungeonId: 'traitor_camp', dungeonLevel: 1, marker: dMarker, text: dText });
+                    const campZone = scene.add.zone(dx, dy, tileSize * 4, tileSize * 4);
+                    scene.physics.add.existing(campZone, true);
+                    scene.physics.add.overlap(player, campZone, () => {
+                        if (window.uqe && window.uqe.eventBus) window.uqe.eventBus.emit('location_explored', { id: 'traitor_camp' });
                     });
                 }
             }
@@ -764,12 +979,8 @@ const MapManager = {
         }
 
         console.log('✅ Wilderness map created');
-        console.log(`   Map Dimensions: ${scene.mapWidth}x${scene.mapHeight} tiles (${mapWidth * tileSize}x${mapHeight * tileSize} px)`);
-        console.log(`   Edge walls added to physics: ${this.dungeonWalls.length}`);
-        console.log(`   World bounds set to: 0, 0, ${mapWidth * tileSize}, ${mapHeight * tileSize}`);
-
-        // Play Wilderness Music
         if (typeof playBackgroundMusic === 'function') playBackgroundMusic('wilderness');
+        this.updateQuestZones(scene);
     },
 
     /**
@@ -856,10 +1067,14 @@ const MapManager = {
                         this.dungeonWalls.push({ x: x * tileSize, y: y * tileSize, width: tileSize, height: tileSize, rect: wall });
 
                         // Add to physics group for monster collision
+                        // Add to physics group for monster collision
                         if (this.wallGroup) {
                             const pWall = this.wallGroup.create(x * tileSize + tileSize / 2, y * tileSize + tileSize / 2, null);
-                            pWall.setSize(tileSize, tileSize);
-                            pWall.setVisible(false); // Invisible physics body, visual is separate
+                            // Reduce wall body size to 24x24 to allow smoother navigation around corners
+                            // Effectively widens corridors from 32px to 40px physics-wise
+                            pWall.setSize(24, 24);
+                            pWall.setOffset(4, 4); // Center in 32x32 tile
+                            pWall.setVisible(false);
                         }
                     }
                 }
@@ -913,6 +1128,7 @@ const MapManager = {
             scene.mapWidth = dungeon.width;
             scene.mapHeight = dungeon.height;
             scene.physics.world.setBounds(0, 0, dungeon.width * tileSize, dungeon.height * tileSize);
+            // scene.cameras.main.setBounds(0, 0, dungeon.width * tileSize, dungeon.height * tileSize);
 
             console.log(`✅ Dungeon Level ${level} created`);
 
@@ -927,9 +1143,123 @@ const MapManager = {
                 pathfinder.initializeGrid(dungeon.mapData);
             }
 
+
+            // Spawn Dungeon Interactables
+            this.spawnDungeonInteractables(dungeonDef, level, dungeon, scene);
+
         } catch (e) {
             console.error("Error creating dungeon:", e);
             this.createWildernessMap();
+        }
+    },
+
+    /**
+     * Spawn Interactables for Dungeon
+     */
+    spawnDungeonInteractables(dungeonDef, level, dungeon, scene) {
+        if (!dungeonDef.interactables) return;
+
+        const interactables = dungeonDef.interactables.filter(i => level >= i.minLevel && level <= (i.maxLevel || 999));
+        if (interactables.length === 0) return;
+
+        console.log(`🗿 [DungeonInteract] Level ${level}. Defs found: ${dungeonDef.interactables.length}, Filtered: ${interactables.length}`);
+
+        for (const def of interactables) {
+            try {
+                const limit = def.limit || 5;
+                const chance = def.chance || 0.5;
+                let count = 0;
+
+                console.log(`   -> Attempting to spawn ${def.id} (Limit: ${limit}, Chance: ${chance})`);
+
+                for (let i = 0; i < limit; i++) {
+                    if (Math.random() > chance) continue;
+
+                    let planted = false;
+                    for (let a = 0; a < 20; a++) {
+                        const rx = Phaser.Math.Between(1, dungeon.width - 2);
+                        const ry = Phaser.Math.Between(1, dungeon.height - 2);
+
+                        if (dungeon.mapData[ry][rx] === 1) {
+                            const pixelX = rx * scene.tileSize + scene.tileSize / 2;
+                            const pixelY = ry * scene.tileSize + scene.tileSize / 2;
+
+                            // NOTE: Images/sprites don't render in spawnDungeonInteractables context
+                            // Using styled shapes as visual (these work)
+                            let visual;
+                            let collisionBody;
+
+                            if (def.id === 'ritual_altar') {
+                                // Dark Ritual Altar - red themed
+                                visual = scene.add.rectangle(pixelX, pixelY, 24, 64, 0x8B0000).setDepth(8);
+                                scene.add.rectangle(pixelX, pixelY - 24, 16, 16, 0xCC4444).setDepth(9);
+                                scene.add.circle(pixelX, pixelY, 28, 0xFF0000, 0.15).setDepth(7);
+                                collisionBody = scene.add.rectangle(pixelX, pixelY, 32, 80, 0x000000, 0);
+                            } else if (def.id === 'void_tear') {
+                                // Void Tear - purple/void themed with pulsing effect
+                                // Outer glow
+                                const outerGlow = scene.add.circle(pixelX, pixelY, 40, 0x8800FF, 0.2).setDepth(6);
+                                // Inner void
+                                visual = scene.add.circle(pixelX, pixelY, 24, 0x220044).setDepth(8);
+                                visual.setStrokeStyle(4, 0xAA00FF);
+                                // Core
+                                const core = scene.add.circle(pixelX, pixelY, 10, 0x000000).setDepth(9);
+                                // Pulsing animation
+                                scene.tweens.add({
+                                    targets: [outerGlow, visual],
+                                    scaleX: 1.15,
+                                    scaleY: 1.15,
+                                    alpha: { from: 1, to: 0.7 },
+                                    duration: 800,
+                                    yoyo: true,
+                                    repeat: -1,
+                                    ease: 'Sine.easeInOut'
+                                });
+                                collisionBody = scene.add.rectangle(pixelX, pixelY, 48, 48, 0x000000, 0);
+                            } else {
+                                // Generic fallback - gray rectangle
+                                visual = scene.add.rectangle(pixelX, pixelY, 32, 32, 0x666666).setDepth(8);
+                                collisionBody = scene.add.rectangle(pixelX, pixelY, 32, 32, 0x000000, 0);
+                            }
+
+                            scene.physics.add.existing(collisionBody, true);
+
+                            if (typeof player !== 'undefined' && player && player.body) {
+                                scene.physics.add.collider(player, collisionBody);
+                            }
+
+                            // Get the definition for interaction tracking
+                            const fullDefs = scene.cache.json.get('interactables') || [];
+                            const fullDef = fullDefs.find(obj => obj.id === def.id);
+
+                            if (fullDef) {
+                                visual.collisionBody = collisionBody;
+
+                                this.interactables.push({
+                                    definition: fullDef,
+                                    sprite: visual
+                                });
+
+
+                                planted = true;
+                                count++;
+                                break;
+                            } else {
+                                // Definition not found - destroy the shapes
+                                visual.destroy();
+                                collisionBody.destroy();
+                                console.warn(`[INTERACTABLE] Definition for ${def.id} not found`);
+                            }
+                        }
+
+
+
+                    }
+                }
+                console.log(`   -> Spawned ${count} of ${def.id}`);
+            } catch (err) {
+                console.error(`   -> Error spawning ${def.id}:`, err);
+            }
         }
     },
 
@@ -1168,6 +1498,10 @@ const MapManager = {
 
         // Aggressive cleanup: destroy all world objects that aren't the player
         // This catches orphaned graphics, particles, etc.
+        if (scene.physics && scene.physics.world) {
+            scene.physics.world.colliders.getActive().forEach(c => c.destroy());
+        }
+
         const children = scene.children.list.filter(c =>
             c !== player &&
             (c.scrollFactorX > 0 || c.scrollFactorY > 0) &&
@@ -1193,12 +1527,17 @@ const MapManager = {
             }
         }
 
+        // spawn interactables
+        this.spawnInteractables(targetMap);
+
         scene.cameras.main.startFollow(player);
         scene.cameras.main.startFollow(player);
         console.log(`Transitioned to ${targetMap}`);
 
+
         // RESTORE STATE: If returning to the previous map
-        if (targetMap === this.lastMap && (targetMap === 'town' || targetMap === 'wilderness')) {
+        // (Disabled for Town to ensure player spawns at Exit/Entrance when returning from Wilderness)
+        if (targetMap === this.lastMap && (targetMap === 'wilderness')) {
             if (typeof player !== 'undefined') {
                 player.x = this.lastPlayerX;
                 player.y = this.lastPlayerY;
@@ -1213,6 +1552,20 @@ const MapManager = {
         // Notify UQE if exists
         if (window.uqe && window.uqe.eventBus) {
             window.uqe.eventBus.emit('map_entered', { map: targetMap, level: level, dungeonId: dungeonId });
+
+            // Special Trigger for Traitor's Stronghold (Level 2)
+            if (dungeonId === 'traitor_camp' && level === 2) {
+                window.uqe.eventBus.emit('location_explored', { id: 'traitor_stronghold' });
+            }
+            // Special Trigger for Inner Sanctum (Level 3)
+            if (dungeonId === 'traitor_camp' && level === 3) {
+                window.uqe.eventBus.emit('location_explored', { id: 'inner_sanctum' });
+            }
+        }
+
+        // Restore weapon sprite (was destroyed by cleanup)
+        if (typeof window.updateWeaponSprite === 'function') {
+            window.updateWeaponSprite();
         }
     },
 

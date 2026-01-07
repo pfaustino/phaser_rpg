@@ -11,6 +11,7 @@ let gamepadConnected = false;
 let activeGamepad = null;
 let lastButtonStates = {};
 let controllerScene = null;
+let inputKeys = {}; // Stores Phaser Key objects mapped by action name
 
 // Menu navigation state
 let menuSelectionIndex = 0;
@@ -21,6 +22,7 @@ let currentMenuItems = [];
 
 // Virtual Cursor state
 let virtualCursor = null;
+let aimReticle = null;
 let virtualCursorSpeed = 600; // Pixels per second
 let cursorVisible = false;
 
@@ -31,6 +33,7 @@ async function loadControllerConfig() {
     try {
         const response = await fetch('controller.json');
         controllerConfig = await response.json();
+        window.controllerConfig = controllerConfig; // Ensure global access
         console.log('🎮 Controller config loaded:', controllerConfig);
         return controllerConfig;
     } catch (error) {
@@ -82,6 +85,14 @@ function initController(scene) {
         console.log('🎮 Virtual cursor created');
     }
 
+    // Create aim reticle (initially hidden)
+    if (!aimReticle) {
+        aimReticle = scene.add.circle(0, 0, 5, 0xff0000)
+            .setStrokeStyle(2, 0xffffff)
+            .setDepth(900)
+            .setVisible(false);
+    }
+
     // Listen for gamepad connection
     scene.input.gamepad.on('connected', (pad) => {
         console.log('🎮 Controller connected:', pad.id);
@@ -111,11 +122,37 @@ function initController(scene) {
         }
     }
 
-    // Set up ESC key handler for menu action
-    scene.input.keyboard.on('keydown-ESC', () => {
-        console.log('⌨️ ESC Key Pressed');
-        onControllerMenu();
-    });
+    // Initialize Keyboard Keys from Config
+    if (controllerConfig && controllerConfig.keyboard) {
+        console.log('⌨️ Initializing Keyboard Controls...');
+        for (const [action, keyStr] of Object.entries(controllerConfig.keyboard)) {
+            // keyStr can be "W,UP" -> split by comma
+            const codes = keyStr.split(',').map(s => s.trim());
+            inputKeys[action] = [];
+
+            codes.forEach(code => {
+                // Handle special case for number keys if needed, but Phaser usually handles "ONE", "TWO" etc.
+                // Phaser.Input.Keyboard.KeyCodes[code]
+                let keyCode = Phaser.Input.Keyboard.KeyCodes[code];
+
+                // Fallback for single characters "W", "A", "S", "D"
+                if (!keyCode && code.length === 1) {
+                    keyCode = Phaser.Input.Keyboard.KeyCodes[code.toUpperCase()];
+                }
+
+                if (keyCode) {
+                    const keyObj = scene.input.keyboard.addKey(keyCode);
+                    inputKeys[action].push(keyObj);
+                    // console.log(`   Mapped ${action} -> ${code}`);
+                } else {
+                    console.warn(`⚠️ Invalid key code: ${code} for action: ${action}`);
+                }
+            });
+        }
+    }
+
+    // Set up ESC key handler for menu action - keep as backup or part of 'settings' action
+    // (Now handled by isActionJustPressed('settings'))
 
     console.log('🎮 Controller system initialized');
 }
@@ -161,11 +198,43 @@ function isButtonJustPressed(buttonIndex) {
 }
 
 /**
- * Check if an action button was just pressed
+ * Check if an action button was just pressed (Gamepad OR Keyboard)
  */
 function isActionJustPressed(action) {
+    // 1. Check Gamepad
     const buttonIndex = getButtonForAction(action);
-    return isButtonJustPressed(buttonIndex);
+    if (isButtonJustPressed(buttonIndex)) return true;
+
+    // 2. Check Keyboard
+    if (inputKeys[action]) {
+        for (const key of inputKeys[action]) {
+            if (Phaser.Input.Keyboard.JustDown(key)) return true;
+        }
+    }
+
+    return false;
+}
+
+/**
+ * Check if an action is currently active (Held Down) - Gamepad OR Keyboard
+ */
+function isActionActive(action) {
+    // 1. Check Gamepad
+    if (activeGamepad && controllerConfig) {
+        const buttonIndex = getButtonForAction(action);
+        if (buttonIndex >= 0 && activeGamepad.buttons[buttonIndex]?.pressed) {
+            return true;
+        }
+    }
+
+    // 2. Check Keyboard
+    if (inputKeys[action]) {
+        for (const key of inputKeys[action]) {
+            if (key.isDown) return true;
+        }
+    }
+
+    return false;
 }
 
 /**
@@ -208,20 +277,8 @@ function handleGamepadInput() {
     const inShop = (window.shopVisible || shopVisible);
 
     // --- D-PAD MENU TOGGLES (always work, except in shop) ---
-    if (!inShop && !inDialog) {
-        // D-pad UP = Toggle Inventory
-        if (isButtonJustPressed(controllerConfig.buttons.DPAD_UP)) {
-            if (typeof toggleInventory === 'function') {
-                toggleInventory();
-            }
-        }
-        // D-pad DOWN = Toggle Equipment
-        if (isButtonJustPressed(controllerConfig.buttons.DPAD_DOWN)) {
-            if (typeof toggleEquipment === 'function') {
-                toggleEquipment();
-            }
-        }
-    }
+    // --- D-PAD MENU TOGGLES (Removed: Handled by Game.js via Actions) ---
+    // Actions: inventory, equipment, quests defined in controller.json
 
     // Get current quest modal state
     const modalNew = window.newQuestModal || newQuestModal;
@@ -288,6 +345,9 @@ function handleGamepadInput() {
 
         // --- MOVEMENT (left stick, only when NOT in menu/dialog) ---
         handleGamepadMovement(pad, deadzone);
+
+        // --- AIMING (right stick) ---
+        handleGamepadAiming(pad, deadzone);
     }
 
     // --- BUTTON ACTIONS ---
@@ -296,50 +356,13 @@ function handleGamepadInput() {
         if (inMenu || inDialog || inQuestModal) {
             // Virtual click at cursor position
             triggerVirtualCursorClick();
-        } else {
-            onControllerA();
         }
+        // Gameplay actions (Attack/Interact) are handled by Game.js via isActionJustPressed('attack'/'interact')
     }
 
-    // B button - Cancel/Close
-    if (isButtonJustPressed(controllerConfig.buttons.B)) {
-        onControllerB();
-    }
-
-    // X button - Ability 1
-    if (isButtonJustPressed(controllerConfig.buttons.X)) {
-        onControllerX();
-    }
-
-    // Y button - Ability 2
-    if (isButtonJustPressed(controllerConfig.buttons.Y)) {
-        onControllerY();
-    }
-
-    // LB - Health Potion
-    if (isButtonJustPressed(controllerConfig.buttons.LB)) {
-        console.log('[Ability Debug] LB pressed (Health Potion)');
-        if (typeof usePotion === 'function') {
-            usePotion('health');
-        } else if (typeof window.usePotion === 'function') {
-            window.usePotion('health');
-        }
-    }
-
-    // RB - Mana Potion
-    if (isButtonJustPressed(controllerConfig.buttons.RB)) {
-        console.log('[Ability Debug] RB pressed (Mana Potion)');
-        if (typeof usePotion === 'function') {
-            usePotion('mana');
-        } else if (typeof window.usePotion === 'function') {
-            window.usePotion('mana');
-        }
-    }
-
-    // Start - Menu toggle (same as ESC)
-    if (isButtonJustPressed(controllerConfig.buttons.START)) {
-        onControllerMenu();
-    }
+    // Other buttons (B, X, Y, LB, RB, RT, Start) are now handled by Game.js
+    // via isActionJustPressed() + controller.json mappings.
+    // This prevents double-firing of abilities and actions.
 }
 
 /**
@@ -392,6 +415,45 @@ function handleGamepadMovement(pad, deadzone) {
         if (typeof cursors !== 'undefined' && !cursors.up?.isDown && !cursors.down?.isDown) {
             player.setVelocityY(0);
         }
+    }
+}
+
+/**
+ * Handle aiming input from gamepad (right stick)
+ */
+function handleGamepadAiming(pad, deadzone) {
+    if (typeof player === 'undefined' || !player) return;
+
+    let rx = 0, ry = 0;
+    if (pad.rightStick) {
+        rx = pad.rightStick.x;
+        ry = pad.rightStick.y;
+    } else if (pad.axes.length >= 4) {
+        // Fallback for some non-standard mappings
+        rx = typeof pad.axes[2].getValue === 'function' ? pad.axes[2].getValue() : pad.axes[2];
+        ry = typeof pad.axes[3].getValue === 'function' ? pad.axes[3].getValue() : pad.axes[3];
+    }
+
+    if (Math.abs(rx) > deadzone || Math.abs(ry) > deadzone) {
+        const angle = Math.atan2(ry, rx);
+        player.aimAngle = angle; // Store for firing
+
+        // Position reticle at fixed distance
+        const aimDist = 100;
+        if (aimReticle) {
+            aimReticle.setPosition(player.x + Math.cos(angle) * aimDist, player.y + Math.sin(angle) * aimDist);
+            aimReticle.setVisible(true);
+        }
+
+        // Also update facing direction based on aim
+        if (Math.abs(rx) > Math.abs(ry)) {
+            player.facingDirection = rx > 0 ? 'east' : 'west';
+        } else {
+            player.facingDirection = ry > 0 ? 'south' : 'north';
+        }
+    } else {
+        if (aimReticle) aimReticle.setVisible(false);
+        // Don't clear player.aimAngle, keep last aim
     }
 }
 

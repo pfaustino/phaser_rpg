@@ -10,6 +10,11 @@
 
 window.GameState = {
     // ============================================
+    // GAME META
+    // ============================================
+    gameVersion: 'v0.9.187',
+
+    // ============================================
     // PLAYER DATA
     // ============================================
     playerStats: {
@@ -32,6 +37,7 @@ window.GameState = {
         comboCount: 0,       // Combo counter
         comboTimer: 0,       // Time since last attack (for combo reset)
         comboResetTime: 2000, // Combo resets after 2 seconds of no attacks
+        isInvulnerable: false, // Temporary protection flag
         gold: 0,
         inventory: [], // Temporary storage for picked up items
         equipment: {

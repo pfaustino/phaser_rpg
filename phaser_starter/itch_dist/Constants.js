@@ -70,6 +70,20 @@ window.Constants = {
     MONSTER_SCALING: {
         hpPerLevel: 0.15,      // +15% HP per monster level
         attackPerLevel: 0.10   // +10% attack per monster level
+    },
+
+    // ============================================
+    // ITEM SCORE (GEAR SCORE) SETTINGS
+    // ============================================
+    ITEM_SCORE_WEIGHTS: {
+        attackPower: 1,
+        defense: 1,
+        maxHp: 0.1,
+        speed: 1,
+        critChance: 100,      // 0.05 (5%) -> 5 points
+        lifesteal: 100,       // 0.05 (5%) -> 5 points
+        manaAmount: 0.5,
+        healAmount: 0.5
     }
 };
 

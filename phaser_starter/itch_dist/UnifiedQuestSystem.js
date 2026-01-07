@@ -46,7 +46,8 @@ const UQE_EVENTS = {
     TIME_SURVIVED: 'time_survived',
     LEVEL_UP: 'level_up',
     GOLD_EARNED: 'gold_earned',
-    LOCATION_EXPLORED: 'location_explored'
+    LOCATION_EXPLORED: 'location_explored',
+    INTERACT_OBJECT: 'interact_object'
 };
 
 class UqeObjective {
@@ -160,6 +161,7 @@ class TalkObjective extends UqeObjective {
     }
 }
 
+
 class CollectObjective extends UqeObjective {
     constructor(data, eventBus) {
         super(data, eventBus);
@@ -167,6 +169,26 @@ class CollectObjective extends UqeObjective {
         this.subscribe(UQE_EVENTS.ITEM_PICKUP, (data) => {
             // Match specific ID, type, or wildcard 'any'
             if (this.itemId === 'any' || data.id === this.itemId || data.type === this.itemId) {
+                this.updateProgress(data.amount || 1);
+            }
+        });
+    }
+}
+
+class DynamicSpawnObjective extends UqeObjective {
+    constructor(data, eventBus) {
+        super(data, eventBus);
+        this.itemId = data.itemId;
+        this.spawnConfig = data.spawnConfig || {
+            visualType: 'star',
+            color: 0x00ffff,
+            spawnRate: 0.02,
+            maxNodes: 5,
+            radius: 400
+        };
+
+        this.subscribe(UQE_EVENTS.ITEM_PICKUP, (data) => {
+            if (data.id === this.itemId || data.type === this.itemId) {
                 this.updateProgress(data.amount || 1);
             }
         });
@@ -185,12 +207,26 @@ class ExploreObjective extends UqeObjective {
 class ExploreLocationObjective extends UqeObjective {
     constructor(data, eventBus) {
         super(data, eventBus);
-        this.zoneId = data.zoneId; // Optional specific zone ID
+        this.zoneId = data.zoneId || data.locationId; // Support both naming conventions
 
         this.subscribe(UQE_EVENTS.LOCATION_EXPLORED, (data) => {
             // Match against zoneId if specified, otherwise fall back to objective ID
             const targetId = this.zoneId || this.id;
             if (data.id === targetId) {
+                this.updateProgress(1);
+            }
+        });
+    }
+}
+
+class InteractObjective extends UqeObjective {
+    constructor(data, eventBus) {
+        super(data, eventBus);
+        // data.targetObjectId is the preferred key, but fallback to objectId or zoneId
+        this.targetObjectId = data.targetObjectId || data.objectId || data.zoneId;
+
+        this.subscribe(UQE_EVENTS.INTERACT_OBJECT, (eventData) => {
+            if (eventData.id === this.targetObjectId) {
                 this.updateProgress(1);
             }
         });
@@ -239,6 +275,19 @@ class LevelObjective extends UqeObjective {
             }
         });
     }
+    rehydrate(saveData) {
+        super.rehydrate(saveData);
+        // Validate against actual player level to prevent regression/stuck quests
+        if (typeof playerStats !== 'undefined' && playerStats.level) {
+            if (playerStats.level > this.progress) {
+                this.progress = playerStats.level;
+            }
+        }
+        if (this.progress >= this.target) {
+            this.completed = true;
+            this.progress = this.target;
+        }
+    }
 }
 
 class GoldObjective extends UqeObjective {
@@ -276,9 +325,11 @@ class Quest {
                 case 'collect': obj = new CollectObjective(data, eventBus); break;
                 case 'explore': obj = new ExploreObjective(data, eventBus); break;
                 case 'explore_location': obj = new ExploreLocationObjective(data, eventBus); break;
+                case 'interact': obj = new InteractObjective(data, eventBus); break;
                 case 'survive': obj = new SurviveObjective(data, eventBus); break;
                 case 'level': obj = new LevelObjective(data, eventBus); break;
                 case 'gold': obj = new GoldObjective(data, eventBus); break;
+                case 'dynamic_spawn': obj = new DynamicSpawnObjective(data, eventBus); break;
                 default: obj = new UqeObjective(data, eventBus); break;
             }
             obj.parentQuest = this; // Link to parent
@@ -340,6 +391,7 @@ class UqeEngine {
         this.completedQuests = []; // Completed registry
         this.pendingQuests = []; // Available but not yet accepted
         this.allDefinitions = {};
+        this.isUpdating = false; // Re-entrancy guard
     }
 
     init(definitions) {
@@ -484,26 +536,35 @@ class UqeEngine {
     }
 
     update() {
-        // Iterate backwards to safely remove
-        let questCompleted = false;
-        for (let i = this.activeQuests.length - 1; i >= 0; i--) {
-            const quest = this.activeQuests[i];
-            if (quest.checkCompletion()) {
-                // console.log(`🏁 [UQE Engine] Quest Completed: ${quest.title}`);
+        if (this.isUpdating) return;
+        this.isUpdating = true;
 
-                // Unsubscribe listeners for completed quest to stop tracking
-                quest.dispose();
+        try {
+            // Iterate backwards to safely remove
+            let questCompleted = false;
+            for (let i = this.activeQuests.length - 1; i >= 0; i--) {
+                const quest = this.activeQuests[i];
+                if (!quest) continue; // Safety: modification in event listeners might shift indices
 
-                this.activeQuests.splice(i, 1);
-                this.completedQuests.push(quest);
-                this.eventBus.emit(UQE_EVENTS.QUEST_COMPLETED, quest);
-                questCompleted = true;
+                if (quest.checkCompletion()) {
+                    // console.log(`🏁 [UQE Engine] Quest Completed: ${quest.title}`);
+
+                    // Unsubscribe listeners for completed quest to stop tracking
+                    quest.dispose();
+
+                    this.activeQuests.splice(i, 1);
+                    this.completedQuests.push(quest);
+                    this.eventBus.emit(UQE_EVENTS.QUEST_COMPLETED, quest);
+                    questCompleted = true;
+                }
             }
-        }
 
-        // If a quest was completed, check for new unlocks
-        if (questCompleted) {
-            this.checkNewQuests();
+            // If a quest was completed, check for new unlocks
+            if (questCompleted) {
+                this.checkNewQuests();
+            }
+        } finally {
+            this.isUpdating = false;
         }
     }
     // Debug/Console Helper: Start a quest by ID

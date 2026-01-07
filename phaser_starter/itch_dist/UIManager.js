@@ -48,9 +48,10 @@ window.UIManager = {
             this.dialogVisible ||
             this.shopVisible ||
             this.buildingPanelVisible ||
+            (typeof window.buildingPanelVisible !== 'undefined' && window.buildingPanelVisible) ||
             this.assetsVisible ||
             this.grassDebugVisible ||
-            (window.questCompletedModal && window.questCompletedModal.visible) ||
+            (window.questCompletedModal && (window.questCompletedModal.visible || window.questCompletedModal.closeBtn)) ||
             (window.newQuestModal && window.newQuestModal.visible) ||
             (window.questPreviewModal !== null); // Assuming questPreviewModal remains global or moves here later
     },
@@ -79,7 +80,20 @@ window.UIManager = {
         if (this.dialogVisible) {
             this.closeDialog();
         }
-        // Add others as they are migrated
+
+        // Handle Building UIs
+        if (typeof window.buildingPanelVisible !== 'undefined' && window.buildingPanelVisible) {
+            if (typeof window.closeBuildingUI === 'function') {
+                window.closeBuildingUI();
+            } else {
+                // Manual fallback for specific buildings
+                if (window.TavernUI && window.TavernUI.visible) window.TavernUI.close();
+                if (window.InnUI && window.InnUI.visible) window.InnUI.close();
+                if (window.ForgeUI && window.ForgeUI.visible) window.ForgeUI.close();
+            }
+            window.buildingPanelVisible = false;
+            this.buildingPanelVisible = false;
+        }
     },
 
     // ============================================
@@ -87,19 +101,133 @@ window.UIManager = {
     // ============================================
 
     toggleSettings: function () {
-        // If already open, close it
+        // If settings is already open, close it (handled by closeAllInterfaces via isAnyWindowOpen check, but explicit check here is fine too)
         if (this.settingsVisible) {
             this.settingsVisible = false;
             this.destroySettingsUI();
             return;
         }
 
-        // Close all other interfaces before opening
-        this.closeAllInterfaces();
+        // If ANY other window is open, simply close them and DO NOT open settings
+        // This makes ESC act as a generic "Close" button
+        if (this.isAnyWindowOpen() || (typeof window.buildingPanelVisible !== 'undefined' && window.buildingPanelVisible)) {
+            this.closeAllInterfaces();
+            return;
+        }
 
-        // Now open settings
+        // Now open settings (only if nothing else was open)
         this.settingsVisible = true;
         this.createSettingsUI();
+    },
+
+    // --- Save/Load Modal ---
+    saveLoadModal: null,
+
+    showSaveLoadModal: function (mode) { // mode: 'save' or 'load'
+        if (this.saveLoadModal) this.destroySaveLoadModal();
+        this.closeAllInterfaces(); // Close other windows
+
+        const scene = game.scene.scenes[0];
+        const centerX = scene.cameras.main.width / 2;
+        const centerY = scene.cameras.main.height / 2;
+        const width = 600;
+        const height = 500;
+
+        const bg = scene.add.rectangle(centerX, centerY, width, height, 0x1a1a1a, 0.95)
+            .setScrollFactor(0).setDepth(20000).setStrokeStyle(3, mode === 'save' ? 0x00ff00 : 0x4444ff)
+            .setInteractive(); // Block input
+
+        const titleText = mode === 'save' ? 'SAVE GAME' : 'LOAD GAME';
+        const titleColor = mode === 'save' ? '#00ff00' : '#aaaaff';
+
+        const title = scene.add.text(centerX, centerY - height / 2 + 30, titleText, {
+            fontSize: '32px', fill: titleColor, fontStyle: 'bold'
+        }).setScrollFactor(0).setDepth(20001).setOrigin(0.5);
+
+        const closeBtn = scene.add.text(centerX + width / 2 - 20, centerY - height / 2 + 20, 'X', {
+            fontSize: '24px', fill: '#ffffff'
+        }).setScrollFactor(0).setDepth(20001).setOrigin(0.5)
+            .setInteractive({ useHandCursor: true });
+
+        closeBtn.on('pointerdown', () => this.destroySaveLoadModal());
+
+        this.saveLoadModal = { bg, title, closeBtn, elements: [] };
+
+        // Render Slots
+        const startY = centerY - height / 2 + 80;
+        const gap = 70;
+
+        for (let i = 1; i <= 5; i++) {
+            const y = startY + (i - 1) * gap;
+            this.createSlotEntry(scene, centerX, y, i, mode);
+        }
+    },
+
+    createSlotEntry: function (scene, x, y, slot, mode) {
+        const width = 500;
+        const height = 60;
+        const meta = window.SaveManager.getSlotMeta(slot);
+
+        // Slot Background
+        const bg = scene.add.rectangle(x, y, width, height, 0x333333, 0.9)
+            .setScrollFactor(0).setDepth(20001).setInteractive({ useHandCursor: true })
+            .setStrokeStyle(1, 0x666666);
+
+        // Slot Number
+        const numText = scene.add.text(x - width / 2 + 20, y, `Slot ${slot}`, {
+            fontSize: '20px', fill: '#ffffff', fontStyle: 'bold'
+        }).setScrollFactor(0).setDepth(20002).setOrigin(0, 0.5);
+
+        // Info Text
+        let infoStr = "Empty";
+        let subInfoStr = "";
+
+        if (meta) {
+            const date = new Date(meta.timestamp).toLocaleString();
+            infoStr = `Lvl ${meta.info.level || '?'} - ${meta.info.map}`;
+            subInfoStr = date;
+        }
+
+        const infoText = scene.add.text(x, y - 10, infoStr, {
+            fontSize: '18px', fill: meta ? '#ffff00' : '#888888'
+        }).setScrollFactor(0).setDepth(20002).setOrigin(0.5, 0.5);
+
+        const subText = scene.add.text(x, y + 15, subInfoStr, {
+            fontSize: '12px', fill: '#aaaaaa'
+        }).setScrollFactor(0).setDepth(20002).setOrigin(0.5, 0.5);
+
+        // Action
+        bg.on('pointerdown', () => {
+            if (mode === 'save') {
+                // Confirm overwrite if exists
+                if (meta && !confirm(`Overwrite Slot ${slot}?`)) return;
+
+                window.SaveManager.saveGame(slot);
+                this.destroySaveLoadModal();
+            } else {
+                if (!meta) {
+                    if (typeof playSound === 'function') playSound('ui_error');
+                    return;
+                }
+                window.loadGame(slot);
+            }
+        });
+
+        // Hover effect
+        bg.on('pointerover', () => bg.setStrokeStyle(2, 0xffffff));
+        bg.on('pointerout', () => bg.setStrokeStyle(1, 0x666666));
+
+        this.saveLoadModal.elements.push(bg, numText, infoText, subText);
+    },
+
+    destroySaveLoadModal: function () {
+        if (this.saveLoadModal) {
+            if (this.saveLoadModal.bg) this.saveLoadModal.bg.destroy();
+            if (this.saveLoadModal.title) this.saveLoadModal.title.destroy();
+            if (this.saveLoadModal.closeBtn) this.saveLoadModal.closeBtn.destroy();
+            if (this.saveLoadModal.elements) this.saveLoadModal.elements.forEach(e => e.destroy());
+            this.saveLoadModal = null;
+        }
     },
 
     createSettingsUI: function () {
@@ -107,7 +235,7 @@ window.UIManager = {
         const centerX = scene.cameras.main.width / 2;
         const centerY = scene.cameras.main.height / 2;
         const panelWidth = 400;
-        const panelHeight = 550;
+        const panelHeight = 620;
 
         // Background
         const bg = scene.add.rectangle(centerX, centerY, panelWidth, panelHeight, 0x1a1a1a, 0.95)
@@ -126,42 +254,63 @@ window.UIManager = {
             elements: []
         };
 
-        let currentY = centerY - 100;
-        const spacing = 60;
+        let currentY = centerY - 150;
+        const spacing = 55;
 
-        // --- Music Toggle ---
-        // Access global musicEnabled if it exists, otherwise assume true
-        const musicOn = (typeof window.musicEnabled !== 'undefined') ? window.musicEnabled : true;
+        // --- Volume Sliders Helper ---
+        const createSlider = (y, label, initialValue, onUpdate) => {
+            const trackWidth = 250;
+            const trackHeight = 10;
+            const thumbSize = 20;
 
-        const musicStatus = musicOn ? 'ON' : 'OFF';
-        const musicColor = musicOn ? '#00ff00' : '#ff0000';
+            // Label
+            const labelText = scene.add.text(centerX, y - 25, `${label}: ${Math.round(initialValue * 100)}%`, {
+                fontSize: '18px', fill: '#ffffff'
+            }).setScrollFactor(0).setDepth(10002).setOrigin(0.5);
 
-        const musicBtnBg = scene.add.rectangle(centerX, currentY, 200, 50, 0x333333)
-            .setScrollFactor(0).setDepth(10001).setInteractive({ useHandCursor: true });
+            // Track
+            const track = scene.add.rectangle(centerX, y, trackWidth, trackHeight, 0x333333)
+                .setScrollFactor(0).setDepth(10001).setInteractive({ useHandCursor: true });
 
-        const musicBtnText = scene.add.text(centerX, currentY, `Music: ${musicStatus}`, {
-            fontSize: '20px', fill: musicColor
-        }).setScrollFactor(0).setDepth(10002).setOrigin(0.5);
+            // Thumb
+            const thumbX = centerX - (trackWidth / 2) + (initialValue * trackWidth);
+            const thumb = scene.add.rectangle(thumbX, y, thumbSize, thumbSize, 0xffffff)
+                .setScrollFactor(0).setDepth(10002).setInteractive({ useHandCursor: true });
 
-        musicBtnBg.on('pointerdown', () => {
-            if (typeof window.musicEnabled !== 'undefined') {
-                window.musicEnabled = !window.musicEnabled;
-                // Persist music preference to localStorage
-                localStorage.setItem('musicEnabled', window.musicEnabled ? 'true' : 'false');
-                musicBtnText.setText(`Music: ${window.musicEnabled ? 'ON' : 'OFF'}`);
-                musicBtnText.setColor(window.musicEnabled ? '#00ff00' : '#ff0000');
+            const updateSlider = (pointerX) => {
+                const relativeX = Phaser.Math.Clamp(pointerX - (centerX - trackWidth / 2), 0, trackWidth);
+                const value = relativeX / trackWidth;
 
-                if (typeof toggleMusic === 'function') {
-                    toggleMusic(window.musicEnabled);
-                } else if (scene.sound) {
-                    scene.sound.mute = !window.musicEnabled;
-                }
+                thumb.x = (centerX - trackWidth / 2) + relativeX;
+                labelText.setText(`${label}: ${Math.round(value * 100)}%`);
+                onUpdate(value);
+            };
+
+            track.on('pointerdown', (pointer) => updateSlider(pointer.x));
+
+            scene.input.setDraggable(thumb);
+            thumb.on('drag', (pointer) => updateSlider(pointer.x));
+
+            this.settingsPanel.elements.push(labelText, track, thumb);
+        };
+
+        // --- Music Slider ---
+        const musicVolume = (typeof window.musicVolume !== 'undefined') ? window.musicVolume : 0.5;
+        createSlider(currentY, 'Music Volume', musicVolume, (val) => {
+            if (typeof window.updateMusicVolume === 'function') {
+                window.updateMusicVolume(val);
             }
-            if (typeof playSound === 'function') playSound('menu_select');
         });
+        currentY += spacing + 20;
 
-        this.settingsPanel.elements.push(musicBtnBg, musicBtnText);
-        currentY += spacing;
+        // --- SFX Slider ---
+        const sfxVolume = (typeof window.sfxVolume !== 'undefined') ? window.sfxVolume : 0.7;
+        createSlider(currentY, 'SFX Volume', sfxVolume, (val) => {
+            if (typeof window.updateSFXVolume === 'function') {
+                window.updateSFXVolume(val);
+            }
+        });
+        currentY += spacing + 10;
 
         // --- Difficulty Selector ---
         const diffLabel = scene.add.text(centerX, currentY, 'Difficulty:', {
@@ -239,7 +388,7 @@ window.UIManager = {
         }).setScrollFactor(0).setDepth(10002).setOrigin(0.5);
 
         saveBtnBg.on('pointerdown', () => {
-            if (typeof window.saveGame === 'function') window.saveGame();
+            this.showSaveLoadModal('save');
             if (typeof playSound === 'function') playSound('menu_select');
         });
         this.settingsPanel.elements.push(saveBtnBg, saveBtnText);
@@ -254,10 +403,7 @@ window.UIManager = {
         }).setScrollFactor(0).setDepth(10002).setOrigin(0.5);
 
         loadBtnBg.on('pointerdown', () => {
-            if (typeof window.loadGame === 'function') {
-                this.toggleSettings(); // Close menu
-                window.loadGame();
-            }
+            this.showSaveLoadModal('load');
             if (typeof playSound === 'function') playSound('menu_select');
         });
         this.settingsPanel.elements.push(loadBtnBg, loadBtnText);
@@ -272,11 +418,9 @@ window.UIManager = {
         }).setScrollFactor(0).setDepth(10002).setOrigin(0.5);
 
         newGameBtnBg.on('pointerdown', () => {
-            if (typeof window.resetGame === 'function') {
-                window.resetGame();
-            } else if (confirm("Are you sure? This will DELETE your save file!")) {
-                localStorage.clear();
-                location.reload();
+            if (confirm("Start a New Game? Unsaved progress will be lost.")) {
+                localStorage.removeItem('rpg_load_on_start'); // Ensure clean start
+                window.resetGame ? window.resetGame() : location.reload();
             }
         });
         this.settingsPanel.elements.push(newGameBtnBg, newGameBtnText);
@@ -307,272 +451,32 @@ window.UIManager = {
     },
 
     // ============================================
-    // INVENTORY UI
+    // INVENTORY UI (DEPRECATED)
     // ============================================
+    // NOTE: The standalone Inventory UI has been removed.
+    // Use the Equipment panel (E key / D-pad UP) which shows both equipment and inventory.
 
+    // Stubs for backward compatibility (do nothing)
     toggleInventory: function () {
-        // If already open, close it
-        if (this.inventoryVisible) {
-            this.inventoryVisible = false;
-            this.destroyInventoryUI();
-            return;
-        }
-
-        // Close all other interfaces before opening
-        this.closeAllInterfaces();
-
-        // Now open inventory
-        this.inventoryVisible = true;
-        this.createInventoryUI();
+        console.warn('toggleInventory is deprecated. Use toggleEquipment instead.');
     },
+
 
     createInventoryUI: function () {
-        const scene = game.scene.scenes[0];
-        const panelWidth = 650;
-        const panelHeight = 600;
-        const centerX = scene.cameras.main.width / 2;
-        const centerY = scene.cameras.main.height / 2;
-
-        const bg = scene.add.rectangle(centerX, centerY, panelWidth, panelHeight, 0x1a1a1a, 0.95)
-            .setScrollFactor(0).setDepth(300).setStrokeStyle(3, 0xffffff);
-
-        const title = scene.add.text(centerX, centerY - panelHeight / 2 + 20, 'INVENTORY', {
-            fontSize: '28px',
-            fill: '#ffffff',
-            fontStyle: 'bold'
-        }).setScrollFactor(0).setDepth(301).setOrigin(0.5, 0);
-
-        const closeText = scene.add.text(centerX + panelWidth / 2 - 20, centerY - panelHeight / 2 + 20, 'Press I to Close', {
-            fontSize: '14px',
-            fill: '#aaaaaa'
-        }).setScrollFactor(0).setDepth(301).setOrigin(1, 0);
-
-        this.inventoryPanel = {
-            bg,
-            title,
-            closeText,
-            items: []
-        };
-
-        const inventoryStartY = centerY - panelHeight / 2 + 80;
-        const inventoryVisibleHeight = panelHeight - 120;
-        const inventoryContainer = null; // scene.add.container(centerX, inventoryStartY);
-        // inventoryContainer.setScrollFactor(0).setDepth(301);
-
-        const inventoryMask = scene.make.graphics();
-        inventoryMask.fillStyle(0xffffff);
-        inventoryMask.fillRect(centerX - panelWidth / 2, inventoryStartY, panelWidth, inventoryVisibleHeight);
-        inventoryMask.setScrollFactor(0);
-        const maskGeometry = inventoryMask.createGeometryMask();
-
-        // Scrollbar Callback
-        const onScroll = (scrollValue) => {
-            if (this.inventoryPanel && this.inventoryPanel.items) {
-                this.inventoryPanel.items.forEach(itemObj => {
-                    if (itemObj.baseY !== undefined) {
-                        const newY = itemObj.baseY - scrollValue;
-                        if (itemObj.sprite) itemObj.sprite.y = newY;
-                        if (itemObj.text) itemObj.text.y = newY + 30 + 5; // slotSize/2 + 5
-                        if (itemObj.borderRect) itemObj.borderRect.y = newY;
-                    }
-                });
-            }
-        };
-
-        const scrollbar = this.setupScrollbar({
-            scene,
-            x: centerX + panelWidth / 2 - 25,
-            y: inventoryStartY,
-            height: inventoryVisibleHeight,
-            depth: 303,
-            minScroll: 0,
-            initialScroll: 0,
-            onScroll: onScroll,
-            // container: inventoryContainer, // Removed Container link
-            // containerStartY: inventoryStartY,
-            wheelHitArea: this.inventoryPanel.bg,
-            visibleHeight: inventoryVisibleHeight
-        });
-
-        this.inventoryPanel.mask = inventoryMask;
-        this.inventoryPanel.maskGeometry = maskGeometry;
-        this.inventoryPanel.scrollbar = scrollbar;
-        this.inventoryPanel.startY = inventoryStartY;
-        this.inventoryPanel.visibleHeight = inventoryVisibleHeight;
-
-        this.updateInventoryItems();
+        console.warn('createInventoryUI is deprecated. Use Equipment panel instead.');
     },
 
+
     updateInventoryItems: function () {
-        const scene = game.scene.scenes[0];
-        if (!this.inventoryPanel) return;
-
-        const centerX = scene.cameras.main.width / 2;
-
-        // Hide tooltip
-        this.hideTooltip(true);
-
-        // Clear container
-        if (this.inventoryPanel.container) {
-            this.inventoryPanel.container.removeAll(true);
-        }
-        this.inventoryPanel.items = [];
-
-        const slotSize = 60;
-        const slotsPerRow = 6;
-        const spacing = 30;
-
-        // Calculate grid
-        const gridWidth = slotsPerRow * slotSize + (slotsPerRow - 1) * spacing;
-        const startX = centerX - gridWidth / 2 + slotSize / 2; // GLOBAL X
-        const startY = this.inventoryPanel.startY + 40;        // GLOBAL Y BASE
-
-        const currentScroll = this.inventoryPanel.scrollbar ? this.inventoryPanel.scrollbar.getScroll() : 0;
-
-        playerStats.inventory.forEach((item, index) => {
-            const row = Math.floor(index / slotsPerRow);
-            const col = index % slotsPerRow;
-
-            // Global Positioning
-            const globalX = startX + col * (slotSize + spacing);
-            const globalBaseY = startY + row * (slotSize + spacing);
-            const globalY = globalBaseY - currentScroll;
-
-            let spriteKey = 'item_weapon';
-            if (item.type === 'weapon') {
-                const weaponType = item.weaponType || 'Sword';
-                const weaponKey = `weapon_${weaponType.toLowerCase()}`;
-                if (scene.textures.exists(weaponKey)) spriteKey = weaponKey;
-            } else if (item.type === 'armor') spriteKey = 'item_armor';
-            else if (item.type === 'helmet') spriteKey = 'item_helmet';
-            else if (item.type === 'ring') spriteKey = 'item_ring';
-            else if (item.type === 'amulet') spriteKey = 'item_amulet';
-            else if (item.type === 'boots') spriteKey = 'item_boots';
-            else if (item.type === 'gloves') spriteKey = 'item_gloves';
-            else if (item.type === 'belt') spriteKey = 'item_belt';
-            else if (item.type === 'consumable') spriteKey = (item.name === 'Mana Potion') ? 'mana_potion' : 'item_consumable';
-            else if (item.type === 'gold') spriteKey = 'item_gold';
-            else if (item.type === 'quest_item' || item.type === 'quest') {
-                if (item.id === 'crystal_shard') spriteKey = 'item_crystal';
-                else if (item.id === 'artifact_fragment') spriteKey = 'item_fragment';
-                else spriteKey = 'item_consumable';
-            }
-
-            const itemSprite = scene.add.sprite(globalX, globalY, spriteKey);
-            itemSprite.setDepth(302).setScale(0.8).setScrollFactor(0);
-            itemSprite.setMask(this.inventoryPanel.maskGeometry); // Apply Mask
-
-            const qualityColor = window.QUALITY_COLORS ? (window.QUALITY_COLORS[item.quality] || window.QUALITY_COLORS['Common']) : 0xffffff;
-            const borderWidth = 2;
-            const spriteSize = slotSize * 0.8;
-            const borderRect = scene.add.rectangle(globalX, globalY, spriteSize + borderWidth * 2, spriteSize + borderWidth * 2, qualityColor, 0)
-                .setStrokeStyle(borderWidth, qualityColor)
-                .setDepth(300.5).setScrollFactor(0);
-            borderRect.setMask(this.inventoryPanel.maskGeometry); // Apply Mask
-
-            const displayName = (item.quantity && item.quantity > 1) ? `${item.name} x${item.quantity}` : item.name;
-            const itemText = scene.add.text(globalX, globalY + slotSize / 2 + 5, displayName, {
-                fontSize: '10px',
-                fill: '#ffffff',
-                wordWrap: { width: slotSize }
-            }).setDepth(302).setOrigin(0.5, 0).setScrollFactor(0);
-            itemText.setMask(this.inventoryPanel.maskGeometry); // Apply Mask
-
-            itemSprite.setInteractive({ useHandCursor: true });
-
-            const onPointerOver = () => {
-                this.showTooltip(item, globalX, globalY, 'inventory');
-            };
-            const onPointerOut = () => this.hideTooltip();
-
-            itemSprite.on('pointerover', onPointerOver);
-            itemSprite.on('pointerout', onPointerOut);
-            itemSprite._tooltipHandlers = { onPointerOver, onPointerOut };
-
-            // DEBUG: Visual Input Debug
-            // scene.input.enableDebug(itemSprite, 0xffff00);
-
-            // Removed Debug Control Item
-
-            const equippableTypes = ['weapon', 'armor', 'helmet', 'ring', 'amulet', 'boots', 'gloves', 'belt'];
-            if (equippableTypes.includes(item.type)) {
-                itemSprite.on('pointerdown', () => {
-                    if (typeof equipItemFromInventory === 'function') equipItemFromInventory(item, index);
-                    this.hideTooltip(true);
-                });
-            } else if (item.type === 'consumable' && item.healAmount) {
-                itemSprite.on('pointerdown', () => {
-                    if (typeof useConsumable === 'function') useConsumable(item, index);
-                    this.hideTooltip(true);
-                });
-            }
-
-            // Direct add to scene, but push to items array to track them
-            // this.inventoryPanel.container.add([borderRect, itemSprite, itemText]);
-
-            this.inventoryPanel.items.push({
-                sprite: itemSprite,
-                text: itemText,
-                borderRect: borderRect,
-                item: item,
-                baseY: globalBaseY // Store base Y for scroll calculation
-            });
-        });
-
-        // Update scrollbar logic
-        const totalRows = Math.ceil(playerStats.inventory.length / slotsPerRow);
-        const totalContentHeight = totalRows * (slotSize + spacing) + 20;
-        if (this.inventoryPanel.scrollbar) {
-            this.inventoryPanel.scrollbar.updateMaxScroll(Math.max(0, totalContentHeight - this.inventoryPanel.visibleHeight), totalContentHeight);
-        }
-
-        if (playerStats.inventory.length === 0) {
-            const emptyText = scene.add.text(0, 50, 'Inventory is empty\nKill monsters to collect items!', {
-                fontSize: '18px',
-                fill: '#888888',
-                align: 'center',
-                fontStyle: 'italic'
-            }).setScrollFactor(0).setDepth(302).setOrigin(0.5, 0);
-            // Manually position empty text centrally
-            emptyText.x = centerX;
-            emptyText.y = inventoryStartY + 50;
-            this.inventoryPanel.items.push({ text: emptyText });
-        }
+        // No-op: deprecated
     },
 
     destroyInventoryUI: function () {
         this.inventoryVisible = false;
-        this.hideTooltip(true);
-
-        if (this.inventoryPanel) {
-            if (this.inventoryPanel.bg) this.inventoryPanel.bg.destroy();
-            if (this.inventoryPanel.title) this.inventoryPanel.title.destroy();
-            if (this.inventoryPanel.closeText) this.inventoryPanel.closeText.destroy();
-            if (this.inventoryPanel.container) this.inventoryPanel.container.destroy();
-            if (this.inventoryPanel.scrollbar) this.inventoryPanel.scrollbar.destroy();
-
-            // Assuming `items` array holds references to display objects that need to be destroyed
-            // The original code just cleared the array, but if the objects are not in the container, they need explicit destruction.
-            // However, since they are added to `this.inventoryPanel.container`, `container.removeAll(true)` should handle it.
-            // If `itemElements` was intended, it's not defined in the original structure.
-            // Sticking to the original `items` array and assuming container handles destruction.
-            // Manually destroy items since they are no longer in the container
-            if (this.inventoryPanel.items) {
-                this.inventoryPanel.items.forEach(itemObj => {
-                    if (itemObj.sprite) itemObj.sprite.destroy();
-                    if (itemObj.text) itemObj.text.destroy();
-                    if (itemObj.borderRect) itemObj.borderRect.destroy();
-                });
-            }
-            this.inventoryPanel.items = [];
-
-            this.inventoryPanel = null;
-        }
     },
 
-    // Alias for backward compatibility / fixing user crash
     updateInventory: function () {
-        this.updateInventoryItems();
+        // No-op: deprecated
     },
 
     // ============================================
@@ -580,6 +484,7 @@ window.UIManager = {
     // ============================================
 
     showTooltip: function (item, x, y, context = 'inventory') {
+
         const scene = game.scene.scenes[0];
         if (!item) return;
 
@@ -592,7 +497,13 @@ window.UIManager = {
         let tooltipLines = [];
         tooltipLines.push(item.name || 'Unknown Item');
 
+        if (typeof calculateItemScore === 'function') {
+            const score = calculateItemScore(item);
+            if (score > 0) tooltipLines.push(`Gear Score: ${score}`);
+        }
+
         if (item.quality) tooltipLines.push(`Quality: ${item.quality}`);
+        if (item.itemLevel) tooltipLines.push(`iLvl: ${item.itemLevel}`);
         if (item.type) {
             const typeStr = item.type.charAt(0).toUpperCase() + item.type.slice(1);
             tooltipLines.push(`Type: ${typeStr}`);
@@ -1167,20 +1078,20 @@ window.UIManager = {
                     fontSize: '24px', fill: '#ffffff', fontStyle: 'bold', wordWrap: { width: detailWidth - 20 }
                 }).setScrollFactor(0).setDepth(302).setOrigin(0, 0);
                 this.questPanel.questDetailElements.push(detailTitle);
-                detailY += 35;
+                detailY += detailTitle.height + 15;
 
                 const detailDesc = scene.add.text(detailStartX, detailY, quest.description, {
                     fontSize: '16px', fill: '#cccccc', wordWrap: { width: detailWidth - 20 }
                 }).setScrollFactor(0).setDepth(302).setOrigin(0, 0);
                 this.questPanel.questDetailElements.push(detailDesc);
-                detailY += 50;
+                detailY += detailDesc.height + 25;
 
                 if (quest.objectives) {
                     const objLabel = scene.add.text(detailStartX, detailY, 'Objectives:', {
                         fontSize: '18px', fill: '#ffffff', fontStyle: 'bold'
                     }).setScrollFactor(0).setDepth(302).setOrigin(0, 0);
                     this.questPanel.questDetailElements.push(objLabel);
-                    detailY += 30;
+                    detailY += objLabel.height + 10;
 
                     quest.objectives.forEach(obj => {
                         const statusStr = obj.completed ? '✅' : '⏳';
@@ -1195,10 +1106,10 @@ window.UIManager = {
                         }
 
                         const objText = scene.add.text(detailStartX + textXOffset, detailY, `${statusStr} ${obj.label}: ${objProgress}/${obj.target}`, {
-                            fontSize: '14px', fill: obj.completed ? '#00ff00' : '#cccccc'
+                            fontSize: '14px', fill: obj.completed ? '#00ff00' : '#cccccc', wordWrap: { width: detailWidth - textXOffset - 20 }
                         }).setScrollFactor(0).setDepth(302).setOrigin(0, 0);
                         this.questPanel.questDetailElements.push(objText);
-                        detailY += 25;
+                        detailY += objText.height + 5;
                     });
                     detailY += 15;
                 }
@@ -1209,7 +1120,7 @@ window.UIManager = {
                     fontSize: '18px', fill: '#ffd700', fontStyle: 'bold'
                 }).setScrollFactor(0).setDepth(302).setOrigin(0, 0);
                 this.questPanel.questDetailElements.push(rewardsLabel);
-                detailY += 30;
+                detailY += rewardsLabel.height + 5;
 
                 let rewardsText = '';
                 if (quest.rewards.xp) rewardsText += `+${quest.rewards.xp} XP`;
@@ -1298,6 +1209,208 @@ window.UIManager = {
     },
 
 
+
+    // ============================================
+    // TOOLTIP SYSTEM (Monsters/Items)
+    // ============================================
+
+    showTooltip: function (item, x, y, context = 'inventory') {
+        if (!window.game || !window.game.scene || !window.game.scene.scenes[0]) return;
+        const scene = window.game.scene.scenes[0];
+
+        // Clean up existing tooltip
+        this.hideTooltip();
+
+        // Safe check for item
+        if (!item) return;
+
+        // Create container
+        // Offset slightly to not cover the item entirely or cursor
+        const tooltipX = x + 20;
+        const tooltipY = y;
+
+        const tooltip = scene.add.container(tooltipX, tooltipY).setDepth(20000).setScrollFactor(0);
+        this.currentTooltip = tooltip;
+
+        const rarityColors = {
+            'Legendary': 0xffaa00,
+            'Epic': 0x9900cc,
+            'Rare': 0x0099ff,
+            'Common': 0xffffff
+        };
+        const rarityColor = rarityColors[item.quality] || 0xffffff;
+        const rarityHex = '#' + rarityColor.toString(16).padStart(6, '0');
+
+        // Text elements array to calculate height
+        const texts = [];
+        let currentY = 10;
+        const padding = 10;
+        const width = 220;
+
+        // 1. Name
+        const nameText = scene.add.text(width / 2, currentY, item.name, {
+            fontSize: '14px', fontFamily: 'Arial', fontStyle: 'bold', fill: '#ffffff',
+            wordWrap: { width: width - 20 }
+        }).setOrigin(0.5, 0);
+        tooltip.add(nameText);
+        texts.push(nameText);
+        currentY += nameText.height + 5;
+
+        // 2. Gear Score (if applicable) - approximate logic or reading from item? 
+        // Item Level is usually a good proxy if GS isn't explicit
+        if (item.itemLevel) {
+            const gsText = scene.add.text(width / 2, currentY, `Gear Score: ${item.itemLevel * 10 + 50}`, { // Dummy calc to match look
+                fontSize: '12px', fontFamily: 'Arial', fill: '#aaaaaa'
+            }).setOrigin(0.5, 0);
+            tooltip.add(gsText);
+            texts.push(gsText);
+            currentY += gsText.height + 2;
+        }
+
+        // 3. Quality
+        const qualityText = scene.add.text(width / 2, currentY, `Quality: ${item.quality}`, {
+            fontSize: '12px', fontFamily: 'Arial', fill: rarityHex
+        }).setOrigin(0.5, 0);
+        tooltip.add(qualityText);
+        texts.push(qualityText);
+        currentY += qualityText.height + 2;
+
+        // 4. Type
+        const typeText = scene.add.text(width / 2, currentY, `Type: ${item.type.charAt(0).toUpperCase() + item.type.slice(1)}`, {
+            fontSize: '12px', fontFamily: 'Arial', fill: '#aaaaaa'
+        }).setOrigin(0.5, 0);
+        tooltip.add(typeText);
+        texts.push(typeText);
+        currentY += typeText.height + 8;
+
+        // 5. Stats
+        const stats = [
+            { label: 'Attack', val: item.attackPower || item.attack, prefix: '+' },
+            { label: 'Defense', val: item.defense, prefix: '+' },
+            { label: 'Crit', val: item.critChance ? Math.round(item.critChance * 100) + '%' : null, prefix: '+' },
+            { label: 'Speed', val: item.speedBonus || item.speed, prefix: '+' },
+            { label: 'Health', val: item.maxHp || item.hpBonus, prefix: '+' }, // maxHp on item usually means bonus
+            { label: 'Lifesteal', val: item.lifesteal ? Math.round(item.lifesteal * 100) + '%' : null, prefix: '+' }
+        ];
+
+        stats.forEach(stat => {
+            if (stat.val) {
+                const statText = scene.add.text(padding + 10, currentY, `${stat.label}: ${stat.prefix}${stat.val}`, {
+                    fontSize: '12px', fontFamily: 'Arial', fill: '#dddddd'
+                }).setOrigin(0, 0);
+                tooltip.add(statText);
+                texts.push(statText);
+                currentY += statText.height + 2;
+            }
+        });
+
+        // 6. Description (if any)
+        if (item.description) {
+            currentY += 5;
+            const descText = scene.add.text(width / 2, currentY, item.description, {
+                fontSize: '11px', fontFamily: 'Arial', fill: '#aaaaaa', fontStyle: 'italic',
+                wordWrap: { width: width - 20 }, align: 'center'
+            }).setOrigin(0.5, 0);
+            tooltip.add(descText);
+            texts.push(descText);
+            currentY += descText.height + 5;
+        }
+
+        // 7. Hint
+        currentY += 10;
+        const hintText = scene.add.text(width / 2, currentY, 'Click to Equip', {
+            fontSize: '11px', fontFamily: 'Arial', fill: '#666666'
+        }).setOrigin(0.5, 0);
+        tooltip.add(hintText);
+        texts.push(hintText);
+        currentY += hintText.height + 10;
+
+        // Background (created last to know height, but added first via sendToBack... or just insert at 0?)
+        // Container add order matters for rendering. We should add bg first.
+        // We can use moveDown or just create it first (but we didn't know height).
+        // Best: create bg, then add all texts again? Or update bg size.
+        // Let's create bg now and send to back.
+        const bgHeight = currentY;
+        const bg = scene.add.rectangle(width / 2, bgHeight / 2, width, bgHeight, 0x000000, 0.9)
+            .setStrokeStyle(2, rarityColor);
+        tooltip.add(bg);
+        tooltip.sendToBack(bg);
+
+        // Ensure tooltip stays on screen
+        const camera = scene.cameras.main;
+        if (tooltipX + width / 2 > camera.width) {
+            tooltip.x = x - width - 20;
+        }
+        if (tooltipY + bgHeight / 2 > camera.height) {
+            tooltip.y = camera.height - bgHeight / 2 - 10;
+        }
+        if (tooltip.y - bgHeight / 2 < 0) {
+            tooltip.y = bgHeight / 2 + 10;
+        }
+    },
+
+    showMonsterTooltip: function (monster, x, y) {
+        if (!window.game || !window.game.scene || !window.game.scene.scenes[0]) return;
+        const scene = window.game.scene.scenes[0];
+
+        // Clean up existing tooltip
+        this.hideTooltip();
+
+        // Create container
+        const tooltip = scene.add.container(x, y - 50).setDepth(20000);
+        this.currentTooltip = tooltip;
+
+        // Background
+        const bg = scene.add.rectangle(0, 0, 150, 60, 0x000000, 0.8)
+            .setStrokeStyle(2, 0xff0000);
+        tooltip.add(bg);
+
+        // Name Text
+        const nameText = scene.add.text(0, -15, monster.name || 'Unknown', {
+            fontSize: '16px',
+            fontFamily: 'Arial',
+            fontStyle: 'bold',
+            fill: '#ffffff'
+        }).setOrigin(0.5);
+        tooltip.add(nameText);
+
+        // Level Text
+        const levelText = scene.add.text(0, 5, `Lvl ${monster.level || 1}`, {
+            fontSize: '12px',
+            fontFamily: 'Arial',
+            fill: '#cccccc'
+        }).setOrigin(0.5);
+        tooltip.add(levelText);
+
+        // HP Text
+        // Use monster.hp vs monster.maxHp
+        // Handle potential undefined maxHp
+        const maxHp = monster.maxHp || monster.hp || 100;
+        const hpText = scene.add.text(0, 20, `HP: ${Math.floor(monster.hp)}/${Math.floor(maxHp)}`, {
+            fontSize: '12px',
+            fontFamily: 'Arial',
+            fill: '#ff4444'
+        }).setOrigin(0.5);
+        tooltip.add(hpText);
+    },
+
+    hideTooltip: function () {
+        if (this.currentTooltip) {
+            try {
+                if (typeof this.currentTooltip.destroy === 'function') {
+                    this.currentTooltip.destroy();
+                } else if (this.currentTooltip.active) {
+                    // Fallback if it's a game object but somehow destroy is missing (unlikely)
+                    // or if generic object
+                    this.currentTooltip.destroy && this.currentTooltip.destroy();
+                }
+            } catch (e) {
+                console.warn('UIManager: Safe destroy of tooltip failed', e);
+            }
+            this.currentTooltip = null;
+        }
+    },
+
     // ============================================
     // TOAST / NOTIFICATION SYSTEM
     // ============================================
@@ -1309,6 +1422,7 @@ window.UIManager = {
      * @param {number} duration - ms to display
      */
     showToast(message, type = 'info', duration = 3000) {
+        return; // Disabled by user request
         if (!window.game || !window.game.scene || !window.game.scene.scenes[0]) return;
         const scene = window.game.scene.scenes[0];
 

@@ -809,7 +809,9 @@ function preload() {
         // Load Images
         if (data.images) {
             for (const [assetKey, path] of Object.entries(data.images)) {
-                this.load.image(assetKey, path);
+                if (!this.textures.exists(assetKey)) {
+                    this.load.image(assetKey, path);
+                }
             }
         }
         // Load Audio
@@ -2306,6 +2308,62 @@ function create() {
         }
     }
 
+    // CRITICAL: Ensure playerStats refers to the Global State
+    if (typeof playerStats === 'undefined') {
+        window.playerStats = window.GameState.playerStats;
+        console.log('🔗 Link established: global playerStats -> GameState.playerStats');
+    } else if (playerStats !== window.GameState.playerStats) {
+        console.warn('⚠️ DETECTED playerStats DISCONNECT! Re-linking...');
+        playerStats = window.GameState.playerStats;
+    }
+
+    // CREATE DEBUG HUD
+    const debugText = this.add.text(10, 50, '', {
+        fontSize: '14px', fill: '#00ff00', backgroundColor: '#000000aa'
+    }).setScrollFactor(0).setDepth(9999);
+
+    // Track last hover for debug
+    window.lastHoveredType = 'none';
+
+    this.time.addEvent({
+        delay: 250,
+        loop: true,
+        callback: () => {
+            if (!window.GameState) return;
+            const pm = window.playerStats; // local alias might be stale, use global check
+            const inv = pm.inventory ? pm.inventory.length : 'ERR';
+            const gold = pm.gold;
+            const map = window.MapManager ? window.MapManager.currentMap : '???';
+
+            // Save Info
+            const slot = window.SaveManager ? window.SaveManager.currentSlot : '?';
+            const lastSave = localStorage.getItem('rpg_save_data_slot_' + slot);
+            let saveTime = 'Never';
+            if (lastSave) {
+                try {
+                    const parsed = JSON.parse(lastSave);
+                    const date = new Date(parsed.timestamp);
+                    saveTime = date.toLocaleTimeString();
+                    if (parsed.world && parsed.world.currentMap !== map) {
+                        saveTime += ` (Map: ${parsed.world.currentMap}!)`; // Warn if saved map differs
+                    }
+                } catch (e) { saveTime = 'Corrupt'; }
+            }
+
+            debugText.setText(
+                `DEBUG HUD (v0.9.189)\n` +
+                `Map: ${map} | Slot: ${slot}\n` +
+                `Inv: ${inv} | Gold: ${gold}\n` +
+                `Last Save: ${saveTime}\n` +
+                `Pos: ${Math.floor(window.player ? window.player.x : 0)},${Math.floor(window.player ? window.player.y : 0)}\n` +
+                `Trace: ${window.debugTrace || 0} | Err: ${window.lastTooltipError || 'None'}\n` +
+                `-- Tooltip --\n` +
+                `Typ:${window.debugTooltipState ? window.debugTooltipState.type : '?'} | Slt:${window.debugTooltipState ? window.debugTooltipState.slot : '?'}\n` +
+                `Eq:${window.debugTooltipState ? window.debugTooltipState.equippedName : '?'}`
+            );
+        }
+    });
+
     // Initialize Map Manager
     if (typeof MapManager !== 'undefined') {
         MapManager.init(this);
@@ -3241,11 +3299,14 @@ function create() {
         .setDepth(30000);
 
     // Version Number
-    this.add.text(this.scale.width - 10, 10, 'v0.9.186', {
+    // Version Number - Dynamic
+    const versionStr = (window.GameState && window.GameState.gameVersion) ? window.GameState.gameVersion : 'v???';
+    this.add.text(this.scale.width - 10, 10, versionStr, {
         fontFamily: 'Arial',
         fontSize: '16px',
-        color: '#ffffff',
-        align: 'right'
+        color: '#00ff00',
+        align: 'right',
+        backgroundColor: '#000000'
     })
         .setOrigin(1, 0)
         .setScrollFactor(0)
@@ -7333,14 +7394,21 @@ function destroySettingsUI() {
  * showTooltip - Unified tooltip system
  */
 function showTooltip(item, x, y, context = 'inventory') {
-    UIManager.showTooltip(item, x, y, context);
+    console.log('🔗 game.js showTooltip calling UIManager...');
+    if (window.UIManager) {
+        window.UIManager.showTooltip(item, x, y, context);
+    } else {
+        console.error('❌ UIManager not found in game.js wrapper!');
+    }
 }
 
 /**
  * hideTooltip - Hides the active tooltip
  */
 function hideTooltip(immediate = false) {
-    UIManager.hideTooltip(immediate);
+    if (window.UIManager) {
+        window.UIManager.hideTooltip(immediate);
+    }
 }
 
 /**
@@ -7962,6 +8030,9 @@ function updateEquipmentInventoryItems() {
     console.log(`📦 updateEquipmentInventoryItems: Displaying ${playerStats.inventory.length} items in equipment panel`);
 
     // Clear existing inventory item displays
+    // Force hide tooltip to prevent ghost tooltips (e.g. if hovering an item that gets destroyed)
+    if (typeof hideTooltip === 'function') hideTooltip(true);
+
     equipmentPanel.inventoryItems.forEach(item => {
         // Remove event handlers and disable interactivity before destroying
         if (item.bg && item.bg.active) {
@@ -8170,6 +8241,13 @@ function updateEquipmentInventoryItems() {
 
         const onHoverIn = (pointer) => {
             if (pointer) pointer.event.stopPropagation();
+            console.log('🔍 Tooltip Debug (Inv):', JSON.stringify(item));
+            if (item.type) {
+                console.log('   -> item.type:', item.type);
+                window.lastHoveredType = item.type; // Update debug HUD
+            } else {
+                window.lastHoveredType = 'UNDEFINED TYPE';
+            }
             showTooltip(item, getAbsoluteX(), getAbsoluteY(), 'inventory');
         };
         const onHoverOut = () => {
@@ -11424,9 +11502,13 @@ function buyItem(item, price) {
     updateShopInventoryItems(); // Update right panel inventory
     updatePotionSlots(); // Update potion slots if consumable
 
-    // Refresh inventory if open (this will also hide tooltips)
     if (inventoryVisible) {
         refreshInventory();
+    }
+
+    // Auto-save after buying
+    if (window.SaveManager) {
+        window.SaveManager.saveGame(window.SaveManager.currentSlot, true);
     }
 }
 
@@ -11660,6 +11742,11 @@ function updateShopInventoryItems() {
                 }
 
                 playerStats.gold += sellPrice;
+
+                // Auto-save after selling
+                if (window.SaveManager) {
+                    window.SaveManager.saveGame(window.SaveManager.currentSlot, true);
+                }
 
                 // Update displays
                 updateShopItems();

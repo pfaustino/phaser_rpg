@@ -1626,19 +1626,31 @@ function updateZoneIndicators() {
 
 
 function spawnDungeonMonsters() {
+    console.log('[SpawnDebug] spawnDungeonMonsters called');
     const scene = game.scene.scenes[0];
-    if (!MapManager.currentDungeon || !MapManager.currentDungeon.rooms) return;
+    console.log('[SpawnDebug] MapManager.currentDungeon:', MapManager.currentDungeon);
+    console.log('[SpawnDebug] MapManager.currentDungeon.rooms:', MapManager.currentDungeon?.rooms?.length || 'N/A');
+
+    if (!MapManager.currentDungeon || !MapManager.currentDungeon.rooms) {
+        console.log('[SpawnDebug] EARLY RETURN - currentDungeon or rooms is null');
+        return;
+    }
 
     // Spawn monsters in rooms (not entrance room, not exit room)
     const combatRooms = MapManager.currentDungeon.rooms.slice(1, -1); // Skip first and last room
+    console.log(`[SpawnDebug] combatRooms: ${combatRooms.length}, scene.tileSize: ${scene?.tileSize}`);
 
     combatRooms.forEach(room => {
         // Spawn 1-3 monsters per room
         const monsterCount = Phaser.Math.Between(1, 3);
+        console.log(`[SpawnDebug] Spawning ${monsterCount} monsters in room at (${room.x}, ${room.y})`);
+
+        // Use fallback tileSize if scene.tileSize is not set
+        const tileSize = scene?.tileSize || 32;
 
         for (let i = 0; i < monsterCount; i++) {
-            const x = (room.x + Phaser.Math.Between(1, room.width - 1)) * scene.tileSize;
-            const y = (room.y + Phaser.Math.Between(1, room.height - 1)) * scene.tileSize;
+            const x = (room.x + Phaser.Math.Between(1, room.width - 1)) * tileSize;
+            const y = (room.y + Phaser.Math.Between(1, room.height - 1)) * tileSize;
 
             // Spawn random monster type (from dungeon data)
             let dungeonMonsterTypes = [];
@@ -2291,6 +2303,9 @@ function create() {
 
         const saveState = window.SaveManager.loadGame(loadSlot);
         if (saveState) {
+            // Mark that save loading was handled here - Block 2 will use this
+            window._saveLoadHandled = saveState;
+
             // Restore World State (Before MapManager.init uses defaults)
             if (saveState.world && window.MapManager) {
                 if (saveState.world.currentMap) window.MapManager.currentMap = saveState.world.currentMap;
@@ -2351,7 +2366,7 @@ function create() {
             }
 
             debugText.setText(
-                `DEBUG HUD (v0.9.189)\n` +
+                `DEBUG HUD (v0.9.195)\n` +
                 `Map: ${map} | Slot: ${slot}\n` +
                 `Inv: ${inv} | Gold: ${gold}\n` +
                 `Last Save: ${saveTime}\n` +
@@ -2698,27 +2713,37 @@ function create() {
     let loadedFromSave = false;
     if (window.SaveManager) {
         window.SaveManager.init(this);
-        if (localStorage.getItem('rpg_load_on_start') === 'true') {
-            localStorage.removeItem('rpg_load_on_start');
-            const data = window.SaveManager.loadGame();
-            if (data && data.world) {
-                loadedFromSave = true;
-                window.savedPlayerX = data.world.playerX;
-                window.savedPlayerY = data.world.playerY;
 
-                const map = data.world.currentMap || 'town';
-                console.log(`💾 Loading map from save: ${map}`);
+        // Check if Block 1 (early in create()) already loaded save data
+        if (window._saveLoadHandled && window._saveLoadHandled.world) {
+            loadedFromSave = true;
+            const data = window._saveLoadHandled;
+            window.savedPlayerX = data.world.playerX;
+            window.savedPlayerY = data.world.playerY;
 
-                if (typeof MapManager !== 'undefined') {
-                    if (map === 'wilderness') {
-                        MapManager.createWildernessMap();
-                    } else if (map === 'dungeon') {
-                        MapManager.createDungeonMap(data.world.dungeonId || 'tower_dungeon', data.world.dungeonLevel || 1);
-                    } else {
-                        MapManager.createTownMap();
+            const map = data.world.currentMap || 'town';
+            console.log(`💾 Loading map from save (via early load): ${map}`);
+
+            if (typeof MapManager !== 'undefined') {
+                if (map === 'wilderness') {
+                    MapManager.createWildernessMap();
+                    // Spawn monsters (same as transitionToMap does)
+                    if (typeof spawnInitialMonsters === 'function' && this) {
+                        spawnInitialMonsters.call(this, this.mapWidth * this.tileSize, this.mapHeight * this.tileSize);
                     }
+                } else if (map === 'dungeon') {
+                    MapManager.createDungeonMap(data.world.dungeonId || 'tower_dungeon', data.world.dungeonLevel || 1);
+                    // Spawn monsters (same as transitionToMap does)
+                    if (typeof spawnDungeonMonsters === 'function') {
+                        spawnDungeonMonsters();
+                    }
+                } else {
+                    MapManager.createTownMap();
                 }
             }
+
+            // Clean up the flag
+            delete window._saveLoadHandled;
         }
     }
 
@@ -2917,8 +2942,10 @@ function create() {
     // Initialize weapon sprite based on current equipment
     updateWeaponSprite();
 
-    // Initialize NPCs in town
-    initializeNPCs();
+    // Initialize NPCs in town (only if on town map)
+    if (!window.MapManager || window.MapManager.currentMap === 'town') {
+        initializeNPCs();
+    }
 
     // Create UI bars (HP, Mana, Stamina, XP)
     const barWidth = 200;
@@ -3047,8 +3074,10 @@ function create() {
     // Initialize starting quests
     initializeQuests();
 
-    // Initialize NPCs
-    initializeNPCs();
+    // Initialize NPCs (only if on town map)
+    if (!window.MapManager || window.MapManager.currentMap === 'town') {
+        initializeNPCs();
+    }
 
     // Check for auto-load
     checkAutoLoad();
@@ -3806,12 +3835,13 @@ function update(time, delta) {
             if (isActionJustPressed('manaPotion')) window.usePotion('mana');
         }
 
-        // Save/Load
-        if (isActionJustPressed('save') && typeof saveGame === 'function') {
-            saveGame();
+        // Save/Load - Use SaveManager (window.saveGame/loadGame aliases)
+        // NOTE: Do NOT call the local loadGame() function - it's legacy and uses wrong localStorage key!
+        if (isActionJustPressed('save') && typeof window.saveGame === 'function') {
+            window.saveGame();
         }
-        if (isActionJustPressed('load') && typeof loadGame === 'function') {
-            loadGame();
+        if (isActionJustPressed('load') && typeof window.loadGame === 'function') {
+            window.loadGame();
         }
     }
 
@@ -12039,10 +12069,18 @@ function closeBuildingUI() {
 window.resetGame = function () {
     if (confirm('Are you sure you want to RESET the game? All progress will be lost!')) {
         console.log('🔄 Resetting Game State...');
+        // Clear legacy save key
         localStorage.removeItem('rpg_savegame');
+        // Clear all save slots (SaveManager uses these)
+        for (let i = 1; i <= 5; i++) {
+            localStorage.removeItem(`rpg_save_data_slot_${i}`);
+        }
+        // Clear other game data
         localStorage.removeItem('rpg_unlocked_lore');
         localStorage.removeItem('rpg_dialog_unlocks');
         localStorage.removeItem('pfaustino_rpg_settings');
+        localStorage.removeItem('rpg_load_on_start');
+        localStorage.removeItem('rpg_load_slot');
         window.location.reload();
     }
 };
@@ -12055,9 +12093,12 @@ window.addEventListener('keydown', (e) => {
 });
 
 /**
- * Save game to localStorage
+ * DEPRECATED: Legacy save system - DO NOT USE
+ * SaveManager.saveGame() is now the correct method (accessed via window.saveGame())
+ * This function uses the old 'rpg_savegame' key which conflicts with the new slot system.
  */
-function saveGame() {
+function _LEGACY_saveGame_DO_NOT_USE() {
+    console.warn('[LEGACY] _LEGACY_saveGame_DO_NOT_USE called - use window.saveGame() instead!');
     // Build dungeon seeds object from cache
     const dungeonSeeds = {};
     Object.keys(MapManager.dungeonCache).forEach(key => {
@@ -12112,9 +12153,12 @@ function saveGame() {
 }
 
 /**
- * Load game from localStorage
+ * LEGACY: Load game from localStorage (OLD SYSTEM - DO NOT USE!)
+ * This uses the old 'rpg_savegame' key instead of slot-based keys.
+ * Use SaveManager.loadGame() or window.loadGame() instead!
  */
-function loadGame() {
+function _LEGACY_loadGame_DO_NOT_USE() {
+    console.warn('[LEGACY] _LEGACY_loadGame_DO_NOT_USE called - this should not happen!');
     try {
         const saveDataStr = localStorage.getItem('rpg_savegame');
         if (!saveDataStr) {

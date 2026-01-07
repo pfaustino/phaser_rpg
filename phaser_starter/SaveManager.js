@@ -98,8 +98,15 @@ window.SaveManager = {
      * @param {boolean} silent - Suppress UI feedback
      */
     saveGame(slot = 1, silent = false) {
-        if (!window.GameState) return false;
+        console.log(`[SaveDebug] === SAVE START ===`);
+        console.log(`[SaveDebug] Requested slot: ${slot}, silent: ${silent}`);
+
+        if (!window.GameState) {
+            console.error(`[SaveDebug] ABORT: window.GameState is null/undefined`);
+            return false;
+        }
         slot = slot || this.currentSlot;
+        console.log(`[SaveDebug] Resolved slot: ${slot}, currentSlot: ${this.currentSlot}`);
 
         try {
             const data = {
@@ -125,13 +132,31 @@ window.SaveManager = {
                     level: window.GameState.playerStats.level,
                     gold: window.GameState.playerStats.gold,
                     map: window.MapManager ? window.MapManager.currentMap : 'Unknown',
-                    playtime: window.GameState.playtime || 0 // Assuming playtime tracking exists or will exist
+                    playtime: window.GameState.playtime || 0
                 }
             };
 
+            console.log(`[SaveDebug] Data to save:`);
+            console.log(`[SaveDebug]   - Level: ${data.playerStats.level}`);
+            console.log(`[SaveDebug]   - Map: ${data.world.currentMap}`);
+            console.log(`[SaveDebug]   - Position: (${data.world.playerX?.toFixed(0)}, ${data.world.playerY?.toFixed(0)})`);
+            console.log(`[SaveDebug]   - Timestamp: ${new Date(data.timestamp).toLocaleTimeString()}`);
+
             const json = JSON.stringify(data);
-            localStorage.setItem(this.getSlotKey(slot), json);
-            this.currentSlot = slot; // update active slot
+            const slotKey = this.getSlotKey(slot);
+            console.log(`[SaveDebug] Slot key: "${slotKey}", JSON size: ${json.length} bytes`);
+
+            localStorage.setItem(slotKey, json);
+            this.currentSlot = slot;
+
+            // VERIFY the save was written
+            const verification = localStorage.getItem(slotKey);
+            if (verification) {
+                const verifyData = JSON.parse(verification);
+                console.log(`[SaveDebug] VERIFIED - Saved level: ${verifyData.playerStats.level}, map: ${verifyData.world.currentMap}`);
+            } else {
+                console.error(`[SaveDebug] VERIFICATION FAILED - localStorage returned null for key: ${slotKey}`);
+            }
 
             console.log(`💾 Game Saved to Slot ${slot}! Size: ${json.length} bytes`);
 
@@ -159,21 +184,29 @@ window.SaveManager = {
      * Load game from a specific slot
      */
     loadGame(slot = 1) {
+        console.log(`[SaveDebug] === LOAD START ===`);
+        console.log(`[SaveDebug] Requested slot: ${slot}`);
+
         try {
             const key = this.getSlotKey(slot);
-            const json = localStorage.getItem(key);
+            console.log(`[SaveDebug] Slot key: "${key}"`);
 
-            // Fallback to legacy if Slot 1 requested but empty (and legacy exists)
-            // This covers the edge case where migration hasn't run yet? 
-            // Actually init() runs migration, so this shouldn't happen unless init failed.
+            const json = localStorage.getItem(key);
+            console.log(`[SaveDebug] Raw JSON length: ${json ? json.length : 0} bytes`);
 
             if (!json) {
-                console.log(`💾 No save file found in Slot ${slot}.`);
+                console.log(`[SaveDebug] No save file found in Slot ${slot}.`);
                 return null;
             }
 
             const data = JSON.parse(json);
-            console.log(`💾 Loading Save from Slot ${slot}:`, data);
+            console.log(`[SaveDebug] Loaded data:`);
+            console.log(`[SaveDebug]   - Level: ${data.playerStats?.level}`);
+            console.log(`[SaveDebug]   - Map: ${data.world?.currentMap}`);
+            console.log(`[SaveDebug]   - Position: (${data.world?.playerX?.toFixed(0)}, ${data.world?.playerY?.toFixed(0)})`);
+            console.log(`[SaveDebug]   - Timestamp: ${new Date(data.timestamp).toLocaleTimeString()}`);
+            console.log(`[SaveDebug]   - Slot in data: ${data.slot}`);
+
             this.currentSlot = slot;
 
             if (data.playerStats && window.GameState) {

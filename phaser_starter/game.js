@@ -2493,6 +2493,13 @@ function create() {
 
         window.uqe.init(allQuests);
 
+        // Check for deferred quest data from SaveManager
+        if (window._pendingUqeQuests) {
+            console.log(`[Save/Load Debug] Found deferred quest data - loading now...`);
+            window.uqe.loadSaveData(window._pendingUqeQuests);
+            window._pendingUqeQuests = null;
+        }
+
         // Handle V2 Quest Completion
         window.uqe.eventBus.on(UQE_EVENTS.QUEST_COMPLETED, (quest) => {
             console.log(`🎁 [UQE Bridge] Handling completion for: ${quest.title}`);
@@ -3886,9 +3893,11 @@ function update(time, delta) {
         // NOTE: Do NOT call the local loadGame() function - it's legacy and uses wrong localStorage key!
         if (isActionJustPressed('save') && typeof window.saveGame === 'function') {
             window.saveGame();
+            this.isMovingToClick = false; // Cancel any pending click movement
         }
         if (isActionJustPressed('load') && typeof window.loadGame === 'function') {
             window.loadGame();
+            this.isMovingToClick = false; // Cancel any pending click movement
         }
     }
 
@@ -3958,6 +3967,16 @@ function update(time, delta) {
         // Check for click input to set target
         // We use pointer down to set the target (works for click and drag/hold)
         if (pointer.isDown && pointer.button === 0) {
+            // Track if pointer started in HUD area - if so, block movement until release
+            if (!this._pointerWasDown) {
+                this._pointerWasDown = true;
+                this._pointerStartedInHUD = pointer.y <= 60;
+            }
+
+            // If click started in HUD area, don't allow movement
+            if (this._pointerStartedInHUD) {
+                return;
+            }
 
             // Robust UI Check: Block if cursor is over any high-depth object (UI > 100)
             const hitObjects = this.input.hitTestPointer(pointer);
@@ -4044,6 +4063,10 @@ function update(time, delta) {
                     this.clickTargetEntity = null;
                 }
             }
+        } else {
+            // Pointer released - reset tracking flags
+            this._pointerWasDown = false;
+            this._pointerStartedInHUD = false;
         }
 
         // Process movement towards target if active

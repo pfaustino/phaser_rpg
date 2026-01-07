@@ -122,6 +122,13 @@ window.SaveManager = {
         console.log(`[SaveDebug] === SAVE START ===`);
         console.log(`[SaveDebug] Requested slot: ${slot}, silent: ${silent}`);
 
+        // Cancel any click-to-move in progress (prevent walking after save)
+        const scene = this.scene || (window.game && window.game.scene.scenes[0]);
+        if (scene) {
+            scene.isMovingToClick = false;
+            scene.clickMoveTarget = null;
+        }
+
         if (!window.GameState) {
             console.error(`[SaveDebug] ABORT: window.GameState is null/undefined`);
             return false;
@@ -136,7 +143,19 @@ window.SaveManager = {
                 slot: slot,
                 playerStats: window.GameState.playerStats,
                 // UQE Quest system data (for quest progress)
-                uqeQuests: window.uqe && typeof window.uqe.getSaveData === 'function' ? window.uqe.getSaveData() : null,
+                uqeQuests: (() => {
+                    const uqeData = window.uqe && typeof window.uqe.getSaveData === 'function' ? window.uqe.getSaveData() : null;
+                    if (uqeData) {
+                        const activeIds = (uqeData.active || []).map(q => q.id).join(', ');
+                        const completedIds = (uqeData.completed || []).map(q => q.id).join(', ');
+                        console.log(`[Save/Load Debug] 💾 CAPTURING UQE DATA:`);
+                        console.log(`[Save/Load Debug]   - Active (${(uqeData.active || []).length}): ${activeIds || 'NONE'}`);
+                        console.log(`[Save/Load Debug]   - Completed (${(uqeData.completed || []).length}): ${completedIds || 'NONE'}`);
+                    } else {
+                        console.warn(`[Save/Load Debug] UQE quest data is NULL!`);
+                    }
+                    return uqeData;
+                })(),
                 world: {
                     currentMap: window.MapManager ? window.MapManager.currentMap : 'town',
                     playerX: window.player ? window.player.x : (window.lastPlayerX || 0),
@@ -250,12 +269,17 @@ window.SaveManager = {
                     window.toggleMusic(data.settings.musicEnabled);
             }
 
-            // Restore UQE quest data (if present)
-            if (data.uqeQuests && window.uqe && typeof window.uqe.loadSaveData === 'function') {
-                console.log(`[SaveDebug] Restoring UQE quest data...`);
-                window.uqe.loadSaveData(data.uqeQuests);
-            } else if (data.uqeQuests) {
-                console.warn(`[SaveDebug] UQE quests in save but uqe.loadSaveData not available yet`);
+            // Store UQE quest data for deferred loading (UQE definitions may not be loaded yet)
+            if (data.uqeQuests) {
+                console.log(`[SaveDebug] Storing UQE quest data for deferred loading...`);
+                window._pendingUqeQuests = data.uqeQuests;
+
+                // Try to load now if UQE is ready
+                if (window.uqe && Object.keys(window.uqe.allDefinitions || {}).length > 0) {
+                    console.log(`[SaveDebug] UQE ready - loading quests immediately`);
+                    window.uqe.loadSaveData(data.uqeQuests);
+                    window._pendingUqeQuests = null;
+                }
             }
 
             return data;

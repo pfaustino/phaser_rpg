@@ -2332,10 +2332,10 @@ function create() {
         playerStats = window.GameState.playerStats;
     }
 
-    // CREATE DEBUG HUD
+    // CREATE DEBUG HUD (hidden by default - press F3 to toggle)
     const debugText = this.add.text(10, 50, '', {
         fontSize: '14px', fill: '#00ff00', backgroundColor: '#000000aa'
-    }).setScrollFactor(0).setDepth(9999);
+    }).setScrollFactor(0).setDepth(9999).setVisible(false);
 
     // Track last hover for debug
     window.lastHoveredType = 'none';
@@ -2345,38 +2345,46 @@ function create() {
         loop: true,
         callback: () => {
             if (!window.GameState) return;
-            const pm = window.playerStats; // local alias might be stale, use global check
-            const inv = pm.inventory ? pm.inventory.length : 'ERR';
-            const gold = pm.gold;
-            const map = window.MapManager ? window.MapManager.currentMap : '???';
 
-            // Save Info
-            const slot = window.SaveManager ? window.SaveManager.currentSlot : '?';
-            const lastSave = localStorage.getItem('rpg_save_data_slot_' + slot);
-            let saveTime = 'Never';
-            if (lastSave) {
-                try {
-                    const parsed = JSON.parse(lastSave);
-                    const date = new Date(parsed.timestamp);
-                    saveTime = date.toLocaleTimeString();
-                    if (parsed.world && parsed.world.currentMap !== map) {
-                        saveTime += ` (Map: ${parsed.world.currentMap}!)`; // Warn if saved map differs
-                    }
-                } catch (e) { saveTime = 'Corrupt'; }
+            // Update debug HUD if visible
+            if (debugText.visible) {
+                const pm = window.playerStats;
+                const inv = pm.inventory ? pm.inventory.length : 'ERR';
+                const gold = pm.gold;
+                const map = window.MapManager ? window.MapManager.currentMap : '???';
+                const slot = window.SaveManager ? window.SaveManager.currentSlot : '?';
+                const lastSave = localStorage.getItem('rpg_save_data_slot_' + slot);
+                let saveTime = 'Never';
+                if (lastSave) {
+                    try {
+                        const parsed = JSON.parse(lastSave);
+                        const date = new Date(parsed.timestamp);
+                        saveTime = date.toLocaleTimeString();
+                        if (parsed.world && parsed.world.currentMap !== map) {
+                            saveTime += ` (Map: ${parsed.world.currentMap}!)`;
+                        }
+                    } catch (e) { saveTime = 'Corrupt'; }
+                }
+
+                debugText.setText(
+                    `DEBUG HUD (v0.9.196)\n` +
+                    `Map: ${map} | Slot: ${slot}\n` +
+                    `Inv: ${inv} | Gold: ${gold}\n` +
+                    `Last Save: ${saveTime}\n` +
+                    `Pos: ${Math.floor(window.player ? window.player.x : 0)},${Math.floor(window.player ? window.player.y : 0)}\n` +
+                    `Trace: ${window.debugTrace || 0} | Err: ${window.lastTooltipError || 'None'}\n` +
+                    `-- Tooltip --\n` +
+                    `Typ:${window.debugTooltipState ? window.debugTooltipState.type : '?'} | Slt:${window.debugTooltipState ? window.debugTooltipState.slot : '?'}\n` +
+                    `Eq:${window.debugTooltipState ? window.debugTooltipState.equippedName : '?'}`
+                );
             }
-
-            debugText.setText(
-                `DEBUG HUD (v0.9.195)\n` +
-                `Map: ${map} | Slot: ${slot}\n` +
-                `Inv: ${inv} | Gold: ${gold}\n` +
-                `Last Save: ${saveTime}\n` +
-                `Pos: ${Math.floor(window.player ? window.player.x : 0)},${Math.floor(window.player ? window.player.y : 0)}\n` +
-                `Trace: ${window.debugTrace || 0} | Err: ${window.lastTooltipError || 'None'}\n` +
-                `-- Tooltip --\n` +
-                `Typ:${window.debugTooltipState ? window.debugTooltipState.type : '?'} | Slt:${window.debugTooltipState ? window.debugTooltipState.slot : '?'}\n` +
-                `Eq:${window.debugTooltipState ? window.debugTooltipState.equippedName : '?'}`
-            );
         }
+    });
+
+    // F3 to toggle debug HUD
+    this.input.keyboard.on('keydown-F3', () => {
+        debugText.setVisible(!debugText.visible);
+        console.log(`Debug HUD: ${debugText.visible ? 'ON' : 'OFF'}`);
     });
 
     // Initialize Map Manager
@@ -3340,6 +3348,45 @@ function create() {
         .setOrigin(1, 0)
         .setScrollFactor(0)
         .setDepth(30000);
+
+    // Map + Difficulty Indicator (below version number)
+    const mapDiffIndicator = this.add.text(this.scale.width - 10, 28, '', {
+        fontFamily: 'Arial',
+        fontSize: '14px',
+        color: '#ffffff',
+        align: 'right',
+        backgroundColor: '#000000'
+    })
+        .setOrigin(1, 0)
+        .setScrollFactor(0)
+        .setDepth(30000);
+
+    // Store reference globally
+    window.mapDiffIndicator = mapDiffIndicator;
+
+    // Update map/difficulty indicator every 500ms
+    this.time.addEvent({
+        delay: 500,
+        loop: true,
+        callback: () => {
+            if (!window.MapManager || !window.GameState) return;
+            const map = window.MapManager.currentMap || 'unknown';
+            const difficulty = window.GameState.currentDifficulty || 'normal';
+
+            // Capitalize first letter
+            const mapName = map.charAt(0).toUpperCase() + map.slice(1);
+            const diffName = difficulty.charAt(0).toUpperCase() + difficulty.slice(1);
+
+            // Color based on difficulty
+            let color = '#ffffff';
+            if (difficulty === 'casual') color = '#4CAF50';      // Green
+            else if (difficulty === 'normal') color = '#FFC107'; // Yellow/Gold
+            else if (difficulty === 'hardcore') color = '#f44336'; // Red
+
+            mapDiffIndicator.setText(`${mapName} • ${diffName}`);
+            mapDiffIndicator.setColor(color);
+        }
+    });
 
     console.log('Game created');
 }

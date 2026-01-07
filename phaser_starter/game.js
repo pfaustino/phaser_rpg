@@ -277,25 +277,25 @@ const MAX_CHAT_MESSAGES = 50;
 // Inventory UI (Managed by UIManager)
 // inventoryVisible, inventoryPanel proxy to UIManager
 Object.defineProperties(window, {
-    inventoryVisible: { get: () => UIManager.inventoryVisible, set: (v) => UIManager.inventoryVisible = v },
-    inventoryPanel: { get: () => UIManager.inventoryPanel, set: (v) => UIManager.inventoryPanel = v },
+    inventoryVisible: { get: () => window.UIManager ? window.UIManager.inventoryVisible : false, set: (v) => { if (window.UIManager) window.UIManager.inventoryVisible = v; } },
+    inventoryPanel: { get: () => window.UIManager ? window.UIManager.inventoryPanel : null, set: (v) => { if (window.UIManager) window.UIManager.inventoryPanel = v; } },
     inventoryItems: { get: () => [], set: () => { } }, // Deprecated
-    currentTooltip: { get: () => UIManager.currentTooltip, set: (v) => UIManager.currentTooltip = v },
-    tooltipHideTimer: { get: () => UIManager.tooltipHideTimer, set: (v) => UIManager.tooltipHideTimer = v },
+    currentTooltip: { get: () => window.UIManager ? window.UIManager.currentTooltip : null, set: (v) => { if (window.UIManager) window.UIManager.currentTooltip = v; } },
+    tooltipHideTimer: { get: () => window.UIManager ? window.UIManager.tooltipHideTimer : null, set: (v) => { if (window.UIManager) window.UIManager.tooltipHideTimer = v; } },
 
-    equipmentVisible: { get: () => UIManager.equipmentVisible, set: (v) => UIManager.equipmentVisible = v },
-    equipmentPanel: { get: () => UIManager.equipmentPanel, set: (v) => UIManager.equipmentPanel = v },
+    equipmentVisible: { get: () => window.UIManager ? window.UIManager.equipmentVisible : false, set: (v) => { if (window.UIManager) window.UIManager.equipmentVisible = v; } },
+    equipmentPanel: { get: () => window.UIManager ? window.UIManager.equipmentPanel : null, set: (v) => { if (window.UIManager) window.UIManager.equipmentPanel = v; } },
 
-    settingsVisible: { get: () => UIManager.settingsVisible, set: (v) => UIManager.settingsVisible = v },
-    settingsPanel: { get: () => UIManager.settingsPanel, set: (v) => UIManager.settingsPanel = v },
+    settingsVisible: { get: () => window.UIManager ? window.UIManager.settingsVisible : false, set: (v) => { if (window.UIManager) window.UIManager.settingsVisible = v; } },
+    settingsPanel: { get: () => window.UIManager ? window.UIManager.settingsPanel : null, set: (v) => { if (window.UIManager) window.UIManager.settingsPanel = v; } },
 
-    questVisible: { get: () => UIManager.questVisible, set: (v) => UIManager.questVisible = v },
-    questPanel: { get: () => UIManager.questPanel, set: (v) => UIManager.questPanel = v },
-    questLogTab: { get: () => UIManager.questLogTab, set: (v) => UIManager.questLogTab = v },
-    selectedQuestIndex: { get: () => UIManager.selectedQuestIndex, set: (v) => UIManager.selectedQuestIndex = v },
+    questVisible: { get: () => window.UIManager ? window.UIManager.questVisible : false, set: (v) => { if (window.UIManager) window.UIManager.questVisible = v; } },
+    questPanel: { get: () => window.UIManager ? window.UIManager.questPanel : null, set: (v) => { if (window.UIManager) window.UIManager.questPanel = v; } },
+    questLogTab: { get: () => window.UIManager ? window.UIManager.questLogTab : 'active', set: (v) => { if (window.UIManager) window.UIManager.questLogTab = v; } },
+    selectedQuestIndex: { get: () => window.UIManager ? window.UIManager.selectedQuestIndex : -1, set: (v) => { if (window.UIManager) window.UIManager.selectedQuestIndex = v; } },
 
-    dialogVisible: { get: () => UIManager.dialogVisible, set: (v) => UIManager.dialogVisible = v },
-    dialogPanel: { get: () => UIManager.dialogPanel, set: (v) => UIManager.dialogPanel = v }
+    dialogVisible: { get: () => window.UIManager ? window.UIManager.dialogVisible : false, set: (v) => { if (window.UIManager) window.UIManager.dialogVisible = v; } },
+    dialogPanel: { get: () => window.UIManager ? window.UIManager.dialogPanel : null, set: (v) => { if (window.UIManager) window.UIManager.dialogPanel = v; } }
 });
 
 let inventoryKey;
@@ -2429,11 +2429,17 @@ function create() {
         window.projectileManager.init();
         console.log('✅ ProjectileManager initialized');
 
+        // Initialize ESC Key for Settings
+        try {
+            settingsKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ESC);
+        } catch (e) { console.warn('Failed to init ESC key', e); }
+
         // Right Click Listener Removed
         // Spacebar Listener for Ranged Attack
         this.input.keyboard.on('keydown-SPACE', () => {
-            if (window.UIManager && window.UIManager.isAnyWindowOpen()) return;
-            console.log('⌨️ Spacebar pressed');
+            if (window.UIManager && window.UIManager.isAnyWindowOpen()) {
+                return;
+            }
             playerAttack(this.time.now);
         });
     }
@@ -2451,6 +2457,8 @@ function create() {
     } else {
         console.warn('⚠️ npcData not found in cache - NPC portraits may be missing');
     }
+
+
 
     // Initialize Quest Manager
     questManager = new QuestManager(this);
@@ -3655,7 +3663,15 @@ window.triggerItemPickup = triggerItemPickup;
 /**
  * Update loop (like pygame game loop)
  */
+
 function update(time, delta) {
+    // Handle Settings Key (ESC) - Global Toggle
+    if (settingsKey && Phaser.Input.Keyboard.JustDown(settingsKey)) {
+        if (window.UIManager) {
+            window.UIManager.toggleSettings();
+        }
+    }
+
     // Dynamic Quest Visuals (Check every frame, returns early if not needed)
     if (typeof MapManager !== 'undefined' && MapManager.updateQuestZones) {
         // Use active scene reference explicitly to avoid context issues with 'this'
@@ -10610,28 +10626,22 @@ function startDialog(npc) {
     currentShopNPC = npc; // Store reference for shop
     dialogVisible = true;
 
-    UIManager.createDialogUI(npc);
-    UIManager.showDialogNode('start');
+    window.UIManager.createDialogUI(npc);
+    window.UIManager.showDialogNode('start');
 }
 
-/**
- * Show a specific dialog node
- */
 /**
  * Show a specific dialog node
  */
 function showDialogNode(nodeId) {
-    UIManager.showDialogNode(nodeId);
+    if (window.UIManager) window.UIManager.showDialogNode(nodeId);
 }
 
 /**
  * Create dialog UI panel
  */
-/**
- * Create dialog UI panel
- */
 function createDialogUI(npc) {
-    UIManager.createDialogUI(npc);
+    if (window.UIManager) window.UIManager.createDialogUI(npc);
 }
 
 /**

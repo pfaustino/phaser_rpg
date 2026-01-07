@@ -119,8 +119,7 @@ window.SaveManager = {
      * @param {boolean} silent - Suppress UI feedback
      */
     saveGame(slot = 1, silent = false) {
-        console.log(`[SaveDebug] === SAVE START ===`);
-        console.log(`[SaveDebug] Requested slot: ${slot}, silent: ${silent}`);
+
 
         // Cancel any click-to-move in progress (prevent walking after save)
         const scene = this.scene || (window.game && window.game.scene.scenes[0]);
@@ -130,11 +129,11 @@ window.SaveManager = {
         }
 
         if (!window.GameState) {
-            console.error(`[SaveDebug] ABORT: window.GameState is null/undefined`);
+
             return false;
         }
         slot = slot || this.currentSlot;
-        console.log(`[SaveDebug] Resolved slot: ${slot}, currentSlot: ${this.currentSlot}`);
+
 
         try {
             const data = {
@@ -143,19 +142,7 @@ window.SaveManager = {
                 slot: slot,
                 playerStats: window.GameState.playerStats,
                 // UQE Quest system data (for quest progress)
-                uqeQuests: (() => {
-                    const uqeData = window.uqe && typeof window.uqe.getSaveData === 'function' ? window.uqe.getSaveData() : null;
-                    if (uqeData) {
-                        const activeIds = (uqeData.active || []).map(q => q.id).join(', ');
-                        const completedIds = (uqeData.completed || []).map(q => q.id).join(', ');
-                        console.log(`[Save/Load Debug] 💾 CAPTURING UQE DATA:`);
-                        console.log(`[Save/Load Debug]   - Active (${(uqeData.active || []).length}): ${activeIds || 'NONE'}`);
-                        console.log(`[Save/Load Debug]   - Completed (${(uqeData.completed || []).length}): ${completedIds || 'NONE'}`);
-                    } else {
-                        console.warn(`[Save/Load Debug] UQE quest data is NULL!`);
-                    }
-                    return uqeData;
-                })(),
+                uqeQuests: window.uqe && typeof window.uqe.getSaveData === 'function' ? window.uqe.getSaveData() : null,
                 world: {
                     currentMap: window.MapManager ? window.MapManager.currentMap : 'town',
                     playerX: window.player ? window.player.x : (window.lastPlayerX || 0),
@@ -178,27 +165,17 @@ window.SaveManager = {
                 }
             };
 
-            console.log(`[SaveDebug] Data to save:`);
-            console.log(`[SaveDebug]   - Level: ${data.playerStats.level}`);
-            console.log(`[SaveDebug]   - Map: ${data.world.currentMap}`);
-            console.log(`[SaveDebug]   - Position: (${data.world.playerX?.toFixed(0)}, ${data.world.playerY?.toFixed(0)})`);
-            console.log(`[SaveDebug]   - Timestamp: ${new Date(data.timestamp).toLocaleTimeString()}`);
+
 
             const json = JSON.stringify(data);
             const slotKey = this.getSlotKey(slot);
-            console.log(`[SaveDebug] Slot key: "${slotKey}", JSON size: ${json.length} bytes`);
+
 
             localStorage.setItem(slotKey, json);
             this.currentSlot = slot;
 
             // VERIFY the save was written
-            const verification = localStorage.getItem(slotKey);
-            if (verification) {
-                const verifyData = JSON.parse(verification);
-                console.log(`[SaveDebug] VERIFIED - Saved level: ${verifyData.playerStats.level}, map: ${verifyData.world.currentMap}`);
-            } else {
-                console.error(`[SaveDebug] VERIFICATION FAILED - localStorage returned null for key: ${slotKey}`);
-            }
+
 
             console.log(`💾 Game Saved to Slot ${slot}! Size: ${json.length} bytes`);
 
@@ -226,28 +203,22 @@ window.SaveManager = {
      * Load game from a specific slot
      */
     loadGame(slot = 1) {
-        console.log(`[SaveDebug] === LOAD START ===`);
-        console.log(`[SaveDebug] Requested slot: ${slot}`);
+
 
         try {
             const key = this.getSlotKey(slot);
-            console.log(`[SaveDebug] Slot key: "${key}"`);
+
 
             const json = localStorage.getItem(key);
-            console.log(`[SaveDebug] Raw JSON length: ${json ? json.length : 0} bytes`);
+
 
             if (!json) {
-                console.log(`[SaveDebug] No save file found in Slot ${slot}.`);
+
                 return null;
             }
 
             const data = JSON.parse(json);
-            console.log(`[SaveDebug] Loaded data:`);
-            console.log(`[SaveDebug]   - Level: ${data.playerStats?.level}`);
-            console.log(`[SaveDebug]   - Map: ${data.world?.currentMap}`);
-            console.log(`[SaveDebug]   - Position: (${data.world?.playerX?.toFixed(0)}, ${data.world?.playerY?.toFixed(0)})`);
-            console.log(`[SaveDebug]   - Timestamp: ${new Date(data.timestamp).toLocaleTimeString()}`);
-            console.log(`[SaveDebug]   - Slot in data: ${data.slot}`);
+
 
             this.currentSlot = slot;
 
@@ -271,12 +242,12 @@ window.SaveManager = {
 
             // Store UQE quest data for deferred loading (UQE definitions may not be loaded yet)
             if (data.uqeQuests) {
-                console.log(`[SaveDebug] Storing UQE quest data for deferred loading...`);
+
                 window._pendingUqeQuests = data.uqeQuests;
 
                 // Try to load now if UQE is ready
                 if (window.uqe && Object.keys(window.uqe.allDefinitions || {}).length > 0) {
-                    console.log(`[SaveDebug] UQE ready - loading quests immediately`);
+
                     window.uqe.loadSaveData(data.uqeQuests);
                     window._pendingUqeQuests = null;
                 }

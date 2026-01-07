@@ -1408,8 +1408,8 @@ window.UIManager = {
         if (!window.game || !window.game.scene || !window.game.scene.scenes[0]) return;
         const scene = window.game.scene.scenes[0];
 
-        // Clean up existing tooltip
-        this.hideTooltip();
+        // Clean up existing tooltip immediately (cancels any pending hide timers)
+        this.hideTooltip(true);
 
         // Create container
         const tooltip = scene.add.container(x, y - 50).setDepth(20000);
@@ -1447,6 +1447,11 @@ window.UIManager = {
             fill: '#ff4444'
         }).setOrigin(0.5);
         tooltip.add(hpText);
+
+        // Fix: Add to activeTooltips so hideTooltip() can destroy it
+        // We treat the container as the 'text' object for the destroy loop to pick it up effective immediately
+        if (!this.activeTooltips) this.activeTooltips = [];
+        this.activeTooltips.push({ text: tooltip });
     },
 
     // NOTE: hideTooltip is defined earlier in this file (around line 738)

@@ -452,9 +452,19 @@ window.UIManager = {
     // NOTE: The standalone Inventory UI has been removed.
     // Use the Equipment panel (E key / D-pad UP) which shows both equipment and inventory.
 
+    // Use the Equipment panel (E key / D-pad UP) which shows both equipment and inventory.
+
+    toggleEquipment: function () {
+        if (typeof window.toggleEquipment === 'function') {
+            window.toggleEquipment();
+        } else {
+            console.error("Window.toggleEquipment not found!");
+        }
+    },
+
     // Stubs for backward compatibility (do nothing)
     toggleInventory: function () {
-        console.warn('toggleInventory is deprecated. Use toggleEquipment instead.');
+        this.toggleEquipment();
     },
 
 
@@ -497,6 +507,20 @@ window.UIManager = {
         if (typeof calculateItemScore === 'function') {
             const score = calculateItemScore(item);
             if (score > 0) tooltipLines.push(`Gear Score: ${score}`);
+        }
+
+        // --- ABILITY TOOLTIP ---
+        if (item.type === 'ability') {
+            if (item.description) {
+                tooltipLines.push('');
+                // Wrap text if needed? The generic wordWrap in `createTooltipObject` handles visuals
+                tooltipLines.push(item.description);
+            }
+            tooltipLines.push('');
+            if (item.manaCost) tooltipLines.push(`Mana Cost: ${item.manaCost}`);
+            if (item.cooldown) tooltipLines.push(`Cooldown: ${(item.cooldown / 1000).toFixed(1)}s`);
+
+            return tooltipLines.join('\n');
         }
 
         if (item.quality) tooltipLines.push(`Quality: ${item.quality}`);

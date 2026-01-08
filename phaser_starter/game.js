@@ -53,11 +53,8 @@ console.log('🎮 PHASER GAME INSTANCE CREATED');
 let player;
 let cursors;
 let map;
-// Global State Variables
-// Global State Variables
-// (Moved to GameState.js)
-// (Moved to GameState.js: questTrackerEntries, lastPlayerX/Y, monsters, items, npcs, isGamePaused)
-// Global State Variables
+// Global State Variables (Moved to GameState.js)
+// (questTrackerEntries, lastPlayerX/Y, monsters, items, npcs, isGamePaused)
 // (Moved to GameState.js)
 // (Moved to GameState.js: questTrackerEntries, lastPlayerX/Y, monsters, items, npcs, isGamePaused)
 let spaceKey;
@@ -66,10 +63,26 @@ let hpRegenTimerEvent = null;
 let dialogDatabase = {};
 
 const ABILITY_DEFINITIONS = {
-    'fireball': { icon: 'fireball_effect', color: 0xff4400, manaCost: 10, cooldown: 1000 },
-    'heal': { icon: 'heal_effect', color: 0x00ff00, manaCost: 20, cooldown: 5000, healAmount: 50 },
-    'shield': { icon: 'shield_effect', color: 0x0088ff, manaCost: 15, cooldown: 8000 },
-    'ice_nova': { icon: 'ice_nova_effect', color: 0x00ffff, manaCost: 25, cooldown: 6000, damage: 40, aoe: true }
+    'fireball': {
+        name: 'Fireball',
+        description: 'Launches a flaming projectile that burns enemies on contact.',
+        icon: 'fireball_effect', color: 0xff4400, manaCost: 10, cooldown: 1000
+    },
+    'heal': {
+        name: 'Healing Light',
+        description: 'Restores 50 HP to yourself.',
+        icon: 'heal_effect', color: 0x00ff00, manaCost: 20, cooldown: 5000, healAmount: 50
+    },
+    'shield': {
+        name: 'Arcane Shield',
+        description: 'Grants temporary invulnerability for 3 seconds.',
+        icon: 'shield_effect', color: 0x0088ff, manaCost: 15, cooldown: 8000
+    },
+    'ice_nova': {
+        name: 'Ice Nova',
+        description: 'Freezes nearby enemies in place dealing area damage.',
+        icon: 'ice_nova_effect', color: 0x00ffff, manaCost: 25, cooldown: 6000, damage: 40, aoe: true
+    }
 };
 
 let questMarkers = new Map(); // Quest objective markers (key: targetId, value: {sprite, tween})
@@ -2447,6 +2460,21 @@ function create() {
     // Load persistent settings (independent of save game)
     loadSettings();
 
+    // Initialize PlayerStats Manager
+    if (window.PlayerStatsManager) {
+        window.PlayerStatsManager.init(this);
+    }
+
+    // Initialize Loot Manager
+    if (window.LootManager) {
+        window.LootManager.init(this);
+    }
+
+    // Initialize Combat Manager
+    if (window.CombatManager) {
+        window.CombatManager.init(this);
+    }
+
     // Initialize Global NPC Registry
     if (this.cache.json.exists('npcData')) {
         const npcList = this.cache.json.get('npcData');
@@ -2518,7 +2546,8 @@ function create() {
 
             // Give Rewards
             if (quest.rewards.xp) {
-                playerStats.xp += quest.rewards.xp;
+                // Use new XP system with safeguards
+                addXp(quest.rewards.xp);
                 addChatMessage(`Gained ${quest.rewards.xp} XP from quest`, 0xffd700, '✨');
             }
             if (quest.rewards.gold) {
@@ -3353,7 +3382,9 @@ function create() {
     // Version Number
     // Version Number - Dynamic
     const versionStr = (window.GameState && window.GameState.gameVersion) ? window.GameState.gameVersion : 'v???';
-    this.add.text(this.scale.width - 10, 10, versionStr, {
+    const topTextX = this.scale.width - 120; // Shifted left to make room for icons
+
+    this.add.text(topTextX, 10, versionStr, {
         fontFamily: 'Arial',
         fontSize: '16px',
         color: '#00ff00',
@@ -3365,7 +3396,7 @@ function create() {
         .setDepth(30000);
 
     // Map + Difficulty Indicator (below version number)
-    const mapDiffIndicator = this.add.text(this.scale.width - 10, 28, '', {
+    const mapDiffIndicator = this.add.text(topTextX, 28, '', {
         fontFamily: 'Arial',
         fontSize: '14px',
         color: '#ffffff',
@@ -3375,6 +3406,52 @@ function create() {
         .setOrigin(1, 0)
         .setScrollFactor(0)
         .setDepth(30000);
+
+    // --- TOP RIGHT ICONS ---
+
+    // 1. Equipment (Armor Icon)
+    const armorIcon = this.add.sprite(this.scale.width - 70, 25, 'item_armor')
+        .setScrollFactor(0)
+        .setDepth(30000)
+        .setScale(0.7) // Smaller than regular items
+        .setInteractive({ useHandCursor: true });
+
+    armorIcon.on('pointerover', () => armorIcon.setTint(0xcccccc)); // Dim hint
+    armorIcon.on('pointerout', () => armorIcon.clearTint());
+    armorIcon.on('pointerdown', (pointer, localX, localY, event) => {
+        if (event && event.stopPropagation) event.stopPropagation();
+        if (window.UIManager && typeof window.UIManager.toggleEquipment === 'function') {
+            window.UIManager.toggleEquipment();
+            if (typeof playSound === 'function') playSound('menu_select');
+        } else {
+            // Fallback
+            console.log('Toggle Equipment');
+        }
+
+        // Pulse animation
+        this.tweens.add({ targets: armorIcon, scale: 0.6, duration: 50, yoyo: true });
+    });
+
+    // 2. Settings (Cong Wheel)
+    // Using text emoji for now as reliable asset, or valid sprite if available
+    const settingsIcon = this.add.text(this.scale.width - 25, 25, '⚙️', {
+        fontSize: '30px',
+        color: '#ffffff'
+    })
+        .setOrigin(0.5, 0.5)
+        .setScrollFactor(0)
+        .setDepth(30000)
+        .setInteractive({ useHandCursor: true });
+
+    settingsIcon.on('pointerover', () => settingsIcon.setScale(1.1));
+    settingsIcon.on('pointerout', () => settingsIcon.setScale(1.0));
+    settingsIcon.on('pointerdown', (pointer, localX, localY, event) => {
+        if (event && event.stopPropagation) event.stopPropagation();
+        if (window.UIManager && typeof window.UIManager.toggleSettings === 'function') {
+            window.UIManager.toggleSettings();
+            if (typeof playSound === 'function') playSound('menu_select');
+        }
+    });
 
     // Store reference globally
     window.mapDiffIndicator = mapDiffIndicator;
@@ -5160,145 +5237,7 @@ function update(time, delta) {
 /**
  * Handle monster death (XP, quests, loot, animations)
  */
-// --- Handle Monster Death ---
-window.handleMonsterDeath = function (monster) {
-    if (!monster) return;
-    console.log(`💀 handleMonsterDeath CALLED for ${monster.id || 'unknown'} (Dead? ${monster.isDead})`);
 
-    if (monster.isDead) {
-        console.warn(`💀 ...monster already marked dead. Skipping logic?`);
-        return;
-    }
-    monster.isDead = true;
-
-    // Destroy HP bars and level label IMMEDIATELY to prevent lingering
-    console.log(`🗑️ Destroying UI for ${monster.id}`);
-    if (monster.hpBarBg) { monster.hpBarBg.destroy(); monster.hpBarBg = null; }
-    if (monster.hpBar) { monster.hpBar.destroy(); monster.hpBar = null; }
-    if (monster.levelLabel) { monster.levelLabel.destroy(); monster.levelLabel = null; }
-
-    const scene = game.scene.scenes[0];
-
-    // --- Stats & Events ---
-    // Update kill stats
-    if (!playerStats.questStats.monstersKilled) playerStats.questStats.monstersKilled = 0;
-    playerStats.questStats.monstersKilled++;
-
-    // Emit UQE event (for Quests)
-    if (window.uqe && window.uqe.eventBus) {
-        window.uqe.eventBus.emit('monster_killed', {
-            id: monster.monsterId || monster.id || 'unknown',
-            type: monster.monsterType || monster.type || 'unknown'
-        });
-    }
-
-    // Emit Milestone event
-    if (window.milestoneManager) {
-        window.milestoneManager.checkTriggers('stat_change', {
-            stat: 'monsters_killed',
-            value: playerStats.questStats.monstersKilled
-        });
-
-        if (monster.isBoss) {
-            window.milestoneManager.checkTriggers('boss_kill', {
-                bossId: monster.monsterId
-            });
-        }
-    }
-    // ----------------------
-
-    // Check if this was a boss in a dungeon
-    if (monster.isBoss && MapManager.currentMap === 'dungeon') {
-        onBossDefeated(MapManager.dungeonLevel, monster.x, monster.y);
-    }
-
-
-
-    // Play death animation & particles
-    if (typeof createDeathEffects === 'function') {
-        createDeathEffects(monster.x, monster.y);
-    }
-
-    // Use ProceduralMonster animation
-    // Disable interactions immediately upon death to prevent "stuck" tooltips
-    if (monster.disableInteractive) {
-        monster.disableInteractive();
-    }
-    if (window.UIManager && window.UIManager.hideTooltip) {
-        window.UIManager.hideTooltip(true); // Force hide immediately
-    }
-
-    if (typeof ProceduralMonster !== 'undefined' && typeof ProceduralMonster.playDeathAnimation === 'function') {
-        const scene = game.scene.scenes[0];
-        const animScene = monster.scene || scene;
-
-        // Optional: Add a flash effect before death animation
-        if (monster.setTintFill) {
-            monster.setTintFill(0xffffff); // White flash
-            // Clear tint after 150ms to continue the animation with original colors
-            animScene.time.delayedCall(150, () => {
-                if (monster && monster.active && monster.clearTint) {
-                    monster.clearTint();
-                }
-            });
-        }
-
-        ProceduralMonster.playDeathAnimation(animScene, monster, () => {
-            if (monster && monster.active) {
-                monster.destroy();
-            }
-        });
-    } else {
-        // Fallback: Enhanced Death effect - Dissolve, rise, and fade
-        scene.tweens.add({
-            targets: monster,
-            alpha: 0,
-            y: monster.y - 50, // "Ghostly" rise
-            scale: 1.5, // Expand as it fades
-            duration: 1000,
-            ease: 'Cubic.out',
-            onComplete: () => {
-                // Ensure cleanup
-                if (monster && monster.active) {
-                    monster.destroy();
-                }
-            }
-        });
-    }
-
-    // Give XP (based on monster type, scaled by difficulty)
-    const baseXpGain = monster.xpReward || 10;
-    const difficulty = window.GameState?.currentDifficulty || 'normal';
-    const diffSettings = window.Constants?.DIFFICULTY?.[difficulty] || { xpMult: 1 };
-    const xpGain = Math.floor(baseXpGain * diffSettings.xpMult);
-    playerStats.xp += xpGain;
-    showDamageNumber(monster.x, monster.y, `+${xpGain} XP`, 0xffd700, false, 'xp');
-    addChatMessage(`Gained ${xpGain} XP`, 0xffd700, '✨');
-
-    // Track quest progress - (legacy stat, UQE event already emitted above)
-
-    // Add chat message for monster death
-    const monsterName = monster.monsterType || 'Monster';
-    addChatMessage(`${monsterName} defeated`, 0xff6b6b, '💀');
-
-    // Check level up & Drop items
-    checkLevelUp();
-    dropItemsFromMonster(monster.x, monster.y, monster.xpReward || 10);
-
-    // Play death sound
-    playSound('monster_die');
-
-    // Remove monster after animation completes
-    scene.time.delayedCall(300, () => {
-        if (monster && monster.active) {
-            monster.destroy();
-            const index = monsters.indexOf(monster);
-            if (index !== -1) {
-                monsters.splice(index, 1);
-            }
-        }
-    });
-}
 // Items are now manually picked up with Spacebar (handled above)
 // No automatic pickup - player must press Spacebar when near items
 
@@ -5307,352 +5246,14 @@ window.handleMonsterDeath = function (monster) {
 /**
  * Player attack function
  */
-function playerAttack(time, isRightClick = false, aimAngle = null) {
-    const scene = game.scene.scenes[0]; // Restored missing variable
 
-    if (!player || !player.active) {
-        return;
-    }
-
-    const stats = window.GameState.playerStats;
-
-    // Fallback for time if called without args
-    if (!time) time = scene.time.now;
-
-    // Fix for Post-Load Attack Bug:
-    // If lastAttackTime is from a previous session (saved), it might be huge (e.g. 100000).
-    // But Phaser.time.now resets to 0 on reload.
-    // So (time - lastAttackTime) becomes negative, blocking attacks forever.
-    if (stats.lastAttackTime > time) {
-        stats.lastAttackTime = 0;
-    }
-
-    if (!time) time = scene.time.now;
-
-    // Check cooldown
-    if (time - stats.lastAttackTime < stats.attackCooldown) {
-        return;
-    }
-
-    // Ranged/Secondary Attack Check
-    const equippedWeapon = (stats.equipment && stats.equipment.weapon) ? stats.equipment.weapon : {};
-    console.log('[Control Debug] Equipped Weapon:', equippedWeapon);
-    console.log('[Control Debug] Item Definitions:', !!(ItemManager && ItemManager.definitions));
-
-    // Check Projectile Manager
-    if (!window.projectileManager) {
-        console.error('[Control Debug] CRITICAL: projectileManager is MISSING!');
-    }
-
-    if (equippedWeapon.weaponType) {
-        // console.log('... definition ...'); 
-    }
-    let projectileType = equippedWeapon.projectile;
-    let projectileSpeed = equippedWeapon.projectileSpeed;
-    let projectileRange = equippedWeapon.range;
-
-    // Try to lookup from ItemManager if properties are missing
-    if (!projectileType && equippedWeapon.weaponType && ItemManager.definitions && ItemManager.definitions.weaponTypes) {
-        const def = ItemManager.definitions.weaponTypes[equippedWeapon.weaponType];
-        if (def && def.projectile) {
-            projectileType = def.projectile;
-            projectileSpeed = def.projectileSpeed;
-            projectileRange = def.range;
-            console.log(`🔄 Refreshed weapon data from definitions: ${projectileType}`);
-        }
-    }
-
-    if (projectileType) {
-        let angle;
-        let targetX, targetY;
-
-        if (aimAngle !== null) {
-            angle = aimAngle;
-            // Calculate dummy target for facing direction logic
-            targetX = player.x + Math.cos(angle) * 100;
-            targetY = player.y + Math.sin(angle) * 100;
-        } else {
-            targetX = scene.input.activePointer.worldX;
-            targetY = scene.input.activePointer.worldY;
-            angle = Phaser.Math.Angle.Between(player.x, player.y, targetX, targetY);
-        }
-
-        const fired = window.projectileManager.fireProjectile(
-            { x: player.x, y: player.y },
-            angle,
-            {
-                projectileType: projectileType,
-                speed: projectileSpeed,
-                range: projectileRange,
-                damage: stats.attack || 10,
-                critChance: stats.critChance || 0.05
-            }
-        );
-
-        if (fired) {
-            stats.lastAttackTime = time;
-
-            // Update facing direction even for ranged
-            if (Math.abs(targetX - player.x) > Math.abs(targetY - player.y)) {
-                player.facingDirection = targetX > player.x ? 'east' : 'west';
-            } else {
-                player.facingDirection = targetY > player.y ? 'south' : 'north';
-            }
-            const walkTextureKey = `player_walk_${player.facingDirection}`;
-            if (scene.textures.exists(walkTextureKey)) {
-                player.setTexture(walkTextureKey);
-            }
-
-            return; // EXIT FUNCTION - DO NOT DO MELEE ATTACK
-        }
-        // Optional: Face direction
-        if (Math.abs(targetX - player.x) > Math.abs(targetY - player.y)) {
-            player.facingDirection = targetX > player.x ? 'east' : 'west';
-        } else {
-            player.facingDirection = targetY > player.y ? 'south' : 'north';
-        }
-        // Update texture to face direction
-        const walkTextureKey = `player_walk_${player.facingDirection}`;
-        if (scene.textures.exists(walkTextureKey)) {
-            player.setTexture(walkTextureKey);
-        }
-        return; // Skip melee swing
-    }
-
-
-    // Combo tracking - check if within combo window
-    const timeSinceLastAttack = time - stats.lastAttackTime;
-    if (timeSinceLastAttack < stats.comboResetTime && stats.comboCount > 0) {
-        // Continue combo (attacked within combo window)
-        stats.comboCount++;
-    } else {
-        // Start new combo (too much time passed or first attack)
-        stats.comboCount = 1;
-    }
-    stats.lastAttackTime = time;
-    stats.comboTimer = 0; // Reset combo timer
-
-    // Get weapon quality for trail color
-    // equippedWeapon is already defined at start of function
-    const weaponQuality = equippedWeapon ? (equippedWeapon.quality || 'Common') : 'Common';
-    const weaponType = equippedWeapon ? (equippedWeapon.weaponType || 'Sword') : 'Sword';
-
-    // Create weapon swing trail
-    const facingDirection = player.facingDirection || 'south';
-    createWeaponSwingTrail(player.x, player.y, facingDirection, weaponQuality);
-
-    // Play weapon-specific attack swing sound
-    const swingSound = (typeof getWeaponHitSound === 'function') ? getWeaponHitSound(weaponType) : 'attack_swing';
-    playSound(swingSound);
-
-    // Animate weapon sprite during attack
-    animateWeaponStrike(facingDirection, weaponType);
-
-    // Play attack animation if available
-    if (scene.anims.exists('attack')) {
-        // Stop any current animation
-        player.anims.stop();
-
-        // Set texture to attack sprite sheet if needed
-        if (scene.textures.exists('player_attack')) {
-            player.setTexture('player_attack');
-        }
-
-        // Play attack animation
-        player.play('attack');
-        console.log('Playing attack animation');
-
-        // Resume walking animation after attack completes
-        player.once('animationcomplete', (animation) => {
-            if (animation && animation.key === 'attack') {
-                // Switch back to walking texture
-                const walkTextureKey = `player_walk_${player.facingDirection}`;
-                if (scene.textures.exists(walkTextureKey)) {
-                    player.setTexture(walkTextureKey);
-                }
-
-                if (player.isMoving && scene.anims.exists(`walk_${player.facingDirection}`)) {
-                    player.play(`walk_${player.facingDirection}`);
-                } else {
-                    // Show first frame of current direction when stopped
-                    player.setFrame(0);
-                }
-            }
-        });
-    } else {
-        console.log('Attack animation not found - checking textures:', {
-            hasAttackTexture: scene.textures.exists('player_attack'),
-            hasAttackAnim: scene.anims.exists('attack')
-        });
-    }
-
-    // Find nearest monster in attack range
-    const attackRange = 50; // pixels
-    let closestMonster = null;
-    let closestDistance = attackRange;
-
-    monsters.forEach(monster => {
-        if (monster.hp <= 0) return;
-
-        const distance = Phaser.Math.Distance.Between(
-            player.x, player.y,
-            monster.x, monster.y
-        );
-
-        if (distance < closestDistance) {
-            closestDistance = distance;
-            closestMonster = monster;
-        }
-    });
-
-    if (closestMonster) {
-        // Calculate damage (with variation) - uses current attack (base + equipment)
-        const baseDamage = playerStats.attack; // This includes equipment bonuses
-        const variation = Phaser.Math.FloatBetween(0.9, 1.1);
-        let damage = Math.max(1, Math.floor(baseDamage * variation));
-
-        // Check for critical hit (5% chance, 2x damage)
-        const isCritical = Math.random() < 0.05;
-        if (isCritical) {
-            damage = Math.floor(damage * 2);
-        }
-
-        // Apply damage
-        closestMonster.hp -= damage;
-        closestMonster.hp = Math.max(0, closestMonster.hp);
-
-        // Create hit particle effects (physical damage)
-        createHitEffects(closestMonster.x, closestMonster.y, isCritical, 'physical', weaponType);
-
-        // Screen shake on critical hits
-        if (isCritical) {
-            shakeCamera(200, 0.01); // Duration 200ms, intensity 0.01
-        } else if (damage > baseDamage * 1.5) {
-            // Light shake for big hits
-            shakeCamera(100, 0.005);
-        }
-
-        // Show damage number with enhanced visuals for criticals
-        const damageColor = isCritical ? 0xff0000 : 0xffff00; // Red for critical, yellow for normal
-        const damageText = isCritical ? `-${damage} CRIT!` : `-${damage}`;
-        showDamageNumber(closestMonster.x, closestMonster.y - 20, damageText, damageColor, isCritical, 'physical');
-        const monsterName = closestMonster.monsterType || 'Monster';
-        const chatMessage = isCritical ? `${damageText} on ${monsterName}` : `Hit ${monsterName} for ${damage} damage`;
-        addChatMessage(chatMessage, isCritical ? 0xff0000 : 0xffff00, '⚔️');
-
-        // Play weapon-specific hit sound (uses items.js getWeaponHitSound)
-        const hitSound = (typeof getWeaponHitSound === 'function') ? getWeaponHitSound(weaponType) : 'hit_monster';
-        console.log(`🔊 Weapon hit: type=${weaponType}, sound=${hitSound}`);
-        playSound(hitSound);
-
-        // Enhanced visual feedback - professional hit flash
-        if (closestMonster.setTintFill) {
-            // White flash is the industry standard for "hit" feedback
-            closestMonster.setTintFill(0xffffff);
-            scene.time.delayedCall(80, () => {
-                if (closestMonster && closestMonster.active && closestMonster.clearTint) {
-                    closestMonster.clearTint();
-                }
-            });
-        } else if (closestMonster.setTint) {
-            // Fallback for objects that don't support TintFill
-            closestMonster.setTint(isCritical ? 0xff0000 : 0xffffff);
-            scene.time.delayedCall(100, () => {
-                if (closestMonster && closestMonster.active && closestMonster.clearTint) {
-                    closestMonster.clearTint();
-                }
-            });
-        }
-    }
-}
 
 
 
 /**
  * Monster attack player
  */
-function monsterAttackPlayer(monster, time) {
-    // 0. Safety/Invulnerability/Pause Check
-    if ((typeof isGamePaused !== 'undefined' && isGamePaused) ||
-        !monster || !monster.active ||
-        (playerStats && playerStats.isInvulnerable)) {
-        return;
-    }
 
-    // Check cooldown
-    if (time - monster.lastAttackTime < monster.attackCooldown) {
-        return;
-    }
-
-    monster.lastAttackTime = time;
-
-    // Determine direction monster is facing player
-    const dx = player.x - monster.x;
-    const dy = player.y - monster.y;
-    if (Math.abs(dy) > Math.abs(dx)) {
-        monster.facingDirection = dy > 0 ? 'south' : 'north';
-    } else {
-        monster.facingDirection = dx > 0 ? 'east' : 'west';
-    }
-
-    // Play attack animation
-    playMonsterAttackAnimation(monster);
-
-    // Calculate damage using % mitigation formula
-    const baseDamage = Number(monster.attack) || 0;
-    const defense = Number(playerStats.defense) || 0;
-
-    // % mitigation: damage = attack * (100 / (100 + defense))
-    let actualDamage = Math.max(1, Math.floor(baseDamage * (100 / (100 + defense))));
-
-    // Final NaN check
-    if (isNaN(actualDamage)) {
-        console.warn('⚠️ actualDamage is NaN! base:', baseDamage, 'def:', defense);
-        actualDamage = 1;
-    }
-
-    // Apply damage to player
-    playerStats.hp -= actualDamage;
-    playerStats.hp = Math.max(0, playerStats.hp);
-
-    // Create hit effects on player (red particles - physical damage)
-    createHitEffects(player.x, player.y, false, 'physical');
-
-    // Play sound effect when player is hit
-    playSound('hit_player');
-
-    // Light screen shake when player takes damage
-    shakeCamera(150, 0.008);
-
-    // Show damage number
-    showDamageNumber(player.x, player.y - 20, `-${actualDamage}`, 0xff0000, false, 'physical');
-    const monsterName = monster.monsterType || 'Monster';
-    addChatMessage(`Took ${actualDamage} damage from ${monsterName}`, 0xff6b6b, '🛡️');
-
-    // Enhanced visual feedback - flash player white (then clear)
-    if (player.setTintFill) {
-        player.setTintFill(0xffffff);
-        game.scene.scenes[0].time.delayedCall(80, () => {
-            if (player && player.active) {
-                player.clearTint();
-            }
-        });
-    } else {
-        player.setTint(0xff0000);
-        game.scene.scenes[0].time.delayedCall(100, () => {
-            if (player && player.active) {
-                player.clearTint();
-            }
-        });
-    }
-
-    // Check if player died (The update() loop will also catch this, but doing it here 
-    // provides immediate feedback and prevents further attack logic in this frame)
-    if (playerStats.hp <= 0) {
-        console.log('💀 Player health reached zero.');
-        showFallenDialog();
-    }
-}
 
 /**
  * Create hit particle effects at impact point
@@ -5661,103 +5262,7 @@ function monsterAttackPlayer(monster, time) {
  * @param {boolean} isCritical - Whether this is a critical hit
  * @param {string} damageType - 'physical' or 'magic' (default: 'physical')
  */
-function createHitEffects(x, y, isCritical = false, damageType = 'physical', weaponType = 'Unarmed') {
-    const scene = game.scene.scenes[0];
 
-    // Create particle emitter for hit sparks
-    if (!scene.textures.exists('hit_spark')) {
-        // Fallback or ensure texture exists
-    }
-
-    const particleCount = isCritical ? 30 : 16; // Increased count
-    const baseSize = isCritical ? 5 : 3;
-
-    // Color-coded by weapon type / damage type
-    let colors;
-
-    // Override colors based on weapon type if physical
-    if (damageType === 'physical') {
-        if (weaponType === 'Unarmed') {
-            colors = [0xffffff, 0xcccccc]; // White dust
-        } else if (weaponType === 'Staff' || weaponType === 'Wand') {
-            colors = [0x00ffff, 0x0088ff, 0xaa00ff]; // Magic
-        } else if (weaponType === 'Sword') {
-            colors = [0xffffff, 0xaaaaaa, 0xff0000]; // Steel and blood
-        } else if (weaponType === 'Hammer' || weaponType === 'Mace') {
-            colors = [0xff8800, 0x884400, 0xffff44]; // Impact/Sparks
-        } else if (weaponType === 'Axe') {
-            colors = [0xff0000, 0x880000, 0xffffff]; // Blood and steel
-        } else if (weaponType === 'Dagger') {
-            colors = [0xffff00, 0xffffff]; // Quick flash
-        } else {
-            // Default Physical
-            colors = isCritical
-                ? [0xff0000, 0xff8800, 0xffd700, 0xffffff]
-                : [0xffd700, 0xff8800, 0xffff00];
-        }
-    } else if (damageType === 'magic') {
-        // Blue/purple for magic damage
-        colors = isCritical
-            ? [0x4400ff, 0x8800ff, 0xaa88ff, 0xffffff] // Purple/blue/white for critical magic
-            : [0x4400ff, 0x6600ff, 0x8888ff]; // Blue/purple for normal magic
-    } else {
-        // Default Fallback
-        colors = [0xffd700, 0xff8800];
-    }
-
-    // Create particles manually (Phaser 3 particle system)
-    for (let i = 0; i < particleCount; i++) {
-        const angle = Phaser.Math.FloatBetween(0, Math.PI * 2);
-        const speed = Phaser.Math.FloatBetween(50, 120); // Faster spread
-        const distance = Phaser.Math.FloatBetween(5, 30); // Larger initial area
-        const color = Phaser.Utils.Array.GetRandom(colors);
-        const size = Phaser.Math.FloatBetween(baseSize, baseSize + 2); // Larger variable size
-
-        const particle = scene.add.circle(
-            x + Math.cos(angle) * distance,
-            y + Math.sin(angle) * distance,
-            size,
-            color,
-            1.0
-        ).setDepth(201);
-
-        // Add additive blending for "glow" effect
-        particle.setBlendMode(Phaser.BlendModes.ADD);
-
-        // Animate particle
-        scene.tweens.add({
-            targets: particle,
-            x: x + Math.cos(angle) * speed * 1.5,
-            y: y + Math.sin(angle) * speed * 1.5,
-            alpha: 0,
-            scale: { from: 1, to: 0.1 },
-            duration: Phaser.Math.Between(400, 700), // Longer duration
-            ease: 'Quad.easeOut',
-            onComplete: () => {
-                if (particle && particle.active) {
-                    particle.destroy();
-                }
-            }
-        });
-    }
-
-    // Add impact flash (brief white circle)
-    const flash = scene.add.circle(x, y, isCritical ? 15 : 10, 0xffffff, 0.8)
-        .setDepth(201);
-
-    scene.tweens.add({
-        targets: flash,
-        scale: isCritical ? 2 : 1.5,
-        alpha: 0,
-        duration: 150,
-        ease: 'Power2',
-        onComplete: () => {
-            if (flash && flash.active) {
-                flash.destroy();
-            }
-        }
-    });
-}
 
 /**
  * Update weapon sprite based on equipped weapon
@@ -6808,17 +6313,7 @@ function updateAttackSpeedIndicator() {
 /**
  * Update UI bars
  */
-/**
- * Calculate total XP needed to reach the NEXT level
- * Curve: 500 * Level + 250 * Level^2 (Significantly steeper to prevent over-leveling)
- * Example:
- * Lvl 1->2: 750 XP
- * Lvl 19->20: ~100k XP
- * Lvl 34->35: ~300k XP
- */
-function getXPNeededForLevel(level) {
-    return 500 * level + 250 * Math.pow(level, 2);
-}
+
 
 /**
  * Check if any UI window is currently open
@@ -6895,392 +6390,24 @@ function updateUI() {
     }
 }
 
-/**
- * Add XP to player and check for level up
- * @param {number} amount - Amount of XP to add
- */
-function addXp(amount) {
-    if (!amount || amount <= 0) return;
 
-    // Safety check for NaN or undefined XP
-    if (typeof playerStats.xp !== 'number' || isNaN(playerStats.xp)) {
-        console.warn('⚠️ [GameState] Fixed corrupted XP value (was NaN/undefined)');
-        playerStats.xp = 0;
-    }
 
-    // AUTO-REPAIR: Check if XP is lower than the minimum required for the current level
-    // This handles the "Level 19 with 0 XP" bug
-    const minXP = playerStats.level > 1 ? getXPNeededForLevel(playerStats.level - 1) : 0;
-    if (playerStats.xp < minXP) {
-        console.warn(`⚠️ [GameState] Detected XP Desync! Level ${playerStats.level} requires ${minXP} XP, but found ${playerStats.xp}. Repairing...`);
-        playerStats.xp = minXP;
-    }
 
-    playerStats.xp += amount;
 
-    // Visual feedback
-    showDamageNumber(player.x, player.y - 50, `+${amount} XP`, 0xb478ff, false, 'xp');
 
-    // Check for level up immediately
-    checkLevelUp();
-
-    // Update UI
-    updateUI();
-}
-// Expose globally
-window.addXp = addXp;
-
-/**
- * Check for level up
- */
-function checkLevelUp() {
-    const stats = playerStats;
-    // Check loop to handle multiple level ups at once (e.g. big boss XP)
-    let leveledUp = false;
-
-    while (true) {
-        const xpNeeded = getXPNeededForLevel(stats.level);
-
-        if (stats.xp >= xpNeeded) {
-            stats.level++;
-            stats.maxHp += 20;
-            stats.hp = stats.maxHp; // Full heal on level up
-            stats.maxMana += 10;
-            stats.mana = stats.maxMana;
-            stats.attack += 2;
-            stats.defense += 1;
-            leveledUp = true;
-            console.log(`Level up! Now level ${stats.level}`);
-        } else {
-            break;
-        }
-    }
-
-    if (leveledUp) {
-        // Check if any UI is open OR if explicitly blocked OR if dialogs are queued
-        // This covers the gap where a dialog is queued but not yet visible
-        const isQueueActive = (typeof dialogQueue !== 'undefined' && dialogQueue.length > 0);
-
-        if (isAnyWindowOpen() || window.blockLevelUpEffect || isQueueActive) {
-            console.log('⏳ Level Up Queued (UI Open, Blocked, or Dialog Queued)');
-            window.pendingLevelUp = true;
-            window.pendingLevelUpStats = { level: stats.level }; // store for display
-        } else {
-            createLevelUpEffect(stats.level);
-        }
-
-        // UQE: Emit level up event (Always emit to update quests logic)
-        if (typeof uqe !== 'undefined') {
-            uqe.eventBus.emit(UQE_EVENTS.LEVEL_UP, { level: stats.level });
-            uqe.update();
-        }
-    }
-}
-
-/**
- * Trigger visual and audio effects for Level Up
- */
-function createLevelUpEffect(newLevel) {
-    const scene = game.scene.scenes[0];
-    if (!scene) return;
-
-    // 1. Get Audio Duration for Sync
-    let duration = 2500; // Default fallback (ms)
-
-    // Check if audio exists and get duration
-    if (scene.cache.audio.exists('level_up')) {
-        const audioData = scene.cache.audio.get('level_up');
-        // WebAudio buffer has .duration property in seconds
-        if (audioData && audioData.duration) {
-            duration = audioData.duration * 1000;
-        }
-    }
-
-    console.log(`🎵 Level Up Effect Sync: ${duration.toFixed(0)}ms`);
-
-    // Guard: Prevent playing if blocked or UI open (Double check)
-    if (window.blockLevelUpEffect || (typeof isAnyWindowOpen === 'function' && isAnyWindowOpen()) || (typeof dialogQueue !== 'undefined' && dialogQueue.length > 0)) {
-        console.log('🛑 Level Up Effect BLOCKED (Safety Guard)');
-        window.pendingLevelUp = true;
-        // Ensure stats are saved for the pending level up
-        if (!window.pendingLevelUpStats && playerStats) {
-            window.pendingLevelUpStats = { level: playerStats.level };
-        }
-        return;
-    }
-
-    // 2. Sound
-    playSound('level_up');
-
-    // 3. Floating Text
-    const levelText = scene.add.text(player.x, player.y - 60, 'LEVEL UP!', {
-        fontSize: '32px',
-        fill: '#00ffff',
-        stroke: '#000000',
-        strokeThickness: 6,
-        fontStyle: 'bold'
-    }).setOrigin(0.5).setDepth(2000);
-
-    // Animate Text (Match Audio Duration)
-    scene.tweens.add({
-        targets: levelText,
-        y: player.y - 120, // Float higher
-        alpha: { from: 1, to: 0 },
-        scaleX: 1.5,
-        scaleY: 1.5,
-        duration: duration,
-        ease: 'Quad.easeOut',
-        onComplete: () => levelText.destroy()
-    });
-
-    // 4. Particle Explosion (Gold/Cyan)
-    const particleConfig = {
-        speed: { min: 100, max: 250 },
-        angle: { min: 0, max: 360 },
-        scale: { start: 0.7, end: 0 },
-        blendMode: 'ADD',
-        lifespan: Math.min(duration, 1500), // Particles fade slightly faster than full audio tail
-        gravityY: 50,
-        quantity: 30
-    };
-
-    let texture = 'gui_gem_socket'; // Reuse existing
-    if (!scene.textures.exists(texture)) texture = 'fireball_effect'; // Fallback
-
-    const emitter = scene.add.particles(0, 0, texture, particleConfig);
-    emitter.setPosition(player.x, player.y);
-    emitter.explode(40);
-
-    // Destroy emitter after audio finishes
-    setTimeout(() => emitter.destroy(), duration + 100);
-
-    // 5. Chat Message
-    addChatMessage(`Level Up! Now Level ${newLevel}`, 0x00ffff, '⭐');
-    addChatMessage('HP & Mana Restored!', 0x00ff00, '💚');
-}
 
 // Global Cheat for Testing
 window.cheatLevelUp = function () {
     window.addXp(getXPNeededForLevel(playerStats.level) - playerStats.xp + 1);
 };
 
-// Check for pending level ups
-function checkPendingLevelUp() {
-    if (window.pendingLevelUp) {
-        // Only trigger if NO windows are open, NOT blocked, and NO dialogs queued
-        const isQueueActive = (typeof dialogQueue !== 'undefined' && dialogQueue.length > 0);
 
-        if (!isAnyWindowOpen() && !window.blockLevelUpEffect && !isQueueActive) {
-            console.log('✅ Triggering Queued Level Up');
-            createLevelUpEffect(window.pendingLevelUpStats ? window.pendingLevelUpStats.level : playerStats.level);
-            window.pendingLevelUp = false;
-            window.pendingLevelUpStats = null;
-        }
-    }
-}
 
 // ============================================
 // ENHANCED ITEM SYSTEM
 // Item generation logic has been moved to items.js
 // ============================================
 
-
-
-/**
- * Spawn a specific quest item at a location
- * @param {number} x - X coordinate
- * @param {number} y - Y coordinate
- * @param {object} itemData - Item data object
- */
-function spawnQuestItem(x, y, itemData) {
-    const scene = game.scene.scenes[0];
-    const item = itemData;
-
-    // Determine sprite key
-    // Determine sprite key
-    let spriteKey = ItemManager.getSpriteKey(item);
-
-
-
-    // Safety: Verify texture exists
-    if (!scene.textures.exists(spriteKey)) {
-        console.warn(`⚠️ spawnQuestItem texture not found: ${spriteKey}, falling back`);
-        spriteKey = 'item_consumable';
-    }
-
-    const itemSprite = scene.add.sprite(x, y, spriteKey);
-    itemSprite.setDepth(8);
-
-    // Initial setup
-    itemSprite.setInteractive();
-    itemSprite.isItem = true;
-    itemSprite.itemId = (item.id || 'quest') + '_' + Date.now();
-    itemSprite.itemData = item;
-
-    // Add to scenes item list
-    if (scene.items) scene.items.push(itemSprite);
-
-    // Pulsing animation
-    scene.tweens.add({
-        targets: itemSprite,
-        scaleX: 1.2,
-        scaleY: 1.2,
-        duration: 500,
-        yoyo: true,
-        repeat: -1,
-        ease: 'Sine.easeInOut'
-    });
-
-    // Float animation
-    scene.tweens.add({
-        targets: itemSprite,
-        y: y - 5,
-        duration: 1000,
-        yoyo: true,
-        repeat: -1
-    });
-
-    // Add Hover Effect
-    if (typeof window.enableHoverEffect === 'function') {
-        window.enableHoverEffect(itemSprite, scene);
-    }
-
-    // Store in global items array
-    item.sprite = itemSprite;
-    item.x = itemSprite.x;
-    item.y = itemSprite.y;
-    items.push(item);
-
-    console.log(`[Spawn] Quest item spawned: ${item.name} at ${x}, ${y}`);
-}
-// Expose globally
-window.spawnQuestItem = spawnQuestItem;
-
-/**
- * Drop items from a killed monster
- * @param {number} x - X position for drop
- * @param {number} y - Y position for drop
- * @param {number} monsterXP - XP reward of the monster (used to derive level for item scaling)
- */
-function dropItemsFromMonster(x, y, monsterXP = 10) {
-    const scene = game.scene.scenes[0];
-
-    // Derive monster level from XP reward (level = floor(xp / 5), minimum 1)
-    const monsterLevel = Math.max(1, Math.floor(monsterXP / 5));
-
-    // 70% chance to drop random loot
-    let droppedItem = null;
-    if (Math.random() < 0.7) {
-        droppedItem = generateRandomItem(monsterLevel);
-    }
-
-    // NEW: Quest-specific loot logic
-    // If the player has an active quest for a specific item, give it a chance to drop
-    if (typeof uqe !== 'undefined') {
-        uqe.activeQuests.forEach(quest => {
-            quest.objectives.forEach(obj => {
-                if (obj.type === 'collect' && !obj.completed) {
-                    // Skip 'any' type - those count all items, no special drops needed
-                    if (obj.itemId === 'any') return;
-
-                    // 30% chance to drop quest-specific item
-                    if (Math.random() < 0.3) {
-                        // Create proper item name from itemId (e.g. "crystal_shard" -> "Crystal Shard")
-                        const itemName = obj.itemId
-                            .replace(/_/g, ' ')
-                            .replace(/\b\w/g, c => c.toUpperCase());
-
-                        droppedItem = {
-                            id: obj.itemId,
-                            type: 'quest_item',
-                            name: itemName,
-                            quality: 'Uncommon',
-                            amount: 1
-                        };
-                        console.log(`🎁 [UQE Bridge] Dropping quest item: ${droppedItem.name}`);
-                    }
-                }
-            });
-        });
-    }
-
-    if (droppedItem) {
-        const item = droppedItem;
-        // Create item sprite on ground
-        // Create item sprite on ground
-        let spriteKey = ItemManager.getSpriteKey(item);
-
-
-        // Safety: Verify texture exists
-        if (!scene.textures.exists(spriteKey)) {
-            console.warn(`⚠️ Ground item texture not found: ${spriteKey}, falling back`);
-            spriteKey = 'item_consumable';
-        }
-
-        const itemSprite = scene.add.sprite(x, y, spriteKey);
-        itemSprite.setDepth(8); // Above tiles, below monsters
-
-        // Add slight random offset so items don't stack exactly
-        itemSprite.x += Phaser.Math.Between(-10, 10);
-        itemSprite.y += Phaser.Math.Between(-10, 10);
-
-        // Add pulsing animation to make items noticeable
-        scene.tweens.add({
-            targets: itemSprite,
-            scaleX: 1.2,
-            scaleY: 1.2,
-            duration: 500,
-            yoyo: true,
-            repeat: -1,
-            ease: 'Sine.easeInOut'
-        });
-
-        // Make item interactive for click-to-pickup
-        // Reverting to default hit area to debug specific hit test issues
-        itemSprite.setInteractive();
-        itemSprite.isItem = true;
-        itemSprite.itemId = item.type + '_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
-        itemSprite.itemData = item;
-
-        // Add to items group if exists
-        if (scene.items) {
-            scene.items.push(itemSprite);
-        }
-
-        // Add tween to float up and down
-        scene.tweens.add({
-            targets: itemSprite,
-            y: y - 5,
-            duration: 1000,
-            yoyo: true,
-            repeat: -1
-        });
-
-        console.log(`Dropped item: ${item.name} at ${x},${y}`);
-
-        // Add Hover Effect
-        if (typeof window.enableHoverEffect === 'function') {
-            window.enableHoverEffect(itemSprite, scene);
-        }
-
-        // Store item data
-        item.sprite = itemSprite;
-        item.x = itemSprite.x;
-        item.y = itemSprite.y;
-
-        items.push(item);
-
-        // Add chat message for loot drop
-        const qualityColor = {
-            'Common': 0xcccccc,
-            'Uncommon': 0x1eff00,
-            'Rare': 0x0070dd,
-            'Epic': 0xa335ee,
-            'Legendary': 0xff8000
-        }[item.quality] || 0xcccccc;
-        addChatMessage(`Loot: ${item.name} (${item.quality})`, qualityColor, '💎');
-    }
-}
 
 
 /**
@@ -7410,90 +6537,7 @@ function updateAmbientZoneAudio() {
     });
 }
 
-/**
- * Pick up an item
- */
-function pickupItem(item, index) {
-    const scene = game.scene.scenes[0];
 
-    if (item.type === 'gold') {
-        // Add gold directly
-        playerStats.gold += item.amount;
-        playerStats.questStats.goldEarned += item.amount;
-        const goldX = item.sprite ? item.sprite.x : (item.x || player.x);
-        const goldY = item.sprite ? item.sprite.y : (item.y || player.y);
-        showDamageNumber(goldX, goldY, `+${item.amount} Gold`, 0xffd700);
-        updatePlayerStats(); // Update gold display
-
-        // Play sound
-        playSound('gold_pickup');
-
-        // UQE Bridge Event - for Gold Rush quest tracking
-        if (typeof uqe !== 'undefined') {
-            uqe.eventBus.emit(UQE_EVENTS.GOLD_EARNED, { amount: item.amount });
-        }
-    } else {
-        // Add item to inventory (with stacking for consumables)
-        console.log(`📦 Adding item to inventory: ${item.name} (type: ${item.type})`);
-        console.log(`   Before: ${playerStats.inventory.length} items`);
-
-        // Check if this is a stackable consumable or shard
-        let stacked = false;
-        const isStackable = ItemManager.isStackable(item);
-
-
-        if (isStackable && item.name) {
-            // Find existing stack of same item
-            const existingStack = playerStats.inventory.find(i =>
-                (i.type === item.type) && i.name === item.name && (item.id ? i.id === item.id : true)
-            );
-            if (existingStack) {
-                existingStack.quantity = (existingStack.quantity || 1) + (item.quantity || 1);
-                stacked = true;
-                console.log(`   Stacked with existing: now x${existingStack.quantity}`);
-            }
-        }
-
-        if (!stacked) {
-            // Set initial quantity for stackable items
-            if (isStackable) {
-                item.quantity = item.quantity || 1;
-            }
-
-            playerStats.inventory.push(item);
-        }
-
-        console.log(`   After: ${playerStats.inventory.length} items`);
-        console.log(`   Inventory contents:`, playerStats.inventory.map(i => `${i.name}${i.quantity ? ' x' + i.quantity : ''}`));
-        playerStats.questStats.itemsCollected++;
-        const itemX = item.sprite ? item.sprite.x : (item.x || player.x);
-        const itemY = item.sprite ? item.sprite.y : (item.y || player.y);
-        showDamageNumber(itemX, itemY, `Picked up ${item.name}`, 0x00ff00);
-        playSound('item_pickup');
-        console.log(`Picked up: ${item.name} (Inventory: ${playerStats.inventory.length} items)`);
-
-        // Refresh inventory UI if open - this will update the display with the new item
-        refreshInventory();
-
-        // Update potion slot quantities
-        updatePotionSlots();
-
-        // UQE Bridge Event
-        if (typeof uqe !== 'undefined') {
-            uqe.eventBus.emit(UQE_EVENTS.ITEM_PICKUP, {
-                id: item.id || item.name,
-                type: item.type,
-                amount: 1
-            });
-        }
-    }
-
-    // Remove item from ground
-    if (item.sprite && item.sprite.active) {
-        item.sprite.destroy();
-    }
-    items.splice(index, 1);
-}
 
 /**
  * Close all open interfaces
@@ -12903,7 +11947,62 @@ function createAbilityBar() {
 
         // Button background
         const buttonBg = scene.add.rectangle(x, abilityBarY, 60, 60, 0x333333, 0.9)
-            .setScrollFactor(0).setDepth(200).setStrokeStyle(2, 0x666666);
+            .setScrollFactor(0).setDepth(200).setStrokeStyle(2, 0x666666)
+            .setInteractive({ useHandCursor: true });
+
+        // Interaction Logic
+        // 1. Tooltip Hover
+        buttonBg.on('pointerover', () => {
+            buttonBg.setStrokeStyle(2, 0xffffff); // Highlight
+            if (window.UIManager && typeof window.UIManager.showTooltip === 'function') {
+                // Construct a temporary item object for the tooltip
+                const tooltipData = {
+                    type: 'ability',
+                    name: ability.name,
+                    description: ability.description,
+                    manaCost: ability.manaCost,
+                    cooldown: ability.cooldown,
+                    quality: 'Rare' // Color coding hint
+                };
+                window.UIManager.showTooltip(tooltipData, x, abilityBarY - 60, 'ability');
+            }
+        });
+
+        buttonBg.on('pointerout', () => {
+            buttonBg.setStrokeStyle(2, 0x666666); // Reset
+            if (window.UIManager && typeof window.UIManager.hideTooltip === 'function') {
+                window.UIManager.hideTooltip();
+            }
+        });
+
+        // 2. Click / Tap to Cast
+        buttonBg.on('pointerdown', (pointer, localX, localY, event) => {
+            // Stop propagation to prevent movement
+            if (event && event.stopPropagation) {
+                event.stopPropagation();
+            }
+
+            // Trigger the ability
+            // Capture the current index value for this specific button
+            // 'abilityId' is unique to this iteration, so we can also rely on finding its index,
+            // or better yet, just use a locally scoped const if we were inside a for-loop.
+            // But since this is a forEach, we can just use the outer variable IF we copy it,
+            // OR use the forEach index argument.
+            // current 'index' variable is outside scope.
+            // Let's rely on finding the index of this abilityId in definitions key array
+            const keys = Object.keys(ABILITY_DEFINITIONS);
+            const myIndex = keys.indexOf(abilityId) + 1;
+
+            window.useAbility(myIndex);
+
+            // Visual feedback
+            scene.tweens.add({
+                targets: buttonBg,
+                scale: 0.9,
+                duration: 50,
+                yoyo: true
+            });
+        });
 
         // Ability icon
         const icon = scene.add.sprite(x, abilityBarY, ability.icon);
@@ -12954,7 +12053,44 @@ function createAbilityBar() {
 
     // Health Potion slot
     const healthPotionBg = scene.add.rectangle(potionStartX, abilityBarY, 60, 60, 0x442222, 0.9)
-        .setScrollFactor(0).setDepth(200).setStrokeStyle(2, 0xff4444);
+        .setScrollFactor(0).setDepth(200).setStrokeStyle(2, 0xff4444)
+        .setInteractive({ useHandCursor: true });
+
+    // Health Potion Interaction
+    healthPotionBg.on('pointerover', () => {
+        healthPotionBg.setStrokeStyle(2, 0xffffff);
+        if (window.UIManager && typeof window.UIManager.showTooltip === 'function') {
+            const tooltipData = {
+                type: 'consumable',
+                name: 'Health Potion',
+                description: 'Restores 50 HP. Key: 5',
+                quality: 'Common'
+            };
+            window.UIManager.showTooltip(tooltipData, potionStartX, abilityBarY - 60, 'hotbar');
+        }
+    });
+    healthPotionBg.on('pointerout', () => {
+        healthPotionBg.setStrokeStyle(2, 0xff4444);
+        if (window.UIManager && typeof window.UIManager.hideTooltip === 'function') {
+            window.UIManager.hideTooltip();
+        }
+    });
+    healthPotionBg.on('pointerdown', (pointer, localX, localY, event) => {
+        if (event && event.stopPropagation) event.stopPropagation();
+
+        // Use Health Potion logic
+        // Find a health potion in inventory and consume it
+        const potion = playerStats.inventory.find(i => i.name === 'Health Potion' || (i.name && i.name.toLowerCase().includes('health')));
+        if (potion) {
+            // Use item by index
+            const index = playerStats.inventory.indexOf(potion);
+            if (window.useItem) window.useItem(index);
+        } else {
+            if (window.addChatMessage) window.addChatMessage("No Health Potions!", 0xff4444);
+        }
+
+        scene.tweens.add({ targets: healthPotionBg, scale: 0.9, duration: 50, yoyo: true });
+    });
 
     const healthPotionIcon = scene.add.sprite(potionStartX, abilityBarY, 'item_consumable');
     healthPotionIcon.setScrollFactor(0).setDepth(201).setScale(0.8);
@@ -12985,7 +12121,42 @@ function createAbilityBar() {
     const manaPotionX = potionStartX + abilitySpacing;
 
     const manaPotionBg = scene.add.rectangle(manaPotionX, abilityBarY, 60, 60, 0x222244, 0.9)
-        .setScrollFactor(0).setDepth(200).setStrokeStyle(2, 0x4444ff);
+        .setScrollFactor(0).setDepth(200).setStrokeStyle(2, 0x4444ff)
+        .setInteractive({ useHandCursor: true });
+
+    // Mana Potion Interaction
+    manaPotionBg.on('pointerover', () => {
+        manaPotionBg.setStrokeStyle(2, 0xffffff);
+        if (window.UIManager && typeof window.UIManager.showTooltip === 'function') {
+            const tooltipData = {
+                type: 'consumable',
+                name: 'Mana Potion',
+                description: 'Restores 20 MP. Key: 6',
+                quality: 'Common'
+            };
+            window.UIManager.showTooltip(tooltipData, manaPotionX, abilityBarY - 60, 'hotbar');
+        }
+    });
+    manaPotionBg.on('pointerout', () => {
+        manaPotionBg.setStrokeStyle(2, 0x4444ff);
+        if (window.UIManager && typeof window.UIManager.hideTooltip === 'function') {
+            window.UIManager.hideTooltip();
+        }
+    });
+    manaPotionBg.on('pointerdown', (pointer, localX, localY, event) => {
+        if (event && event.stopPropagation) event.stopPropagation();
+
+        // Use Mana Potion logic
+        const potion = playerStats.inventory.find(i => i.name === 'Mana Potion' || (i.name && i.name.toLowerCase().includes('mana')));
+        if (potion) {
+            const index = playerStats.inventory.indexOf(potion);
+            if (window.useItem) window.useItem(index);
+        } else {
+            if (window.addChatMessage) window.addChatMessage("No Mana Potions!", 0x4444ff);
+        }
+
+        scene.tweens.add({ targets: manaPotionBg, scale: 0.9, duration: 50, yoyo: true });
+    });
 
     const manaPotionIcon = scene.add.sprite(manaPotionX, abilityBarY, 'mana_potion');
     manaPotionIcon.setScrollFactor(0).setDepth(201).setScale(0.8);

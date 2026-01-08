@@ -13,11 +13,11 @@ const config = {
     parent: 'game-container',
     backgroundColor: '#2c3e50',
     scale: {
-        mode: Phaser.Scale.FIT,
+        mode: Phaser.Scale.RESIZE,
         autoCenter: Phaser.Scale.CENTER_BOTH,
         min: {
-            width: 960,
-            height: 540
+            width: 1024,
+            height: 768
         },
         max: {
             width: 1920,
@@ -3001,7 +3001,7 @@ function create() {
 
     // Create UI bars (HP, Mana, Stamina, XP)
     const barWidth = 200;
-    const barHeight = 20;
+    const barHeight = 28;
     const barSpacing = 25;
     const barX = 20;
     let barY = 20;
@@ -3012,37 +3012,47 @@ function create() {
     hpBar = this.add.rectangle(barX + 2, barY, barWidth - 4, barHeight - 4, 0xff0000)
         .setScrollFactor(0).setDepth(101).setOrigin(0, 0.5);
 
+    // HP Text
+    hpBarText = this.add.text(barX + barWidth / 2, barY, '', {
+        fontSize: '13px', fill: '#ffffff', stroke: '#000000', strokeThickness: 2, fontStyle: 'bold', padding: { x: 0, y: 0 }
+    }).setScrollFactor(0).setDepth(102).setOrigin(0.5, 0.5);
+
     // Mana Bar
-    barY += barSpacing;
+    barY += barSpacing + 8; // Extra spacing for slightly taller bars
     manaBarBg = this.add.rectangle(barX + barWidth / 2, barY, barWidth, barHeight, 0x000000, 0.7)
         .setScrollFactor(0).setDepth(100).setStrokeStyle(2, 0xffffff);
     manaBar = this.add.rectangle(barX + 2, barY, barWidth - 4, barHeight - 4, 0x0000ff)
         .setScrollFactor(0).setDepth(101).setOrigin(0, 0.5);
 
+    // Mana Text
+    manaBarText = this.add.text(barX + barWidth / 2, barY, '', {
+        fontSize: '13px', fill: '#ffffff', stroke: '#000000', strokeThickness: 2, fontStyle: 'bold', padding: { x: 0, y: 0 }
+    }).setScrollFactor(0).setDepth(102).setOrigin(0.5, 0.5);
+
     // Stamina Bar
-    barY += barSpacing;
+    barY += barSpacing + 8;
     staminaBarBg = this.add.rectangle(barX + barWidth / 2, barY, barWidth, barHeight, 0x000000, 0.7)
         .setScrollFactor(0).setDepth(100).setStrokeStyle(2, 0xffffff);
     staminaBar = this.add.rectangle(barX + 2, barY, barWidth - 4, barHeight - 4, 0x00ff00)
         .setScrollFactor(0).setDepth(101).setOrigin(0, 0.5);
 
     // XP Bar
-    barY += barSpacing;
+    barY += barSpacing + 8;
     xpBarBg = this.add.rectangle(barX + barWidth / 2, barY, barWidth, barHeight, 0x000000, 0.7)
         .setScrollFactor(0).setDepth(100).setStrokeStyle(2, 0xffffff);
     xpBar = this.add.rectangle(barX + 2, barY, barWidth - 4, barHeight - 4, 0xb478ff)
         .setScrollFactor(0).setDepth(101).setOrigin(0, 0.5);
 
-    // Stats text
-    statsText = this.add.text(barX, barY + barSpacing, '', {
-        fontSize: '16px',
-        fill: '#ffffff',
-        backgroundColor: '#000000',
-        padding: { x: 5, y: 3 }
-    }).setScrollFactor(0).setDepth(100);
+    // XP Text
+    xpBarText = this.add.text(barX + barWidth / 2, barY, '', {
+        fontSize: '13px', fill: '#ffffff', stroke: '#000000', strokeThickness: 2, fontStyle: 'bold', padding: { x: 0, y: 0 }
+    }).setScrollFactor(0).setDepth(102).setOrigin(0.5, 0.5);
+
+    // Adjust Y for subsequent elements
+    const startTextY = barY + barSpacing + 15;
 
     // Debug text (player position)
-    this.debugText = this.add.text(barX, barY + barSpacing + 25, '', {
+    this.debugText = this.add.text(barX, startTextY, '', {
         fontSize: '14px',
         fill: '#ffff00',
         backgroundColor: '#000000',
@@ -3050,7 +3060,7 @@ function create() {
     }).setScrollFactor(0).setDepth(100);
 
     // Gold text
-    goldText = this.add.text(barX, barY + barSpacing + 45, 'Gold: 0', {
+    goldText = this.add.text(barX, startTextY + 25, 'Gold: 0', {
         fontSize: '16px',
         fill: '#ffd700',
         backgroundColor: '#000000',
@@ -3061,7 +3071,7 @@ function create() {
     const fullControlsText = 'WASD: Move | SPACE: Attack/Pickup | 1-3: Abilities | E: Equipment \\nQ: Quests | F: Interact | F6: Save | F9: Load | H: Help';
     const shortControlsText = 'H: Help';
 
-    let controlsText = this.add.text(barX, barY + barSpacing + 70, shortControlsText, {
+    let controlsText = this.add.text(barX, startTextY + 50, shortControlsText, {
         fontSize: '14px',
         fill: '#ffffff',
         backgroundColor: '#000000',
@@ -3384,7 +3394,7 @@ function create() {
     const versionStr = (window.GameState && window.GameState.gameVersion) ? window.GameState.gameVersion : 'v???';
     const topTextX = this.scale.width - 120; // Shifted left to make room for icons
 
-    this.add.text(topTextX, 10, versionStr, {
+    this.versionText = this.add.text(topTextX, 10, versionStr, {
         fontFamily: 'Arial',
         fontSize: '16px',
         color: '#00ff00',
@@ -3396,7 +3406,7 @@ function create() {
         .setDepth(30000);
 
     // Map + Difficulty Indicator (below version number)
-    const mapDiffIndicator = this.add.text(topTextX, 28, '', {
+    this.mapDiffIndicator = this.add.text(topTextX, 28, '', {
         fontFamily: 'Arial',
         fontSize: '14px',
         color: '#ffffff',
@@ -3410,15 +3420,15 @@ function create() {
     // --- TOP RIGHT ICONS ---
 
     // 1. Equipment (Armor Icon)
-    const armorIcon = this.add.sprite(this.scale.width - 70, 25, 'item_armor')
+    this.equipmentIcon = this.add.sprite(this.scale.width - 70, 25, 'item_armor')
         .setScrollFactor(0)
         .setDepth(30000)
         .setScale(0.7) // Smaller than regular items
         .setInteractive({ useHandCursor: true });
 
-    armorIcon.on('pointerover', () => armorIcon.setTint(0xcccccc)); // Dim hint
-    armorIcon.on('pointerout', () => armorIcon.clearTint());
-    armorIcon.on('pointerdown', (pointer, localX, localY, event) => {
+    this.equipmentIcon.on('pointerover', () => this.equipmentIcon.setTint(0xcccccc)); // Dim hint
+    this.equipmentIcon.on('pointerout', () => this.equipmentIcon.clearTint());
+    this.equipmentIcon.on('pointerdown', (pointer, localX, localY, event) => {
         if (event && event.stopPropagation) event.stopPropagation();
         if (window.UIManager && typeof window.UIManager.toggleEquipment === 'function') {
             window.UIManager.toggleEquipment();
@@ -3429,12 +3439,12 @@ function create() {
         }
 
         // Pulse animation
-        this.tweens.add({ targets: armorIcon, scale: 0.6, duration: 50, yoyo: true });
+        this.tweens.add({ targets: this.equipmentIcon, scale: 0.6, duration: 50, yoyo: true });
     });
 
     // 2. Settings (Cong Wheel)
     // Using text emoji for now as reliable asset, or valid sprite if available
-    const settingsIcon = this.add.text(this.scale.width - 25, 25, '⚙️', {
+    this.settingsIcon = this.add.text(this.scale.width - 25, 25, '⚙️', {
         fontSize: '30px',
         color: '#ffffff'
     })
@@ -3443,9 +3453,9 @@ function create() {
         .setDepth(30000)
         .setInteractive({ useHandCursor: true });
 
-    settingsIcon.on('pointerover', () => settingsIcon.setScale(1.1));
-    settingsIcon.on('pointerout', () => settingsIcon.setScale(1.0));
-    settingsIcon.on('pointerdown', (pointer, localX, localY, event) => {
+    this.settingsIcon.on('pointerover', () => this.settingsIcon.setScale(1.1));
+    this.settingsIcon.on('pointerout', () => this.settingsIcon.setScale(1.0));
+    this.settingsIcon.on('pointerdown', (pointer, localX, localY, event) => {
         if (event && event.stopPropagation) event.stopPropagation();
         if (window.UIManager && typeof window.UIManager.toggleSettings === 'function') {
             window.UIManager.toggleSettings();
@@ -3454,7 +3464,8 @@ function create() {
     });
 
     // Store reference globally
-    window.mapDiffIndicator = mapDiffIndicator;
+    // Store reference globally
+    window.mapDiffIndicator = this.mapDiffIndicator;
 
     // Update map/difficulty indicator every 500ms
     this.time.addEvent({
@@ -3473,10 +3484,10 @@ function create() {
             let color = '#ffffff';
             if (difficulty === 'casual') color = '#4CAF50';      // Green
             else if (difficulty === 'normal') color = '#FFC107'; // Yellow/Gold
-            else if (difficulty === 'hardcore') color = '#f44336'; // Red
-
-            mapDiffIndicator.setText(`${mapName} • ${diffName}`);
-            mapDiffIndicator.setColor(color);
+            if (this.mapDiffIndicator && typeof this.mapDiffIndicator.setText === 'function') {
+                this.mapDiffIndicator.setText(`${versionStr} | ${mapName} (${diffName})`);
+                this.mapDiffIndicator.setColor(color);
+            }
         }
     });
 
@@ -3780,6 +3791,14 @@ function update(time, delta) {
         showFallenDialog();
         return;
     }
+    // Trigger initial tutorial
+    if (window.showTutorial) {
+        window.showTutorial();
+    }
+
+    // Handle Window Resize
+    this.scale.on('resize', resize, this);
+
     // Update Unified Quest Engine
     if (window.uqe) {
         window.uqe.update();
@@ -5952,8 +5971,8 @@ function shakeCamera(duration = 200, intensity = 0.01) {
  */
 function createSystemChatBox() {
     const scene = game.scene.scenes[0];
-    const gameWidth = 1280;
-    const gameHeight = 720;
+    const gameWidth = scene.scale.width;
+    const gameHeight = scene.scale.height;
     const bottomMargin = 15; // Shared bottom margin with ability bar
     const chatWidth = Math.floor(gameWidth / 3); // One third of map width
     const chatHeight = 120;
@@ -5982,6 +6001,7 @@ function createSystemChatBox() {
         bg: bg,
         container: textContainer,
         mask: mask,
+        maskGraphics: maskGraphics,
         messages: [],
         scrollY: 0,
         maxScrollY: 0,
@@ -6365,9 +6385,20 @@ function updateUI() {
         const xpPercent = Math.max(0, Math.min(1, xpInCurrentLevel / xpRequiredForCurrentLevel));
         xpBar.width = maxBarWidth * xpPercent;
 
-        // Update stats text
+        // Update embedded stats text
         const displayHp = Math.max(0, Math.ceil(stats.hp));
-        statsText.setText(`Level ${stats.level} | HP: ${displayHp}/${stats.maxHp} | XP: ${Math.floor(xpInCurrentLevel)}/${xpRequiredForCurrentLevel}`);
+        if (typeof hpBarText !== 'undefined' && hpBarText) {
+            hpBarText.setText(`HP: ${displayHp}/${stats.maxHp}`);
+        }
+        if (typeof manaBarText !== 'undefined' && manaBarText) {
+            manaBarText.setText(`Mana: ${Math.floor(stats.mana)}/${stats.maxMana}`);
+        }
+        if (typeof xpBarText !== 'undefined' && xpBarText) {
+            xpBarText.setText(`Lvl ${stats.level} | XP: ${Math.floor(xpInCurrentLevel)}/${xpRequiredForCurrentLevel}`);
+        }
+
+        // Legacy cleanup (if needed)
+        // statsText removed
 
         // Update gold text
         if (goldText) {
@@ -6910,8 +6941,8 @@ function createEquipmentUI() {
     const scene = game.scene.scenes[0];
 
     // Calculate panel dimensions - each panel is half the game width
-    const gameWidth = 1024;
-    const gameHeight = 768;
+    const gameWidth = scene.scale.width;
+    const gameHeight = scene.scale.height;
     const panelWidth = gameWidth / 2;
     const panelHeight = gameHeight;
     const leftPanelX = panelWidth / 2;
@@ -10190,8 +10221,8 @@ function createShopUI(npc) {
     const scene = game.scene.scenes[0];
 
     // Calculate panel dimensions - each panel is half the game width
-    const gameWidth = 1024;
-    const gameHeight = 768;
+    const gameWidth = scene.scale.width;
+    const gameHeight = scene.scale.height;
     const panelWidth = gameWidth / 2;
     const panelHeight = gameHeight;
     const leftPanelX = panelWidth / 2;
@@ -11937,6 +11968,7 @@ function createAbilityBar() {
 
     abilityBar = {
         buttons: [],
+        potionSlots: [],
         cooldownOverlays: []
     };
 
@@ -12117,6 +12149,15 @@ function createAbilityBar() {
         fill: '#ff4444'
     }).setScrollFactor(0).setDepth(202).setOrigin(0.5, 0.5);
 
+    abilityBar.potionSlots.push({
+        type: 'health',
+        bg: healthPotionBg,
+        icon: healthPotionIcon,
+        keyText: healthKeyText,
+        quantityText: healthQuantityText,
+        label: healthLabelText
+    });
+
     // Mana Potion slot (key 6)
     const manaPotionX = potionStartX + abilitySpacing;
 
@@ -12183,23 +12224,16 @@ function createAbilityBar() {
         fill: '#4444ff'
     }).setScrollFactor(0).setDepth(202).setOrigin(0.5, 0.5);
 
-    // Store potion slots for updates
-    abilityBar.potionSlots = {
-        health: {
-            bg: healthPotionBg,
-            icon: healthPotionIcon,
-            keyText: healthKeyText,
-            quantityText: healthQuantityText,
-            labelText: healthLabelText
-        },
-        mana: {
-            bg: manaPotionBg,
-            icon: manaPotionIcon,
-            keyText: manaKeyText,
-            quantityText: manaQuantityText,
-            labelText: manaLabelText
-        }
-    };
+    abilityBar.potionSlots.push({
+        type: 'mana',
+        bg: manaPotionBg,
+        icon: manaPotionIcon,
+        keyText: manaKeyText,
+        quantityText: manaQuantityText,
+        label: manaLabelText
+    });
+
+
 
     // Initial update
     updatePotionSlots();
@@ -12233,12 +12267,21 @@ function updatePotionSlots() {
         }
     });
     // Update quantity text
-    abilityBar.potionSlots.health.quantityText.setText(`x${healthPotions}`);
-    abilityBar.potionSlots.mana.quantityText.setText(`x${manaPotions}`);
+    // Update quantity text
+    if (Array.isArray(abilityBar.potionSlots)) {
+        const healthSlot = abilityBar.potionSlots.find(s => s.type === 'health');
+        const manaSlot = abilityBar.potionSlots.find(s => s.type === 'mana');
 
-    // Dim slot if no potions
-    abilityBar.potionSlots.health.icon.setAlpha(healthPotions > 0 ? 1 : 0.3);
-    abilityBar.potionSlots.mana.icon.setAlpha(manaPotions > 0 ? 1 : 0.3);
+        if (healthSlot) {
+            healthSlot.quantityText.setText(`x${healthPotions}`);
+            healthSlot.icon.setAlpha(healthPotions > 0 ? 1 : 0.3);
+        }
+
+        if (manaSlot) {
+            manaSlot.quantityText.setText(`x${manaPotions}`);
+            manaSlot.icon.setAlpha(manaPotions > 0 ? 1 : 0.3);
+        }
+    }
 }
 
 /**
@@ -16553,6 +16596,13 @@ window.unlockAbility = unlockAbility;
  * @param {string} className - 'Warrior', 'Rogue', 'Mage'
  */
 function chooseClass(className) {
+    // ... existing chooseClass code ...
+    // Note: This chunk is just strictly appending the resize function at the end.
+    // But since I can't just append, I'll use the chooseClass signature as anchor if needed.
+    // Actually, createAbilityBar helper or similar might vary.
+    // I'll assume valid chooseClass signature from view.
+    // Wait, the tool requires TARGET CONTENT to match.
+    // I'll target the very last line shown.
     console.log(`🛡️ Class Selected: ${className}`);
 
     // Set Class
@@ -16579,3 +16629,109 @@ function chooseClass(className) {
     }
 }
 window.chooseClass = chooseClass;
+
+/**
+ * Handle Game Resize
+ * Adjusts UI positions dynamically
+ * @param {Phaser.Structs.Size} gameSize
+ */
+function resize(gameSize) {
+    const width = gameSize.width;
+    const height = gameSize.height;
+
+    // Update Camera
+    this.cameras.main.setViewport(0, 0, width, height);
+
+    // --- 1. Update Top-Right UI ---
+    // Offset from right edge
+    const topTextX = width - 120;
+
+    if (this.versionText) {
+        this.versionText.setX(topTextX);
+    }
+    if (this.mapDiffIndicator) {
+        this.mapDiffIndicator.setX(topTextX);
+    }
+
+    // Equipment Icon (70px from right)
+    if (this.equipmentIcon) {
+        this.equipmentIcon.setX(width - 70);
+    }
+
+    // Settings Icon (25px from right)
+    if (this.settingsIcon) {
+        this.settingsIcon.setX(width - 25);
+    }
+
+    // --- 2. Update System Chat Box ---
+    if (systemChatBox && systemChatBox.bg) {
+        const bottomMargin = 20; // Requested 20px
+        const chatWidth = Math.floor(width / 3);
+        const chatHeight = 120;
+        const chatX = 10;
+        const chatY = height - chatHeight - bottomMargin;
+
+        // Update global properties
+        systemChatBox.x = chatX + 5;
+        systemChatBox.y = chatY + 5;
+        systemChatBox.width = chatWidth - 20;
+        systemChatBox.height = chatHeight - 10;
+
+        // BG (centered)
+        systemChatBox.bg.setPosition(chatX + chatWidth / 2, chatY + chatHeight / 2);
+        systemChatBox.bg.setSize(chatWidth, chatHeight);
+
+        // Container
+        systemChatBox.container.setPosition(chatX + 5, chatY + 5);
+
+        // Mask
+        if (systemChatBox.maskGraphics) {
+            systemChatBox.maskGraphics.clear();
+            systemChatBox.maskGraphics.fillStyle(0xffffff);
+            systemChatBox.maskGraphics.fillRect(0, 0, chatWidth - 20, chatHeight - 10);
+            systemChatBox.maskGraphics.setPosition(chatX + 5, chatY + 5);
+        }
+    }
+
+    // --- 3. Update Ability Bar ---
+    if (abilityBar && abilityBar.buttons) {
+        const bottomMargin = 20; // Requested offset from bottom
+        const abilityBarY = height - bottomMargin - 30; // 30 = half button height
+        const abilitySpacing = 80;
+        const numButtons = abilityBar.buttons.length;
+
+        // Count just abilities for original centering logic, 
+        // OR calculate total width including potions?
+        // Original logic: startX based on ability count. Potions follow.
+        // We stick to original logic:
+        const startX = width / 2 - (numButtons - 1) * abilitySpacing / 2;
+
+        abilityBar.buttons.forEach((btn, index) => {
+            const x = startX + index * abilitySpacing;
+
+            if (btn.bg) btn.bg.setPosition(x, abilityBarY);
+            if (btn.icon) btn.icon.setPosition(x, abilityBarY);
+            if (btn.keyText) btn.keyText.setPosition(x - 20, abilityBarY - 20);
+            if (btn.cooldownOverlay) btn.cooldownOverlay.setPosition(x, abilityBarY);
+            if (btn.cooldownText) btn.cooldownText.setPosition(x, abilityBarY);
+            if (btn.manaText) btn.manaText.setPosition(x, abilityBarY + 25);
+        });
+
+        // Update Potions
+        // Potion start X logic: startX + numButtons * spacing + 20 gap
+        let potionStartX = startX + numButtons * abilitySpacing + 20;
+
+        if (abilityBar.potionSlots) {
+            abilityBar.potionSlots.forEach((slot, index) => {
+                const x = potionStartX + index * abilitySpacing;
+                const y = abilityBarY;
+
+                if (slot.bg) slot.bg.setPosition(x, y);
+                if (slot.icon) slot.icon.setPosition(x, y);
+                if (slot.keyText) slot.keyText.setPosition(x - 20, y - 20);
+                if (slot.quantityText) slot.quantityText.setPosition(x + 15, y + 20);
+                if (slot.label) slot.label.setPosition(x, y + 35);
+            });
+        }
+    }
+}

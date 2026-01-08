@@ -9,17 +9,17 @@
         body {
             margin: 0;
             padding: 0;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
+            width: 100%;
+            height: 100vh;
             background: #1a1a1a;
-            font-family: Arial, sans-serif;
+            overflow: hidden;
+            /* Prevent scrollbars */
         }
 
         #game-container {
-            border: 2px solid #333;
-            box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+            width: 100%;
+            height: 100%;
+            /* Removed border/shadow for full immersion, or keep if desired but strictly inside */
         }
     </style>
 </head>
@@ -45,9 +45,11 @@
     <script src="GameState.js"></script>
     <script src="DebugUtils.js"></script>
     <script src="DamageSystem.js"></script>
-    <script src="UIManager.js"></script>
+    <script src="UIManager_v2.js?v=0.9.199"></script>
     <script src="ForgeUI.js"></script>
     <script src="ItemManager.js"></script>
+    <script src="LootManager.js"></script>
+    <script src="CombatManager.js"></script>
     <script src="InnUI.js"></script>
     <script src="TavernUI.js"></script>
     <script src="items.js?v=refactor1"></script>
@@ -55,7 +57,8 @@
     <script src="ProceduralMonster.js"></script>
     <script src="ProjectileManager.js"></script>
     <script src="SaveManager.js"></script>
-    <script src="game.js?v=refactor15"></script>
+    <script src="PlayerStats.js"></script>
+    <script src="game.js?v=0.9.199"></script>
 
     <script src="CinematicManager.js"></script>
 </body>

@@ -62,7 +62,8 @@
             ],
             "rewards": {
                 "xp": 150,
-                "gold": 50
+                "gold": 50,
+                "loreUnlock": "lore_ch1_echo_corruption"
             }
         }
     }

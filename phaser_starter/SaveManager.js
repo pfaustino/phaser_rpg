@@ -240,6 +240,20 @@ window.SaveManager = {
                     window.toggleMusic(data.settings.musicEnabled);
             }
 
+            // SANITIZATION FIX (Idle Slowdown Bug)
+            // Ensure speed is reset if corrupted (e.g. set to < 50)
+            if (window.GameState.playerStats.speed < 100) {
+                console.warn('⚠️ Detected corrupted player speed (< 100). Resetting to 200.');
+                window.GameState.playerStats.speed = 200;
+            }
+
+            // Recalculate stats to ensure speed includes base + equipment
+            if (typeof recalculatePlayerStats === 'function') {
+                recalculatePlayerStats();
+            } else if (window.PlayerStatsManager) {
+                window.PlayerStatsManager.recalculateStats();
+            }
+
             // Store UQE quest data for deferred loading (UQE definitions may not be loaded yet)
             if (data.uqeQuests) {
 

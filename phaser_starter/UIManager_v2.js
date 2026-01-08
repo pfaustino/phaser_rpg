@@ -651,10 +651,10 @@ window.UIManager = {
                 const equippedItem = equipment ? equipment[slot] : null;
 
                 // Check if items are different: use ID if available, otherwise object reference
-                const isDifferentItem = equippedItem && equippedItem !== item &&
-                    (equippedItem.id !== undefined && item.id !== undefined
-                        ? equippedItem.id !== item.id
-                        : equippedItem.name !== item.name);
+                // Check if items are different: default to true if objects are different
+                // Previously suppressed comparison if names were identical, but this hid comparison for 
+                // distinct items with same name (e.g. two "Iron Armor"s with different stats or just duplicates)
+                const isDifferentItem = equippedItem && equippedItem !== item;
 
                 if (isDifferentItem) {
                     const compTextStr = this.getTooltipText(equippedItem, context, true);

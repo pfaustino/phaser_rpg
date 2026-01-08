@@ -3791,7 +3791,10 @@ function update(time, delta) {
     }
     // ----------------------
 
-    const speed = 200; // pixels per second
+    // Re-apply Idle Slowdown Fix: Dynamic Speed
+    let speed = (playerStats && playerStats.speed) ? playerStats.speed : 200;
+    if (speed < 50) speed = 200; // Safety floor
+    // const speed = 200; // OLD hardcoded
 
     // Update damage numbers
     updateDamageNumbers(time, delta);
@@ -5305,10 +5308,25 @@ window.handleMonsterDeath = function (monster) {
  * Player attack function
  */
 function playerAttack(time, isRightClick = false, aimAngle = null) {
-    const stats = playerStats;
-    const scene = game.scene.scenes[0];
+    const scene = game.scene.scenes[0]; // Restored missing variable
+
+    if (!player || !player.active) {
+        return;
+    }
+
+    const stats = window.GameState.playerStats;
 
     // Fallback for time if called without args
+    if (!time) time = scene.time.now;
+
+    // Fix for Post-Load Attack Bug:
+    // If lastAttackTime is from a previous session (saved), it might be huge (e.g. 100000).
+    // But Phaser.time.now resets to 0 on reload.
+    // So (time - lastAttackTime) becomes negative, blocking attacks forever.
+    if (stats.lastAttackTime > time) {
+        stats.lastAttackTime = 0;
+    }
+
     if (!time) time = scene.time.now;
 
     // Check cooldown
@@ -5317,13 +5335,17 @@ function playerAttack(time, isRightClick = false, aimAngle = null) {
     }
 
     // Ranged/Secondary Attack Check
-    // If weapon has a projectile, treat as ranged attack by default
-    // Helper to get fresh definition (in case equipped item is stale)
     const equippedWeapon = (stats.equipment && stats.equipment.weapon) ? stats.equipment.weapon : {};
-    console.log('⚔️ [DEBUG] playerAttack: Equipped:', equippedWeapon);
-    console.log('⚔️ [DEBUG] playerAttack: Definitions available?', !!(ItemManager && ItemManager.definitions));
+    console.log('[Control Debug] Equipped Weapon:', equippedWeapon);
+    console.log('[Control Debug] Item Definitions:', !!(ItemManager && ItemManager.definitions));
+
+    // Check Projectile Manager
+    if (!window.projectileManager) {
+        console.error('[Control Debug] CRITICAL: projectileManager is MISSING!');
+    }
+
     if (equippedWeapon.weaponType) {
-        console.log('⚔️ [DEBUG] playerAttack: Definition for ' + equippedWeapon.weaponType + ':', ItemManager.definitions.weaponTypes[equippedWeapon.weaponType]);
+        // console.log('... definition ...'); 
     }
     let projectileType = equippedWeapon.projectile;
     let projectileSpeed = equippedWeapon.projectileSpeed;

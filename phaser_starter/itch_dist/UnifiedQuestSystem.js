@@ -500,7 +500,13 @@ class UqeEngine {
     }
 
     loadSaveData(saveData) {
-        if (!saveData) return;
+        console.log(`[UQE Load] loadSaveData called with:`, saveData);
+        console.log(`[UQE Load] allDefinitions loaded:`, Object.keys(this.allDefinitions).length, 'quests');
+
+        if (!saveData) {
+            console.warn(`[UQE Load] No save data provided!`);
+            return;
+        }
 
         // Cleanup existing listeners before overwriting
         this.activeQuests.forEach(q => q.dispose()); // PREVENT ZOMBIE LISTENERS
@@ -510,12 +516,17 @@ class UqeEngine {
         const activeData = saveData.active || (Array.isArray(saveData) ? saveData : []);
         const completedData = saveData.completed || [];
 
+        console.log(`[UQE Load] Active quests in save: ${activeData.length}, Completed: ${completedData.length}`);
+
         activeData.forEach(qSave => {
             const def = this.allDefinitions[qSave.id];
             if (def) {
                 const quest = new Quest(def, this.eventBus);
                 quest.rehydrate(qSave);
                 this.activeQuests.push(quest);
+                console.log(`[UQE Load] ✅ Loaded active quest: ${qSave.id}`);
+            } else {
+                console.warn(`[UQE Load] ❌ Definition not found for: ${qSave.id}`);
             }
         });
 
@@ -532,7 +543,7 @@ class UqeEngine {
         // Restore pending quests
         this.pendingQuests = saveData.pending || [];
 
-        // console.log(`💡 [UQE Engine] Rehydrated ${this.activeQuests.length} active, ${this.completedQuests.length} completed, ${this.pendingQuests.length} pending`);
+        console.log(`[UQE Load] Result: ${this.activeQuests.length} active, ${this.completedQuests.length} completed, ${this.pendingQuests.length} pending`);
     }
 
     update() {

@@ -42,35 +42,7 @@ window.SaveManager = {
             }, this.AUTOSAVE_INTERVAL);
         }
 
-        // Create difficulty indicator (top-left corner, below title if any)
-        this.createDifficultyIndicator(scene);
-    },
-
-    /**
-     * Create the difficulty indicator UI element
-     */
-    createDifficultyIndicator(scene) {
-        if (!scene) return;
-
-        const difficulty = window.GameState?.currentDifficulty || 'normal';
-        const difficultyColors = {
-            'casual': { text: 'CASUAL', color: '#00ff00' },
-            'easy': { text: 'EASY', color: '#88ff88' },
-            'normal': { text: 'NORMAL', color: '#ffffff' },
-            'hard': { text: 'HARD', color: '#ffaa00' },
-            'nightmare': { text: 'NIGHTMARE', color: '#ff4444' }
-        };
-
-        const diffInfo = difficultyColors[difficulty] || difficultyColors['normal'];
-
-        // Create text at top-right corner, below version number (version is at y=10)
-        window.difficultyText = scene.add.text(scene.scale.width - 10, 28, diffInfo.text, {
-            fontSize: '12px',
-            fill: diffInfo.color,
-            fontStyle: 'bold',
-            stroke: '#000000',
-            strokeThickness: 2
-        }).setOrigin(1, 0).setScrollFactor(0).setDepth(30000);
+        // Note: Difficulty indicator is now created in game.js (combined with map location)
     },
 
     getSlotKey(slot) {
@@ -78,17 +50,66 @@ window.SaveManager = {
     },
 
     migrateLegacySave() {
+        // Migration 1: Old SaveManager v1 format (rpg_save_data_v1)
         const legacyData = localStorage.getItem(this.LEGACY_SAVE_KEY);
         const slot1Key = this.getSlotKey(1);
         const slot1Data = localStorage.getItem(slot1Key);
 
         if (legacyData && !slot1Data) {
-            console.log('📦 Migrating Legacy Save to Slot 1...');
+            console.log('📦 Migrating Legacy SaveManager v1 to Slot 1...');
             localStorage.setItem(slot1Key, legacyData);
-            // Optional: Move legacy key to a backup or delete it. Keeping it for safety.
             localStorage.setItem(this.LEGACY_SAVE_KEY + '_backup', legacyData);
-            // we do NOT delete the legacy key immediately to prevent data loss if migration fails silently
             console.log('✅ Migration complete.');
+        }
+
+        // Migration 2: Very old format (rpg_savegame) - merge UQE quests if missing
+        this.migrateOldSaveQuests();
+    },
+
+    /**
+     * Migrate UQE quests from very old save format (rpg_savegame) to current slot
+     */
+    migrateOldSaveQuests() {
+        const oldSaveJson = localStorage.getItem('rpg_savegame');
+        if (!oldSaveJson) return;
+
+        try {
+            const oldSave = JSON.parse(oldSaveJson);
+            if (!oldSave.uqeQuests) {
+                console.log('[Migration] Old save has no UQE quests to migrate.');
+                return;
+            }
+
+            // Check current slot for UQE data
+            const currentSlotKey = this.getSlotKey(this.currentSlot || 1);
+            const currentJson = localStorage.getItem(currentSlotKey);
+            if (!currentJson) {
+                console.log('[Migration] No current slot data to migrate into.');
+                return;
+            }
+
+            const currentData = JSON.parse(currentJson);
+            if (currentData.uqeQuests && Object.keys(currentData.uqeQuests).length > 0) {
+                console.log('[Migration] Current slot already has UQE quests, skipping migration.');
+                return;
+            }
+
+            // Migrate!
+            console.log('📦 Migrating UQE quests from old rpg_savegame to current slot...');
+            currentData.uqeQuests = oldSave.uqeQuests;
+            localStorage.setItem(currentSlotKey, JSON.stringify(currentData));
+            console.log('✅ UQE quest migration complete! Reload to apply.');
+
+            // Also load into current session if uqe is ready
+            if (window.uqe && typeof window.uqe.loadSaveData === 'function') {
+                window.uqe.loadSaveData(oldSave.uqeQuests);
+                console.log('✅ UQE quests loaded into current session!');
+                if (window.addChatMessage) {
+                    window.addChatMessage('Quest data restored from old save!', 0x00ff00, '🎯');
+                }
+            }
+        } catch (e) {
+            console.error('[Migration] Failed to migrate old save quests:', e);
         }
     },
 
@@ -98,8 +119,21 @@ window.SaveManager = {
      * @param {boolean} silent - Suppress UI feedback
      */
     saveGame(slot = 1, silent = false) {
-        if (!window.GameState) return false;
+
+
+        // Cancel any click-to-move in progress (prevent walking after save)
+        const scene = this.scene || (window.game && window.game.scene.scenes[0]);
+        if (scene) {
+            scene.isMovingToClick = false;
+            scene.clickMoveTarget = null;
+        }
+
+        if (!window.GameState) {
+
+            return false;
+        }
         slot = slot || this.currentSlot;
+
 
         try {
             const data = {
@@ -107,6 +141,8 @@ window.SaveManager = {
                 version: 1,
                 slot: slot,
                 playerStats: window.GameState.playerStats,
+                // UQE Quest system data (for quest progress)
+                uqeQuests: window.uqe && typeof window.uqe.getSaveData === 'function' ? window.uqe.getSaveData() : null,
                 world: {
                     currentMap: window.MapManager ? window.MapManager.currentMap : 'town',
                     playerX: window.player ? window.player.x : (window.lastPlayerX || 0),
@@ -125,13 +161,21 @@ window.SaveManager = {
                     level: window.GameState.playerStats.level,
                     gold: window.GameState.playerStats.gold,
                     map: window.MapManager ? window.MapManager.currentMap : 'Unknown',
-                    playtime: window.GameState.playtime || 0 // Assuming playtime tracking exists or will exist
+                    playtime: window.GameState.playtime || 0
                 }
             };
 
+
+
             const json = JSON.stringify(data);
-            localStorage.setItem(this.getSlotKey(slot), json);
-            this.currentSlot = slot; // update active slot
+            const slotKey = this.getSlotKey(slot);
+
+
+            localStorage.setItem(slotKey, json);
+            this.currentSlot = slot;
+
+            // VERIFY the save was written
+
 
             console.log(`💾 Game Saved to Slot ${slot}! Size: ${json.length} bytes`);
 
@@ -159,21 +203,23 @@ window.SaveManager = {
      * Load game from a specific slot
      */
     loadGame(slot = 1) {
+
+
         try {
             const key = this.getSlotKey(slot);
+
+
             const json = localStorage.getItem(key);
 
-            // Fallback to legacy if Slot 1 requested but empty (and legacy exists)
-            // This covers the edge case where migration hasn't run yet? 
-            // Actually init() runs migration, so this shouldn't happen unless init failed.
 
             if (!json) {
-                console.log(`💾 No save file found in Slot ${slot}.`);
+
                 return null;
             }
 
             const data = JSON.parse(json);
-            console.log(`💾 Loading Save from Slot ${slot}:`, data);
+
+
             this.currentSlot = slot;
 
             if (data.playerStats && window.GameState) {
@@ -192,6 +238,33 @@ window.SaveManager = {
                     window.updateSFXVolume(data.settings.sfxVolume);
                 if (window.toggleMusic && data.settings.musicEnabled !== undefined)
                     window.toggleMusic(data.settings.musicEnabled);
+            }
+
+            // SANITIZATION FIX (Idle Slowdown Bug)
+            // Ensure speed is reset if corrupted (e.g. set to < 50)
+            if (window.GameState.playerStats.speed < 100) {
+                console.warn('⚠️ Detected corrupted player speed (< 100). Resetting to 200.');
+                window.GameState.playerStats.speed = 200;
+            }
+
+            // Recalculate stats to ensure speed includes base + equipment
+            if (typeof recalculatePlayerStats === 'function') {
+                recalculatePlayerStats();
+            } else if (window.PlayerStatsManager) {
+                window.PlayerStatsManager.recalculateStats();
+            }
+
+            // Store UQE quest data for deferred loading (UQE definitions may not be loaded yet)
+            if (data.uqeQuests) {
+
+                window._pendingUqeQuests = data.uqeQuests;
+
+                // Try to load now if UQE is ready
+                if (window.uqe && Object.keys(window.uqe.allDefinitions || {}).length > 0) {
+
+                    window.uqe.loadSaveData(data.uqeQuests);
+                    window._pendingUqeQuests = null;
+                }
             }
 
             return data;

@@ -34,6 +34,34 @@ class MilestoneManager {
 
         // Check game_start triggers immediately
         this.checkTriggers('game_start', {});
+
+        // Retroactive fix: Ensure rewards for already completed milestones are unlocked
+        this.retroactiveLoreCheck();
+    }
+
+    /**
+     * Retroactively check completed milestones and unlock their lore if missing
+     * (Fixes issues where milestones were completed before LoreManager was active)
+     */
+    retroactiveLoreCheck() {
+        if (!this.scene.loreManager) return;
+
+        this.completedMilestones.forEach(milestoneId => {
+            const milestone = this.milestones.find(m => m.id === milestoneId);
+            if (milestone) {
+                const unlocks = milestone.unlocks || milestone.rewards || {};
+
+                // Unlock Lore Array
+                if (unlocks.lore && Array.isArray(unlocks.lore)) {
+                    unlocks.lore.forEach(loreId => this.scene.loreManager.unlockLore(loreId, 'milestone_retro'));
+                }
+
+                // Unlock Lore String
+                if (unlocks.loreUnlock) {
+                    this.scene.loreManager.unlockLore(unlocks.loreUnlock, 'milestone_retro');
+                }
+            }
+        });
     }
 
     /**

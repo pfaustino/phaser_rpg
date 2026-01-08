@@ -34,7 +34,10 @@
                 "type": "game_start"
             },
             "rewards": {
-                "loreUnlock": "lore_ch1_intro"
+                "lore": [
+                    "lore_ch1_intro",
+                    "lore_ch1_hearthwell"
+                ]
             }
         },
         {

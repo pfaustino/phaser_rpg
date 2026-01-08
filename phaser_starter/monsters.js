@@ -245,14 +245,38 @@ class MonsterRenderer {
         if (monster.isAggro && distance > 32) { // 32 is "stop distance" to prevent clipping
             const monsterSpeed = monster.speed || 50;
 
+            // --- Universal Separation Calculation (Boids-style) ---
+            let separationX = 0;
+            let separationY = 0;
+            const separationRadius = 48; // Pixel radius
+
+            // Use monsterGroup if available, otherwise fall back to global monsters array
+            let neighbors = [];
+            if (window.monsterGroup && typeof window.monsterGroup.getChildren === 'function') {
+                neighbors = window.monsterGroup.getChildren();
+            } else if (window.monsters && Array.isArray(window.monsters)) {
+                neighbors = window.monsters;
+            }
+
+            neighbors.forEach(neighbor => {
+                if (neighbor !== monster && neighbor.active) {
+                    const dist = Phaser.Math.Distance.Between(monster.x, monster.y, neighbor.x, neighbor.y);
+                    if (dist < separationRadius && dist > 0) {
+                        const weight = (separationRadius - dist) / separationRadius;
+                        separationX += (monster.x - neighbor.x) * weight;
+                        separationY += (monster.y - neighbor.y) * weight;
+                    }
+                }
+            });
+            const sepForceX = separationX * 3.0; // Strong separation weight
+            const sepForceY = separationY * 3.0;
+
             if (currentMap === 'dungeon' && pathfinder) {
                 // --- Dungeon: Use Pathfinding ---
-                // Update path every 500ms or if no path
                 if (!monster.lastPathTime || time - monster.lastPathTime > 500 || !monster.currentPath) {
                     monster.currentPath = pathfinder.findPath(monster.x, monster.y, player.x, player.y);
                     monster.lastPathTime = time;
 
-                    // Remove first point if it's too close
                     if (monster.currentPath && monster.currentPath.length > 0) {
                         const firstPoint = monster.currentPath[0];
                         const distToFirst = Phaser.Math.Distance.Between(monster.x, monster.y, firstPoint.x, firstPoint.y);
@@ -260,23 +284,35 @@ class MonsterRenderer {
                     }
                 }
 
-                // Follow the path
+                // Follow path with separation
                 if (monster.currentPath && monster.currentPath.length > 0) {
                     const nextPoint = monster.currentPath[0];
                     const distToPoint = Phaser.Math.Distance.Between(monster.x, monster.y, nextPoint.x, nextPoint.y);
 
                     if (distToPoint < 5) {
-                        monster.currentPath.shift(); // Reached waypoint
+                        monster.currentPath.shift();
                     } else {
-                        this.scene.physics.moveTo(monster, nextPoint.x, nextPoint.y, monsterSpeed);
+                        const angle = Phaser.Math.Angle.Between(monster.x, monster.y, nextPoint.x, nextPoint.y);
+                        monster.body.setVelocity(
+                            Math.cos(angle) * monsterSpeed + sepForceX,
+                            Math.sin(angle) * monsterSpeed + sepForceY
+                        );
                     }
                 } else {
-                    // Fallback to direct movement if path fails or finished
-                    this.scene.physics.moveToObject(monster, player, monsterSpeed);
+                    // Fallback with separation
+                    const angle = Phaser.Math.Angle.Between(monster.x, monster.y, player.x, player.y);
+                    monster.body.setVelocity(
+                        Math.cos(angle) * monsterSpeed + sepForceX,
+                        Math.sin(angle) * monsterSpeed + sepForceY
+                    );
                 }
             } else {
-                // --- Wilderness / No Pathfinder: Direct Movement ---
-                this.scene.physics.moveToObject(monster, player, monsterSpeed);
+                // --- Wilderness: Direct Movement with Separation ---
+                const angle = Phaser.Math.Angle.Between(monster.x, monster.y, player.x, player.y);
+                monster.body.setVelocity(
+                    Math.cos(angle) * monsterSpeed + sepForceX,
+                    Math.sin(angle) * monsterSpeed + sepForceY
+                );
             }
         } else {
             // Stop if not aggro or too close

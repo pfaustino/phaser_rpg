@@ -37,7 +37,7 @@ window.SaveManager = {
             if (this.autosaveInterval) clearInterval(this.autosaveInterval);
             this.autosaveInterval = setInterval(() => {
                 if (window.GameState && !window.GameState.isGamePaused && window.player && window.player.active && window.playerStats.hp > 0) {
-                    this.saveGame(this.currentSlot, true);
+                    this.saveGame(this.currentSlot, false, "Autosave every 60 seconds");
                 }
             }, this.AUTOSAVE_INTERVAL);
         }
@@ -118,7 +118,7 @@ window.SaveManager = {
      * @param {number} slot - Slot number (1-5)
      * @param {boolean} silent - Suppress UI feedback
      */
-    saveGame(slot = 1, silent = false) {
+    saveGame(slot = 1, silent = false, customMessage = null) {
 
 
         // Cancel any click-to-move in progress (prevent walking after save)
@@ -180,11 +180,13 @@ window.SaveManager = {
             debugLog(`💾 Game Saved to Slot ${slot}! Size: ${json.length} bytes`);
 
             if (!silent) {
+                const msg = customMessage ? `${customMessage} (Slot ${slot})` : `Game Saved (Slot ${slot}).`;
+
                 if (window.showDamageNumber && window.player) {
-                    window.showDamageNumber(window.player.x, window.player.y - 50, "Game Saved!", 0x00ff00);
+                    window.showDamageNumber(window.player.x, window.player.y - 50, customMessage || "Game Saved!", 0x00ff00);
                 }
                 if (window.addChatMessage) {
-                    window.addChatMessage(`Game Saved (Slot ${slot}).`, 0x00ff00);
+                    window.addChatMessage(msg, 0x00ff00, '💾');
                 }
                 const scene = this.scene || (window.game && window.game.scene.scenes[0]);
                 if (scene && scene.sound && window.sfxVolume > 0 && scene.cache.audio.exists('menu_select')) {
@@ -300,7 +302,7 @@ window.SaveManager = {
 
 // Global Alias for UIManager/Buttons
 // Global Alias for UIManager/Buttons
-window.saveGame = (slot, silent) => window.SaveManager.saveGame(slot, silent);
+window.saveGame = (slot, silent, msg) => window.SaveManager.saveGame(slot, silent, msg);
 window.loadGame = (slot) => {
     // If no slot specified, check if UIManager can show simple load or default
     // Ideally UIManager handles slot selection. 

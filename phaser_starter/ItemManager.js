@@ -68,7 +68,19 @@ const ItemManager = {
 
         // 2. Legacy/Fallback Logic (preserve existing mappings if definition missing)
         // This ensures we don't break things if items.json is incomplete
-        if (item.type === 'weapon') return 'item_weapon';
+        // 2. Legacy/Fallback Logic (preserve existing mappings if definition missing)
+        // This ensures we don't break things if items.json is incomplete
+        if (item.type === 'weapon') {
+            const n = (item.name || '').toLowerCase();
+            const i = itemId.toLowerCase();
+            if (n.includes('axe') || i.includes('axe')) return 'item_axe';
+            if (n.includes('mace') || i.includes('mace') || n.includes('hammer')) return 'item_mace';
+            if (n.includes('dagger') || i.includes('dagger')) return 'item_dagger';
+            if (n.includes('bow') || i.includes('bow')) return 'item_bow';
+            if (n.includes('crossbow') || i.includes('crossbow')) return 'item_crossbow';
+            if (n.includes('staff') || i.includes('staff') || n.includes('wand')) return 'item_staff';
+            return 'item_weapon';
+        }
         if (item.type === 'armor') return 'item_armor';
         if (item.type === 'helmet') return 'item_helmet';
         if (item.type === 'ring') return 'item_ring';

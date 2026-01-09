@@ -160,7 +160,7 @@ window.InnUI = {
         // Save Action
         const performSave = () => {
             if (typeof window.saveGame === 'function') {
-                window.saveGame();
+                window.saveGame(null, false, "Inn Rest Autosave");
                 if (typeof window.showDamageNumber === 'function') window.showDamageNumber(window.player.x, window.player.y - 40, 'Game Saved!', 0x00ff00);
                 if (typeof window.addChatMessage === 'function') window.addChatMessage('Game saved successfully', 0x00ff00, '💾');
             } else {

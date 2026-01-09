@@ -152,13 +152,13 @@ window.ShopManager = {
             leftBg, rightBg, divider: dividerGraphics,
             leftTitle: scene.add.text(leftPanelX, 30, `${npc.name}'s Shop`, {
                 fontSize: '24px', fill: '#ffffff', fontStyle: 'bold'
-            }).setScrollFactor(0).setDepth(401).setOrigin(0.5, 0),
+            }).setScrollFactor(0).setDepth(40001).setOrigin(0.5, 0),
             rightTitle: scene.add.text(rightPanelX, 30, 'Your Inventory (Click to Sell)', {
                 fontSize: '24px', fill: '#ffffff', fontStyle: 'bold'
-            }).setScrollFactor(0).setDepth(401).setOrigin(0.5, 0),
+            }).setScrollFactor(0).setDepth(40001).setOrigin(0.5, 0),
             closeText: scene.add.text(gameWidth - 20, 20, 'Press F to Close', {
                 fontSize: '14px', fill: '#aaaaaa'
-            }).setScrollFactor(0).setDepth(401).setOrigin(1, 0),
+            }).setScrollFactor(0).setDepth(40001).setOrigin(1, 0),
             goldText: null,
             items: [],
             inventoryItems: [],
@@ -174,7 +174,7 @@ window.ShopManager = {
 
         this.shopPanel.goldText = scene.add.text(leftPanelX - panelWidth / 2 + 20, 15, `Gold: ${playerStats.gold}`, {
             fontSize: '20px', fill: '#ffd700', fontStyle: 'bold'
-        }).setScrollFactor(0).setDepth(401).setOrigin(0, 0);
+        }).setScrollFactor(0).setDepth(40001).setOrigin(0, 0);
 
         this.createShopTabs();
         this.updateShopItems();
@@ -220,11 +220,11 @@ window.ShopManager = {
             const tabAlpha = isActive ? 0.8 : 0.6;
 
             const tabBg = scene.add.rectangle(tabX, tabY, tabWidth - 4, tabHeight, tabColor, tabAlpha)
-                .setScrollFactor(0).setDepth(402).setInteractive({ useHandCursor: true });
+                .setScrollFactor(0).setDepth(40002).setInteractive({ useHandCursor: true });
 
             const tabText = scene.add.text(tabX, tabY, tab.label, {
                 fontSize: '12px', fill: '#ffffff', fontStyle: isActive ? 'bold' : 'normal'
-            }).setScrollFactor(0).setDepth(403).setOrigin(0.5, 0.5);
+            }).setScrollFactor(0).setDepth(40003).setOrigin(0.5, 0.5);
 
             tabBg.on('pointerdown', () => {
                 this.shopPanel.currentTab = tab.id;
@@ -276,7 +276,7 @@ window.ShopManager = {
             const x = 0; // Container-relative
 
             const itemBg = scene.add.rectangle(x, itemY, itemWidth, itemHeight, 0x333333, 0.8)
-                .setScrollFactor(0).setDepth(401).setStrokeStyle(2, 0x666666);
+                .setScrollFactor(0).setDepth(40001).setStrokeStyle(2, 0x666666);
 
             // Sprite Logic
             let spriteKey = 'item_weapon';
@@ -305,7 +305,7 @@ window.ShopManager = {
             let itemSprite, borderRect;
             try {
                 itemSprite = scene.add.sprite(x - itemWidth / 2 + 30, itemY, finalSpriteKey)
-                    .setScrollFactor(0).setDepth(402).setScale(1.2);
+                    .setScrollFactor(0).setDepth(40002).setScale(1.2);
 
                 const customImageKeys = ['item_weapon', 'item_armor', 'item_helmet', 'item_amulet', 'item_boots', 'item_ring', 'item_consumable'];
                 if (!customImageKeys.includes(finalSpriteKey) || finalSpriteKey !== spriteKey) {
@@ -315,15 +315,15 @@ window.ShopManager = {
 
                 const qColor = QUALITY_COLORS[item.quality] || QUALITY_COLORS['Common'];
                 borderRect = scene.add.rectangle(x - itemWidth / 2 + 30, itemY, 32 * 1.2 + 6, 32 * 1.2 + 6, qColor, 0)
-                    .setStrokeStyle(3, qColor).setScrollFactor(0).setDepth(401);
+                    .setStrokeStyle(3, qColor).setScrollFactor(0).setDepth(40001);
             } catch (e) {
-                itemSprite = scene.add.rectangle(x - itemWidth / 2 + 30, itemY, 32, 32, 0x888888).setScrollFactor(0).setDepth(402);
+                itemSprite = scene.add.rectangle(x - itemWidth / 2 + 30, itemY, 32, 32, 0x888888).setScrollFactor(0).setDepth(40002);
             }
 
             // Text
             const nameText = scene.add.text(x - itemWidth / 2 + 80, itemY - 15, item.name, {
                 fontSize: '18px', fill: '#ffffff', fontStyle: 'bold'
-            }).setScrollFactor(0).setDepth(402).setOrigin(0, 0.5);
+            }).setScrollFactor(0).setDepth(40002).setOrigin(0, 0.5);
 
             let stats = [];
             if (item.attackPower) stats.push(`Atk: +${item.attackPower}`);
@@ -333,18 +333,18 @@ window.ShopManager = {
             if (item.healAmount) stats.push(`Heal: ${item.healAmount}`);
             const statsText = scene.add.text(x - itemWidth / 2 + 80, itemY + 15, stats.join(' | '), {
                 fontSize: '14px', fill: '#cccccc'
-            }).setScrollFactor(0).setDepth(402).setOrigin(0, 0.5);
+            }).setScrollFactor(0).setDepth(40002).setOrigin(0, 0.5);
 
             const priceText = scene.add.text(x + itemWidth / 2 - 140, itemY, `${item.price} G`, {
                 fontSize: '18px', fill: '#ffd700', fontStyle: 'bold'
-            }).setScrollFactor(0).setDepth(402).setOrigin(0.5, 0.5);
+            }).setScrollFactor(0).setDepth(40002).setOrigin(0.5, 0.5);
 
             // Buy Config
             const buyButton = scene.add.rectangle(x + itemWidth / 2 - 60, itemY, 80, 40, 0x00aa00, 0.9)
-                .setScrollFactor(0).setDepth(401).setStrokeStyle(2, 0x00ff00).setInteractive({ useHandCursor: true });
+                .setScrollFactor(0).setDepth(40001).setStrokeStyle(2, 0x00ff00).setInteractive({ useHandCursor: true });
             const buyText = scene.add.text(x + itemWidth / 2 - 60, itemY, 'Buy', {
                 fontSize: '16px', fill: '#ffffff', fontStyle: 'bold'
-            }).setScrollFactor(0).setDepth(402).setOrigin(0.5, 0.5);
+            }).setScrollFactor(0).setDepth(40002).setOrigin(0.5, 0.5);
 
             buyButton.on('pointerover', () => buyButton.setFillStyle(0x00cc00));
             buyButton.on('pointerout', () => buyButton.setFillStyle(0x00aa00));
@@ -496,27 +496,27 @@ window.ShopManager = {
             const y = rowY[row];
 
             const itemBg = scene.add.rectangle(x, y, itemSize, itemSize, 0x222222, 0.8)
-                .setScrollFactor(0).setDepth(400).setStrokeStyle(1, 0x444444);
+                .setScrollFactor(0).setDepth(40000).setStrokeStyle(1, 0x444444);
 
             let spriteKey = (typeof ItemManager !== 'undefined') ? ItemManager.getSpriteKey(item) : 'item_weapon';
             let itemSprite;
             try {
-                itemSprite = scene.add.sprite(x, y, spriteKey).setScrollFactor(0).setDepth(402).setScale(0.8);
+                itemSprite = scene.add.sprite(x, y, spriteKey).setScrollFactor(0).setDepth(40002).setScale(0.8);
             } catch (e) {
-                itemSprite = scene.add.rectangle(x, y, 32, 32, 0xff00ff).setScrollFactor(0).setDepth(402);
+                itemSprite = scene.add.rectangle(x, y, 32, 32, 0xff00ff).setScrollFactor(0).setDepth(40002);
             }
 
             const displayName = (item.quantity && item.quantity > 1) ? `${item.name} x${item.quantity}` : item.name;
             const nameText = scene.add.text(x, y + itemSize / 2 + 5, displayName, {
                 fontSize: '11px', fill: '#ffffff', wordWrap: { width: itemSize + 10 }
-            }).setScrollFactor(0).setDepth(402).setOrigin(0.5, 0);
+            }).setScrollFactor(0).setDepth(40002).setOrigin(0.5, 0);
 
             const sellPrice = this.calculateItemSellPrice(item);
             // Dynamic positioning for price to avoid overlap
             const priceY = nameText.y + nameText.displayHeight + 2;
             const priceText = scene.add.text(x, priceY, `${sellPrice}G`, {
                 fontSize: '10px', fill: '#ffd700'
-            }).setScrollFactor(0).setDepth(402).setOrigin(0.5, 0);
+            }).setScrollFactor(0).setDepth(40002).setOrigin(0.5, 0);
 
             // Sell Handler
             const sellItem = () => {

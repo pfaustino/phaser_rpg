@@ -228,7 +228,7 @@ window.DialogManager = {
                 if (window.uqe) {
                     window.uqe.completeObjective(quest.id, pendingTalkObj.id);
                     // Force save immediately
-                    if (window.saveGame) window.saveGame(null, true);
+                    if (window.saveGame) window.saveGame(null, false, "Objective Updated Autosave");
                 }
             }
 

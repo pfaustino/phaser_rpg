@@ -1309,6 +1309,15 @@ function preload() {
     this.load.image('inn', 'assets/images/inn.png?v=3');
     this.load.image('tower', 'assets/images/tower.png?v=3');
 
+    // Load Basic Weapon Icons
+    this.load.image('item_axe', 'assets/images/basic-axe.png');
+    this.load.image('item_mace', 'assets/images/basic-mace.png');
+    this.load.image('item_dagger', 'assets/images/basic-dagger.png');
+    this.load.image('item_bow', 'assets/images/basic-bow.png');
+    this.load.image('item_crossbow', 'assets/images/basic-crossbow.png');
+    this.load.image('item_staff', 'assets/images/basic-staff.png');
+    this.load.image('item_staff2', 'assets/images/basic-staff2.png');
+
     // Load background music for all areas
     this.load.audio('village_music', 'assets/audio/music/Village_Hearth_FULL_SONG_MusicGPT.mp3');
     this.load.audio('wilderness_music', 'assets/audio/music/Wilderness_of_Arcana_FULL_SONG_MusicGPT.mp3');
@@ -3422,7 +3431,7 @@ function create() {
     })
         .setOrigin(0.5, 0)
         .setScrollFactor(0)
-        .setDepth(30000);
+        .setDepth(1);
 
     // Version Number
     // Version Number - Dynamic
@@ -3438,7 +3447,7 @@ function create() {
     })
         .setOrigin(1, 0)
         .setScrollFactor(0)
-        .setDepth(30000);
+        .setDepth(1);
 
     // Map + Difficulty Indicator (below version number)
     this.mapDiffIndicator = this.add.text(topTextX, 28, '', {
@@ -3450,14 +3459,14 @@ function create() {
     })
         .setOrigin(1, 0)
         .setScrollFactor(0)
-        .setDepth(30000);
+        .setDepth(1);
 
     // --- TOP RIGHT ICONS ---
 
     // 1. Equipment (Armor Icon)
     this.equipmentIcon = this.add.sprite(this.scale.width - 70, 25, 'item_armor')
         .setScrollFactor(0)
-        .setDepth(30000)
+        .setDepth(1)
         .setScale(0.7) // Smaller than regular items
         .setInteractive({ useHandCursor: true });
 
@@ -3485,7 +3494,7 @@ function create() {
     })
         .setOrigin(0.5, 0.5)
         .setScrollFactor(0)
-        .setDepth(30000)
+        .setDepth(1)
         .setInteractive({ useHandCursor: true });
 
     this.settingsIcon.on('pointerover', () => this.settingsIcon.setScale(1.1));

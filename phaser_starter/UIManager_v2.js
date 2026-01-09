@@ -738,7 +738,7 @@ window.UIManager = {
 
                 // Force save to prevent data loss on refresh
                 if (window.saveGame) {
-                    window.saveGame(null, true); // Silent save
+                    window.saveGame(null, false, "Quest Update Autosave"); // Silent set to false to show message
                     console.warn('💾 Forced silent save after objective complete');
                 }
 
@@ -755,7 +755,7 @@ window.UIManager = {
 
                     // Force save to prevent data loss on refresh
                     if (window.saveGame) {
-                        window.saveGame(null, true); // Silent save
+                        window.saveGame(null, false, "Quest Complete Autosave"); // Silent set to false to show message
                     }
                 } else {
                     console.error('❌ UIManager: window.uqe.completeQuest is NOT a function');

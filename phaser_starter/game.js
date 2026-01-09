@@ -481,10 +481,9 @@ let currentDialog = null;
 let currentDialogNode = null;
 let interactKey; // 'F' key for interaction
 
-// Shop UI
-var shopVisible = false;
-var shopPanel = null;
-let currentShopNPC = null;
+// Shop variables moved to ShopManager
+let currentDialogNPC = null; // Track current NPC for dialogs/shop
+
 
 // Building UI
 var buildingPanelVisible = false;
@@ -3373,7 +3372,7 @@ function create() {
 
     // Set up mouse wheel event listener for shop scrolling (left panel only)
     this.input.on('wheel', (pointer, gameObjects, deltaX, deltaY, deltaZ) => {
-        if (shopVisible && shopPanel && shopPanel.maxScrollY > 0) {
+        if (window.ShopManager && window.ShopManager.shopVisible && window.ShopManager.shopPanel && window.ShopManager.shopPanel.maxScrollY > 0) {
             // Check if pointer is over the left panel (shop items area)
             const leftPanelBounds = shopPanel.leftBg.getBounds();
             if (leftPanelBounds.contains(pointer.x, pointer.y)) {
@@ -3549,13 +3548,13 @@ function checkNPCInteraction() {
 
         if (dialogId) {
             if (typeof startDialog === 'function') {
-                startDialog(dialogId, closestNPC.name);
+                startDialog(closestNPC);
                 return true;
             } else if (typeof showDialog === 'function') {
-                showDialog(dialogId, closestNPC.name);
+                showDialog(closestNPC);
                 return true;
             } else if (typeof openDialog === 'function') {
-                openDialog(dialogId, closestNPC.name);
+                openDialog(closestNPC);
                 return true;
             } else {
                 console.warn(`⚠️ Dialog function missing! Cannot open dialog '${dialogId}' for ${closestNPC.name}`);
@@ -4054,7 +4053,7 @@ function update(time, delta) {
         player.setVelocity(0);
     }
 
-    if (shopVisible || inventoryVisible || dialogVisible || settingsVisible || buildingPanelVisible) {
+    if ((window.ShopManager && window.ShopManager.shopVisible) || inventoryVisible || dialogVisible || settingsVisible || buildingPanelVisible) {
         // Don't process movement when UI is open, but continue with other updates
         // Reset velocity when in UI (even if controller was moving)
         player.setVelocity(0);
@@ -5124,7 +5123,7 @@ function update(time, delta) {
     // Note: Mouse wheel is handled in the 'wheel' event listener in create()
     // Keyboard scrolling (Up/Down arrows when shop is open)
     // Note: Movement is disabled when shop is open, so arrows only scroll
-    if (shopVisible && shopPanel && shopPanel.maxScrollY > 0) {
+    if (window.ShopManager && window.ShopManager.shopVisible && window.ShopManager.shopPanel && window.ShopManager.shopPanel.maxScrollY > 0) {
         let scrollChanged = false;
 
         if (Phaser.Input.Keyboard.JustDown(cursors.up)) {
@@ -9313,7 +9312,7 @@ function checkBuildingInteraction() {
         debugLog('❌ Not in town, skipping building interaction');
         return;
     }
-    if (dialogVisible || shopVisible || inventoryVisible || settingsVisible || buildingPanelVisible) {
+    if (dialogVisible || (window.ShopManager && window.ShopManager.shopVisible) || inventoryVisible || settingsVisible || buildingPanelVisible) {
         debugLog('❌ UI already open, skipping building interaction');
         return;
     }
@@ -9600,6 +9599,7 @@ function deepCloneDialog(obj) {
  * Start dialog with an NPC
  */
 function startDialog(npc) {
+    currentDialogNPC = npc; // Track for Shop/Quests
     let dialogData = dialogDatabase[npc.dialogId];
     debugLog(`[DEBUG_DIALOG] startDialog called for ${npc.name}. DialogID: ${npc.dialogId}. Found data: ${!!dialogData}`);
 
@@ -9733,7 +9733,7 @@ function startDialog(npc) {
 
     currentDialog = activeDialog;
     currentDialogNode = 'start';
-    currentShopNPC = npc; // Store reference for shop
+    // currentShopNPC = npc; // Removed: Handled by currentDialogNPC
     dialogVisible = true;
 
     window.UIManager.createDialogUI(npc);
@@ -9961,7 +9961,7 @@ function updateDialogUI(node) {
             }
  
             if (action === 'open_shop') {
-                openShop(currentShopNPC);
+                openShop(currentDialogNPC);
             } else if (action === 'choose_class') {
                 chooseClass(choice.className);
                 if (choice.next) showDialogNode(choice.next);
@@ -10030,7 +10030,7 @@ function updateDialogUI(node) {
                     debugLog(`🔗 [UQE Bridge] Showing preview for quest: ${questId}`);
  
                     // Store current NPC for reopening dialog after accept/decline
-                    const currentNPC = currentShopNPC;
+                    const currentNPC = currentDialogNPC;
  
                     // Close dialog first
                     closeDialog();
@@ -10113,25 +10113,8 @@ function closeDialog() {
 // SHOP SYSTEM
 // ============================================
 
-/**
- * Shop inventory (items available for purchase)
- */
-const shopInventory = [
-    { type: 'weapon', name: 'Iron Sword', quality: 'Common', attackPower: 5, price: 50, itemLevel: 5 },
-    { type: 'weapon', name: 'Steel Blade', quality: 'Uncommon', attackPower: 8, price: 100, itemLevel: 10 },
-    { type: 'armor', name: 'Leather Armor', quality: 'Common', defense: 3, price: 40, itemLevel: 5 },
-    { type: 'armor', name: 'Chain Mail', quality: 'Uncommon', defense: 5, price: 80, itemLevel: 10 },
-    { type: 'helmet', name: 'Iron Helmet', quality: 'Common', defense: 2, price: 30, itemLevel: 5 },
-    { type: 'helmet', name: 'Steel Helmet', quality: 'Uncommon', defense: 4, price: 60, itemLevel: 10 },
-    { type: 'ring', name: 'Bronze Ring', quality: 'Common', attackPower: 1, defense: 1, price: 40, itemLevel: 5 },
-    { type: 'ring', name: 'Silver Ring', quality: 'Uncommon', attackPower: 3, defense: 2, price: 80, itemLevel: 10 },
-    { type: 'amulet', name: 'Copper Amulet', quality: 'Common', defense: 2, maxHp: 10, price: 50, itemLevel: 5 },
-    { type: 'amulet', name: 'Gold Amulet', quality: 'Uncommon', defense: 4, maxHp: 20, price: 100, itemLevel: 10 },
-    { type: 'boots', name: 'Leather Boots', quality: 'Common', defense: 1, speed: 5, price: 25, itemLevel: 5 },
-    { type: 'boots', name: 'Steel Boots', quality: 'Uncommon', defense: 3, speed: 10, price: 50, itemLevel: 10 },
-    { type: 'consumable', name: 'Health Potion', quality: 'Common', healAmount: 50, price: 20 },
-    { type: 'consumable', name: 'Mana Potion', quality: 'Common', manaAmount: 30, price: 20 }
-];
+// Shop Inventory moved to ShopManager.js
+
 
 /**
  * Choose player class and set initial stats/equipment
@@ -10210,916 +10193,16 @@ function chooseClass(className) {
     UIManager.closeDialog();
 }
 
-/**
- * Open shop UI
- */
-function openShop(npc) {
-    if (!npc || !npc.merchant) return;
 
-    // Close all other interfaces before opening shop
-    UIManager.closeAllInterfaces();
-    UIManager.closeDialog(); // Also close dialog if open
 
-    shopVisible = true;
-    if (window.UIManager) window.UIManager.shopVisible = true;
-    currentShopNPC = npc; // Set current merchant
-    createShopUI(npc);
-}
 
 
-/**
- * Create shop UI panel - split into left (shop items) and right (player inventory) panels
- */
-function createShopUI(npc) {
-    const scene = game.scene.scenes[0];
 
-    // Calculate panel dimensions - each panel is half the game width
-    const gameWidth = scene.scale.width;
-    const gameHeight = scene.scale.height;
-    const panelWidth = gameWidth / 2;
-    const panelHeight = gameHeight;
-    const leftPanelX = panelWidth / 2;
-    const rightPanelX = panelWidth + panelWidth / 2;
-    const centerY = gameHeight / 2;
 
-    // Left panel - Shop Items
-    const leftBg = scene.add.rectangle(leftPanelX, centerY, panelWidth, panelHeight, 0x1a1a1a, 0.95)
-        .setScrollFactor(0).setDepth(400).setStrokeStyle(3, 0xffffff);
 
-    // Right panel - Player Inventory
-    const rightBg = scene.add.rectangle(rightPanelX, centerY, panelWidth, panelHeight, 0x1a1a1a, 0.95)
-        .setScrollFactor(0).setDepth(400).setStrokeStyle(3, 0xffffff);
 
-    // Divider line between panels
-    const dividerGraphics = scene.add.graphics();
-    dividerGraphics.lineStyle(2, 0xffffff, 0.5);
-    dividerGraphics.lineBetween(panelWidth, 0, panelWidth, gameHeight);
-    dividerGraphics.setScrollFactor(0).setDepth(401);
-    const divider = dividerGraphics;
 
-    // --- Right Panel: Player Inventory ---
-    const inventoryStartY = 150; // Increased to 150 to make room for tabs
-    const inventoryEndY = gameHeight - 20;
-    const inventoryVisibleHeight = inventoryEndY - inventoryStartY;
-    const inventoryContainerOffset = 60;
-    const inventoryContainer = scene.add.container(rightPanelX, inventoryStartY - inventoryContainerOffset);
-    inventoryContainer.setScrollFactor(0).setDepth(401);
 
-    const inventoryMaskTopOffset = 30;
-    const inventoryMask = scene.make.graphics();
-    inventoryMask.fillStyle(0xffffff);
-    inventoryMask.fillRect(rightPanelX - panelWidth / 2, inventoryStartY - inventoryMaskTopOffset, panelWidth, inventoryVisibleHeight + inventoryMaskTopOffset);
-    inventoryMask.setScrollFactor(0);
-    const inventoryMaskGeometry = inventoryMask.createGeometryMask();
-    inventoryContainer.setMask(inventoryMaskGeometry);
-
-    const inventoryScrollbar = setupScrollbar({
-        scene,
-        x: rightPanelX + panelWidth / 2 - 22,
-        y: inventoryStartY,
-        height: inventoryVisibleHeight,
-        depth: 403,
-        minScroll: -30,
-        initialScroll: -30,
-        container: inventoryContainer,
-        containerStartY: inventoryStartY,
-        containerOffset: inventoryContainerOffset,
-        wheelHitArea: rightBg,
-        visibleHeight: inventoryVisibleHeight
-    });
-
-    // --- Left Panel: Shop Items ---
-    const shopStartY = 100;
-    const shopVisibleHeight = gameHeight - 120;
-    const shopItemsContainer = scene.add.container(leftPanelX, shopStartY);
-    shopItemsContainer.setScrollFactor(0).setDepth(401);
-
-    const shopMask = scene.make.graphics();
-    shopMask.fillStyle(0xffffff);
-    shopMask.fillRect(leftPanelX - panelWidth / 2, shopStartY, panelWidth, shopVisibleHeight);
-    shopMask.setScrollFactor(0);
-    const shopMaskGeometry = shopMask.createGeometryMask();
-    shopItemsContainer.setMask(shopMaskGeometry);
-
-    const shopItemsScrollbar = setupScrollbar({
-        scene,
-        x: leftPanelX + panelWidth / 2 - 22,
-        y: shopStartY,
-        height: shopVisibleHeight,
-        depth: 403,
-        minScroll: 0,
-        initialScroll: 0,
-        container: shopItemsContainer,
-        containerStartY: shopStartY,
-        containerOffset: 0,
-        wheelHitArea: leftBg,
-        visibleHeight: shopVisibleHeight
-    });
-
-    shopPanel = {
-        leftBg: leftBg,
-        rightBg: rightBg,
-        divider: divider,
-        leftTitle: scene.add.text(leftPanelX, 30, `${npc.name}'s Shop`, {
-            fontSize: '24px',
-            fill: '#ffffff',
-            fontStyle: 'bold'
-        }).setScrollFactor(0).setDepth(401).setOrigin(0.5, 0),
-        rightTitle: scene.add.text(rightPanelX, 30, 'Your Inventory (Click to Sell)', {
-            fontSize: '24px',
-            fill: '#ffffff',
-            fontStyle: 'bold'
-        }).setScrollFactor(0).setDepth(401).setOrigin(0.5, 0),
-        closeText: scene.add.text(gameWidth - 20, 20, 'Press F to Close', {
-            fontSize: '14px',
-            fill: '#aaaaaa'
-        }).setScrollFactor(0).setDepth(401).setOrigin(1, 0),
-        goldText: null,
-        items: [],
-        inventoryItems: [],
-        shopItemsContainer: shopItemsContainer,
-        shopItemsScrollbar: shopItemsScrollbar,
-        inventoryContainer: inventoryContainer,
-        inventoryScrollbar: inventoryScrollbar,
-        inventoryVisibleHeight: inventoryVisibleHeight,
-        shopVisibleHeight: shopVisibleHeight,
-        inventoryContainerOffset: inventoryContainerOffset,
-        minScroll: -30,
-        shopMask: shopMask,
-        inventoryMask: inventoryMask,
-        currentTab: 'all', // Initialize tab
-        tabs: [] // Store tab objects
-    };
-
-
-
-    // Show current gold - positioned in left panel (moved up to avoid overlap with title)
-    shopPanel.goldText = scene.add.text(leftPanelX - panelWidth / 2 + 20, 15, `Gold: ${playerStats.gold}`, {
-        fontSize: '20px',
-        fill: '#ffd700',
-        fontStyle: 'bold'
-    }).setScrollFactor(0).setDepth(401).setOrigin(0, 0);
-
-    createShopTabs(); // Create tabs
-    updateShopItems();
-    updateShopInventoryItems();
-}
-
-/**
- * Create shop tabs (Player Inventory side)
- */
-function createShopTabs() {
-    const scene = game.scene.scenes[0];
-    if (!shopPanel) return;
-
-    // Clear existing tabs
-    if (shopPanel.tabs) {
-        shopPanel.tabs.forEach(t => {
-            if (t.bg) t.bg.destroy();
-            if (t.text) t.text.destroy();
-        });
-    }
-    shopPanel.tabs = [];
-
-    // Tab definitions
-    const tabs = [
-        { id: 'all', label: 'All' },
-        { id: 'weapon', label: 'Weapons' },
-        { id: 'armor', label: 'Armor' },
-        { id: 'accessory', label: 'Access.' },
-        { id: 'consumable', label: 'Items' }
-    ];
-
-    const panelWidth = shopPanel.rightBg.width;
-    const rightPanelX = shopPanel.rightBg.x;
-    const tabWidth = (panelWidth - 20) / tabs.length;
-    const tabHeight = 30;
-    const tabY = 70; // Position below title
-
-    const currentTab = shopPanel.currentTab || 'all';
-
-    tabs.forEach((tab, index) => {
-        const tabX = rightPanelX - panelWidth / 2 + 10 + index * tabWidth + tabWidth / 2;
-
-        // Tab background
-        const isActive = currentTab === tab.id;
-        const tabColor = isActive ? 0x00aaff : 0x333333;
-        const tabAlpha = isActive ? 0.8 : 0.6;
-
-        const tabBg = scene.add.rectangle(tabX, tabY, tabWidth - 4, tabHeight, tabColor, tabAlpha)
-            .setScrollFactor(0).setDepth(402).setInteractive({ useHandCursor: true });
-
-        // Tab text
-        const tabText = scene.add.text(tabX, tabY, tab.label, {
-            fontSize: '12px',
-            fill: '#ffffff',
-            fontStyle: isActive ? 'bold' : 'normal'
-        }).setScrollFactor(0).setDepth(403).setOrigin(0.5, 0.5);
-
-        // Click handler
-        tabBg.on('pointerdown', () => {
-            shopPanel.currentTab = tab.id;
-            createShopTabs(); // Refresh tabs (highlight)
-            updateShopInventoryItems(); // Refresh list
-        });
-
-        // Hover effects
-        tabBg.on('pointerover', () => {
-            if (shopPanel.currentTab !== tab.id) tabBg.setFillStyle(0x444444);
-        });
-        tabBg.on('pointerout', () => {
-            if (shopPanel.currentTab !== tab.id) tabBg.setFillStyle(0x333333);
-        });
-
-        shopPanel.tabs.push({ bg: tabBg, text: tabText });
-    });
-}
-
-/**
- * Update shop items display
- */
-function updateShopItems() {
-    const scene = game.scene.scenes[0];
-    if (!shopPanel || !currentShopNPC) return;
-
-    // Clear existing shop items
-    shopPanel.items.forEach(item => {
-        if (item.bg && item.bg.active) item.bg.destroy();
-        if (item.sprite && item.sprite.active) item.sprite.destroy();
-        if (item.nameText && item.nameText.active) item.nameText.destroy();
-        if (item.statsText && item.statsText.active) item.statsText.destroy();
-        if (item.priceText && item.priceText.active) item.priceText.destroy();
-        if (item.buyButton && item.buyButton.active) item.buyButton.destroy();
-        if (item.buyText && item.buyText.active) item.buyText.destroy();
-        if (item.borderRect && item.borderRect.active) item.borderRect.destroy();
-    });
-    shopPanel.items = [];
-    if (shopPanel.shopItemsContainer) {
-        shopPanel.shopItemsContainer.removeAll(true);
-    }
-
-    const itemsToDisplay = (currentShopNPC && currentShopNPC.inventory) ? currentShopNPC.inventory : shopInventory;
-
-    const panelWidth = shopPanel.leftBg.width;
-    const panelHeight = shopPanel.leftBg.height; // This is the full panel height, not just visible area
-    const leftPanelX = shopPanel.leftBg.x;
-    const startY = 50; // Relative to container
-    const itemHeight = 100; // Increased to accommodate stats/price
-    const spacing = 20; // Increased spacing between rows
-
-    const visibleAreaHeight = shopPanel.shopVisibleHeight;
-
-    // Update gold display
-    if (shopPanel.goldText) {
-        shopPanel.goldText.setText(`Gold: ${playerStats.gold}`);
-    }
-
-    itemsToDisplay.forEach((item, index) => {
-
-        const itemY = startY + index * (itemHeight + spacing);
-        const itemWidth = panelWidth - 60;
-        const x = 0; // Center of container (which is at leftPanelX)
-
-        const itemBg = scene.add.rectangle(x, itemY, itemWidth, itemHeight, 0x333333, 0.8)
-            .setScrollFactor(0).setDepth(401).setStrokeStyle(2, 0x666666);
-
-        // Item sprite - map item types to sprite keys
-        let spriteKey = 'item_weapon'; // Default fallback
-        if (item.type === 'weapon') spriteKey = 'item_weapon';
-        else if (item.type === 'armor') spriteKey = 'item_armor';
-        else if (item.type === 'helmet') spriteKey = 'item_helmet';
-        else if (item.type === 'ring') spriteKey = 'item_ring';
-        else if (item.type === 'amulet') spriteKey = 'item_amulet';
-        else if (item.type === 'boots') spriteKey = 'item_boots';
-        else if (item.type === 'gloves') spriteKey = 'item_gloves';
-        else if (item.type === 'belt') spriteKey = 'item_belt';
-        else if (item.type === 'consumable') spriteKey = (item.name === 'Mana Potion') ? 'mana_potion' : 'item_consumable';
-        else if (item.type === 'quest_item') {
-            if (item.id === 'crystal_shard') spriteKey = 'item_crystal';
-            else if (item.id === 'artifact_fragment') spriteKey = 'item_fragment';
-            else spriteKey = 'item_consumable';
-        }
-
-        // Check if sprite key exists, use fallback if not
-        let finalSpriteKey = spriteKey;
-        if (!scene.textures.exists(spriteKey)) {
-            console.warn(`Shop: Sprite key "${spriteKey}" not found for item type "${item.type}", checking fallbacks...`);
-            // Try common fallbacks that should always exist (generated textures)
-            const fallbacks = ['item_weapon', 'item_armor', 'item_helmet', 'item_ring', 'item_amulet', 'item_boots', 'item_consumable'];
-            let foundFallback = false;
-            for (const fallback of fallbacks) {
-                if (scene.textures.exists(fallback)) {
-                    finalSpriteKey = fallback;
-                    foundFallback = true;
-                    console.warn(`Shop: Using fallback "${fallback}" for item "${item.name}"`);
-                    break;
-                }
-            }
-            if (!foundFallback) {
-                console.error(`Shop: No fallback sprites found! Item: ${item.name}, Type: ${item.type}. Will create placeholder.`);
-                // Use a default that should exist
-                finalSpriteKey = 'item_weapon';
-            }
-        }
-
-        let itemSprite;
-        let borderRect = null; // Declare outside try block so it's accessible later
-
-        try {
-            itemSprite = scene.add.sprite(x - itemWidth / 2 + 30, itemY, finalSpriteKey);
-            if (itemSprite) {
-                itemSprite.setScrollFactor(0).setDepth(402).setScale(1.2);
-
-                // Check if this is a custom image (not a generated fallback)
-                // Custom images: weapon, armor, helmet, amulet, boots, gloves, belt, ring, consumable
-                const customImageKeys = ['item_weapon', 'item_armor', 'item_helmet', 'item_amulet', 'item_boots', 'item_gloves', 'item_belt', 'item_ring', 'item_consumable'];
-                const isCustomImage = customImageKeys.includes(finalSpriteKey) && finalSpriteKey === spriteKey;
-
-                // Don't tint custom images - they already have their own colors
-                // Only tint generated fallback sprites to show quality
-                if (!isCustomImage) {
-                    const qualityColor = QUALITY_COLORS[item.quality] || QUALITY_COLORS['Common'];
-                    itemSprite.setTint(qualityColor);
-                }
-                // Custom images are left untinted to preserve their appearance
-
-                // Add quality border around the sprite
-                const qualityColor = QUALITY_COLORS[item.quality] || QUALITY_COLORS['Common'];
-                const borderWidth = 3;
-                const spriteSize = 32 * 1.2; // Match sprite scale
-                borderRect = scene.add.rectangle(x - itemWidth / 2 + 30, itemY, spriteSize + borderWidth * 2, spriteSize + borderWidth * 2, qualityColor, 0)
-                    .setStrokeStyle(borderWidth, qualityColor)
-                    .setScrollFactor(0)
-                    .setDepth(401); // Behind sprite but visible
-
-                debugLog(`Shop: Successfully created sprite for "${item.name}" using "${finalSpriteKey}"`);
-            }
-        } catch (error) {
-            console.error(`Shop: Failed to create sprite for item "${item.name}":`, error);
-            // Create a placeholder rectangle if sprite creation fails
-            itemSprite = scene.add.rectangle(x - itemWidth / 2 + 30, itemY, 32, 32, 0x888888, 1.0)
-                .setScrollFactor(0).setDepth(402);
-        }
-
-        // Item name
-        const nameText = scene.add.text(x - itemWidth / 2 + 80, itemY - 15, item.name, {
-            fontSize: '18px',
-            fill: '#ffffff',
-            fontStyle: 'bold'
-        }).setScrollFactor(0).setDepth(402).setOrigin(0, 0.5);
-
-        // Item stats
-        let statsText = '';
-        const stats = [];
-        if (item.attackPower) stats.push(`Attack: +${item.attackPower}`);
-        if (item.defense) stats.push(`Defense: +${item.defense}`);
-        if (item.maxHp) stats.push(`Max HP: +${item.maxHp}`);
-        if (item.speed) stats.push(`Speed: +${item.speed}`);
-        if (item.healAmount) stats.push(`Heals: ${item.healAmount} HP`);
-        statsText = stats.join(' | ');
-
-        const statsTextObj = scene.add.text(x - itemWidth / 2 + 80, itemY + 15, statsText, {
-            fontSize: '14px',
-            fill: '#cccccc'
-        }).setScrollFactor(0).setDepth(402).setOrigin(0, 0.5);
-
-        // Price
-        const priceText = scene.add.text(x + itemWidth / 2 - 140, itemY, `${item.price} Gold`, {
-            fontSize: '18px',
-            fill: '#ffd700',
-            fontStyle: 'bold'
-        }).setScrollFactor(0).setDepth(402).setOrigin(0.5, 0.5);
-
-        // Buy button
-        const buyButton = scene.add.rectangle(
-            x + itemWidth / 2 - 60,
-            itemY,
-            80,
-            40,
-            0x00aa00,
-            0.9
-        ).setScrollFactor(0).setDepth(401)
-            .setStrokeStyle(2, 0x00ff00)
-            .setInteractive({ useHandCursor: true });
-
-        const buyText = scene.add.text(x + itemWidth / 2 - 60, itemY, 'Buy', {
-            fontSize: '16px',
-            fill: '#ffffff',
-            fontStyle: 'bold'
-        }).setScrollFactor(0).setDepth(402).setOrigin(0.5, 0.5);
-
-        // Button hover
-        buyButton.on('pointerover', () => {
-            buyButton.setFillStyle(0x00cc00);
-        });
-        buyButton.on('pointerout', () => {
-            buyButton.setFillStyle(0x00aa00);
-        });
-
-        // Buy handler
-        buyButton.on('pointerdown', () => {
-            buyItem(item, item.price);
-        });
-
-        // Hover effects
-        const onBuyHoverIn = () => {
-            // Tooltip position needs to be absolute, so add container's world Y
-            showTooltip(item, leftPanelX, shopPanel.shopItemsContainer.y + itemY, 'shop_buy');
-        };
-        const onBuyHoverOut = () => {
-            hideTooltip();
-        };
-
-        itemBg.setInteractive({ useHandCursor: true });
-        itemSprite.setInteractive({ useHandCursor: true });
-        if (borderRect) borderRect.setInteractive({ useHandCursor: true });
-
-        itemBg.on('pointerover', onBuyHoverIn);
-        itemBg.on('pointerout', onBuyHoverOut);
-        itemSprite.on('pointerover', onBuyHoverIn);
-        itemSprite.on('pointerout', onBuyHoverOut);
-        if (borderRect) {
-            borderRect.on('pointerover', onBuyHoverIn);
-            borderRect.on('pointerout', onBuyHoverOut);
-        }
-
-        shopPanel.shopItemsContainer.add([itemBg, itemSprite, borderRect, nameText, statsTextObj, priceText, buyButton, buyText]);
-
-        shopPanel.items.push({
-            bg: itemBg,
-            sprite: itemSprite,
-            nameText: nameText,
-            statsText: statsTextObj,
-            priceText: priceText,
-            buyButton: buyButton,
-            buyText: buyText,
-            borderRect: borderRect, // Store border for cleanup
-            item: item,
-            baseY: itemY // Store base position for scrolling (relative to container)
-        });
-    });
-
-    const totalContentHeight = itemsToDisplay.length * (itemHeight + spacing) + startY;
-
-    if (shopPanel.shopItemsScrollbar) {
-        shopPanel.shopItemsScrollbar.updateMaxScroll(Math.max(0, totalContentHeight - visibleAreaHeight), totalContentHeight);
-    }
-}
-
-/**
- * Buy item from shop
- */
-function buyItem(item, price) {
-    if (playerStats.gold < price) {
-        showDamageNumber(player.x, player.y - 40, 'Not enough gold!', 0xff0000);
-        return;
-    }
-
-    // Hide any tooltips before refreshing
-    hideTooltip(true);
-
-    // Check if we can stack with existing consumable or shard
-    let stacked = false;
-    const isShard = (item.type === 'quest_item' && ['crystal_shard', 'echo_shard', 'shard_resonance'].includes(item.id));
-
-    if ((item.type === 'consumable' || isShard) && item.name) {
-        const existingStack = playerStats.inventory.find(i =>
-            (i.type === item.type) && i.name === item.name && (i.id === item.id || !isShard)
-        );
-        if (existingStack) {
-            existingStack.quantity = (existingStack.quantity || 1) + 1;
-            stacked = true;
-        }
-    }
-
-    if (!stacked) {
-        // Check inventory space
-        if (playerStats.inventory.length >= 30) {
-            showDamageNumber(player.x, player.y - 40, 'Inventory full!', 0xff0000);
-            return;
-        }
-
-        // Create item copy for inventory
-        const purchasedItem = {
-            ...item,
-            id: isShard ? item.id : `shop_${Date.now()}_${Math.random()}`,
-            quantity: (item.type === 'consumable' || isShard) ? 1 : undefined
-        };
-        playerStats.inventory.push(purchasedItem);
-    }
-
-    playerStats.gold -= price;
-
-    // Update gold display
-    if (shopPanel.goldText) {
-        shopPanel.goldText.setText(`Gold: ${playerStats.gold}`);
-    }
-
-    showDamageNumber(player.x, player.y - 40, `Bought ${item.name}!`, 0x00ff00);
-
-    // Refresh shop UI
-    updateShopItems();
-    updateShopInventoryItems(); // Update right panel inventory
-    updatePotionSlots(); // Update potion slots if consumable
-
-    if (inventoryVisible) {
-        refreshInventory();
-    }
-
-    // Auto-save after buying
-    if (window.SaveManager) {
-        window.SaveManager.saveGame(window.SaveManager.currentSlot, true);
-    }
-}
-
-/**
- * Update shop inventory items display (right panel - player inventory for selling)
- */
-function updateShopInventoryItems() {
-    const scene = game.scene.scenes[0];
-    if (!shopPanel) return;
-
-    // Clear existing inventory items
-    shopPanel.inventoryItems.forEach(item => {
-        if (item.bg && item.bg.active) item.bg.destroy();
-        if (item.sprite && item.sprite.active) item.sprite.destroy();
-        if (item.nameText && item.nameText.active) item.nameText.destroy();
-        if (item.priceText && item.priceText.active) item.priceText.destroy();
-        if (item.borderRect && item.borderRect.active) item.borderRect.destroy();
-    });
-    shopPanel.inventoryItems = [];
-
-    // Clear container
-    if (shopPanel.inventoryContainer) {
-        shopPanel.inventoryContainer.removeAll(true);
-    }
-
-    const rightPanelX = shopPanel.rightBg.x;
-
-    // Filter items based on current tab
-    const currentTab = shopPanel.currentTab || 'all';
-    const inventoryItems = playerStats.inventory.filter(item => {
-        if (currentTab === 'all') return true;
-        if (currentTab === 'weapon') return item.type === 'weapon';
-        if (currentTab === 'armor') return ['armor', 'helmet', 'boots', 'gloves', 'belt'].includes(item.type);
-        if (currentTab === 'accessory') return ['ring', 'amulet'].includes(item.type);
-        if (currentTab === 'consumable') return ['consumable', 'quest_item'].includes(item.type);
-        return true;
-    });
-
-    // Sort inventory items to match Equipment UI behavior
-    inventoryItems.sort((a, b) => {
-        // Sort by type first
-        const typeOrder = ['weapon', 'armor', 'helmet', 'boots', 'gloves', 'belt', 'amulet', 'ring', 'consumable', 'quest_item'];
-        const typeA = typeOrder.indexOf(a.type);
-        const typeB = typeOrder.indexOf(b.type);
-
-        if (typeA !== typeB) {
-            return typeA - typeB;
-        }
-
-        // Sort by quality (Legendary > Epic > Rare > Common)
-        const qualityOrder = { 'Legendary': 3, 'Epic': 2, 'Rare': 1, 'Common': 0 };
-        const qA = qualityOrder[a.quality] || 0;
-        const qB = qualityOrder[b.quality] || 0;
-
-        if (qA !== qB) {
-            return qB - qA; // Higher quality first
-        }
-
-        // Sort by name
-        return a.name.localeCompare(b.name);
-    });
-
-    if (inventoryItems.length === 0) {
-        const emptyText = scene.add.text(rightPanelX, 200, 'Inventory is empty', {
-            fontSize: '16px',
-            fill: '#888888',
-            fontStyle: 'italic'
-        }).setScrollFactor(0).setDepth(401).setOrigin(0.5, 0.5);
-        shopPanel.inventoryItems.push({ label: emptyText });
-        // Hide scrollbar when empty
-        if (shopPanel.scrollbarTrack) shopPanel.scrollbarTrack.setVisible(false);
-        if (shopPanel.scrollbarThumb) shopPanel.scrollbarThumb.setVisible(false);
-        return;
-    }
-
-    // Display items in a grid in right panel with dynamic row heights
-    const itemSize = 60;
-    const spacing = 15;
-    const itemsPerRow = 6;
-    const gridWidth = itemsPerRow * itemSize + (itemsPerRow - 1) * spacing;
-    const startX = -gridWidth / 2 + itemSize / 2; // Relative to container center
-    const topPadding = 45; // Increased to ensure first row isn't cut off
-    const startY = topPadding;
-
-
-    // First, create all items and measure their heights
-    const itemData = [];
-    inventoryItems.forEach((item, index) => {
-        const row = Math.floor(index / itemsPerRow);
-        const col = index % itemsPerRow;
-        const x = startX + col * (itemSize + spacing);
-
-        // Create temporary text to measure height (we'll recreate it properly below)
-        const displayName = (item.quantity && item.quantity > 1) ? `${item.name} x${item.quantity}` : item.name;
-        const tempNameText = scene.add.text(0, 0, displayName, {
-            fontSize: '11px',
-            fill: '#ffffff',
-            wordWrap: { width: itemSize + 10 }
-        });
-        const nameTextHeight = tempNameText.height;
-        tempNameText.destroy();
-
-        // Calculate total item height: sprite + name + price + spacing
-        const spriteHeight = itemSize;
-        const nameStartOffset = 5;
-        const priceHeight = 10;
-        const priceSpacing = 4; // Reduced from 8 to 4 for tighter spacing between label and price
-        const itemTotalHeight = spriteHeight + nameStartOffset + nameTextHeight + priceSpacing + priceHeight;
-
-        itemData.push({
-            item: item,
-            row: row,
-            col: col,
-            x: x,
-            nameTextHeight: nameTextHeight,
-            itemTotalHeight: itemTotalHeight
-        });
-    });
-
-    // Group items by row and find the tallest item in each row
-    const rowHeights = {};
-    const totalRows = Math.ceil(inventoryItems.length / itemsPerRow);
-
-    for (let r = 0; r < totalRows; r++) {
-        const rowItems = itemData.filter(data => data.row === r);
-        const maxHeight = Math.max(...rowItems.map(data => data.itemTotalHeight));
-        rowHeights[r] = maxHeight;
-    }
-
-    // Calculate cumulative Y positions for each row
-    const rowYPositions = {};
-    let currentY = startY;
-    for (let r = 0; r < totalRows; r++) {
-        rowYPositions[r] = currentY;
-        currentY += rowHeights[r] + spacing; // Add spacing between rows
-    }
-
-    // Calculate total content height based on actual row heights
-    // Include top padding in total height calculation
-
-    // Now create items with proper positioning
-    itemData.forEach((data, index) => {
-        const { item, row, col, x, nameTextHeight } = data;
-        const y = rowYPositions[row];
-
-        // Get item sprite key based on type
-        let spriteKey = 'item_weapon';
-        if (item.type === 'weapon') {
-            // For weapons, use weapon-specific sprite based on weaponType
-            const weaponType = item.weaponType || 'Sword';
-            const weaponKey = `weapon_${weaponType.toLowerCase()}`;
-            // Check if weapon-specific sprite exists, otherwise fallback to item_weapon
-            if (scene.textures.exists(weaponKey)) {
-                spriteKey = weaponKey;
-            } else {
-                spriteKey = 'item_weapon'; // Fallback
-            }
-        } else {
-            spriteKey = ItemManager.getSpriteKey(item);
-        }
-
-
-
-
-        // Create item sprite with background (add to container)
-        const itemBg = scene.add.rectangle(x, y, itemSize, itemSize, 0x222222, 0.8)
-            .setScrollFactor(0).setDepth(400).setStrokeStyle(1, 0x444444);
-
-        const itemSprite = scene.add.sprite(x, y, spriteKey);
-        itemSprite.setScrollFactor(0).setDepth(402).setScale(0.8);
-
-        // Add quality border
-        const qualityColor = QUALITY_COLORS[item.quality] || QUALITY_COLORS['Common'];
-        const borderWidth = 2;
-        const spriteSize = itemSize * 0.8;
-        const borderRect = scene.add.rectangle(x, y, spriteSize + borderWidth * 2, spriteSize + borderWidth * 2, qualityColor, 0)
-            .setStrokeStyle(borderWidth, qualityColor)
-            .setScrollFactor(0)
-            .setDepth(400.5);
-
-        // Item name below sprite (include quantity for stacked items)
-        const shopDisplayName = (item.quantity && item.quantity > 1) ? `${item.name} x${item.quantity}` : item.name;
-        const itemNameText = scene.add.text(x, y + itemSize / 2 + 5, shopDisplayName, {
-            fontSize: '11px',
-            fill: '#ffffff',
-            wordWrap: { width: itemSize + 10 }
-        }).setScrollFactor(0).setDepth(402).setOrigin(0.5, 0);
-
-        // Calculate sell price (typically 50% of buy price, or a base value)
-        const sellPrice = item.price ? Math.floor(item.price * 0.5) : calculateItemSellPrice(item);
-        // Position price below item name using actual measured height
-        // Start of name (5px below sprite center) + actual name height + reduced spacing
-        const priceY = y + itemSize / 2 + 5 + nameTextHeight + 4; // Reduced from 8 to 4 for tighter spacing
-        const priceText = scene.add.text(x, priceY, `${sellPrice}G`, {
-            fontSize: '10px',
-            fill: '#ffd700'
-        }).setScrollFactor(0).setDepth(402).setOrigin(0.5, 0);
-
-        // Add all items to container (this fixes the positioning issue)
-        shopPanel.inventoryContainer.add([itemBg, itemSprite, borderRect, itemNameText, priceText]);
-
-        // Hover effects for selling
-        const onSellHoverIn = (pointer) => {
-            if (pointer) pointer.event.stopPropagation();
-            showTooltip(item, rightPanelX + x, shopPanel.inventoryContainer.y + y, 'shop_sell');
-        };
-        const onSellHoverOut = () => {
-            hideTooltip();
-        };
-
-        itemSprite.setInteractive({ useHandCursor: true });
-        itemBg.setInteractive({ useHandCursor: true });
-        borderRect.setInteractive({ useHandCursor: true });
-
-        itemSprite.on('pointerover', onSellHoverIn);
-        itemSprite.on('pointerout', onSellHoverOut);
-        itemBg.on('pointerover', onSellHoverIn);
-        itemBg.on('pointerout', onSellHoverOut);
-        borderRect.on('pointerover', onSellHoverIn);
-        borderRect.on('pointerout', onSellHoverOut);
-
-        const sellItem = () => {
-            // Find item in inventory
-            const itemIndex = playerStats.inventory.indexOf(item);
-            if (itemIndex > -1) {
-                // Handle stacked items - decrement quantity or remove if last one
-                if (item.quantity && item.quantity > 1) {
-                    item.quantity--;
-                } else {
-                    playerStats.inventory.splice(itemIndex, 1);
-                }
-
-                playerStats.gold += sellPrice;
-
-                // Auto-save after selling
-                if (window.SaveManager) {
-                    window.SaveManager.saveGame(window.SaveManager.currentSlot, true);
-                }
-
-                // Update displays
-                updateShopItems();
-                updateShopInventoryItems();
-                updatePotionSlots(); // Update potion slots if consumable
-
-                showDamageNumber(player.x, player.y - 40, `Sold ${item.name} for ${sellPrice} Gold!`, 0x00ff00);
-                addChatMessage(`Sold ${item.name} for ${sellPrice} Gold`, 0xffd700, '💰');
-            }
-        };
-
-        itemSprite.on('pointerdown', sellItem);
-        itemBg.on('pointerdown', sellItem);
-        borderRect.on('pointerdown', sellItem);
-
-        // Hover effects
-        const hoverIn = () => {
-            itemBg.setStrokeStyle(2, 0xffff00);
-            itemBg.setFillStyle(0x333333, 1.0);
-        };
-        const hoverOut = () => {
-            itemBg.setStrokeStyle(1, 0x444444);
-            itemBg.setFillStyle(0x222222, 0.8);
-        };
-
-        itemSprite.on('pointerover', hoverIn);
-        itemBg.on('pointerover', hoverIn);
-        borderRect.on('pointerover', hoverIn);
-        itemSprite.on('pointerout', hoverOut);
-        itemBg.on('pointerout', hoverOut);
-        borderRect.on('pointerout', hoverOut);
-
-        shopPanel.inventoryItems.push({
-            bg: itemBg,
-            sprite: itemSprite,
-            nameText: itemNameText,
-            priceText: priceText,
-            borderRect: borderRect,
-            item: item
-        });
-    });
-
-    // Calculate and update scroll limits
-    const inventoryTotalHeight = currentY - spacing;
-    if (shopPanel.inventoryScrollbar) {
-        shopPanel.inventoryScrollbar.updateMaxScroll(Math.max(0, inventoryTotalHeight - shopPanel.inventoryVisibleHeight - shopPanel.inventoryContainerOffset), inventoryTotalHeight);
-        // Reset scroll position to top
-        shopPanel.inventoryScrollbar.setScroll(shopPanel.minScroll || 0);
-    }
-
-    // Set up controller navigation for shop inventory items
-    if (typeof setMenuItems === 'function') {
-        setMenuItems(shopPanel.inventoryItems, 5);
-    }
-}
-
-
-/**
- * Calculate sell price for an item (if it doesn't have a price property)
- */
-function calculateItemSellPrice(item) {
-    // Base prices by quality
-    const qualityMultiplier = {
-        'Common': 10,
-        'Uncommon': 25,
-        'Rare': 50,
-        'Epic': 100,
-        'Legendary': 200
-    };
-
-    let basePrice = qualityMultiplier[item.quality] || 10;
-
-    // Add value based on stats
-    if (item.attackPower) basePrice += item.attackPower * 2;
-    if (item.defense) basePrice += item.defense * 2;
-    if (item.maxHp) basePrice += item.maxHp;
-    if (item.speed) basePrice += item.speed * 3;
-    if (item.healAmount) basePrice += item.healAmount;
-
-    return Math.floor(basePrice * 0.5); // 50% of calculated value
-}
-
-/**
- * Close shop
- */
-function closeShop() {
-    // Hide tooltips first
-    hideTooltip(true);
-
-    if (shopPanel) {
-        // Destroy panel backgrounds
-        if (shopPanel.leftBg && shopPanel.leftBg.active) shopPanel.leftBg.destroy();
-        if (shopPanel.rightBg && shopPanel.rightBg.active) shopPanel.rightBg.destroy();
-        if (shopPanel.divider && shopPanel.divider.active) shopPanel.divider.destroy();
-        if (shopPanel.leftTitle && shopPanel.leftTitle.active) shopPanel.leftTitle.destroy();
-        if (shopPanel.rightTitle && shopPanel.rightTitle.active) shopPanel.rightTitle.destroy();
-        if (shopPanel.closeText && shopPanel.closeText.active) shopPanel.closeText.destroy();
-        if (shopPanel.goldText && shopPanel.goldText.active) shopPanel.goldText.destroy();
-        if (shopPanel.shopMask && shopPanel.shopMask.active) shopPanel.shopMask.destroy();
-        if (shopPanel.inventoryMask && shopPanel.inventoryMask.active) shopPanel.inventoryMask.destroy();
-        if (shopPanel.shopItemsContainer && shopPanel.shopItemsContainer.active) shopPanel.shopItemsContainer.destroy();
-        if (shopPanel.inventoryContainer && shopPanel.inventoryContainer.active) shopPanel.inventoryContainer.destroy();
-
-
-        // Destroy scrollbars
-        if (shopPanel.shopItemsScrollbar) shopPanel.shopItemsScrollbar.destroy();
-        if (shopPanel.inventoryScrollbar) shopPanel.inventoryScrollbar.destroy();
-
-        // Destroy all shop item elements (left panel)
-        shopPanel.items.forEach(item => {
-            if (item.bg && item.bg.active) item.bg.destroy();
-            if (item.sprite && item.sprite.active) item.sprite.destroy();
-            if (item.nameText && item.nameText.active) item.nameText.destroy();
-            if (item.statsText && item.statsText.active) item.statsText.destroy();
-            if (item.priceText && item.priceText.active) item.priceText.destroy();
-            if (item.buyButton && item.buyButton.active) item.buyButton.destroy();
-            if (item.buyText && item.buyText.active) item.buyText.destroy();
-            if (item.borderRect && item.borderRect.active) item.borderRect.destroy();
-        });
-
-        // Destroy tabs
-        if (shopPanel.tabs) {
-            shopPanel.tabs.forEach(tab => {
-                if (tab.bg && tab.bg.active) tab.bg.destroy();
-                if (tab.text && tab.text.active) tab.text.destroy();
-            });
-        }
-
-        // Destroy all inventory item elements (right panel)
-        shopPanel.inventoryItems.forEach(item => {
-            if (item.bg && item.bg.active) item.bg.destroy();
-            if (item.sprite && item.sprite.active) item.sprite.destroy();
-            if (item.nameText && item.nameText.active) item.nameText.destroy();
-            if (item.priceText && item.priceText.active) item.priceText.destroy();
-            if (item.borderRect && item.borderRect.active) item.borderRect.destroy();
-            if (item.label && item.label.active) item.label.destroy();
-        });
-
-        shopPanel.items = [];
-        shopPanel.inventoryItems = [];
-        shopPanel = null;
-    }
-
-    // Clear controller menu selection
-    if (typeof clearMenuSelection === 'function') {
-        clearMenuSelection();
-    }
-
-    shopVisible = false;
-    if (window.UIManager) window.UIManager.shopVisible = false;
-    currentShopNPC = null;
-    debugLog('🛒 Shop closed');
-}
 
 // ============================================
 // BUILDING INTERACTION SYSTEM

@@ -315,8 +315,51 @@ class MonsterRenderer {
                 );
             }
         } else {
-            // Stop if not aggro or too close
-            monster.body.setVelocity(0);
+            // --- Idle Behavior: Wander within spawn radius ---
+            // Store original spawn point if not set
+            if (monster.spawnX === undefined) {
+                monster.spawnX = monster.x;
+                monster.spawnY = monster.y;
+            }
+
+            const IDLE_RADIUS = 50; // Max wander distance from spawn
+            const IDLE_SPEED = 15;  // Slow wandering speed
+            const IDLE_PAUSE_CHANCE = 0.02; // 2% chance each frame to pause/change direction
+
+            // Initialize idle state
+            if (monster.idleTarget === undefined || Math.random() < IDLE_PAUSE_CHANCE) {
+                // Pick a random point within idle radius of spawn
+                const angle = Math.random() * Math.PI * 2;
+                const dist = Math.random() * IDLE_RADIUS;
+                monster.idleTarget = {
+                    x: monster.spawnX + Math.cos(angle) * dist,
+                    y: monster.spawnY + Math.sin(angle) * dist
+                };
+                // Small pause before moving to new target
+                monster.idlePauseUntil = (typeof time !== 'undefined' ? time : Date.now()) + 500 + Math.random() * 1500;
+            }
+
+            const currentTime = (typeof time !== 'undefined' ? time : Date.now());
+
+            // If paused, stay still
+            if (monster.idlePauseUntil && currentTime < monster.idlePauseUntil) {
+                monster.body.setVelocity(0);
+            } else {
+                // Move toward idle target
+                const distToTarget = Phaser.Math.Distance.Between(monster.x, monster.y, monster.idleTarget.x, monster.idleTarget.y);
+
+                if (distToTarget > 5) {
+                    const angleToTarget = Phaser.Math.Angle.Between(monster.x, monster.y, monster.idleTarget.x, monster.idleTarget.y);
+                    monster.body.setVelocity(
+                        Math.cos(angleToTarget) * IDLE_SPEED,
+                        Math.sin(angleToTarget) * IDLE_SPEED
+                    );
+                } else {
+                    // Reached target, pick new one next frame
+                    monster.body.setVelocity(0);
+                    monster.idleTarget = undefined;
+                }
+            }
         }
 
         // Attack Logic (Unified)

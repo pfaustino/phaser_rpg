@@ -13654,6 +13654,8 @@ function updateAbilityCooldowns(time) {
  */
 function createHealEffect(x, y) {
     const scene = game.scene.scenes[0];
+
+    // Original sprite effect
     const effect = scene.add.sprite(x, y, 'heal_effect');
     effect.setDepth(20).setScale(1.5);
 
@@ -13664,6 +13666,26 @@ function createHealEffect(x, y) {
         alpha: 0,
         duration: 500,
         onComplete: () => effect.destroy()
+    });
+
+    // Particle effect - rising green sparkles
+    const particles = scene.add.particles(x, y, 'heal_effect', {
+        speed: { min: 30, max: 80 },
+        angle: { min: -120, max: -60 },  // Upward direction
+        scale: { start: 0.3, end: 0 },
+        alpha: { start: 1, end: 0 },
+        lifespan: 800,
+        quantity: 2,
+        frequency: 50,
+        tint: [0x00ff00, 0x88ff88, 0xaaffaa],  // Green colors
+        emitting: true
+    });
+    particles.setDepth(21);
+
+    // Stop emitting after 600ms, destroy after particles fade
+    scene.time.delayedCall(600, () => {
+        particles.stop();
+        scene.time.delayedCall(1000, () => particles.destroy());
     });
 }
 
@@ -13684,6 +13706,8 @@ function createFireballEffect(x, y) {
 
 function createShieldEffect(x, y) {
     const scene = game.scene.scenes[0];
+
+    // Original sprite effect
     const effect = scene.add.sprite(x, y, 'shield_effect');
     effect.setDepth(20).setScale(1.2);
 
@@ -13696,6 +13720,26 @@ function createShieldEffect(x, y) {
         yoyo: true,
         repeat: 2,
         onComplete: () => effect.destroy()
+    });
+
+    // Particle effect - orbiting blue shield particles
+    const particles = scene.add.particles(x, y, 'shield_effect', {
+        speed: { min: 60, max: 100 },
+        angle: { min: 0, max: 360 },  // All directions
+        scale: { start: 0.4, end: 0 },
+        alpha: { start: 0.8, end: 0 },
+        lifespan: 1000,
+        quantity: 3,
+        frequency: 80,
+        tint: [0x0088ff, 0x44aaff, 0x88ccff],  // Blue colors
+        emitting: true
+    });
+    particles.setDepth(21);
+
+    // Stop emitting after 2s to match shield duration
+    scene.time.delayedCall(2000, () => {
+        particles.stop();
+        scene.time.delayedCall(1200, () => particles.destroy());
     });
 }
 

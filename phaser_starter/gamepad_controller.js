@@ -317,6 +317,18 @@ function handleGamepadInput() {
     const pad = activeGamepad;
     const deadzone = controllerConfig.deadzone || 0.3;
 
+    // Define state variables
+    const inMenu = (typeof window.inventoryVisible !== 'undefined' && window.inventoryVisible) ||
+        (typeof window.equipmentVisible !== 'undefined' && window.equipmentVisible) ||
+        (typeof window.shopVisible !== 'undefined' && window.shopVisible) ||
+        (window.ShopManager && window.ShopManager.shopVisible);
+
+    const inDialog = (typeof window.dialogVisible !== 'undefined' && window.dialogVisible);
+
+    const inQuestModal = (typeof window.newQuestModal !== 'undefined' && window.newQuestModal) ||
+        (typeof window.questCompletedModal !== 'undefined' && window.questCompletedModal) ||
+        (typeof window.questPreviewModal !== 'undefined' && window.questPreviewModal);
+
     // Debug: log gamepad state every 60 frames (about once per second)
     debugCounter++;
     if (debugCounter % 60 === 0) {
@@ -337,13 +349,6 @@ function handleGamepadInput() {
     }
 
     // Get current menu/dialog state from global variables
-    // Get current menu/dialog state from global variables
-    const inMenu = (typeof window.inventoryVisible !== 'undefined' && window.inventoryVisible) ||
-        (typeof window.equipmentVisible !== 'undefined' && window.equipmentVisible) ||
-        (typeof window.shopVisible !== 'undefined' && window.shopVisible) ||
-        (window.ShopManager && window.ShopManager.shopVisible);
-
-    const inDialog = (typeof window.dialogVisible !== 'undefined' && window.dialogVisible);
     const inShop = (typeof window.shopVisible !== 'undefined' && window.shopVisible) ||
         (window.ShopManager && window.ShopManager.shopVisible);
 
@@ -355,8 +360,6 @@ function handleGamepadInput() {
     const modalNew = (typeof window.newQuestModal !== 'undefined' && window.newQuestModal);
     const modalCompleted = (typeof window.questCompletedModal !== 'undefined' && window.questCompletedModal);
     const modalPreview = (typeof window.questPreviewModal !== 'undefined' && window.questPreviewModal);
-
-    const inQuestModal = (modalNew) || (modalCompleted) || (modalPreview);
 
     // Debug quest modal state periodically
     debugCounter++;

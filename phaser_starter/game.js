@@ -12760,8 +12760,7 @@ function createMonsterAnimations() {
                     repeat: 0 // Play once
                 });
                 debugLog(`✅ Created attack animation: ${attackAnimKey} from ${attackSpriteSheetKey}`);
-            } else {
-                debugLog(`⚠️ Attack spritesheet not found: ${attackSpriteSheetKey}`);
+                // debugLog(`⚠️ Attack spritesheet not found: ${attackSpriteSheetKey}`);
             }
         });
 

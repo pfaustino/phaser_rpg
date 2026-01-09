@@ -5,7 +5,7 @@ class AbilityManager {
         this.definitions = {
             'fireball': {
                 name: 'Fireball',
-                description: 'Launches a flaming projectile that burns enemies on contact.',
+                description: 'Area damage explosion that burns enemies over 3 seconds.',
                 icon: 'fireball_effect', color: 0xff4400, manaCost: 10, cooldown: 1000
             },
             'heal': {
@@ -20,7 +20,7 @@ class AbilityManager {
             },
             'ice_nova': {
                 name: 'Ice Nova',
-                description: 'Freezes nearby enemies in place dealing area damage.',
+                description: 'Slows nearby enemies in place dealing area damage over 3 seconds.',
                 icon: 'ice_nova_effect', color: 0x00ffff, manaCost: 25, cooldown: 6000, damage: 40, aoe: true
             }
         };

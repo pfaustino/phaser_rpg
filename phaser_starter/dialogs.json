@@ -172,7 +172,7 @@
                 "choices": [
                     {
                         "text": "I'd like to browse your wares",
-                        "next": "shop"
+                        "action": "open_shop"
                     },
                     {
                         "text": "Goodbye",

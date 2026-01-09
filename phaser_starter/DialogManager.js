@@ -213,6 +213,24 @@ window.DialogManager = {
         }
     },
 
+    /**
+     * Close the current dialog
+     */
+    closeDialog() {
+        this.currentDialog = null;
+        this.currentDialogNode = null;
+        this.currentDialogNPC = null;
+
+        // Sync Globals
+        window.currentDialog = null;
+        window.currentDialogNode = null;
+        window.dialogVisible = false;
+
+        if (window.UIManager && typeof window.UIManager.closeDialog === 'function') {
+            window.UIManager.closeDialog();
+        }
+    },
+
     injectQuestChoices(activeDialog, npc) {
         const uqe = window.uqe;
         const uqeCompletedIds = uqe.completedQuests.map(q => q.id);
@@ -315,6 +333,7 @@ window.DialogManager = {
 // Global Aliases for Compatibility
 window.loadDialogs = () => window.DialogManager.loadDialogs();
 window.startDialog = (npc) => window.DialogManager.startDialog(npc);
+window.closeDialog = () => window.DialogManager.closeDialog();
 window.evaluateDialogCondition = (str, stats) => window.DialogManager.evaluateDialogCondition(str, stats);
 
 // Move showQuestPreviewModalEnhanced here as it is tightly coupled with quest acceptance dialogs

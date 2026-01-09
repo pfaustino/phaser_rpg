@@ -270,20 +270,24 @@ function handleGamepadInput() {
     }
 
     // Get current menu/dialog state from global variables
-    const inMenu = (window.inventoryVisible || inventoryVisible) ||
-        (window.equipmentVisible || equipmentVisible) ||
-        (window.shopVisible || shopVisible);
-    const inDialog = (window.dialogVisible || dialogVisible);
-    const inShop = (window.shopVisible || shopVisible);
+    // Get current menu/dialog state from global variables
+    const inMenu = (typeof window.inventoryVisible !== 'undefined' && window.inventoryVisible) ||
+        (typeof window.equipmentVisible !== 'undefined' && window.equipmentVisible) ||
+        (typeof window.shopVisible !== 'undefined' && window.shopVisible) ||
+        (window.ShopManager && window.ShopManager.shopVisible);
+
+    const inDialog = (typeof window.dialogVisible !== 'undefined' && window.dialogVisible);
+    const inShop = (typeof window.shopVisible !== 'undefined' && window.shopVisible) ||
+        (window.ShopManager && window.ShopManager.shopVisible);
 
     // --- D-PAD MENU TOGGLES (always work, except in shop) ---
     // --- D-PAD MENU TOGGLES (Removed: Handled by Game.js via Actions) ---
     // Actions: inventory, equipment, quests defined in controller.json
 
     // Get current quest modal state
-    const modalNew = window.newQuestModal || newQuestModal;
-    const modalCompleted = window.questCompletedModal || questCompletedModal;
-    const modalPreview = window.questPreviewModal || questPreviewModal;
+    const modalNew = (typeof window.newQuestModal !== 'undefined' && window.newQuestModal);
+    const modalCompleted = (typeof window.questCompletedModal !== 'undefined' && window.questCompletedModal);
+    const modalPreview = (typeof window.questPreviewModal !== 'undefined' && window.questPreviewModal);
 
     const inQuestModal = (modalNew) || (modalCompleted) || (modalPreview);
 
@@ -300,8 +304,9 @@ function handleGamepadInput() {
         });
     }
 
-    // --- VIRTUAL MOUSE CURSOR (when in menu or dialog or quest modal) ---
-    if (inMenu || inDialog || inQuestModal) {
+    // --- VIRTUAL MOUSE CURSOR (when in menu only) ---
+    // Note: We EXCLUDE inDialog AND inQuestModal here because we want discrete D-Pad/Stick navigation
+    if (inMenu && !inQuestModal) {
         if (!cursorVisible) {
             // Show cursor centered or at last position
             virtualCursor.setPosition(controllerScene.scale.width / 2, controllerScene.scale.height / 2);
@@ -338,32 +343,112 @@ function handleGamepadInput() {
             updateVirtualCursorHover();
         }
     } else {
-        if (cursorVisible) {
-            virtualCursor.setVisible(false);
-            cursorVisible = false;
+        // Hide cursor if not in relevant menu (and NOT in dialog/quest, though they manage visibility separately)
+        // Actually, for Dialogs/Quests, we might WANT the cursor visible to show selection, 
+        // but we don't want the STICK to move it freely.
+        // So we should handle visibility separately.
+
+        if (inDialog || inQuestModal) {
+            if (!cursorVisible) {
+                virtualCursor.setVisible(true);
+                cursorVisible = true;
+                virtualCursor.setDepth(10000);
+            }
+            // Do NOT allow analog movement here.
+
+            // Allow Discrete Menu Navigation via Stick Flick/D-Pad
+            handleMenuNavigation(pad, deadzone);
+        } else {
+            if (cursorVisible) {
+                virtualCursor.setVisible(false);
+                cursorVisible = false;
+            }
+
+            // --- MOVEMENT (left stick, only when NOT in menu/dialog/quest) ---
+            handleGamepadMovement(pad, deadzone);
+
+            // --- AIMING (right stick) ---
+            handleGamepadAiming(pad, deadzone);
         }
+    }
 
-        // --- MOVEMENT (left stick, only when NOT in menu/dialog) ---
-        handleGamepadMovement(pad, deadzone);
-
-        // --- AIMING (right stick) ---
-        handleGamepadAiming(pad, deadzone);
+    // --- MENU NAVIGATION (D-Pad / Stick Flick) ---
+    // Explicitly handle menu navigation when in Menu or Dialog or Quest
+    if (inMenu || inDialog || inQuestModal) {
+        handleMenuNavigation(pad, deadzone);
     }
 
     // --- BUTTON ACTIONS ---
     // A button - Attack/Interact/Confirm
     if (isButtonJustPressed(controllerConfig.buttons.A)) {
-        if (inMenu || inDialog || inQuestModal) {
+        if (inDialog) {
+            debugLog('[Controller] "A" Pressed in Dialog - Calling Discrete Activation');
+            // Try discrete activation first
+            if (typeof window.activateDialogSelection === 'function' && window.activateDialogSelection()) {
+                return; // Handled
+            }
+            // Fallback to virtual cursor
+            triggerVirtualCursorClick();
+        } else if (inQuestModal) {
+            debugLog('[Controller] "A" Pressed in Quest Modal - Discrete Activation');
+            // Quest Modal Discrete Activation
+            let handled = false;
+            // Determine active modal
+            const modal = window.newQuestModal || window.questCompletedModal || window.questPreviewModal;
+            if (modal && typeof modal.selectedIndex !== 'undefined' && modal.selectedIndex >= 0) {
+                // Identify button based on index
+                let btnToClick = null;
+
+                if (window.newQuestModal) {
+                    if (modal.selectedIndex === 0) btnToClick = modal.acceptBtn;
+                    else if (modal.selectedIndex === 1) btnToClick = modal.cancelBtn;
+                } else if (window.questCompletedModal) {
+                    if (modal.selectedIndex === 0) btnToClick = modal.closeBtn;
+                } else if (window.questPreviewModal) {
+                    if (modal.selectedIndex === 0) btnToClick = modal.acceptBtn;
+                    else if (modal.selectedIndex === 1) btnToClick = modal.declineBtn;
+                }
+
+                if (btnToClick) {
+                    debugLog('[Controller] Clicking Quest Button via Index', modal.selectedIndex);
+                    // Emit pointerdown event manually
+                    const mockPointer = {
+                        isDown: true, x: 0, y: 0,
+                        event: { stopPropagation: () => { } }
+                    };
+                    if (btnToClick.emit) {
+                        btnToClick.emit('pointerdown', mockPointer);
+                        if (typeof playSound === 'function') playSound('ui_click');
+                        handled = true;
+                    }
+                }
+            }
+
+            if (!handled) {
+                // Fallback to virtual cursor if no index selected
+                triggerVirtualCursorClick();
+            }
+
+        } else if (inMenu) {
             // Virtual click at cursor position
             triggerVirtualCursorClick();
         }
-        // Gameplay actions (Attack/Interact) are handled by Game.js via isActionJustPressed('attack'/'interact')
     }
 
-    // Other buttons (B, X, Y, LB, RB, RT, Start) are now handled by Game.js
-    // via isActionJustPressed() + controller.json mappings.
-    // This prevents double-firing of abilities and actions.
+    // B button - Back/Cancel (Close UI)
+    if (isButtonJustPressed(controllerConfig.buttons.B)) {
+        debugLog('[Controller] "B" Pressed');
+        if (typeof onControllerB === 'function') {
+            onControllerB();
+        }
+    }
+    // Gameplay actions (Attack/Interact) are handled by Game.js via isActionJustPressed('attack'/'interact')
 }
+
+// Other buttons (B, X, Y, LB, RB, RT, Start) are now handled by Game.js
+// via isActionJustPressed() + controller.json mappings.
+// This prevents double-firing of abilities and actions.
+
 
 /**
  * Handle movement input from gamepad (left stick only)
@@ -394,26 +479,53 @@ function handleGamepadMovement(pad, deadzone) {
 
     const speed = playerStats.speed || 200;
 
-    // Horizontal movement
-    if (moveLeft) {
-        player.setVelocityX(-speed);
-    } else if (moveRight) {
-        player.setVelocityX(speed);
-    } else if (Math.abs(leftStickX) < deadzone) {
-        // Only reset if keyboard isn't controlling and stick is in deadzone
-        if (typeof cursors !== 'undefined' && !cursors.left?.isDown && !cursors.right?.isDown) {
-            player.setVelocityX(0);
-        }
-    }
+    // Define state variables locally
+    const inMenu = (typeof window.inventoryVisible !== 'undefined' && window.inventoryVisible) ||
+        (typeof window.equipmentVisible !== 'undefined' && window.equipmentVisible) ||
+        (typeof window.shopVisible !== 'undefined' && window.shopVisible) ||
+        (window.ShopManager && window.ShopManager.shopVisible);
 
-    // Vertical movement
-    if (moveUp) {
-        player.setVelocityY(-speed);
-    } else if (moveDown) {
-        player.setVelocityY(speed);
-    } else if (Math.abs(leftStickY) < deadzone) {
-        if (typeof cursors !== 'undefined' && !cursors.up?.isDown && !cursors.down?.isDown) {
-            player.setVelocityY(0);
+    const inDialog = (typeof window.dialogVisible !== 'undefined' && window.dialogVisible);
+
+    const inQuestModal = (typeof window.newQuestModal !== 'undefined' && window.newQuestModal) ||
+        (typeof window.questCompletedModal !== 'undefined' && window.questCompletedModal) ||
+        (typeof window.questPreviewModal !== 'undefined' && window.questPreviewModal);
+
+    // Horizontal movement
+    // Horizontal movement
+    if (!inMenu && !inDialog && !inQuestModal) {
+        if (moveLeft) {
+            player.setVelocityX(-speed);
+        } else if (moveRight) {
+            player.setVelocityX(speed);
+        } else if (Math.abs(leftStickX) < deadzone) {
+            if (typeof cursors !== 'undefined' && !cursors.left?.isDown && !cursors.right?.isDown) {
+                player.setVelocityX(0);
+            }
+        }
+
+        // Vertical movement
+        if (moveUp) {
+            player.setVelocityY(-speed);
+        } else if (moveDown) {
+            player.setVelocityY(speed);
+        } else if (Math.abs(leftStickY) < deadzone) {
+            if (typeof cursors !== 'undefined' && !cursors.up?.isDown && !cursors.down?.isDown) {
+                player.setVelocityY(0);
+            }
+        }
+
+        // DEBUG MOVEMENT
+        if (debugCounter % 60 === 0 && (Math.abs(leftStickX) > deadzone || Math.abs(leftStickY) > deadzone)) {
+            debugLog(`[Controller] Moving: X:${leftStickX.toFixed(2)} Y:${leftStickY.toFixed(2)} Speed:${speed}`);
+        }
+
+    } else {
+        // In Menu/Dialog - Stop player movement
+        player.setVelocity(0);
+
+        if (debugCounter % 60 === 0) {
+            debugLog(`[Controller] Movement BLOCKED by UI: Menu:${inMenu} Dialog:${inDialog} Quest:${inQuestModal}`);
         }
     }
 }
@@ -538,6 +650,9 @@ function updateVirtualCursorHover() {
 /**
  * Trigger click on the item under the virtual cursor
  */
+/**
+ * Trigger click on the item under the virtual cursor
+ */
 function triggerVirtualCursorClick() {
     if (lastHoveredItem) {
         debugLog('[Virtual Cursor] Clicked item:', lastHoveredItem, 'Source:', lastHoveredItem.source);
@@ -547,7 +662,6 @@ function triggerVirtualCursorClick() {
         if (target) {
             debugLog(`[Virtual Cursor] Emitting pointerdown on target: ${target.name || 'Unnamed'} (${target.type})`);
             if (target.emit) {
-                debugLog(`[Virtual Cursor] Target listener count for pointerdown: ${target.listenerCount('pointerdown')}`);
                 // Pass a mock pointer object with event.stopPropagation (needed by onClickItem)
                 const mockPointer = {
                     isDown: true,
@@ -558,7 +672,11 @@ function triggerVirtualCursorClick() {
                     }
                 };
                 target.emit('pointerdown', mockPointer);
+                // Also try 'pointerup' as some Buttons require it
+                // target.emit('pointerup', mockPointer); 
+
                 debugLog('[Virtual Cursor] pointerdown EMITTED');
+                return true;
             } else {
                 console.warn('[Virtual Cursor] Target has no emit function!');
             }
@@ -566,8 +684,12 @@ function triggerVirtualCursorClick() {
             console.warn('[Virtual Cursor] No target found to click inside item wrapper');
         }
     } else {
-        debugLog('[Virtual Cursor] Click - no target hovered');
+        debugLog('[Virtual Cursor] Click - FAILED (No item hovered)');
+        // Extra Debug: Print why?
+        const items = getVisibleMenuItems();
+        debugLog(`[Virtual Cursor] Visible Items Count: ${items.length}`);
     }
+    return false;
 }
 
 /**
@@ -631,10 +753,20 @@ function getVisibleMenuItems() {
     }
 
     // Dialog
-    const isDialog = (window.dialogVisible || dialogVisible);
-    const panelDialog = (window.dialogPanel || dialogPanel);
+    const isDialog = (typeof window.dialogVisible !== 'undefined' && window.dialogVisible);
+
+    // Check UIManager for the panel, or fallback to global/local
+    let panelDialog = null;
+    if (window.UIManager && window.UIManager.dialogPanel) {
+        panelDialog = window.UIManager.dialogPanel;
+    } else if (typeof window.dialogPanel !== 'undefined') {
+        panelDialog = window.dialogPanel;
+    } else if (typeof dialogPanel !== 'undefined') {
+        panelDialog = dialogPanel;
+    }
 
     if (isDialog && panelDialog && panelDialog.choiceButtons) {
+        // debugLog('[Virtual Cursor] Adding ' + panelDialog.choiceButtons.length + ' dialog buttons');
         items = items.concat(panelDialog.choiceButtons);
     }
 
@@ -659,9 +791,37 @@ function onControllerA() {
         (typeof window.questPreviewModal !== 'undefined' && window.questPreviewModal);
 
     if (inDialog) {
-        // Advance dialog
-        if (typeof advanceDialog === 'function') {
-            advanceDialog();
+        // Use Discrete Selection first (more reliable for Menu Navigation)
+        // Use Discrete Selection first (more reliable for Menu Navigation)
+        // Inline logic for guaranteed execution
+        let handled = false;
+        debugLog('[Controller] Attempting Inline Dialog Activation...');
+        if (window.UIManager && window.UIManager.dialogPanel && window.UIManager.dialogPanel.choiceButtons) {
+            const panel = window.UIManager.dialogPanel;
+            const index = panel.selectedIndex;
+            debugLog(`[Controller] Dialog Index: ${index}`);
+
+            if (typeof index === 'number' && index >= 0 && index < panel.choiceButtons.length) {
+                const btn = panel.choiceButtons[index];
+                debugLog(`[Controller] Activating: ${btn.choice ? btn.choice.text : 'Unknown'}`);
+                if (typeof window.UIManager.handleDialogChoice === 'function') {
+                    window.UIManager.handleDialogChoice(btn.choice);
+                    if (typeof playSound === 'function') playSound('ui_click');
+                    handled = true;
+                }
+            } else {
+                debugLog('[Controller] Invalid Index for Activation');
+            }
+        }
+
+        if (handled) return;
+
+
+        // Fallback: Use Virtual Cursor click
+        if (typeof triggerVirtualCursorClick === 'function') {
+            triggerVirtualCursorClick();
+        } else if (typeof advanceDialog === 'function') {
+            advanceDialog(); // Fallback
         }
     } else if (inQuestModal) {
         // Quest Modal interaction is primarily handled by Virtual Cursor (Rectangles), 
@@ -705,16 +865,39 @@ function onControllerA() {
  * B button action - Cancel/Close
  */
 function onControllerB() {
-    debugLog('[Ability Debug] onControllerB called');
+    debugLog('[Controller] onControllerB called');
+
+    // 1. Inventory
     if (typeof inventoryVisible !== 'undefined' && inventoryVisible) {
         if (typeof closeInventory === 'function') closeInventory();
-    } else if (typeof equipmentVisible !== 'undefined' && equipmentVisible) {
+    }
+    // 2. Equipment
+    else if (typeof equipmentVisible !== 'undefined' && equipmentVisible) {
         if (typeof destroyEquipmentUI === 'function') destroyEquipmentUI();
-    } else if (typeof shopVisible !== 'undefined' && shopVisible) {
+    }
+    // 3. Shop (Global or Manager)
+    else if ((typeof shopVisible !== 'undefined' && shopVisible) || (window.ShopManager && window.ShopManager.shopVisible)) {
         if (typeof closeShop === 'function') closeShop();
-    } else if (typeof dialogVisible !== 'undefined' && dialogVisible) {
+        else if (window.ShopManager) window.ShopManager.closeShop();
+    }
+    // 4. Forge (Blacksmith)
+    else if (window.ForgeUI && window.ForgeUI.visible) {
+        window.ForgeUI.close();
+    }
+    // 5. Tavern
+    else if (window.TavernUI && window.TavernUI.visible) {
+        window.TavernUI.close();
+    }
+    // 6. Inn
+    else if (window.InnUI && window.InnUI.visible) {
+        window.InnUI.close();
+    }
+    // 7. Dialog (Last priority for UI)
+    else if (typeof dialogVisible !== 'undefined' && dialogVisible) {
         if (typeof closeDialog === 'function') closeDialog();
-    } else {
+    }
+    // 8. No UI open - Gameplay Action
+    else {
         // No menu open - Use Ability 4 (Shield)
         debugLog('[Ability Debug] No menu open, attempting Ability 4 (Shield)');
         if (typeof useAbility === 'function') {
@@ -936,4 +1119,77 @@ if (typeof window !== 'undefined') {
     window.clearMenuSelection = clearMenuSelection;
     window.getMenuSelectionIndex = getMenuSelectionIndex;
     window.destroyMenuCursor = destroyMenuCursor;
+}
+
+/**
+ * Handle menu navigation from gamepad (Stick Flick or D-Pad)
+ */
+function handleMenuNavigation(pad, deadzone) {
+    // Handle Menu Navigation (Stick Flick)
+    if (typeof cycleMenuSelection === 'function') {
+        // Get Stick Y
+        let stickY = 0;
+        if (pad.axes && pad.axes.length >= 2) {
+            stickY = typeof pad.axes[1].getValue === 'function' ? pad.axes[1].getValue() : pad.axes[1];
+        }
+        // Fallback
+        if (stickY === 0 && pad.leftStick) stickY = pad.leftStick.y;
+
+        if ((stickY < -0.5 && !window.stickWasUp) || (pad.buttons[12]?.pressed && !window.dpadWasUp)) {
+            debugLog('[Controller] Menu Nav UP');
+            cycleMenuSelection(-1);
+            window.stickWasUp = true;
+            window.dpadWasUp = pad.buttons[12]?.pressed;
+        } else if ((stickY > 0.5 && !window.stickWasDown) || (pad.buttons[13]?.pressed && !window.dpadWasDown)) {
+            debugLog('[Controller] Menu Nav DOWN');
+            cycleMenuSelection(1);
+            window.stickWasDown = true;
+            window.dpadWasDown = pad.buttons[13]?.pressed;
+        }
+
+        if (Math.abs(stickY) < 0.3) {
+            window.stickWasUp = false;
+            window.stickWasDown = false;
+        }
+        if (!pad.buttons[12]?.pressed) window.dpadWasUp = false;
+        if (!pad.buttons[13]?.pressed) window.dpadWasDown = false;
+    }
+}
+
+/**
+ * Activates the currently selected dialog option (Discrete Mode)
+ * Returns true if successful, false otherwise.
+ */
+function activateDialogSelection() {
+    debugLog('[Controller] activateDialogSelection ENTERED');
+    if (window.UIManager && window.UIManager.dialogPanel && window.UIManager.dialogPanel.choiceButtons) {
+        const panel = window.UIManager.dialogPanel;
+        const index = panel.selectedIndex;
+        debugLog(`[Controller] Dialog Panel Index: ${index}`);
+
+        if (typeof index === 'number' && index >= 0 && index < panel.choiceButtons.length) {
+            const btn = panel.choiceButtons[index];
+            debugLog(`[Controller] Activating dialog button index ${index}:`, btn.choice ? btn.choice.text : 'NO CHOICE DATA');
+
+            // Trigger the choice logic directly
+            if (typeof window.UIManager.handleDialogChoice === 'function') {
+                window.UIManager.handleDialogChoice(btn.choice);
+                if (typeof playSound === 'function') playSound('ui_click');
+                debugLog('[Controller] activateDialogSelection SUCCESS');
+                return true;
+            } else {
+                console.error('[Controller] UIManager.handleDialogChoice is missing!');
+            }
+        } else {
+            debugLog(`[Controller] No valid dialog selection index: ${index}`);
+        }
+    } else {
+        debugLog('[Controller] activateDialogSelection FAILED - Missing Panel/Buttons');
+    }
+    return false;
+}
+
+// Expose for robustness
+if (typeof window !== 'undefined') {
+    window.activateDialogSelection = activateDialogSelection;
 }

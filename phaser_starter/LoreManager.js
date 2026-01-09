@@ -135,6 +135,11 @@ class LoreManager {
             window.showDamageNumber(x, y, text, 0x00FFFF);
         }
     }
+
+    // Alias for compatibility
+    unlock(loreId, source) {
+        this.unlockLore(loreId, source);
+    }
 }
 
 // Export global

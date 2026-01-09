@@ -516,6 +516,292 @@ window.UIManager = {
     },
 
     // ============================================
+    // DIALOG UI
+    // ============================================
+
+    createDialogUI: function (npc) {
+        const scene = game.scene.scenes[0];
+
+        if (this.dialogPanel) {
+            this.destroyDialogUI();
+        }
+
+        const panelWidth = 700;
+        const panelHeight = 250;
+        const centerX = scene.cameras.main.width / 2;
+        const centerY = scene.cameras.main.height / 2 + 50;
+
+        // Background
+        const bg = scene.add.rectangle(centerX, centerY, panelWidth, panelHeight, 0x000000, 0.9)
+            .setScrollFactor(0).setDepth(400).setStrokeStyle(4, 0xffffff);
+
+        // Portrait
+        let portraitImage = null;
+        let portraitHeight = 0;
+
+        if (npc && npc.portraitKey && scene.textures.exists(npc.portraitKey)) {
+            portraitImage = scene.add.image(centerX, centerY - 100, npc.portraitKey)
+                .setScrollFactor(0).setDepth(401);
+
+            const maxPortraitHeight = 150;
+            if (portraitImage.height > maxPortraitHeight) {
+                const scale = maxPortraitHeight / portraitImage.height;
+                portraitImage.setScale(scale);
+            }
+            portraitHeight = portraitImage.displayHeight;
+        }
+
+        // Name
+        const npcNameText = scene.add.text(centerX, centerY - 100, npc.name || 'Unknown', {
+            fontSize: '24px', fill: '#ffd700', fontStyle: 'bold'
+        }).setScrollFactor(0).setDepth(401).setOrigin(0.5);
+
+        this.dialogPanel = {
+            bg: bg,
+            portraitImage: portraitImage,
+            npcNameText: npcNameText,
+            dialogText: null,
+            choiceButtons: [],
+            portraitHeight: portraitHeight
+        };
+
+        this.dialogVisible = true;
+    },
+
+    showDialogNode: function (nodeId) {
+        if (!window.DialogManager || !window.DialogManager.currentDialog) return;
+        const dialog = window.DialogManager.currentDialog;
+        const node = dialog.nodes[nodeId];
+
+        if (!node) {
+            console.error(`Dialog node '${nodeId}' not found!`);
+            this.closeDialog();
+            return;
+        }
+
+        window.DialogManager.currentDialogNode = nodeId;
+        this.updateDialogUI(node);
+    },
+
+    updateDialogUI: function (node) {
+        const scene = game.scene.scenes[0];
+        if (!this.dialogPanel) return;
+
+        if (this.dialogPanel.dialogText) this.dialogPanel.dialogText.destroy();
+        this.dialogPanel.choiceButtons.forEach(btn => {
+            if (btn.bg) btn.bg.destroy();
+            if (btn.text) btn.text.destroy();
+        });
+        this.dialogPanel.choiceButtons = [];
+
+        const panelWidth = 700;
+        const buttonHeight = 40;
+        const buttonSpacing = 10;
+        const portraitHeight = this.dialogPanel.portraitHeight || 0;
+
+        // Filter valid choices
+        const visibleChoices = node.choices.filter(choice => {
+            if (!choice.condition) return true;
+            return window.evaluateDialogCondition ? window.evaluateDialogCondition(choice.condition, window.playerStats) : true;
+        });
+
+        // Layout calcs
+        const headerHeight = portraitHeight + 50;
+        const lineCount = (node.text.match(/\n/g) || []).length + 1;
+        const textHeight = Math.max(80, Math.min(600, Math.max(lineCount * 24, node.text.length * 0.6)));
+        const choicesHeight = visibleChoices.length * (buttonHeight + buttonSpacing) + 20;
+        const dynamicPanelHeight = headerHeight + textHeight + choicesHeight + 20;
+
+        const centerX = scene.cameras.main.width / 2;
+        const centerY = scene.cameras.main.height / 2 + 50;
+
+        this.dialogPanel.bg.setPosition(centerX, centerY);
+        this.dialogPanel.bg.setSize(panelWidth, dynamicPanelHeight);
+
+        if (this.dialogPanel.portraitImage) {
+            this.dialogPanel.portraitImage.setPosition(centerX, centerY - dynamicPanelHeight / 2 + portraitHeight / 2 + 10);
+        }
+        this.dialogPanel.npcNameText.setPosition(centerX, centerY - dynamicPanelHeight / 2 + portraitHeight + 35);
+
+        const textX = centerX - panelWidth / 2 + 20;
+        const textY = centerY - dynamicPanelHeight / 2 + portraitHeight + 65;
+        this.dialogPanel.dialogText = scene.add.text(textX, textY, node.text, {
+            fontSize: '18px', fill: '#ffffff', wordWrap: { width: panelWidth - 40 }
+        }).setScrollFactor(0).setDepth(401).setOrigin(0, 0);
+
+        // Buttons
+        const startY = centerY - dynamicPanelHeight / 2 + headerHeight + textHeight;
+
+        visibleChoices.forEach((choice, index) => {
+            const buttonY = startY + index * (buttonHeight + buttonSpacing);
+            const buttonWidth = panelWidth - 40;
+
+            const buttonBg = scene.add.rectangle(centerX, buttonY, buttonWidth, buttonHeight, 0x333333, 0.9)
+                .setScrollFactor(0).setDepth(401).setStrokeStyle(2, 0x666666).setInteractive({ useHandCursor: true });
+
+            let displayText = choice.text;
+            let textColor = '#ffffff';
+            let loreUnlocked = false;
+
+            if (choice.isQuest) {
+                // Determine icon based on state
+                if (choice.questState === 'active') {
+                    displayText = `(?) ${choice.text}`;
+                    textColor = '#aaaaaa'; // Grey for active/in-progress
+                } else if (choice.questState === 'turnin') {
+                    displayText = `(?) ${choice.text}`; // Or (!) depending on pref, usually Turn In is Special
+                    textColor = '#ffff00'; // Yellow for turn-in
+                } else {
+                    // Default / Available / Offer
+                    displayText = `(!) ${choice.text}`;
+                    textColor = '#ffff00'; // Yellow for new
+                }
+            } else if (choice.action === 'unlock_lore' && choice.loreId) {
+                try {
+                    const unlocked = JSON.parse(localStorage.getItem('rpg_unlocked_lore') || '[]');
+                    loreUnlocked = unlocked.includes(choice.loreId);
+                } catch (e) { }
+                displayText = loreUnlocked ? `✓ ${choice.text}` : `○ ${choice.text}`;
+                textColor = loreUnlocked ? '#88ff88' : '#9370DB';
+            }
+
+            const buttonText = scene.add.text(centerX, buttonY, displayText, {
+                fontSize: '16px', fill: textColor
+            }).setScrollFactor(0).setDepth(402).setOrigin(0.5, 0.5);
+
+            buttonBg.on('pointerover', () => buttonBg.setFillStyle(0x444444));
+            buttonBg.on('pointerout', () => buttonBg.setFillStyle(0x333333));
+
+            buttonBg.on('pointerdown', (pointer) => {
+                console.warn('🖱️ Dialog Button Clicked:', choice.text);
+                if (pointer && pointer.event) pointer.event.stopPropagation();
+                this.handleDialogChoice(choice);
+            });
+
+            // Make text pass-through or interactive too (just to be safe)
+            buttonText.setInteractive({ useHandCursor: true })
+                .on('pointerdown', (pointer) => {
+                    console.warn('🖱️ Dialog Text Clicked:', choice.text);
+                    if (pointer && pointer.event) pointer.event.stopPropagation();
+                    this.handleDialogChoice(choice);
+                });
+
+            this.dialogPanel.choiceButtons.push({ bg: buttonBg, text: buttonText, choice: choice });
+        });
+
+        // 🛑 FALLBACK: If no choices are valid (dead end), auto-close after 3 seconds
+        if (visibleChoices.length === 0) {
+            scene.time.delayedCall(3000, () => {
+                this.closeDialog();
+            });
+        }
+    },
+
+    handleDialogChoice: function (choice) {
+        const action = choice.action;
+
+        if (action === 'unlock_lore' && choice.loreId) {
+            if (window.loreManager) window.loreManager.unlock(choice.loreId);
+        }
+
+        if (action === 'open_shop') {
+            if (window.ShopManager) window.ShopManager.openShop(window.currentDialogNPC);
+        } else if (action === 'choose_class') {
+            if (typeof window.chooseClass === 'function') window.chooseClass(choice.className);
+            this.finishChoice(choice);
+        } else if (['quest_advance', 'quest_accept', 'quest_accept_side', 'quest_accept_v2', 'quest_accept_main'].includes(action)) {
+            // Redirect to global helper for preview modal
+            if (window.showQuestPreviewModalEnhanced) {
+                // Must close dialog strictly but keep reference? 
+                // showQuestPreviewModalEnhanced handles closing/reopening internally?
+                // No, it expects us to close.
+                this.closeDialog();
+                window.showQuestPreviewModalEnhanced(choice.questId,
+                    () => { // Accept
+                        window.uqe.acceptQuest(choice.questId);
+                        window.updateQuestTrackerHUD && window.updateQuestTrackerHUD();
+                        // Reopen
+                        if (window.DialogManager) setTimeout(() => window.DialogManager.startDialog(window.currentDialogNPC), 50);
+                    },
+                    () => { // Decline
+                        if (window.DialogManager) setTimeout(() => window.DialogManager.startDialog(window.currentDialogNPC), 50);
+                    }
+                );
+                return; // Stop here
+            }
+        } else if (action === 'complete_objective') {
+            console.warn('🎯 UIManager: complete_objective called', choice.questId, choice.objectiveId);
+            if (window.uqe && choice.questId && choice.objectiveId) {
+                // Call UQE to update progress
+                window.uqe.completeObjective(choice.questId, choice.objectiveId);
+                console.warn('✅ UQE.completeObjective executed');
+
+                // Force save to prevent data loss on refresh
+                if (window.saveGame) {
+                    window.saveGame(null, true); // Silent save
+                    console.warn('💾 Forced silent save after objective complete');
+                }
+
+                // Then show feedback
+                this.finishChoice(choice);
+            } else {
+                console.error('❌ UIManager: UQE or IDs missing for complete_objective');
+            }
+        } else if (action === 'complete_quest' || action === 'quest_turnin') {
+            if (window.uqe && choice.questId) {
+                // Explicitly call completeQuest in UQE
+                if (typeof window.uqe.completeQuest === 'function') {
+                    window.uqe.completeQuest(choice.questId);
+
+                    // Force save to prevent data loss on refresh
+                    if (window.saveGame) {
+                        window.saveGame(null, true); // Silent save
+                    }
+                } else {
+                    console.error('❌ UIManager: window.uqe.completeQuest is NOT a function');
+                }
+
+                // Close dialog or proceed
+                if (choice.next) this.showDialogNode(choice.next);
+                else this.closeDialog();
+            }
+        } else {
+            this.finishChoice(choice);
+        }
+    },
+
+    finishChoice: function (choice) {
+        if (choice.next) {
+            this.showDialogNode(choice.next);
+        } else {
+            this.closeDialog();
+        }
+    },
+
+    closeDialog: function () {
+        this.destroyDialogUI();
+        if (window.DialogManager) window.DialogManager.currentDialog = null;
+    },
+
+    destroyDialogUI: function () {
+        if (this.dialogPanel) {
+            if (this.dialogPanel.bg) this.dialogPanel.bg.destroy();
+            if (this.dialogPanel.portraitImage) this.dialogPanel.portraitImage.destroy();
+            if (this.dialogPanel.npcNameText) this.dialogPanel.npcNameText.destroy();
+            if (this.dialogPanel.dialogText) this.dialogPanel.dialogText.destroy();
+            if (this.dialogPanel.choiceButtons) {
+                this.dialogPanel.choiceButtons.forEach(btn => {
+                    if (btn.bg) btn.bg.destroy();
+                    if (btn.text) btn.text.destroy();
+                });
+            }
+            this.dialogPanel = null;
+        }
+        this.dialogVisible = false;
+        window.dialogVisible = false;
+    },
+
+    // ============================================
     // UTILS (Tooltip & Scrollbar)
     // ============================================
 
@@ -1611,307 +1897,7 @@ window.UIManager = {
         const icon = isComplete ? '✅' : '📜';
         const message = `${icon} ${title}\n${progressMessage}`;
         this.showToast(message, type, 4000);
-    },
-
-
-    // ============================================
-    // DIALOG UI
-    // ============================================
-
-    createDialogUI: function (npc) {
-        const scene = game.scene.scenes[0];
-        const panelWidth = 700;
-        const portraitHeight = 150;
-        const initialPanelHeight = 350;
-        const centerX = scene.cameras.main.width / 2;
-        const centerY = scene.cameras.main.height / 2 + 80;
-
-        let portraitImage = null;
-        if (npc.portraitKey && scene.textures.exists(npc.portraitKey)) {
-            portraitImage = scene.add.image(
-                centerX,
-                centerY - initialPanelHeight / 2 + portraitHeight / 2 + 10,
-                npc.portraitKey
-            ).setScrollFactor(0).setDepth(402);
-
-            const originalWidth = portraitImage.width;
-            const originalHeight = portraitImage.height;
-            const scaleFactor = (panelWidth - 20) / originalWidth;
-            portraitImage.setScale(scaleFactor);
-            if (portraitImage.displayHeight > portraitHeight) {
-                portraitImage.setDisplaySize(panelWidth - 20, portraitHeight);
-            }
-        }
-
-        this.dialogVisible = true;
-        this.dialogPanel = {
-            bg: scene.add.rectangle(centerX, centerY, panelWidth, initialPanelHeight, 0x1a1a1a, 0.95)
-                .setScrollFactor(0).setDepth(400).setStrokeStyle(3, 0xffffff),
-            portraitImage: portraitImage,
-            portraitHeight: portraitImage ? portraitHeight : 0,
-            npcNameText: scene.add.text(
-                centerX - panelWidth / 2 + 20,
-                centerY - initialPanelHeight / 2 + (portraitImage ? portraitHeight + 15 : 15),
-                `${npc.name}${npc.title ? ' - ' + npc.title : ''}`, {
-                fontSize: '22px', fill: '#ffd700', fontStyle: 'bold'
-            }).setScrollFactor(0).setDepth(401).setOrigin(0, 0),
-            dialogText: null,
-            choiceButtons: [],
-            npc: npc
-        };
-    },
-
-    updateDialogUI: function (node) {
-        const scene = game.scene.scenes[0];
-        if (!this.dialogPanel) return;
-
-        if (this.dialogPanel.dialogText) this.dialogPanel.dialogText.destroy();
-        this.dialogPanel.choiceButtons.forEach(btn => {
-            if (btn.bg) btn.bg.destroy();
-            if (btn.text) btn.text.destroy();
-        });
-        this.dialogPanel.choiceButtons = [];
-
-        const panelWidth = 700;
-        const buttonHeight = 40;
-        const buttonSpacing = 10;
-        const portraitHeight = this.dialogPanel.portraitHeight || 0;
-
-        // Count visible choices
-        let visibleChoices = 0;
-        node.choices.forEach(choice => {
-            let result = true;
-            if (choice.condition) {
-                try {
-                    if (typeof choice.condition === 'function') {
-                        result = choice.condition(playerStats);
-                    } else if (typeof evaluateDialogCondition === 'function') {
-                        result = evaluateDialogCondition(choice.condition, playerStats);
-                    }
-                } catch (e) { console.error(e); }
-            }
-            if (result) visibleChoices++;
-        });
-
-        // Dynamic Height
-        const headerHeight = portraitHeight + 50;
-        const estHeight = Math.max((node.text.match(/\n/g) || []).length * 24, node.text.length * 0.6);
-        const textHeight = Math.max(80, Math.min(600, estHeight));
-        const choicesHeight = visibleChoices * (buttonHeight + buttonSpacing) + 20;
-        const dynamicPanelHeight = headerHeight + textHeight + choicesHeight + 20;
-
-        const centerX = scene.cameras.main.width / 2;
-        const centerY = scene.cameras.main.height / 2 + 50;
-
-        this.dialogPanel.bg.setPosition(centerX, centerY);
-        this.dialogPanel.bg.setSize(panelWidth, dynamicPanelHeight);
-
-        if (this.dialogPanel.portraitImage) {
-            this.dialogPanel.portraitImage.setPosition(centerX, centerY - dynamicPanelHeight / 2 + portraitHeight / 2 + 10);
-        }
-
-        this.dialogPanel.npcNameText.setPosition(
-            centerX - panelWidth / 2 + 20,
-            centerY - dynamicPanelHeight / 2 + portraitHeight + 15
-        );
-
-        const textX = centerX - panelWidth / 2 + 20;
-        const textY = centerY - dynamicPanelHeight / 2 + portraitHeight + 45;
-        this.dialogPanel.dialogText = scene.add.text(textX, textY, node.text, {
-            fontSize: '16px', fill: '#ffffff', wordWrap: { width: panelWidth - 40 }
-        }).setScrollFactor(0).setDepth(401).setOrigin(0, 0);
-
-        const startY = centerY - dynamicPanelHeight / 2 + headerHeight + textHeight;
-        let visibleChoiceCount = 0;
-
-        node.choices.forEach((choice) => {
-            // Re-evaluate condition for display
-            if (choice.condition) {
-                let result = true;
-                if (typeof choice.condition === 'function') {
-                    result = choice.condition(playerStats);
-                } else if (typeof evaluateDialogCondition === 'function') {
-                    result = evaluateDialogCondition(choice.condition, playerStats);
-                }
-                if (!result) return;
-            }
-
-            const buttonY = startY + visibleChoiceCount * (buttonHeight + buttonSpacing);
-            visibleChoiceCount++;
-            const buttonWidth = panelWidth - 40;
-
-            const buttonBg = scene.add.rectangle(centerX, buttonY, buttonWidth, buttonHeight, 0x333333, 0.9)
-                .setScrollFactor(0).setDepth(401).setStrokeStyle(2, 0x666666).setInteractive({ useHandCursor: true });
-
-            let displayText = choice.text;
-            let textColor = '#ffffff';
-
-            if (choice.isQuest) {
-                const state = choice.questState || 'available';
-                if (state === 'available') {
-                    displayText = `(!) ${choice.text}`;
-                    textColor = '#ffff00';
-                } else if (state === 'active') {
-                    displayText = `(?) ${choice.text}`;
-                    textColor = '#ffffff';
-                } else if (state === 'turnin') {
-                    displayText = `(?) ${choice.text}`;
-                    textColor = '#ffff00';
-                }
-            } else if (choice.action === 'unlock_lore' && choice.loreId) {
-                // Simple Lore Check
-                let isUnlocked = false;
-                try {
-                    const unlocked = JSON.parse(localStorage.getItem('rpg_unlocked_lore') || '[]');
-                    isUnlocked = unlocked.includes(choice.loreId);
-                } catch (e) { }
-                displayText = isUnlocked ? `✓ ${choice.text}` : `○ ${choice.text}`;
-                textColor = isUnlocked ? '#88ff88' : '#9370DB';
-            }
-
-            const buttonText = scene.add.text(
-                centerX,
-                buttonY,
-                displayText,
-                {
-                    fontSize: '16px',
-                    fill: textColor
-                }
-            ).setScrollFactor(0).setDepth(402).setOrigin(0.5, 0.5);
-
-            // Button hover effects
-            buttonBg.on('pointerover', () => buttonBg.setFillStyle(0x444444));
-            buttonBg.on('pointerout', () => buttonBg.setFillStyle(0x333333));
-
-            buttonBg.on('pointerdown', (pointer) => {
-                if (pointer && pointer.event) pointer.event.stopPropagation();
-
-                // Handle actions
-                if (choice.action === 'unlock_lore' && choice.loreId) {
-                    if (window.loreManager && typeof window.loreManager.unlock === 'function') {
-                        window.loreManager.unlock(choice.loreId);
-                    }
-                }
-
-                if (choice.action === 'open_shop') {
-                    if (typeof openShop === 'function') openShop(this.dialogPanel.npc);
-                } else if (choice.action === 'choose_class') {
-                    if (typeof chooseClass === 'function') chooseClass(choice.className);
-                    this.handleDialogNext(choice);
-                } else if (choice.action === 'complete_objective') {
-                    if (window.uqe && choice.questId && choice.objectiveId) {
-                        const quest = window.uqe.activeQuests.find(q => q.id === choice.questId);
-                        if (quest) {
-                            const obj = quest.objectives.find(o => o.id === choice.objectiveId);
-                            if (obj && !obj.isComplete()) {
-                                obj.progress = obj.target;
-                                obj.completed = true;
-                                quest.checkCompletion();
-                                window.uqe.update();
-                                if (typeof addChatMessage === 'function') addChatMessage(`Objective updated: ${obj.description}`, 0x00ff00);
-                            }
-                        }
-                    }
-                    this.handleDialogNext(choice);
-                } else if (choice.action === 'complete_quest') {
-                    if (window.uqe && choice.questId) {
-                        const quest = window.uqe.activeQuests.find(q => q.id === choice.questId);
-                        if (quest && quest.canComplete()) {
-                            quest.complete();
-                            if (typeof addChatMessage === 'function') addChatMessage(`Quest Completed: ${quest.title}`, 0x00ff00);
-                            if (typeof playSound === 'function') playSound('quest_complete');
-                        }
-                    }
-                    this.handleDialogNext(choice);
-                } else if (['quest_advance', 'quest_accept', 'quest_accept_side', 'quest_accept_v2', 'quest_accept_main'].includes(choice.action)) {
-                    const questId = choice.questId;
-                    if (questId && window.uqe && window.uqe.allDefinitions[questId]) {
-                        const currentNPC = this.dialogPanel.npc;
-                        this.closeDialog();
-                        if (typeof showQuestPreviewModalEnhanced === 'function') {
-                            showQuestPreviewModalEnhanced(questId,
-                                () => { // Accept
-                                    window.uqe.acceptQuest(questId);
-                                    if (typeof updateQuestTrackerHUD === 'function') updateQuestTrackerHUD();
-                                    if (currentNPC) setTimeout(() => {
-                                        if (typeof startDialog === 'function') startDialog(currentNPC);
-                                    }, 50);
-                                },
-                                () => { // Decline
-                                    if (currentNPC) setTimeout(() => {
-                                        if (typeof startDialog === 'function') startDialog(currentNPC);
-                                    }, 50);
-                                }
-                            );
-                        }
-                    } else {
-                        this.handleDialogNext(choice);
-                    }
-                } else if (choice.action === 'accept_all') {
-                    if (typeof acceptAllAvailableQuests === 'function') acceptAllAvailableQuests();
-                    this.handleDialogNext(choice);
-                } else {
-                    this.handleDialogNext(choice);
-                }
-            });
-
-            this.dialogPanel.choiceButtons.push({ bg: buttonBg, text: buttonText, choice });
-        });
-    },
-
-    handleDialogNext: function (choice) {
-        if (choice.next) {
-            this.showDialogNode(choice.next);
-        } else {
-            this.closeDialog();
-        }
-    },
-
-    showDialogNode: function (nodeId) {
-        // Use global currentDialog if available (maintained by game.js startDialog)
-        if (typeof currentDialog === 'undefined' || !currentDialog || !currentDialog.nodes[nodeId]) {
-            this.closeDialog();
-            return;
-        }
-
-        // Update global state for compatibility
-        if (typeof currentDialogNode !== 'undefined') currentDialogNode = nodeId;
-
-        const node = currentDialog.nodes[nodeId];
-        this.updateDialogUI(node);
-
-        // If no choices, auto-close after a moment
-        if (node.choices.length === 0) {
-            const scene = game.scene.scenes[0];
-            scene.time.delayedCall(2000, () => {
-                this.closeDialog();
-            });
-        }
-    },
-
-    closeDialog: function () {
-        if (this.dialogPanel) {
-            if (this.dialogPanel.bg) this.dialogPanel.bg.destroy();
-            if (this.dialogPanel.npcNameText) this.dialogPanel.npcNameText.destroy();
-            if (this.dialogPanel.dialogText) this.dialogPanel.dialogText.destroy();
-            if (this.dialogPanel.portraitImage) this.dialogPanel.portraitImage.destroy();
-
-            this.dialogPanel.choiceButtons.forEach(btn => {
-                if (btn.bg) btn.bg.destroy();
-                if (btn.text) btn.text.destroy();
-            });
-            this.dialogPanel = null;
-        }
-
-        this.dialogVisible = false;
-
-        // Reset globals if they exist
-        if (typeof currentDialog !== 'undefined') currentDialog = null;
-        if (typeof currentDialogNode !== 'undefined') currentDialogNode = null;
-        if (typeof currentShopNPC !== 'undefined') currentShopNPC = null;
-        if (typeof dialogVisible !== 'undefined') dialogVisible = false;
-
-        const scene = game.scene.scenes[0];
-        if (scene) scene.lastWindowCloseTime = scene.time.now;
     }
+
 };
+

@@ -1295,7 +1295,6 @@ function preload() {
     this.load.audio('bow_hit', 'assets/audio/bow-release.mp3');
 
     // Load Building Assets
-    // Load Building Assets
     this.load.image('tavern', 'assets/images/tavern.png?v=3');
     this.load.image('shop', 'assets/images/shop.png?v=3');
     this.load.image('blacksmith', 'assets/images/blacksmith.png?v=3');
@@ -2495,11 +2494,11 @@ function create() {
     this.loreManager = new LoreManager(this);
     this.loreManager.init();
 
-    this.dialogManager = new DialogManager(this);
-    this.dialogManager.init();
-
-    // Load dialog data from JSON
-    loadDialogs();
+    // Initialize Dialog System
+    if (window.DialogManager) {
+        window.DialogManager.init(this);
+        window.DialogManager.loadDialogs(); // Essential for loading dialog content
+    }
 
     this.milestoneManager = new MilestoneManager(this);
     if (this.cache.json.exists('milestoneData')) {
@@ -2512,6 +2511,30 @@ function create() {
     if (this.cache.json.exists('cinematicData')) {
         this.cinematicManager.init(this.cache.json.get('cinematicData'));
     }
+
+    // Restore chooseClass helper
+    window.chooseClass = function (className) {
+        console.log(`⚔️ Class chosen: ${className}`);
+        const stats = window.playerStats;
+        if (!stats) return;
+
+        if (className === 'Warrior') {
+            stats.maxHp = 150; stats.hp = 150;
+            stats.baseDefense = 10;
+            stats.baseAttack = 15;
+            addChatMessage("You are now a Warrior!", 0xff0000);
+        } else if (className === 'Rogue') {
+            stats.speedBonus = 20;
+            stats.attackSpeedBonus = 0.2;
+            stats.critChance = 0.2;
+            addChatMessage("You are now a Rogue!", 0x00ff00);
+        } else if (className === 'Mage') {
+            stats.maxMana = 100; stats.mana = 100;
+            stats.abilities.fireball = { lastUsed: 0, unlocked: true };
+            addChatMessage("You are now a Mage!", 0x0000ff);
+        }
+        if (window.updatePlayerStatsUI) window.updatePlayerStatsUI();
+    };
 
     // Initialize Codex UI Keys
     if (window.setupLoreCodexKeys) {
@@ -9063,28 +9086,56 @@ function updateNPCIndicators() {
 
             if (uqe.activeQuests) {
                 // Check Talk Objectives
-                isTalkTarget = uqe.activeQuests.some(q => {
-                    return q.objectives.some(obj => {
-                        // Check if objective is incomplete and is a talk objective for this NPC
-                        return !obj.completed && obj.type === 'talk' && obj.npcId === npcName;
-                    });
-                });
-
-                // Check Ready for Turn-in (All objectives complete, return to giver)
-                isTurnInTarget = uqe.activeQuests.some(q => {
+                const activeQuest = uqe.activeQuests.find(q => {
                     const def = uqe.allDefinitions[q.id];
-                    // Only the giver can complete the quest
-                    if (!def || def.giver !== npcName) return false;
-                    // All objectives must be complete
-                    return q.objectives.every(o => o.completed);
+                    // 1. Check if NPC is the quest giver AND quest is ready to turn in
+                    if (def && def.giver === npc.name) {
+                        if (typeof q.canComplete === 'function' && q.canComplete()) return true;
+                    }
+                    // 2. Check if NPC is a target for a talk objective
+                    const talkObj = q.objectives.find(o => !o.completed && o.type === 'talk' && o.npcId === npc.name);
+                    return !!talkObj;
                 });
+
+                if (activeQuest) {
+                    // Determine type: Turn-in vs Objective
+                    const def = uqe.allDefinitions[activeQuest.id];
+                    const isTurnIn = (def && def.giver === npc.name && typeof activeQuest.canComplete === 'function' && activeQuest.canComplete());
+
+                    if (isTurnIn) {
+                        iconText = '?';
+                        iconColor = '#ffff00'; // Yellow ? for Turn In
+                        showAlways = true;
+                    } else {
+                        // Active Talk Objective
+                        iconText = '?';
+                        iconColor = '#aaaaaa'; // Grey ? for Active
+                        showAlways = true;
+                    }
+                } else {
+                    isTurnInTarget = uqe.activeQuests.some(q => {
+                        const def = uqe.allDefinitions[q.id];
+                        // Only the giver can complete the quest
+                        if (!def || def.giver !== npcName) return false;
+                        if (typeof q.canComplete === 'function') return q.canComplete();
+                        return q.objectives.every(o => o.completed);
+                    });
+
+                    if (isTurnInTarget) {
+                        iconText = '?';
+                        iconColor = '#ffff00'; // Yellow ?
+                        showAlways = true;
+                    }
+                }
             }
 
-            if (isTalkTarget || isTurnInTarget) {
-                iconText = '?';
-                iconColor = '#ffff00'; // Yellow ?
-                showAlways = true;
-            }
+            // Consolidate logic - if activeQuest handled it, we are good.
+            // The block below (original 9122) was:
+            // if (isTalkTarget || isTurnInTarget) { ... }
+            // We have handled 'isTalkTarget' via activeQuest (Condition 2)
+            // We handled isTurnInTarget via activeQuest (Condition 1) OR fallback check
+
+            // So if we set iconText above, we are done.
 
             // 2. Check for Available Quests (Only if no turn-in pending)
             if (!iconText && npc.questGiver) {
@@ -9461,6 +9512,10 @@ async function loadDialogs() {
  */
 function evaluateDialogCondition(conditionStr, stats) {
     if (!conditionStr) return true; // No condition = always show
+    if (typeof conditionStr !== 'string') {
+        console.warn('⚠️ evaluateDialogCondition received non-string:', conditionStr);
+        return true; // Default to showing if malformed
+    }
 
     const [type, param] = conditionStr.split(':');
 
@@ -9581,523 +9636,365 @@ function evaluateDialogCondition(conditionStr, stats) {
  * Deep clone dialog data while preserving functions (like condition)
  * JSON.parse/stringify destroys functions, so we need this custom clone
  */
-function deepCloneDialog(obj) {
-    if (obj === null || typeof obj !== 'object') return obj;
-    if (typeof obj === 'function') return obj; // Preserve functions!
-    if (Array.isArray(obj)) return obj.map(item => deepCloneDialog(item));
-
-    const cloned = {};
-    for (const key in obj) {
-        if (obj.hasOwnProperty(key)) {
-            cloned[key] = deepCloneDialog(obj[key]);
-        }
-    }
-    return cloned;
-}
+// function deepCloneDialog moved to DialogManager.js
 
 /**
  * Start dialog with an NPC
  */
-function startDialog(npc) {
-    currentDialogNPC = npc; // Track for Shop/Quests
-    let dialogData = dialogDatabase[npc.dialogId];
-    debugLog(`[DEBUG_DIALOG] startDialog called for ${npc.name}. DialogID: ${npc.dialogId}. Found data: ${!!dialogData}`);
-
-    if (!dialogData) {
-        console.warn(`[DEBUG_DIALOG] Dialog data NOT FOUND for ${npc.dialogId}. Using generic fallback.`);
-        addChatMessage(`[DEBUG] Missing dialog: ${npc.dialogId}`, 0xff0000);
-        dialogData = dialogDatabase['generic_npc'];
-    } else {
-        addChatMessage(`[DEBUG] Starting dialog: ${npc.name}`, 0x00ff00);
-    }
-
-    // Clone to avoid modifying the original database - use custom clone to preserve functions
-    const activeDialog = deepCloneDialog(dialogData);
-
-    activeDialog.npcName = npc.name || activeDialog.npcName;
-    activeDialog.npcTitle = npc.title || activeDialog.npcTitle;
-
-    // UQE Bridge Event - EMIT EARLY so TalkObjectives complete BEFORE we check quest state
-    if (typeof uqe !== 'undefined') {
-        uqe.eventBus.emit(UQE_EVENTS.NPC_TALK, { id: npc.name });
-        // Run UQE update to process any completed quests immediately
-        uqe.update();
-    }
-
-    // Check for available main quests from this NPC
-    // IMPORTANT: We gather state AFTER the NPC_TALK event so we have fresh quest state
-    if (typeof uqe !== 'undefined' && uqe.allDefinitions) {
-        // Gather current quest state from UQE
-        const uqeCompletedIds = uqe.completedQuests.map(q => q.id);
-        const uqeActiveIds = uqe.activeQuests.map(q => q.id);
-
-        // Get all quests for this NPC from UQE definitions
-        const npcQuests = Object.values(uqe.allDefinitions).filter(q =>
-            q.giver === npc.name
-        );
-
-        // 1. Inject STATUS requests for ACTIVE quests given by this NPC
-        // "Active/In-Progress" dialog option
-        uqe.activeQuests.forEach(quest => {
-            const def = uqe.allDefinitions[quest.id];
-
-            // A. Check if this NPC is the GIVER
-            if (def && def.giver === npc.name) {
-                // Check if ready for turn-in (all objectives complete)
-                const isReadyForTurnIn = quest.objectives.every(o => o.completed);
-
-                if (isReadyForTurnIn) {
-                    activeDialog.nodes.start.choices.unshift({
-                        text: `[Complete] ${quest.title}`,
-                        // next: null, // DialogManager closes if next is undefined
-                        isQuest: true,
-                        questState: 'turnin',
-                        action: 'complete_quest',
-                        questId: quest.id // Required for action handler
-                    });
-                } else {
-                    activeDialog.nodes.start.choices.unshift({
-                        text: `About ${quest.title}...`,
-                        next: `quest_status_${quest.id}`,
-                        isQuest: true,
-                        questState: 'active'
-                    });
-
-                    // Create status node
-                    activeDialog.nodes[`quest_status_${quest.id}`] = {
-                        text: `How goes the task? Remember: ${quest.description}`,
-                        choices: [{ text: 'I\'m working on it.', next: 'start' }]
-                    };
-                }
-            }
-
-            // B. Check if this NPC is a target for a TALK objective (even if not giver)
-            const talkObjective = quest.objectives.find(o =>
-                !o.completed && o.type === 'talk' && o.npcId === npc.name
-            );
-
-            if (talkObjective) {
-                // Add a priority choice to advance the quest
-                // Use 'turnin' state for Yellow ? to match overhead
-                activeDialog.nodes.start.choices.unshift({
-                    text: `[Quest] ${quest.title}`,
-                    next: `quest_talk_${quest.id}_${talkObjective.id}`,
-                    isQuest: true,
-                    questState: 'turnin',
-                    action: 'complete_objective', // Helper action to ensure completion
-                    questId: quest.id,
-                    objectiveId: talkObjective.id
-                });
-
-                // Create a generic response node if not exists
-                //Ideally this would come from dialogs.json, but we provide a fallback
-                if (!activeDialog.nodes[`quest_talk_${quest.id}_${talkObjective.id}`]) {
-                    activeDialog.nodes[`quest_talk_${quest.id}_${talkObjective.id}`] = {
-                        text: "Ah, good. Let us proceed.",
-                        choices: [{ text: "Continue", next: "start" }]
-                    };
-                }
-            }
-        });
-
-        // 2. Inject Available Quests
-        // Only show quest if: not active, not completed, and prereqs met
-        npcQuests.forEach(questDef => {
-            const isActive = uqeActiveIds.includes(questDef.id);
-            const isCompleted = uqeCompletedIds.includes(questDef.id);
-            let prereqMet = true;
-            if (questDef.requires) {
-                prereqMet = uqeCompletedIds.includes(questDef.requires);
-            }
-
-            if (!isActive && !isCompleted && prereqMet) {
-                activeDialog.nodes.start.choices.unshift({
-                    text: questDef.title,
-                    isQuest: true,
-                    questState: 'available',
-                    action: 'quest_accept_v2',
-                    questId: questDef.id,
-                    next: 'quest_accepted',
-                    condition: (stats) => !isQuestActive(questDef.id) && !isQuestCompleted(questDef.id)
-                });
-
-                if (!activeDialog.nodes.quest_accepted) {
-                    activeDialog.nodes.quest_accepted = {
-                        text: `Excellent. Here's what I need you to do: ${questDef.description}`,
-                        choices: [{ text: 'I\'ll get right on it', next: 'end' }]
-                    };
-                }
-            }
-        });
-    }
-
-    currentDialog = activeDialog;
-    currentDialogNode = 'start';
-    // currentShopNPC = npc; // Removed: Handled by currentDialogNPC
-    dialogVisible = true;
-
-    window.UIManager.createDialogUI(npc);
-    window.UIManager.showDialogNode('start');
-}
+// function startDialog moved to DialogManager.js
 
 /**
  * Show a specific dialog node
  */
-function showDialogNode(nodeId) {
-    if (window.UIManager) window.UIManager.showDialogNode(nodeId);
-}
+// function showDialogNode wrapper removed
 
 /**
  * Create dialog UI panel
  */
-function createDialogUI(npc) {
-    if (window.UIManager) window.UIManager.createDialogUI(npc);
-}
+// function createDialogUI wrapper removed
 
 /**
  * Update dialog UI with current node
  */
-function updateDialogUI(node) {
-    UIManager.updateDialogUI(node);
-    return;
-    /*
-    const scene = game.scene.scenes[0];
-    if (!dialogPanel) return;
+// function updateDialogUI wrapper removed
+/*
+const scene = game.scene.scenes[0];
+if (!dialogPanel) return;
  
-    // Clear previous dialog text and choices
-    if (dialogPanel.dialogText) {
-        dialogPanel.dialogText.destroy();
-    }
-    dialogPanel.choiceButtons.forEach(btn => {
-        if (btn.bg) btn.bg.destroy();
-        if (btn.text) btn.text.destroy();
-    });
-    dialogPanel.choiceButtons = [];
+// Clear previous dialog text and choices
+if (dialogPanel.dialogText) {
+    dialogPanel.dialogText.destroy();
+}
+dialogPanel.choiceButtons.forEach(btn => {
+    if (btn.bg) btn.bg.destroy();
+    if (btn.text) btn.text.destroy();
+});
+dialogPanel.choiceButtons = [];
  
-    const panelWidth = 700;
-    const buttonHeight = 40;
-    const buttonSpacing = 10;
-    const portraitHeight = dialogPanel.portraitHeight || 0;
+const panelWidth = 700;
+const buttonHeight = 40;
+const buttonSpacing = 10;
+const portraitHeight = dialogPanel.portraitHeight || 0;
  
-    // Count visible choices first
-    let visibleChoices = 0;
-    node.choices.forEach(choice => {
-        if (!choice.condition) {
-            visibleChoices++;
-        } else {
-            try {
-                let result;
-                if (typeof choice.condition === 'function') {
-                    result = choice.condition(playerStats);
-                } else {
-                    result = evaluateDialogCondition(choice.condition, playerStats);
-                }
-                debugLog(`[DEBUG_DIALOG] Choice '${choice.text}' condition result: ${result} (Condition: ${choice.condition})`);
-                if (result) visibleChoices++;
-            } catch (err) {
-                console.error(`[DEBUG_DIALOG] Error evaluating condition for '${choice.text}':`, err);
+// Count visible choices first
+let visibleChoices = 0;
+node.choices.forEach(choice => {
+    if (!choice.condition) {
+        visibleChoices++;
+    } else {
+        try {
+            let result;
+            if (typeof choice.condition === 'function') {
+                result = choice.condition(playerStats);
+            } else {
+                result = evaluateDialogCondition(choice.condition, playerStats);
             }
+            debugLog(`[DEBUG_DIALOG] Choice '${choice.text}' condition result: ${result} (Condition: ${choice.condition})`);
+            if (result) visibleChoices++;
+        } catch (err) {
+            console.error(`[DEBUG_DIALOG] Error evaluating condition for '${choice.text}':`, err);
         }
-    });
+    }
+});
  
-    // Calculate dynamic panel height
-    const headerHeight = portraitHeight + 50; // Portrait + NPC name area
-    // Improve text height estimation: count lines (approx 24px per line) and length
-    const lineCount = (node.text.match(/\n/g) || []).length + 1;
-    const estHeightByLines = lineCount * 24;
-    const estHeightByLength = node.text.length * 0.6;
-    const textHeight = Math.max(80, Math.min(600, Math.max(estHeightByLines, estHeightByLength))); // Increased max from 150 to 600
-    const choicesHeight = visibleChoices * (buttonHeight + buttonSpacing) + 20;
-    const dynamicPanelHeight = headerHeight + textHeight + choicesHeight + 20;
+// Calculate dynamic panel height
+const headerHeight = portraitHeight + 50; // Portrait + NPC name area
+// Improve text height estimation: count lines (approx 24px per line) and length
+const lineCount = (node.text.match(/\n/g) || []).length + 1;
+const estHeightByLines = lineCount * 24;
+const estHeightByLength = node.text.length * 0.6;
+const textHeight = Math.max(80, Math.min(600, Math.max(estHeightByLines, estHeightByLength))); // Increased max from 150 to 600
+const choicesHeight = visibleChoices * (buttonHeight + buttonSpacing) + 20;
+const dynamicPanelHeight = headerHeight + textHeight + choicesHeight + 20;
  
-    // Update panel size and position
-    const centerX = scene.cameras.main.width / 2;
-    const centerY = scene.cameras.main.height / 2 + 50;
+// Update panel size and position
+const centerX = scene.cameras.main.width / 2;
+const centerY = scene.cameras.main.height / 2 + 50;
  
-    dialogPanel.bg.setPosition(centerX, centerY);
-    dialogPanel.bg.setSize(panelWidth, dynamicPanelHeight);
+dialogPanel.bg.setPosition(centerX, centerY);
+dialogPanel.bg.setSize(panelWidth, dynamicPanelHeight);
  
-    // Reposition portrait at top (full width, centered)
-    if (dialogPanel.portraitImage) {
-        dialogPanel.portraitImage.setPosition(
-            centerX,
-            centerY - dynamicPanelHeight / 2 + portraitHeight / 2 + 10
-        );
+// Reposition portrait at top (full width, centered)
+if (dialogPanel.portraitImage) {
+    dialogPanel.portraitImage.setPosition(
+        centerX,
+        centerY - dynamicPanelHeight / 2 + portraitHeight / 2 + 10
+    );
+}
+ 
+// Reposition NPC name below portrait
+dialogPanel.npcNameText.setPosition(
+    centerX - panelWidth / 2 + 20,
+    centerY - dynamicPanelHeight / 2 + portraitHeight + 15
+);
+ 
+// Dialog text (positioned after NPC name)
+const textX = centerX - panelWidth / 2 + 20;
+const textY = centerY - dynamicPanelHeight / 2 + portraitHeight + 45;
+dialogPanel.dialogText = scene.add.text(
+    textX,
+    textY,
+    node.text,
+    {
+        fontSize: '16px',
+        fill: '#ffffff',
+        wordWrap: { width: panelWidth - 40 }
+    }
+).setScrollFactor(0).setDepth(401).setOrigin(0, 0);
+ 
+// Choice buttons - start after the text area
+const startY = centerY - dynamicPanelHeight / 2 + headerHeight + textHeight;
+ 
+let visibleChoiceCount = 0;
+node.choices.forEach((choice) => {
+    // Skip choices that don't meet their condition
+    if (choice.condition) {
+        try {
+            // Support both string conditions (from JSON) and legacy function conditions
+            let result;
+            if (typeof choice.condition === 'function') {
+                result = choice.condition(playerStats);
+            } else {
+                result = evaluateDialogCondition(choice.condition, playerStats);
+            }
+            debugLog(`[UQE] Choice '${choice.text}' (Quest: ${choice.questId || 'none'}, Action: ${choice.action || 'next'}) condition: ${result}`);
+            if (!result) return;
+        } catch (err) {
+            console.error(`❌ [Dialog] Condition error for '${choice.text}':`, err);
+            return; // Hide on error for safety
+        }
     }
  
-    // Reposition NPC name below portrait
-    dialogPanel.npcNameText.setPosition(
-        centerX - panelWidth / 2 + 20,
-        centerY - dynamicPanelHeight / 2 + portraitHeight + 15
-    );
+    const buttonY = startY + visibleChoiceCount * (buttonHeight + buttonSpacing);
+    visibleChoiceCount++;
+    const buttonWidth = panelWidth - 40;
  
-    // Dialog text (positioned after NPC name)
-    const textX = centerX - panelWidth / 2 + 20;
-    const textY = centerY - dynamicPanelHeight / 2 + portraitHeight + 45;
-    dialogPanel.dialogText = scene.add.text(
-        textX,
-        textY,
-        node.text,
+    // Button background
+    const buttonBg = scene.add.rectangle(
+        centerX,
+        buttonY,
+        buttonWidth,
+        buttonHeight,
+        0x333333,
+        0.9
+    ).setScrollFactor(0).setDepth(401)
+        .setStrokeStyle(2, 0x666666)
+        .setInteractive({ useHandCursor: true });
+ 
+    // Button text with indicators
+    const isQuest = choice.isQuest;
+    const isLore = choice.action === 'unlock_lore' && choice.loreId;
+ 
+    // Check if lore is already unlocked
+    let loreAlreadyUnlocked = false;
+    if (isLore) {
+        try {
+            const unlockedLore = JSON.parse(localStorage.getItem('rpg_unlocked_lore') || '[]');
+            loreAlreadyUnlocked = unlockedLore.includes(choice.loreId);
+        } catch (e) { }
+    }
+ 
+    // Build display text with appropriate prefix
+    let displayText = choice.text;
+    if (isQuest) {
+        displayText = `(!) ${choice.text}`;
+    } else if (isLore) {
+        displayText = loreAlreadyUnlocked ? `✓ ${choice.text}` : `○ ${choice.text}`;
+    }
+ 
+    const buttonText = scene.add.text(
+        centerX,
+        buttonY,
+        displayText,
         {
             fontSize: '16px',
-            fill: '#ffffff',
-            wordWrap: { width: panelWidth - 40 }
+            fill: '#ffffff'
         }
-    ).setScrollFactor(0).setDepth(401).setOrigin(0, 0);
+    ).setScrollFactor(0).setDepth(402).setOrigin(0.5, 0.5);
  
-    // Choice buttons - start after the text area
-    const startY = centerY - dynamicPanelHeight / 2 + headerHeight + textHeight;
+    // Apply colors based on type
+    if (isQuest) {
+        buttonText.setFill('#ffff00'); // Yellow for quests
+    } else if (isLore) {
+        buttonText.setFill(loreAlreadyUnlocked ? '#88ff88' : '#9370DB'); // Green if read, purple if new
+    }
  
-    let visibleChoiceCount = 0;
-    node.choices.forEach((choice) => {
-        // Skip choices that don't meet their condition
-        if (choice.condition) {
-            try {
-                // Support both string conditions (from JSON) and legacy function conditions
-                let result;
-                if (typeof choice.condition === 'function') {
-                    result = choice.condition(playerStats);
-                } else {
-                    result = evaluateDialogCondition(choice.condition, playerStats);
+    // Button hover effects
+    buttonBg.on('pointerover', () => {
+        buttonBg.setFillStyle(0x444444);
+    });
+    buttonBg.on('pointerout', () => {
+        buttonBg.setFillStyle(0x333333);
+    });
+ 
+    // Button click handler
+    buttonBg.on('pointerdown', (pointer) => {
+        if (pointer && pointer.event) {
+            pointer.event.stopPropagation();
+        }
+ 
+        const questId = choice.questId;
+        const action = choice.action;
+ 
+        // Handle lore unlock action
+        if (action === 'unlock_lore' && choice.loreId) {
+            if (window.loreManager && typeof window.loreManager.unlock === 'function') {
+                window.loreManager.unlock(choice.loreId);
+                debugLog(`📖 [Dialog] Unlocked lore: ${choice.loreId}`);
+            } else {
+                // Fallback: directly add to localStorage
+                try {
+                    const unlockedLore = JSON.parse(localStorage.getItem('rpg_unlocked_lore') || '[]');
+                    if (!unlockedLore.includes(choice.loreId)) {
+                        unlockedLore.push(choice.loreId);
+                        localStorage.setItem('rpg_unlocked_lore', JSON.stringify(unlockedLore));
+                        debugLog(`📖 [Dialog] Unlocked lore (fallback): ${choice.loreId}`);
+                        addChatMessage(`New lore discovered: Press L to read`, 0x9370DB, '📜');
+                    }
+                } catch (e) {
+                    console.warn('Failed to save lore unlock:', e);
                 }
-                debugLog(`[UQE] Choice '${choice.text}' (Quest: ${choice.questId || 'none'}, Action: ${choice.action || 'next'}) condition: ${result}`);
-                if (!result) return;
-            } catch (err) {
-                console.error(`❌ [Dialog] Condition error for '${choice.text}':`, err);
-                return; // Hide on error for safety
             }
         }
  
-        const buttonY = startY + visibleChoiceCount * (buttonHeight + buttonSpacing);
-        visibleChoiceCount++;
-        const buttonWidth = panelWidth - 40;
+        if (action === 'open_shop') {
+            openShop(currentDialogNPC);
+        } else if (action === 'choose_class') {
+            chooseClass(choice.className);
+            if (choice.next) showDialogNode(choice.next);
+            if (choice.next) showDialogNode(choice.next);
+            else closeDialog();
+        } else if (action === 'complete_objective') {
+            // Handle single objective completion (e.g. Interrogation)
+            if (window.uqe && choice.questId && choice.objectiveId) {
+                const quest = window.uqe.activeQuests.find(q => q.id === choice.questId);
+                if (quest) {
+                    const obj = quest.objectives.find(o => o.id === choice.objectiveId);
+                    if (obj && !obj.isComplete()) {
+                        obj.progress = obj.target;
+                        obj.completed = true;
+                        // Check if this completes the whole quest
+                        quest.checkCompletion();
+                        window.uqe.update();
  
-        // Button background
-        const buttonBg = scene.add.rectangle(
-            centerX,
-            buttonY,
-            buttonWidth,
-            buttonHeight,
-            0x333333,
-            0.9
-        ).setScrollFactor(0).setDepth(401)
-            .setStrokeStyle(2, 0x666666)
-            .setInteractive({ useHandCursor: true });
- 
-        // Button text with indicators
-        const isQuest = choice.isQuest;
-        const isLore = choice.action === 'unlock_lore' && choice.loreId;
- 
-        // Check if lore is already unlocked
-        let loreAlreadyUnlocked = false;
-        if (isLore) {
-            try {
-                const unlockedLore = JSON.parse(localStorage.getItem('rpg_unlocked_lore') || '[]');
-                loreAlreadyUnlocked = unlockedLore.includes(choice.loreId);
-            } catch (e) { }
-        }
- 
-        // Build display text with appropriate prefix
-        let displayText = choice.text;
-        if (isQuest) {
-            displayText = `(!) ${choice.text}`;
-        } else if (isLore) {
-            displayText = loreAlreadyUnlocked ? `✓ ${choice.text}` : `○ ${choice.text}`;
-        }
- 
-        const buttonText = scene.add.text(
-            centerX,
-            buttonY,
-            displayText,
-            {
-                fontSize: '16px',
-                fill: '#ffffff'
-            }
-        ).setScrollFactor(0).setDepth(402).setOrigin(0.5, 0.5);
- 
-        // Apply colors based on type
-        if (isQuest) {
-            buttonText.setFill('#ffff00'); // Yellow for quests
-        } else if (isLore) {
-            buttonText.setFill(loreAlreadyUnlocked ? '#88ff88' : '#9370DB'); // Green if read, purple if new
-        }
- 
-        // Button hover effects
-        buttonBg.on('pointerover', () => {
-            buttonBg.setFillStyle(0x444444);
-        });
-        buttonBg.on('pointerout', () => {
-            buttonBg.setFillStyle(0x333333);
-        });
- 
-        // Button click handler
-        buttonBg.on('pointerdown', (pointer) => {
-            if (pointer && pointer.event) {
-                pointer.event.stopPropagation();
-            }
- 
-            const questId = choice.questId;
-            const action = choice.action;
- 
-            // Handle lore unlock action
-            if (action === 'unlock_lore' && choice.loreId) {
-                if (window.loreManager && typeof window.loreManager.unlock === 'function') {
-                    window.loreManager.unlock(choice.loreId);
-                    debugLog(`📖 [Dialog] Unlocked lore: ${choice.loreId}`);
-                } else {
-                    // Fallback: directly add to localStorage
-                    try {
-                        const unlockedLore = JSON.parse(localStorage.getItem('rpg_unlocked_lore') || '[]');
-                        if (!unlockedLore.includes(choice.loreId)) {
-                            unlockedLore.push(choice.loreId);
-                            localStorage.setItem('rpg_unlocked_lore', JSON.stringify(unlockedLore));
-                            debugLog(`📖 [Dialog] Unlocked lore (fallback): ${choice.loreId}`);
-                            addChatMessage(`New lore discovered: Press L to read`, 0x9370DB, '📜');
-                        }
-                    } catch (e) {
-                        console.warn('Failed to save lore unlock:', e);
+                        addChatMessage(`Objective updated: ${obj.description || choice.objectiveId}`, 0x00ff00);
                     }
                 }
             }
+            if (choice.next) showDialogNode(choice.next);
+            else closeDialog();
  
-            if (action === 'open_shop') {
-                openShop(currentDialogNPC);
-            } else if (action === 'choose_class') {
-                chooseClass(choice.className);
-                if (choice.next) showDialogNode(choice.next);
-                if (choice.next) showDialogNode(choice.next);
-                else closeDialog();
-            } else if (action === 'complete_objective') {
-                // Handle single objective completion (e.g. Interrogation)
-                if (window.uqe && choice.questId && choice.objectiveId) {
-                    const quest = window.uqe.activeQuests.find(q => q.id === choice.questId);
-                    if (quest) {
-                        const obj = quest.objectives.find(o => o.id === choice.objectiveId);
-                        if (obj && !obj.isComplete()) {
-                            obj.progress = obj.target;
-                            obj.completed = true;
-                            // Check if this completes the whole quest
-                            quest.checkCompletion();
-                            window.uqe.update();
+        } else if (action === 'quest_complete' || action === 'quest_turnin' || action === 'complete_quest') {
+            // Handle quest completion via dialog
+            debugLog('✅ Action was quest completion - closing dialog to unblock queue');
  
-                            addChatMessage(`Objective updated: ${obj.description || choice.objectiveId}`, 0x00ff00);
-                        }
-                    }
+            // Complete the quest via UQE
+            if (window.uqe && choice.questId) {
+                window.uqe.completeQuest(choice.questId); // Assuming completeQuest helper exists in UQE wrapper or use uqe.activeQuests logic
+                // Actually UQE engine has completeQuest? No, engine.update() handles it.
+                // But for manual turn-in, we might need to force it or set a flag?
+                // NO wait, UQE automatically completes once all objectives are done.
+                // BUT for 'talk' objectives, they auto-complete on talk.
+                // If the quest requires a "Turn In" action, implying the final step was manual?
+                // Re-checking UQE: `Quest.checkCompletion()` checks if all objectives are complete.
+                // If the dialogue IS the final objective (Talk), it should have completed by now?
+                // Wait, `startDialog` emits `NPC_TALK`. If the last objective was `talk`, it completes. `uqe.update()` moves it to completed.
+                // So `action: complete_quest` might be redundant or just for UI feedback/closing.
+                // BUT, if we want to ensure it is marked complete, we can call it.
+                // Does UQE have `completeQuest`?
+                // Checking UQE class... it has no `completeQuest` method exposed on `uqe`?
+                // It has `acceptQuest`.
+                // It has `update` which calls `checkCompletion`.
+                // If we want to FORCE completion, we might need to find the quest and set `completed = true`?
+                // OR set the remaining 'talk' objective to complete.
+ 
+                const quest = window.uqe.activeQuests.find(q => q.id === choice.questId);
+                if (quest) {
+                    // Mark all objectives as complete?
+                    // Or just force complete.
+                    quest.objectives.forEach(o => o.progress = o.target);
+                    quest.objectives.forEach(o => o.completed = true);
+                    quest.checkCompletion(); // This sets quest.completed = true
+                    window.uqe.update(); // This moves it to completedQuests
                 }
-                if (choice.next) showDialogNode(choice.next);
-                else closeDialog();
+            }
  
-            } else if (action === 'quest_complete' || action === 'quest_turnin' || action === 'complete_quest') {
-                // Handle quest completion via dialog
-                debugLog('✅ Action was quest completion - closing dialog to unblock queue');
+            closeDialog();
+        } else if (action === 'quest_advance' || action === 'quest_accept' || action === 'quest_accept_side' || action === 'quest_accept_v2' || action === 'quest_accept_main') {
+            // UNIFIED UQE BRIDGE REDIRECT with PREVIEW MODAL
+            const questEngine = window.uqe;
+            if (questId && typeof questEngine !== 'undefined' && questEngine.allDefinitions[questId]) {
+                debugLog(`🔗 [UQE Bridge] Showing preview for quest: ${questId}`);
  
-                // Complete the quest via UQE
-                if (window.uqe && choice.questId) {
-                    window.uqe.completeQuest(choice.questId); // Assuming completeQuest helper exists in UQE wrapper or use uqe.activeQuests logic
-                    // Actually UQE engine has completeQuest? No, engine.update() handles it.
-                    // But for manual turn-in, we might need to force it or set a flag?
-                    // NO wait, UQE automatically completes once all objectives are done.
-                    // BUT for 'talk' objectives, they auto-complete on talk.
-                    // If the quest requires a "Turn In" action, implying the final step was manual?
-                    // Re-checking UQE: `Quest.checkCompletion()` checks if all objectives are complete.
-                    // If the dialogue IS the final objective (Talk), it should have completed by now?
-                    // Wait, `startDialog` emits `NPC_TALK`. If the last objective was `talk`, it completes. `uqe.update()` moves it to completed.
-                    // So `action: complete_quest` might be redundant or just for UI feedback/closing.
-                    // BUT, if we want to ensure it is marked complete, we can call it.
-                    // Does UQE have `completeQuest`?
-                    // Checking UQE class... it has no `completeQuest` method exposed on `uqe`?
-                    // It has `acceptQuest`.
-                    // It has `update` which calls `checkCompletion`.
-                    // If we want to FORCE completion, we might need to find the quest and set `completed = true`?
-                    // OR set the remaining 'talk' objective to complete.
+                // Store current NPC for reopening dialog after accept/decline
+                const currentNPC = currentDialogNPC;
  
-                    const quest = window.uqe.activeQuests.find(q => q.id === choice.questId);
-                    if (quest) {
-                        // Mark all objectives as complete?
-                        // Or just force complete.
-                        quest.objectives.forEach(o => o.progress = o.target);
-                        quest.objectives.forEach(o => o.completed = true);
-                        quest.checkCompletion(); // This sets quest.completed = true
-                        window.uqe.update(); // This moves it to completedQuests
-                    }
-                }
- 
+                // Close dialog first
                 closeDialog();
-            } else if (action === 'quest_advance' || action === 'quest_accept' || action === 'quest_accept_side' || action === 'quest_accept_v2' || action === 'quest_accept_main') {
-                // UNIFIED UQE BRIDGE REDIRECT with PREVIEW MODAL
-                const questEngine = window.uqe;
-                if (questId && typeof questEngine !== 'undefined' && questEngine.allDefinitions[questId]) {
-                    debugLog(`🔗 [UQE Bridge] Showing preview for quest: ${questId}`);
  
-                    // Store current NPC for reopening dialog after accept/decline
-                    const currentNPC = currentDialogNPC;
+                // Show quest preview modal
+                showQuestPreviewModalEnhanced(questId,
+                    // On Accept - accept quest then reopen dialog
+                    () => {
+                        questEngine.acceptQuest(questId);
  
-                    // Close dialog first
-                    closeDialog();
+                        // Sync: Remove from legacy lists if it exists there
+                        playerStats.quests.main = playerStats.quests.main.filter(q => q.id !== questId);
+                        playerStats.quests.active = playerStats.quests.active.filter(q => q.id !== questId);
+                        playerStats.quests.available = playerStats.quests.available.filter(q => q.id !== questId);
  
-                    // Show quest preview modal
-                    showQuestPreviewModalEnhanced(questId,
-                        // On Accept - accept quest then reopen dialog
-                        () => {
-                            questEngine.acceptQuest(questId);
+                        showDamageNumber(player.x, player.y - 40, "Quest Accepted!", 0x00ff00);
+                        playSound('item_pickup');
  
-                            // Sync: Remove from legacy lists if it exists there
-                            playerStats.quests.main = playerStats.quests.main.filter(q => q.id !== questId);
-                            playerStats.quests.active = playerStats.quests.active.filter(q => q.id !== questId);
-                            playerStats.quests.available = playerStats.quests.available.filter(q => q.id !== questId);
+                        // Update the quest tracker HUD to show the new quest
+                        updateQuestTrackerHUD();
  
-                            showDamageNumber(player.x, player.y - 40, "Quest Accepted!", 0x00ff00);
-                            playSound('item_pickup');
- 
-                            // Update the quest tracker HUD to show the new quest
-                            updateQuestTrackerHUD();
- 
-                            // Reopen dialog with NPC so player can continue talking
-                            debugLog('📋 [Dialog] Accept callback - reopening dialog with:', currentNPC?.name);
-                            if (currentNPC) {
-                                setTimeout(() => startDialog(currentNPC), 50);
-                            }
-                        },
-                        // On Decline - reopen dialog with NPC
-                        () => {
-                            debugLog('📋 [Dialog] Decline callback - reopening dialog with:', currentNPC?.name);
-                            if (currentNPC) {
-                                setTimeout(() => startDialog(currentNPC), 50);
-                            }
+                        // Reopen dialog with NPC so player can continue talking
+                        debugLog('📋 [Dialog] Accept callback - reopening dialog with:', currentNPC?.name);
+                        if (currentNPC) {
+                            setTimeout(() => startDialog(currentNPC), 50);
                         }
-                    );
-                } else {
-                    // Quest not found in UQE - should not happen with proper setup
-                    console.warn(`⚠️ Quest ${questId} not found in UQE definitions! All quests should be in quests_v2.json.`);
-                    addChatMessage(`Quest not found: ${questId}`, 0xff0000, '⚠️');
-                    if (choice.next) {
-                        showDialogNode(choice.next);
-                    } else {
-                        closeDialog();
+                    },
+                    // On Decline - reopen dialog with NPC
+                    () => {
+                        debugLog('📋 [Dialog] Decline callback - reopening dialog with:', currentNPC?.name);
+                        if (currentNPC) {
+                            setTimeout(() => startDialog(currentNPC), 50);
+                        }
                     }
-                }
-            } else if (action === 'accept_all') {
-                acceptAllAvailableQuests();
+                );
+            } else {
+                // Quest not found in UQE - should not happen with proper setup
+                console.warn(`⚠️ Quest ${questId} not found in UQE definitions! All quests should be in quests_v2.json.`);
+                addChatMessage(`Quest not found: ${questId}`, 0xff0000, '⚠️');
                 if (choice.next) {
                     showDialogNode(choice.next);
                 } else {
                     closeDialog();
                 }
-            } else if (choice.next) {
+            }
+        } else if (action === 'accept_all') {
+            acceptAllAvailableQuests();
+            if (choice.next) {
                 showDialogNode(choice.next);
             } else {
                 closeDialog();
             }
-        });
- 
-        dialogPanel.choiceButtons.push({
-            bg: buttonBg,
-            text: buttonText,
-            choice: choice
-        });
+        } else if (choice.next) {
+            showDialogNode(choice.next);
+        } else {
+            closeDialog();
+        }
     });
-    */
-}
+ 
+    dialogPanel.choiceButtons.push({
+        bg: buttonBg,
+        text: buttonText,
+        choice: choice
+    });
+});
+*/
+
 
 /**
  * Close dialog
@@ -10105,9 +10002,7 @@ function updateDialogUI(node) {
 /**
  * Close dialog
  */
-function closeDialog() {
-    UIManager.closeDialog();
-}
+// function closeDialog wrapper removed
 
 // ============================================
 // SHOP SYSTEM
@@ -14879,290 +14774,7 @@ function showQuestCompletedPopupEnhanced(quest) {
 /**
  * Enhanced Quest Preview Modal with Portrait and Details
  */
-function showQuestPreviewModalEnhanced(questId, onAccept, onDecline) {
-    debugLog(`[Quest Debug] START showQuestPreviewModalEnhanced for ${questId}`);
-    const scene = game.scene.scenes[0];
-
-    // Get quest definition from UQE
-    const questDef = uqe.allDefinitions[questId];
-    if (!questDef) {
-        console.error(`Quest ${questId} not found in UQE definitions`);
-        if (onDecline) onDecline();
-        return;
-    }
-
-    // Hide any existing preview modal
-    if (questPreviewModal) {
-        if (typeof hideQuestPreviewModal === 'function') {
-            hideQuestPreviewModal();
-        } else {
-            // Fallback destroy
-            if (questPreviewModal && questPreviewModal.destroy) questPreviewModal.destroy();
-            questPreviewModal = null;
-        }
-    }
-
-    const centerX = scene.cameras.main.width / 2;
-    const centerY = scene.cameras.main.height / 2;
-
-    // Adjusted dimensions for vertical layout
-    const modalWidth = 600;
-    const portraitHeight = 150;
-    const padding = 20;
-    const contentHeight = 350; // Text area
-    const modalHeight = portraitHeight + contentHeight; // Total height ~500
-
-    // Background overlay
-    const overlay = scene.add.rectangle(centerX, centerY, scene.cameras.main.width, scene.cameras.main.height, 0x000000, 0.70)
-        .setScrollFactor(0).setDepth(2100).setInteractive();
-
-    // Modal background
-    const modalBg = scene.add.rectangle(centerX, centerY, modalWidth, modalHeight, 0x111111, 0.98)
-        .setScrollFactor(0).setDepth(2101).setStrokeStyle(3, 0xffd700);
-
-    const elements = [overlay, modalBg];
-
-    // Top Y coordinate of the modal
-    const modalTopY = centerY - modalHeight / 2;
-    let currentY = modalTopY + padding;
-
-    // --- Portrait Section (Top) ---
-    // Lookup NPC using registry
-    let npc = null;
-    if (typeof npcRegistry !== 'undefined' && questDef.giver) {
-        npc = npcRegistry[questDef.giver];
-    }
-
-    // Check if portrait exists
-    if (npc && npc.portraitKey && scene.textures.exists(npc.portraitKey)) {
-        // Portrait dimensions
-        const targetWidth = modalWidth - 20; // 580
-        const centerPortraitY = modalTopY + portraitHeight / 2 + 10;
-
-        // Add container/background for portrait area
-        const portraitBg = scene.add.rectangle(centerX, centerPortraitY, targetWidth, portraitHeight, 0x222222)
-            .setScrollFactor(0).setDepth(2102);
-
-        // Portrait Image
-        const portrait = scene.add.image(centerX, centerPortraitY, npc.portraitKey)
-            .setScrollFactor(0).setDepth(2102);
-
-        // Scaling logic: "Cover" strategy
-        // We want to fill width (580) always.
-        const scaleX = targetWidth / portrait.width;
-        portrait.setScale(scaleX);
-
-        // Center the image vertically in the box
-        portrait.setPosition(centerX, centerPortraitY);
-
-        // MASKING
-        const maskShape = scene.make.graphics();
-        maskShape.fillStyle(0xffffff);
-        // Fix: Mask must also be fixed to camera to match the image
-        maskShape.setScrollFactor(0);
-
-        // Draw mask at world coordinates (which map to screen because ScrollFactor is 0)
-        maskShape.fillRect(centerX - targetWidth / 2, centerPortraitY - portraitHeight / 2, targetWidth, portraitHeight);
-
-        const mask = maskShape.createGeometryMask();
-        portrait.setMask(mask);
-
-        // Ensure mask graphics is destroyed when closing
-        elements.push(maskShape);
-
-        // Add a frame around portrait (on top of image)
-        const portraitFrame = scene.add.rectangle(centerX, centerPortraitY, targetWidth, portraitHeight, 0x000000, 0)
-            .setScrollFactor(0).setDepth(2104).setStrokeStyle(2, 0x444444);
-
-        elements.push(portraitBg, portrait, portraitFrame);
-
-        // NPC Name Overlay on portrait (bottom left of the portrait box)
-        const nameY = centerPortraitY + portraitHeight / 2 - 15;
-        const nameBg = scene.add.rectangle(centerX, nameY, targetWidth, 30, 0x000000, 0.7)
-            .setScrollFactor(0).setDepth(2103);
-
-        const npcName = scene.add.text(centerX, nameY, npc.name, {
-            fontSize: '18px',
-            fill: '#ffd700',
-            fontStyle: 'bold'
-        }).setScrollFactor(0).setDepth(2104).setOrigin(0.5);
-
-        elements.push(nameBg, npcName);
-
-        currentY += portraitHeight + 30;
-    } else {
-        // No portrait, just add a spacer
-        currentY += 40;
-    }
-
-    // --- Text Content (Below Portrait) ---
-
-    // Header "QUEST OFFER"
-    const header = scene.add.text(centerX, currentY, 'QUEST OFFER', {
-        fontSize: '24px',
-        fill: '#ffffff',
-        fontStyle: 'bold'
-    }).setScrollFactor(0).setDepth(2103).setOrigin(0.5, 0);
-    elements.push(header);
-    currentY += 35;
-
-    // Quest title
-    const questTitle = scene.add.text(centerX, currentY, questDef.title, {
-        fontSize: '22px',
-        fill: '#ffff00', // Yellow title
-        fontStyle: 'bold',
-        wordWrap: { width: modalWidth - 40 },
-        align: 'center'
-    }).setScrollFactor(0).setDepth(2103).setOrigin(0.5, 0);
-    elements.push(questTitle);
-    currentY += questTitle.height + 15;
-
-    // Quest description
-    const questDesc = scene.add.text(centerX, currentY, questDef.description || "No description available.", {
-        fontSize: '15px',
-        fill: '#cccccc',
-        wordWrap: { width: modalWidth - 60 },
-        align: 'center'
-    }).setScrollFactor(0).setDepth(2103).setOrigin(0.5, 0);
-    elements.push(questDesc);
-    currentY += Math.max(60, questDesc.height + 20); // Minimum height spacing
-
-    // Objectives section
-    const objLabel = scene.add.text(centerX - (modalWidth / 2) + 40, currentY, 'Objectives:', {
-        fontSize: '16px',
-        fill: '#ffffff',
-        fontStyle: 'bold'
-    }).setScrollFactor(0).setDepth(2103).setOrigin(0, 0);
-    elements.push(objLabel);
-    currentY += 25;
-
-    if (questDef.objectives) {
-        questDef.objectives.forEach(obj => {
-            const objText = scene.add.text(centerX - (modalWidth / 2) + 50, currentY, `⏳ ${obj.label}: 0/${obj.target}`, {
-                fontSize: '14px',
-                fill: '#aaaaaa'
-            }).setScrollFactor(0).setDepth(2103).setOrigin(0, 0);
-            elements.push(objText);
-            currentY += 20;
-        });
-    }
-
-    // Rewards section
-    currentY += 10;
-    const rewardsLabel = scene.add.text(centerX - (modalWidth / 2) + 40, currentY, 'Rewards:', {
-        fontSize: '16px',
-        fill: '#ffd700', // Gold color
-        fontStyle: 'bold'
-    }).setScrollFactor(0).setDepth(2103).setOrigin(0, 0);
-    elements.push(rewardsLabel);
-    currentY += 25;
-
-    if (questDef.rewards) {
-        let rewardStr = "";
-        if (questDef.rewards.xp) rewardStr += `+${questDef.rewards.xp} XP  `;
-        if (questDef.rewards.gold) rewardStr += `+${questDef.rewards.gold} Gold`;
-
-        const rewardText = scene.add.text(centerX - (modalWidth / 2) + 50, currentY, rewardStr, {
-            fontSize: '15px',
-            fill: '#00ff00'
-        }).setScrollFactor(0).setDepth(2103).setOrigin(0, 0);
-        elements.push(rewardText);
-    }
-
-    // Buttons (Bottom)
-    const btnY = centerY + modalHeight / 2 - 40;
-
-    // Accept button
-    const acceptBtn = scene.add.rectangle(centerX - 80, btnY, 140, 40, 0x00aa00, 1)
-        .setScrollFactor(0).setDepth(2103).setStrokeStyle(2, 0x00ff00).setInteractive({ useHandCursor: true });
-
-    const acceptBtnText = scene.add.text(centerX - 80, btnY, 'Accept', {
-        fontSize: '16px', fill: '#ffffff', fontStyle: 'bold'
-    }).setScrollFactor(0).setDepth(2104).setOrigin(0.5);
-
-    elements.push(acceptBtn, acceptBtnText);
-
-    // Decline button
-    const declineBtn = scene.add.rectangle(centerX + 80, btnY, 140, 40, 0x666666, 1)
-        .setScrollFactor(0).setDepth(2103).setStrokeStyle(2, 0xaaaaaa).setInteractive({ useHandCursor: true });
-
-    const declineBtnText = scene.add.text(centerX + 80, btnY, 'Decline', {
-        fontSize: '16px', fill: '#ffffff', fontStyle: 'bold'
-    }).setScrollFactor(0).setDepth(2104).setOrigin(0.5);
-
-    elements.push(declineBtn, declineBtnText);
-
-    // Handlers
-    const acceptHandler = () => {
-        elements.forEach(e => e.destroy());
-        questPreviewModal = null;
-
-        // Record closure time
-        if (game.scene.scenes[0]) {
-            game.scene.scenes[0].lastWindowCloseTime = game.scene.scenes[0].time.now;
-        }
-
-        if (onAccept) onAccept();
-    };
-
-    const declineHandler = () => {
-        elements.forEach(e => e.destroy());
-        questPreviewModal = null;
-
-        // Play decline sound
-        if (typeof playSound === 'function') {
-            playSound('quest_decline');
-        }
-
-        // Record closure time
-        if (game.scene.scenes[0]) {
-            game.scene.scenes[0].lastWindowCloseTime = game.scene.scenes[0].time.now;
-        }
-
-        if (onDecline) onDecline();
-    };
-
-    // Events
-    acceptBtn.on('pointerover', () => acceptBtn.setFillStyle(0x00cc00));
-    acceptBtn.on('pointerout', () => acceptBtn.setFillStyle(0x00aa00));
-    acceptBtn.on('pointerdown', acceptHandler);
-
-    declineBtn.on('pointerover', () => declineBtn.setFillStyle(0x888888));
-    declineBtn.on('pointerout', () => declineBtn.setFillStyle(0x666666));
-    declineBtn.on('pointerdown', declineHandler);
-
-    // Store global reference for destroy and controller access
-    window.questPreviewModal = {
-        acceptBtn: acceptBtn,
-        declineBtn: declineBtn,
-        destroy: () => {
-            elements.forEach(e => e.destroy());
-
-            // Record closure time
-            if (game.scene.scenes[0]) {
-                game.scene.scenes[0].lastWindowCloseTime = game.scene.scenes[0].time.now;
-            }
-
-            window.questPreviewModal = null;
-            questPreviewModal = null;
-        }
-    };
-    questPreviewModal = window.questPreviewModal;
-
-    debugLog('[Quest Debug] questPreviewModal assigned with buttons:', {
-        acceptBtn: !!acceptBtn,
-        declineBtn: !!declineBtn
-    });
-
-    // Animation
-    scene.tweens.add({
-        targets: elements,
-        scale: { from: 0.95, to: 1 },
-        alpha: { from: 0, to: 1 },
-        duration: 200,
-        ease: 'Back.out'
-    });
-}
+// function showQuestPreviewModalEnhanced moved to DialogManager.js
 
 // Defense Quest Wave Spawner State
 // let defenseSpawnerState = { ... }; // Moved to top of file

@@ -12,7 +12,7 @@ window.GameState = {
     // ============================================
     // GAME META
     // ============================================
-    gameVersion: 'v0.9.197',
+    gameVersion: 'v0.9.215.debug', // Bumped for cache busting
 
     // ============================================
     // PLAYER DATA

@@ -3448,6 +3448,14 @@ function create() {
         .setScale(0.7) // Smaller than regular items
         .setInteractive({ useHandCursor: true });
 
+    // Equipment Label (E / D-Up)
+    this.equipmentLabel = this.add.text(this.scale.width - 70, 45, 'E', {
+        fontSize: '12px',
+        fill: '#ffffff',
+        stroke: '#000000',
+        strokeThickness: 2
+    }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(1);
+
     this.equipmentIcon.on('pointerover', () => this.equipmentIcon.setTint(0xcccccc)); // Dim hint
     this.equipmentIcon.on('pointerout', () => this.equipmentIcon.clearTint());
     this.equipmentIcon.on('pointerdown', (pointer, localX, localY, event) => {
@@ -3475,6 +3483,14 @@ function create() {
         .setDepth(1)
         .setInteractive({ useHandCursor: true });
 
+    // Settings Label (Esc / Sel)
+    this.settingsLabel = this.add.text(this.scale.width - 25, 45, 'Esc', {
+        fontSize: '12px',
+        fill: '#ffffff',
+        stroke: '#000000',
+        strokeThickness: 2
+    }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(1);
+
     this.settingsIcon.on('pointerover', () => this.settingsIcon.setScale(1.1));
     this.settingsIcon.on('pointerout', () => this.settingsIcon.setScale(1.0));
     this.settingsIcon.on('pointerdown', (pointer, localX, localY, event) => {
@@ -3484,6 +3500,29 @@ function create() {
             if (typeof playSound === 'function') playSound('menu_select');
         }
     });
+
+    // --- HUD LABEL UPDATES ---
+    this.updateHUDLabels = () => {
+        if (typeof window.getInputLabel !== 'function') return;
+        
+        // Update Equipment Label
+        if (this.equipmentLabel) {
+            this.equipmentLabel.setText(window.getInputLabel('equipment'));
+        }
+        
+        // Update Settings Label
+        if (this.settingsLabel) {
+            this.settingsLabel.setText(window.getInputLabel('settings'));
+        }
+    };
+
+    // Listen for input mode changes
+    this.events.on('input-mode-changed', () => {
+        if (this.updateHUDLabels) this.updateHUDLabels();
+    });
+
+    // Initial Update
+    if (this.updateHUDLabels) this.updateHUDLabels();
 
     // Store reference globally
     // Store reference globally

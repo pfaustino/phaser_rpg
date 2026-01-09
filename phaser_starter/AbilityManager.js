@@ -148,7 +148,41 @@ class AbilityManager {
         this.createPotionSlots(startX, index, abilityBarY, abilitySpacing);
         this.updatePotionSlots();
 
+        // Listen for input mode changes to update labels
+        if (this.scene && this.scene.events) {
+            this.scene.events.on('input-mode-changed', (mode) => {
+                this.updateInputLabels();
+            });
+        }
+
+        // Initial label update
+        this.updateInputLabels();
+
         console.log(`[AbilityManager] Ability bar created with ${this.abilityBar.buttons.length} abilities`);
+    }
+
+    /**
+     * Update hotbar labels based on current input mode (keyboard vs gamepad)
+     */
+    updateInputLabels() {
+        if (!this.abilityBar || !this.abilityBar.buttons || typeof window.getInputLabel !== 'function') return;
+
+        // Update Ability Buttons (1-4)
+        this.abilityBar.buttons.forEach((btn, index) => {
+            const actionName = `ability${index + 1}`;
+            const label = window.getInputLabel(actionName);
+            if (btn.keyText) btn.keyText.setText(label);
+        });
+
+        // Update Potion Slots
+        // Health Potion (Slot 0)
+        if (this.abilityBar.potionSlots[0] && this.abilityBar.potionSlots[0].keyText) {
+            this.abilityBar.potionSlots[0].keyText.setText(window.getInputLabel('healthPotion'));
+        }
+        // Mana Potion (Slot 1)
+        if (this.abilityBar.potionSlots[1] && this.abilityBar.potionSlots[1].keyText) {
+            this.abilityBar.potionSlots[1].keyText.setText(window.getInputLabel('manaPotion'));
+        }
     }
 
     createPotionSlots(startX, index, abilityBarY, abilitySpacing) {

@@ -18,12 +18,47 @@
         "DPAD_LEFT": 14,
         "DPAD_RIGHT": 15
     },
+    "uiLabels": {
+        "ability1": {
+            "keyboard": "1",
+            "gamepad": "X"
+        },
+        "ability2": {
+            "keyboard": "2",
+            "gamepad": "Y"
+        },
+        "ability3": {
+            "keyboard": "3",
+            "gamepad": "B"
+        },
+        "ability4": {
+            "keyboard": "4",
+            "gamepad": "LT"
+        },
+        "healthPotion": {
+            "keyboard": "5",
+            "gamepad": "LB"
+        },
+        "manaPotion": {
+            "keyboard": "6",
+            "gamepad": "RB"
+        },
+        "equipment": {
+            "keyboard": "E",
+            "gamepad": "D-Up"
+        },
+        "settings": {
+            "keyboard": "Esc",
+            "gamepad": "Sel"
+        }
+    },
     "actions": {
         "attack": "A",
         "cancel": "B",
         "ability1": "X",
         "ability2": "Y",
         "ability3": "B",
+        "ability4": "LT",
         "healthPotion": "LB",
         "manaPotion": "RB",
         "menu": "START",

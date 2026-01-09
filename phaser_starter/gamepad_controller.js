@@ -122,6 +122,15 @@ function initController(scene) {
         }
     }
 
+    // Listen for mouse input to switch to keyboard mode
+    scene.input.on('pointermove', () => {
+        if (typeof checkInputModeChange === 'function') checkInputModeChange('keyboard');
+    });
+
+    scene.input.on('pointerdown', () => {
+        if (typeof checkInputModeChange === 'function') checkInputModeChange('keyboard');
+    });
+
     // Initialize Keyboard Keys from Config
     if (controllerConfig && controllerConfig.keyboard) {
         debugLog('⌨️ Initializing Keyboard Controls...');
@@ -155,6 +164,11 @@ function initController(scene) {
     // (Now handled by isActionJustPressed('settings'))
 
     debugLog('🎮 Controller system initialized');
+
+    // Trigger initial UI update now that config is loaded
+    if (scene && scene.events) {
+        scene.events.emit('input-mode-changed', currentInputMode);
+    }
 }
 
 /**
@@ -208,7 +222,10 @@ function isActionJustPressed(action) {
     // 2. Check Keyboard
     if (inputKeys[action]) {
         for (const key of inputKeys[action]) {
-            if (Phaser.Input.Keyboard.JustDown(key)) return true;
+            if (Phaser.Input.Keyboard.JustDown(key)) {
+                checkInputModeChange('keyboard');
+                return true;
+            }
         }
     }
 
@@ -238,6 +255,51 @@ function isActionActive(action) {
 }
 
 /**
+ * Check and handle input mode switching (Keyboard <-> Gamepad)
+ * Call this whenever input is detected
+ * @param {string} source - 'gamepad' or 'keyboard'
+ */
+let currentInputMode = 'keyboard'; // Default
+
+// Expose checks
+window.getContentInputMode = () => currentInputMode;
+
+function checkInputModeChange(source) {
+    if (source !== currentInputMode) {
+        currentInputMode = source;
+        // debugLog(`🎮 Input Mode Changed to: ${source.toUpperCase()}`);
+
+        // Emit event for UI updates
+        const scene = controllerScene || (game.scene.scenes[0]);
+        if (scene && scene.events) {
+            scene.events.emit('input-mode-changed', currentInputMode);
+        }
+    }
+}
+
+/**
+ * Get the display label for an action based on current input mode
+ * @param {string} action - Action name (e.g. 'ability1', 'equipment')
+ * @returns {string} - Display text (e.g. 'X', '1', 'E', 'D-Up')
+ */
+window.getInputLabel = function (action) {
+    if (!controllerConfig || !controllerConfig.uiLabels || !controllerConfig.uiLabels[action]) {
+        // Fallback or unconfigured
+        return '?';
+    }
+
+    // Check if input mode is gamepad (active or just recently used)
+    const isGamepad = (currentInputMode === 'gamepad');
+
+    // Allow forcing mode if needed, but currentInputMode is best source of truth
+    if (isGamepad) {
+        return controllerConfig.uiLabels[action].gamepad || '?';
+    } else {
+        return controllerConfig.uiLabels[action].keyboard || '?';
+    }
+};
+
+/**
  * Handle all gamepad input - call this from update()
  */
 let debugCounter = 0;
@@ -246,6 +308,11 @@ function handleGamepadInput() {
 
     // Update all button states once at the start of the frame
     updateButtonStates();
+
+    // Check for input to switch mode
+    if (activeGamepad && activeGamepad.buttons.some(b => b.pressed) || (activeGamepad.axes.some(a => Math.abs(a.getValue()) > 0.3))) {
+        checkInputModeChange('gamepad');
+    }
 
     const pad = activeGamepad;
     const deadzone = controllerConfig.deadzone || 0.3;

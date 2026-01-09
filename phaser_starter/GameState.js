@@ -138,7 +138,7 @@ debugLog('✅ GameState loaded');
  */
 window.debugLog = function (...args) {
     if (window.GameState && window.GameState.debugMode) {
-        debugLog(...args);
+        console.log(...args);
     }
 };
 

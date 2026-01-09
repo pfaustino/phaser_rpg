@@ -182,6 +182,23 @@ class ProjectileManager {
                         });
                     }
                 }
+
+                // --- MANUAL COLLISION FALLBACK (Fixes Arrows missing after Load) ---
+                if (window.monsters) {
+                    // Handle both Phaser Group and Array for robustness
+                    const monstersList = window.monsters.getChildren ? window.monsters.getChildren() : window.monsters;
+
+                    monstersList.forEach(monster => {
+                        if (monster.active && monster.visible && !monster.isDead) {
+                            const distToMonster = Phaser.Math.Distance.Between(projectile.x, projectile.y, monster.x, monster.y);
+                            // Hitbox radius ~20px
+                            if (distToMonster < 20) {
+                                debugLog(`🎯 [ProjectileManager] Manual hit detected on ${monster.type}`);
+                                this.handleMonsterCollision(projectile, monster);
+                            }
+                        }
+                    });
+                }
             }
         });
 

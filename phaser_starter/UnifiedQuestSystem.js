@@ -583,6 +583,25 @@ class UqeEngine {
         return this.acceptQuest(questId);
     }
 
+    // Debug/Console Helper: Force complete a specific objective by ID
+    completeObjective(questId, objectiveId) {
+        const quest = this.activeQuests.find(q => q.id === questId);
+        if (quest) {
+            const obj = quest.objectives.find(o => o.id === objectiveId);
+            if (obj) {
+                obj.progress = obj.target;
+                obj.completed = true;
+                // Check if this completes the whole quest
+                this.update();
+                debugLog(`✅ [UQE] Force completed objective: ${objectiveId} in quest ${questId}`);
+            } else {
+                console.warn(`⚠️ [UQE] Objective ${objectiveId} not found in quest ${questId}`);
+            }
+        } else {
+            console.warn(`⚠️ [UQE] Cannot complete objective - quest ${questId} not active.`);
+        }
+    }
+
     // Debug/Console Helper: Force complete a quest by ID
     completeQuest(questId) {
         const quest = this.activeQuests.find(q => q.id === questId);

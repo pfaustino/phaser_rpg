@@ -2939,8 +2939,21 @@ function create() {
 
     // Restore saved position if loaded
     if (typeof window.savedPlayerX !== 'undefined') {
-        player.x = window.savedPlayerX;
-        player.y = window.savedPlayerY;
+        let spawnX = window.savedPlayerX;
+        let spawnY = window.savedPlayerY;
+
+        // Validation Check: ensure we don't spawn in a wall (critical for dungeon saves)
+        if (window.MapManager && typeof window.MapManager.findValidSpawnPosition === 'function') {
+            const validPos = window.MapManager.findValidSpawnPosition(spawnX, spawnY);
+            if (validPos.x !== spawnX || validPos.y !== spawnY) {
+                debugLog(`⚠️ [Spawn Fix] Adjusted spawn from (${spawnX}, ${spawnY}) to (${validPos.x}, ${validPos.y})`);
+                spawnX = validPos.x;
+                spawnY = validPos.y;
+            }
+        }
+
+        player.x = spawnX;
+        player.y = spawnY;
         debugLog(`📍 Player position restored to (${player.x}, ${player.y})`);
 
         // Clear temp vars

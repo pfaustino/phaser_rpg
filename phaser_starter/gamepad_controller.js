@@ -321,7 +321,8 @@ function handleGamepadInput() {
     const inMenu = (typeof window.inventoryVisible !== 'undefined' && window.inventoryVisible) ||
         (typeof window.equipmentVisible !== 'undefined' && window.equipmentVisible) ||
         (typeof window.shopVisible !== 'undefined' && window.shopVisible) ||
-        (window.ShopManager && window.ShopManager.shopVisible);
+        (window.ShopManager && window.ShopManager.shopVisible) ||
+        (window.UIManager && window.UIManager.settingsVisible);
 
     const inDialog = (typeof window.dialogVisible !== 'undefined' && window.dialogVisible);
 
@@ -451,6 +452,13 @@ function handleGamepadInput() {
     // --- BUTTON ACTIONS ---
     // A button - Attack/Interact/Confirm
     if (isButtonJustPressed(controllerConfig.buttons.A)) {
+        // --- Settings Menu Confirm ---
+        if (window.UIManager && window.UIManager.settingsVisible && window.handleSettingsInput) {
+            if (window.handleSettingsInput('confirm')) {
+                return; // Handled
+            }
+        }
+
         if (inDialog) {
             debugLog('[Controller] "A" Pressed in Dialog - Calling Discrete Activation');
             // Try discrete activation first
@@ -553,7 +561,8 @@ function handleGamepadMovement(pad, deadzone) {
     const inMenu = (typeof window.inventoryVisible !== 'undefined' && window.inventoryVisible) ||
         (typeof window.equipmentVisible !== 'undefined' && window.equipmentVisible) ||
         (typeof window.shopVisible !== 'undefined' && window.shopVisible) ||
-        (window.ShopManager && window.ShopManager.shopVisible);
+        (window.ShopManager && window.ShopManager.shopVisible) ||
+        (window.UIManager && window.UIManager.settingsVisible);
 
     const inDialog = (typeof window.dialogVisible !== 'undefined' && window.dialogVisible);
 
@@ -1199,11 +1208,42 @@ function handleMenuNavigation(pad, deadzone) {
     if (typeof cycleMenuSelection === 'function') {
         // Get Stick Y
         let stickY = 0;
+        let stickX = 0;
         if (pad.axes && pad.axes.length >= 2) {
-            stickY = typeof pad.axes[1].getValue === 'function' ? pad.axes[1].getValue() : pad.axes[1];
+            // Handle Phaser axis objects or raw numbers
+            const axis0 = pad.axes[0]; // Left stick X
+            const axis1 = pad.axes[1]; // Left stick Y
+            stickX = typeof axis0.getValue === 'function' ? axis0.getValue() : axis0;
+            stickY = typeof axis1.getValue === 'function' ? axis1.getValue() : axis1;
         }
         // Fallback
         if (stickY === 0 && pad.leftStick) stickY = pad.leftStick.y;
+        if (stickX === 0 && pad.leftStick) stickX = pad.leftStick.x;
+
+        // SETTINGS NAVIGATION (Left/Right for Sliders)
+        if (window.UIManager && window.UIManager.settingsVisible) {
+            // Check Left/Right Stick Flick or D-Pad
+            const moveLeft = (stickX < -0.5 && !window.stickWasLeft) || (pad.buttons[14]?.pressed && !window.dpadWasLeft);
+            const moveRight = (stickX > 0.5 && !window.stickWasRight) || (pad.buttons[15]?.pressed && !window.dpadWasRight);
+
+            // Debounce flags for X axis
+            if (Math.abs(stickX) < 0.3) {
+                window.stickWasLeft = false;
+                window.stickWasRight = false;
+            }
+            if (!pad.buttons[14]?.pressed) window.dpadWasLeft = false;
+            if (!pad.buttons[15]?.pressed) window.dpadWasRight = false;
+
+            if (moveLeft) {
+                if (window.handleSettingsInput) window.handleSettingsInput('left');
+                window.stickWasLeft = true;
+                window.dpadWasLeft = pad.buttons[14]?.pressed;
+            } else if (moveRight) {
+                if (window.handleSettingsInput) window.handleSettingsInput('right');
+                window.stickWasRight = true;
+                window.dpadWasRight = pad.buttons[15]?.pressed;
+            }
+        }
 
         if ((stickY < -0.5 && !window.stickWasUp) || (pad.buttons[12]?.pressed && !window.dpadWasUp)) {
             debugLog('[Controller] Menu Nav UP');
@@ -1216,6 +1256,7 @@ function handleMenuNavigation(pad, deadzone) {
             window.stickWasDown = true;
             window.dpadWasDown = pad.buttons[13]?.pressed;
         }
+
 
         if (Math.abs(stickY) < 0.3) {
             window.stickWasUp = false;

@@ -12,6 +12,18 @@ window.UIManager = {
     assetsVisible: false,
     grassDebugVisible: false,
 
+    init: function () {
+        console.log('[UIManager] Initializing global hooks...');
+        window.toggleSettings = () => this.toggleSettings();
+        window.createSettingsUI = () => this.createSettingsUI(); // Ensure game.js can call it
+        window.toggleEquipment = () => {
+            // Defer to EquipmentManager
+            if (window.EquipmentManager) window.EquipmentManager.toggleEquipmentWindow();
+            else console.warn('EquipmentManager not found');
+        };
+        // Ensure other managers can hook in
+    },
+
     // Panel References
     inventoryPanel: null,
     equipmentPanel: null,
@@ -247,14 +259,15 @@ window.UIManager = {
         this.settingsPanel = {
             bg: bg,
             title: title,
-            elements: []
+            elements: [],
+            interactiveItems: [] // Structured list for controller navigation
         };
 
         let currentY = centerY - 150;
         const spacing = 55;
 
         // --- Volume Sliders Helper ---
-        const createSlider = (y, label, initialValue, onUpdate) => {
+        const createSlider = (y, label, initialValue, onUpdate, id) => {
             const trackWidth = 250;
             const trackHeight = 10;
             const thumbSize = 20;
@@ -282,12 +295,30 @@ window.UIManager = {
                 onUpdate(value);
             };
 
+            const setValue = (val) => {
+                const value = Phaser.Math.Clamp(val, 0, 1);
+                const relativeX = value * trackWidth;
+                thumb.x = (centerX - trackWidth / 2) + relativeX;
+                labelText.setText(`${label}: ${Math.round(value * 100)}%`);
+                onUpdate(value);
+            };
+
             track.on('pointerdown', (pointer) => updateSlider(pointer.x));
 
             scene.input.setDraggable(thumb);
             thumb.on('drag', (pointer) => updateSlider(pointer.x));
 
             this.settingsPanel.elements.push(labelText, track, thumb);
+
+            // Register as interactive item
+            this.settingsPanel.interactiveItems.push({
+                type: 'slider',
+                id: id,
+                bg: track, // Visual target for highlight
+                thumb: thumb,
+                getValue: () => (thumb.x - (centerX - trackWidth / 2)) / trackWidth,
+                setValue: setValue
+            });
         };
 
         // --- Music Slider ---
@@ -296,7 +327,7 @@ window.UIManager = {
             if (typeof window.updateMusicVolume === 'function') {
                 window.updateMusicVolume(val);
             }
-        });
+        }, 'music');
         currentY += spacing + 20;
 
         // --- SFX Slider ---
@@ -305,7 +336,7 @@ window.UIManager = {
             if (typeof window.updateSFXVolume === 'function') {
                 window.updateSFXVolume(val);
             }
-        });
+        }, 'sfx');
         currentY += spacing + 10;
 
         // --- Difficulty Selector ---
@@ -313,6 +344,10 @@ window.UIManager = {
             fontSize: '18px', fill: '#ffffff'
         }).setScrollFactor(0).setDepth(10002).setOrigin(0.5);
         this.settingsPanel.elements.push(diffLabel);
+
+        // Push label as a non-interactive row purely for spacing? No, we skip it.
+        // We will make the difficulty ROW the interactive item.
+
         currentY += 25;
 
         const difficulties = ['casual', 'easy', 'normal', 'hard', 'nightmare'];
@@ -328,6 +363,8 @@ window.UIManager = {
         const diffBtnSpacing = 5;
         const totalDiffWidth = (diffBtnWidth * 5) + (diffBtnSpacing * 4);
         const diffStartX = centerX - totalDiffWidth / 2 + diffBtnWidth / 2;
+
+        const diffButtons = [];
 
         difficulties.forEach((diff, index) => {
             const btnX = diffStartX + index * (diffBtnWidth + diffBtnSpacing);
@@ -347,7 +384,7 @@ window.UIManager = {
             btn.diffKey = diff;
             btn.btnText = btnText;
 
-            btn.on('pointerdown', () => {
+            const selectDifficulty = () => {
                 // Update game state and persist
                 window.GameState.currentDifficulty = diff;
                 localStorage.setItem('gameDifficulty', diff);
@@ -368,9 +405,26 @@ window.UIManager = {
                 if (typeof addChatMessage === 'function') {
                     addChatMessage(`Difficulty set to ${diffName}`, 0xffd700, '⚙️');
                 }
-            });
+            };
+
+            btn.on('pointerdown', selectDifficulty);
 
             this.settingsPanel.elements.push(btn, btnText);
+            diffButtons.push({ btn, selectDifficulty, key: diff });
+        });
+
+        // Register Difficulty Row
+        this.settingsPanel.interactiveItems.push({
+            type: 'selector',
+            id: 'difficulty',
+            options: diffButtons, // Store references to buttons to manually trigger click/highlight
+            bg: diffButtons[0].btn, // Fallback highlight target (usually we highlight the 'Row' or individual item)
+            // For selector, we might want to highlight the CURRENT selection
+            getValue: () => window.GameState.currentDifficulty || 'normal',
+            select: (diffKey) => {
+                const target = diffButtons.find(d => d.key === diffKey);
+                if (target) target.selectDifficulty();
+            }
         });
 
         currentY += spacing;
@@ -390,7 +444,7 @@ window.UIManager = {
             fontSize: '18px', fill: '#00ff00'
         }).setScrollFactor(0).setDepth(10002).setOrigin(0.5);
 
-        checkboxBg.on('pointerdown', () => {
+        const toggleDebug = () => {
             const newValue = !window.GameState.debugMode;
             window.GameState.debugMode = newValue;
             localStorage.setItem('debugMode', newValue.toString());
@@ -399,9 +453,18 @@ window.UIManager = {
             if (typeof addChatMessage === 'function') {
                 addChatMessage(`Debug mode ${newValue ? 'enabled' : 'disabled'}`, 0xaaaaaa, '🔧');
             }
-        });
+        };
+
+        checkboxBg.on('pointerdown', toggleDebug);
 
         this.settingsPanel.elements.push(debugLabel, checkboxBg, checkmark);
+
+        this.settingsPanel.interactiveItems.push({
+            type: 'checkbox',
+            id: 'debug',
+            bg: checkboxBg, // Highlight target
+            toggle: toggleDebug
+        });
 
         currentY += spacing - 15;
 
@@ -413,11 +476,21 @@ window.UIManager = {
             fontSize: '20px', fill: '#00ff00', fontStyle: 'bold'
         }).setScrollFactor(0).setDepth(10002).setOrigin(0.5);
 
-        saveBtnBg.on('pointerdown', () => {
+        const onSave = () => {
             this.showSaveLoadModal('save');
             if (typeof playSound === 'function') playSound('menu_select');
-        });
+        };
+
+        saveBtnBg.on('pointerdown', onSave);
         this.settingsPanel.elements.push(saveBtnBg, saveBtnText);
+
+        this.settingsPanel.interactiveItems.push({
+            type: 'button',
+            id: 'save',
+            bg: saveBtnBg,
+            action: onSave
+        });
+
         currentY += spacing;
 
         // --- Load Game ---
@@ -428,11 +501,21 @@ window.UIManager = {
             fontSize: '20px', fill: '#aaaaff', fontStyle: 'bold'
         }).setScrollFactor(0).setDepth(10002).setOrigin(0.5);
 
-        loadBtnBg.on('pointerdown', () => {
+        const onLoad = () => {
             this.showSaveLoadModal('load');
             if (typeof playSound === 'function') playSound('menu_select');
-        });
+        };
+
+        loadBtnBg.on('pointerdown', onLoad);
         this.settingsPanel.elements.push(loadBtnBg, loadBtnText);
+
+        this.settingsPanel.interactiveItems.push({
+            type: 'button',
+            id: 'load',
+            bg: loadBtnBg,
+            action: onLoad
+        });
+
         currentY += spacing;
 
         // --- New Game ---
@@ -443,13 +526,22 @@ window.UIManager = {
             fontSize: '20px', fill: '#ff4444', fontStyle: 'bold'
         }).setScrollFactor(0).setDepth(10002).setOrigin(0.5);
 
-        newGameBtnBg.on('pointerdown', () => {
+        const onNewGame = () => {
             if (confirm("Start a New Game? Unsaved progress will be lost.")) {
                 localStorage.removeItem('rpg_load_on_start'); // Ensure clean start
                 window.resetGame ? window.resetGame() : location.reload();
             }
-        });
+        };
+
+        newGameBtnBg.on('pointerdown', onNewGame);
         this.settingsPanel.elements.push(newGameBtnBg, newGameBtnText);
+
+        this.settingsPanel.interactiveItems.push({
+            type: 'button',
+            id: 'newgame',
+            bg: newGameBtnBg,
+            action: onNewGame
+        });
 
         // --- Close ---
         const closeBtnBg = scene.add.rectangle(centerX, centerY + panelHeight / 2 - 40, 100, 40, 0x444444)
@@ -458,11 +550,20 @@ window.UIManager = {
             fontSize: '18px', fill: '#ffffff'
         }).setScrollFactor(0).setDepth(10002).setOrigin(0.5);
 
-        closeBtnBg.on('pointerdown', () => {
+        const onClose = () => {
             this.toggleSettings();
             if (typeof playSound === 'function') playSound('menu_select');
-        });
+        };
+
+        closeBtnBg.on('pointerdown', onClose);
         this.settingsPanel.elements.push(closeBtnBg, closeText);
+
+        this.settingsPanel.interactiveItems.push({
+            type: 'button',
+            id: 'close',
+            bg: closeBtnBg,
+            action: onClose
+        });
     },
 
     destroySettingsUI: function () {
@@ -473,6 +574,29 @@ window.UIManager = {
                 this.settingsPanel.elements.forEach(el => el.destroy());
             }
             this.settingsPanel = null;
+        }
+    },
+
+    toggleSettings: function () {
+        this.settingsVisible = !this.settingsVisible;
+        if (this.settingsVisible) {
+            this.createSettingsUI();
+
+            // Auto-select first item for controller
+            if (this.settingsPanel && this.settingsPanel.interactiveItems.length > 0) {
+                this.settingsPanel.selectedIndex = 0;
+                // Defer update slightly to ensure UI is ready
+                setTimeout(() => {
+                    if (window.updateSettingsHighlight) {
+                        window.updateSettingsHighlight(this.settingsPanel);
+                    }
+                }, 50);
+            }
+
+            if (typeof playSound === 'function') playSound('menu_open');
+        } else {
+            this.destroySettingsUI();
+            if (typeof playSound === 'function') playSound('menu_close');
         }
     },
 

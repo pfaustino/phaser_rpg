@@ -18,7 +18,7 @@ window.damageNumbers = []; // Array of {x, y, text, timer, color, textObject}
  * @param {string} type - 'physical', 'magical', 'healing', 'xp'
  */
 window.showDamageNumber = function (x, y, text, color, isCritical = false, type = 'physical') {
-    console.log(`DamageSystem: Showing ${text} at ${x},${y}`);
+    debugLog(`DamageSystem: Showing ${text} at ${x},${y}`);
     if (!window.game || !window.game.scene || !window.game.scene.scenes || window.game.scene.scenes.length === 0) {
         console.warn('DamageSystem: No scene found!');
         return;

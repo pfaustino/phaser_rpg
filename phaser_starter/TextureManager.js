@@ -279,6 +279,6 @@ const TextureManager = {
             window.monsterDefinitions = monsterDefs;
         }
 
-        console.log('✅ TextureManager: Procedural textures generated');
+        debugLog('✅ TextureManager: Procedural textures generated');
     }
 };

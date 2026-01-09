@@ -1,4 +1,4 @@
-console.log('✅ UIManager_v2.js LOADED (Forced Refresh)');
+debugLog('✅ UIManager_v2.js LOADED (Forced Refresh)');
 
 window.UIManager = {
     // State Variables
@@ -374,6 +374,36 @@ window.UIManager = {
         });
 
         currentY += spacing;
+
+        // --- Debug Mode Checkbox ---
+        const debugEnabled = window.GameState?.debugMode || false;
+
+        const debugLabel = scene.add.text(centerX - 80, currentY, 'Debug Mode:', {
+            fontSize: '16px', fill: '#888888'
+        }).setScrollFactor(0).setDepth(10002).setOrigin(0, 0.5);
+
+        const checkboxBg = scene.add.rectangle(centerX + 60, currentY, 24, 24, 0x333333)
+            .setScrollFactor(0).setDepth(10001).setInteractive({ useHandCursor: true })
+            .setStrokeStyle(1, 0x666666);
+
+        const checkmark = scene.add.text(centerX + 60, currentY, debugEnabled ? '✓' : '', {
+            fontSize: '18px', fill: '#00ff00'
+        }).setScrollFactor(0).setDepth(10002).setOrigin(0.5);
+
+        checkboxBg.on('pointerdown', () => {
+            const newValue = !window.GameState.debugMode;
+            window.GameState.debugMode = newValue;
+            localStorage.setItem('debugMode', newValue.toString());
+            checkmark.setText(newValue ? '✓' : '');
+
+            if (typeof addChatMessage === 'function') {
+                addChatMessage(`Debug mode ${newValue ? 'enabled' : 'disabled'}`, 0xaaaaaa, '🔧');
+            }
+        });
+
+        this.settingsPanel.elements.push(debugLabel, checkboxBg, checkmark);
+
+        currentY += spacing - 15;
 
         // --- Save Game ---
         const saveBtnBg = scene.add.rectangle(centerX, currentY, 200, 50, 0x004400)
@@ -1248,7 +1278,7 @@ window.UIManager = {
                         .setInteractive({ useHandCursor: true });
 
                     const onClick = () => {
-                        console.log('Quest Clicked:', i, quest.title);
+                        debugLog('Quest Clicked:', i, quest.title);
                         this.selectedQuestIndex = i;
                         this.updateQuestLogItems();
                     };
@@ -1261,8 +1291,8 @@ window.UIManager = {
                     titleText.on('pointerup', onClick);
 
                     // Add debug logs directly
-                    itemBg.on('pointerdown', () => console.log(`DEBUG: pointerdown on bg ${i}`));
-                    titleText.on('pointerdown', () => console.log(`DEBUG: pointerdown on text ${i}`));
+                    itemBg.on('pointerdown', () => debugLog(`DEBUG: pointerdown on bg ${i}`));
+                    titleText.on('pointerdown', () => debugLog(`DEBUG: pointerdown on text ${i}`));
 
                     this.questPanel.container.add([itemBg, titleText]);
 
@@ -1357,10 +1387,10 @@ window.UIManager = {
                     }).setScrollFactor(0).setDepth(302).setOrigin(0.5, 0.5);
 
                     const acceptQuest = () => {
-                        console.log(`[QuestLog] Clicking Accept for quest: ${quest.id}`);
+                        debugLog(`[QuestLog] Clicking Accept for quest: ${quest.id}`);
                         if (window.uqe && quest.isUQE) {
                             window.uqe.acceptQuest(quest.id);
-                            console.log(`[QuestLog] Quest ${quest.id} accepted via UQE.`);
+                            debugLog(`[QuestLog] Quest ${quest.id} accepted via UQE.`);
                         }
                         this.updateQuestLogItems();
                         if (typeof playSound === 'function') playSound('item_pickup');

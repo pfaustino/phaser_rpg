@@ -9,14 +9,14 @@ const ItemManager = {
     // Init and load definitions
     async load() {
         try {
-            console.log('📦 ItemManager: Loading items.json...');
+            debugLog('📦 ItemManager: Loading items.json...');
             const response = await fetch('items.json');
             if (!response.ok) {
                 throw new Error(`Failed to load items.json: ${response.status} ${response.statusText}`);
             }
             this.definitions = await response.json();
             this.isLoaded = true;
-            console.log('✅ ItemManager: Items loaded successfully', this.definitions);
+            debugLog('✅ ItemManager: Items loaded successfully', this.definitions);
             return true;
         } catch (error) {
             console.error('❌ ItemManager: Error loading items:', error);
@@ -149,7 +149,7 @@ const ItemManager = {
             });
         }
 
-        console.log(`📦 ItemManager: Queued ${count} sprites for loading`);
+        debugLog(`📦 ItemManager: Queued ${count} sprites for loading`);
     }
 };
 

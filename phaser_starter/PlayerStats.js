@@ -52,7 +52,7 @@ window.PlayerStatsManager = {
         // Sanity Checks
         playerStats.speed = Math.max(100, playerStats.speed);
 
-        console.log(`📊 Stats Recalculated: Speed=${playerStats.speed} (Base: 200 + Bonus: ${playerStats.speedBonus})`);
+        debugLog(`📊 Stats Recalculated: Speed=${playerStats.speed} (Base: 200 + Bonus: ${playerStats.speedBonus})`);
     },
 
     init(scene) {
@@ -124,7 +124,7 @@ window.PlayerStatsManager = {
                 this.recalculateStats();
 
                 leveledUp = true;
-                console.log(`Level up! Now level ${playerStats.level}`);
+                debugLog(`Level up! Now level ${playerStats.level}`);
             } else {
                 break;
             }
@@ -136,7 +136,7 @@ window.PlayerStatsManager = {
             const uiOpen = (window.UIManager && window.UIManager.isAnyWindowOpen());
 
             if (uiOpen || window.blockLevelUpEffect || isQueueActive) {
-                console.log('⏳ Level Up Queued (UI Open, Blocked, or Dialog Queued)');
+                debugLog('⏳ Level Up Queued (UI Open, Blocked, or Dialog Queued)');
                 window.pendingLevelUp = true;
                 window.pendingLevelUpStats = { level: playerStats.level }; // store for display
             } else {
@@ -169,14 +169,14 @@ window.PlayerStatsManager = {
             }
         }
 
-        console.log(`🎵 Level Up Effect Sync: ${duration.toFixed(0)}ms`);
+        debugLog(`🎵 Level Up Effect Sync: ${duration.toFixed(0)}ms`);
 
         // Guard: Prevent playing if blocked or UI open (Double check)
         const uiOpen = (window.UIManager && window.UIManager.isAnyWindowOpen());
         const isQueueActive = (typeof window.dialogQueue !== 'undefined' && window.dialogQueue.length > 0);
 
         if (window.blockLevelUpEffect || uiOpen || isQueueActive) {
-            console.log('🛑 Level Up Effect BLOCKED (Safety Guard)');
+            debugLog('🛑 Level Up Effect BLOCKED (Safety Guard)');
             window.pendingLevelUp = true;
             if (!window.pendingLevelUpStats && playerStats) {
                 window.pendingLevelUpStats = { level: playerStats.level };
@@ -244,7 +244,7 @@ window.PlayerStatsManager = {
             const uiOpen = (window.UIManager && window.UIManager.isAnyWindowOpen());
 
             if (!uiOpen && !window.blockLevelUpEffect && !isQueueActive) {
-                console.log('✅ Triggering Queued Level Up');
+                debugLog('✅ Triggering Queued Level Up');
                 this.createLevelUpEffect(window.pendingLevelUpStats ? window.pendingLevelUpStats.level : playerStats.level);
                 window.pendingLevelUp = false;
                 window.pendingLevelUpStats = null;

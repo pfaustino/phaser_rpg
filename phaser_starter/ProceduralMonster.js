@@ -15,7 +15,7 @@ const ProceduralMonster = {
     // Clear the texture cache (useful for debugging)
     clearCache: function () {
         this.cache = {};
-        console.log('🗑️ ProceduralMonster cache cleared');
+        debugLog('🗑️ ProceduralMonster cache cleared');
     },
 
     // Monster type templates (mask definitions)
@@ -541,7 +541,7 @@ const ProceduralMonster = {
         this.renderToTexture(scene, key, pixels, width, height, scale, palette.dark);
         this.cache[key] = true;
 
-        console.log(`🧬 Generated CA monster: ${monsterType} -> ${key}`);
+        debugLog(`🧬 Generated CA monster: ${monsterType} -> ${key}`);
         return key;
     },
 
@@ -810,7 +810,7 @@ const ProceduralMonster = {
         this.renderToTexture(scene, key, pixels, maxWidth, totalHeight, scale, palette.dark);
         this.cache[key] = true;
 
-        console.log(`🔧 Generated component monster: ${monsterType} -> ${key}`);
+        debugLog(`🔧 Generated component monster: ${monsterType} -> ${key}`);
         return key;
     },
 
@@ -888,7 +888,7 @@ const ProceduralMonster = {
         this.renderToTexture(scene, key, pixels, template.width, template.height, scale, palette.dark);
 
         this.cache[key] = true;
-        console.log(`🎨 Generated mask-based monster: ${type} -> ${key}`);
+        debugLog(`🎨 Generated mask-based monster: ${type} -> ${key}`);
         return key;
     }
 };

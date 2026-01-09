@@ -19,7 +19,7 @@ class LoreManager {
 
         this.loadProgress();
         this.initialized = true;
-        console.log(`📜 LoreManager initialized. ${this.unlockedLore.size} entries discovered.`);
+        debugLog(`📜 LoreManager initialized. ${this.unlockedLore.size} entries discovered.`);
     }
 
     /**
@@ -31,7 +31,7 @@ class LoreManager {
         // If already unlocked, do nothing
         if (this.isLoreUnlocked(loreId)) return;
 
-        console.log(`📜 Unlocking lore: ${loreId}`);
+        debugLog(`📜 Unlocking lore: ${loreId}`);
 
         // Add to set
         this.unlockedLore.add(loreId);

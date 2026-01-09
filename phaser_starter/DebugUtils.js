@@ -15,7 +15,7 @@ const debugQuest = {
      * Show all debug commands
      */
     help: function () {
-        console.log(`
+        debugLog(`
 🔧 QUEST DEBUG COMMANDS
 ========================
 debugQuest.listActive()          - Show all active quests
@@ -36,10 +36,10 @@ debugQuest.info('quest_id')      - Show detailed quest info
      */
     listActive: function () {
         if (!window.uqe) { console.error('UQE not loaded'); return; }
-        console.log('📋 ACTIVE QUESTS:');
+        debugLog('📋 ACTIVE QUESTS:');
         window.uqe.activeQuests.forEach(q => {
             const progress = q.objectives.map(o => `${o.progress}/${o.target}`).join(', ');
-            console.log(`  [${q.id}] ${q.title} - Progress: ${progress}`);
+            debugLog(`  [${q.id}] ${q.title} - Progress: ${progress}`);
         });
         return window.uqe.activeQuests.length;
     },
@@ -49,9 +49,9 @@ debugQuest.info('quest_id')      - Show detailed quest info
      */
     listCompleted: function () {
         if (!window.uqe) { console.error('UQE not loaded'); return; }
-        console.log('✅ COMPLETED QUESTS:');
+        debugLog('✅ COMPLETED QUESTS:');
         window.uqe.completedQuests.forEach(q => {
-            console.log(`  [${q.id}] ${q.title}`);
+            debugLog(`  [${q.id}] ${q.title}`);
         });
         return window.uqe.completedQuests.length;
     },
@@ -61,11 +61,11 @@ debugQuest.info('quest_id')      - Show detailed quest info
      */
     listAll: function () {
         if (!window.uqe) { console.error('UQE not loaded'); return; }
-        console.log('📚 ALL QUEST DEFINITIONS:');
+        debugLog('📚 ALL QUEST DEFINITIONS:');
         Object.keys(window.uqe.allDefinitions).forEach(id => {
             const def = window.uqe.allDefinitions[id];
             const requires = def.requires ? ` (requires: ${def.requires})` : '';
-            console.log(`  [${id}] ${def.title}${requires}`);
+            debugLog(`  [${id}] ${def.title}${requires}`);
         });
         return Object.keys(window.uqe.allDefinitions).length;
     },
@@ -80,7 +80,7 @@ debugQuest.info('quest_id')      - Show detailed quest info
             return false;
         }
         window.uqe.acceptQuest(questId);
-        console.log(`✅ Accepted quest: ${questId}`);
+        debugLog(`✅ Accepted quest: ${questId}`);
         if (window.updateQuestTrackerHUD) window.updateQuestTrackerHUD();
         return true;
     },
@@ -100,7 +100,7 @@ debugQuest.info('quest_id')      - Show detailed quest info
             obj.progress = obj.target;
             obj.completed = true;
         });
-        console.log(`✅ Completed quest: ${questId} (will process on next update)`);
+        debugLog(`✅ Completed quest: ${questId} (will process on next update)`);
         window.uqe.update(); // Process completion immediately
         return true;
     },
@@ -138,7 +138,7 @@ debugQuest.info('quest_id')      - Show detailed quest info
                 obj.completed = true;
             }
         });
-        console.log(`📊 Set progress for ${questId}: ${amount}`);
+        debugLog(`📊 Set progress for ${questId}: ${amount}`);
         if (window.updateQuestTrackerHUD) window.updateQuestTrackerHUD();
         return true;
     },
@@ -155,7 +155,7 @@ debugQuest.info('quest_id')      - Show detailed quest info
         window.uqe.pendingQuests = [];
         // Clear localStorage
         localStorage.removeItem('rpg_quest_save');
-        console.log('🔄 Quest progress reset! Refresh the page to restart.');
+        debugLog('🔄 Quest progress reset! Refresh the page to restart.');
         return true;
     },
 
@@ -178,7 +178,7 @@ debugQuest.info('quest_id')      - Show detailed quest info
             currentId = def.requires;
         }
 
-        console.log(`🎯 Quest chain to ${targetQuestId}:`, chain);
+        debugLog(`🎯 Quest chain to ${targetQuestId}:`, chain);
 
         // Reset and complete all prerequisites
         this.reset();
@@ -201,7 +201,7 @@ debugQuest.info('quest_id')      - Show detailed quest info
         window.uqe.acceptQuest(targetQuestId);
         if (window.updateQuestTrackerHUD) window.updateQuestTrackerHUD();
 
-        console.log(`✅ Now at quest: ${targetQuestId}`);
+        debugLog(`✅ Now at quest: ${targetQuestId}`);
         return true;
     },
 
@@ -215,7 +215,7 @@ debugQuest.info('quest_id')      - Show detailed quest info
             console.error(`Quest '${questId}' not found`);
             return null;
         }
-        console.log(`
+        debugLog(`
 📜 QUEST INFO: ${def.title}
 ID: ${questId}
 Giver: ${def.giver || 'Unknown'}
@@ -223,21 +223,21 @@ Requires: ${def.requires || 'None'}
 Description: ${def.description}
 Objectives:`);
         def.objectives.forEach(obj => {
-            console.log(`  - [${obj.type}] ${obj.label} (target: ${obj.target})`);
+            debugLog(`  - [${obj.type}] ${obj.label} (target: ${obj.target})`);
         });
-        console.log(`Rewards: ${def.rewards.xp} XP, ${def.rewards.gold} Gold`);
+        debugLog(`Rewards: ${def.rewards.xp} XP, ${def.rewards.gold} Gold`);
 
         // Check if active
         const active = window.uqe.activeQuests.find(q => q.id === questId);
         if (active) {
-            console.log('Status: ACTIVE');
+            debugLog('Status: ACTIVE');
             active.objectives.forEach(obj => {
-                console.log(`  Progress: ${obj.progress}/${obj.target}`);
+                debugLog(`  Progress: ${obj.progress}/${obj.target}`);
             });
         } else if (window.uqe.completedQuests.find(q => q.id === questId)) {
-            console.log('Status: COMPLETED');
+            debugLog('Status: COMPLETED');
         } else {
-            console.log('Status: NOT STARTED');
+            debugLog('Status: NOT STARTED');
         }
         return def;
     }
@@ -245,13 +245,13 @@ Objectives:`);
 
 // Attach to window for console access
 window.debugQuest = debugQuest;
-console.log('🔧 Quest debug commands loaded. Type debugQuest.help() for usage.');
+debugLog('🔧 Quest debug commands loaded. Type debugQuest.help() for usage.');
 
 // ============================================
 // DEBUG TOOLS
 // ============================================
 window.debugFixNPCs = function () {
-    console.log('🔧 Running NPC Fixer...');
+    debugLog('🔧 Running NPC Fixer...');
     const scene = window.game ? window.game.scene.scenes[0] : null;
     if (!scene) {
         console.error('❌ Game scene not found!');
@@ -264,7 +264,7 @@ window.debugFixNPCs = function () {
         return;
     }
 
-    console.log(`Found ${npcData.length} NPC definitions in JSON.`);
+    debugLog(`Found ${npcData.length} NPC definitions in JSON.`);
     let updated = 0;
 
     // Check global npcs array (from GameState/window)
@@ -274,15 +274,15 @@ window.debugFixNPCs = function () {
             if (def) {
                 // Check for mismatches
                 if (npc.name !== def.name || npc.dialogId !== def.dialogId) {
-                    console.log(`Mismatch for ${npc.id}:`);
-                    console.log(`  Current: Name="${npc.name}", Dialog="${npc.dialogId}"`);
-                    console.log(`  Target:  Name="${def.name}", Dialog="${def.dialogId}"`);
+                    debugLog(`Mismatch for ${npc.id}:`);
+                    debugLog(`  Current: Name="${npc.name}", Dialog="${npc.dialogId}"`);
+                    debugLog(`  Target:  Name="${def.name}", Dialog="${def.dialogId}"`);
 
                     npc.name = def.name;
                     npc.dialogId = def.dialogId;
                     if (npc.nameText) npc.nameText.setText(def.name);
 
-                    console.log('  ✅ Fixed!');
+                    debugLog('  ✅ Fixed!');
                     updated++;
                 }
             } else {
@@ -294,10 +294,10 @@ window.debugFixNPCs = function () {
     // Force save
     if (typeof window.saveGame === 'function') {
         window.saveGame();
-        console.log('💾 Game saved with fixed NPCs.');
+        debugLog('💾 Game saved with fixed NPCs.');
     }
 
-    console.log(`🔧 Fix complete. Updated ${updated} NPCs.`);
+    debugLog(`🔧 Fix complete. Updated ${updated} NPCs.`);
     if (typeof window.addChatMessage === 'function') {
         window.addChatMessage(`Fixed ${updated} NPCs. Try talking now!`, 0x00ff00);
     }

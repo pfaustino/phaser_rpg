@@ -31,7 +31,7 @@ class AStarPathfinding {
             }
         }
 
-        console.log(`🗺️ A* Grid initialized from map data: ${this.gridWidth}x${this.gridHeight}`);
+        debugLog(`🗺️ A* Grid initialized from map data: ${this.gridWidth}x${this.gridHeight}`);
     }
 
     /**

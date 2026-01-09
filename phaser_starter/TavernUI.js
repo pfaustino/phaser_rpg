@@ -177,7 +177,7 @@ window.TavernUI = {
                         if (existingItem) {
                             existingItem.quantity = (existingItem.quantity || 1) + 1;
                             stacked = true;
-                            console.log(`Stacked ${newItem.name}, new quantity: ${existingItem.quantity}`);
+                            debugLog(`Stacked ${newItem.name}, new quantity: ${existingItem.quantity}`);
                         }
                     }
 

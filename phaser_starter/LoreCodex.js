@@ -50,7 +50,7 @@ let updateEvent = null;
 
 function openLoreCodex(scene) {
     if (codexVisible) return;
-    console.log("📖 Opening Lore Codex...");
+    debugLog("📖 Opening Lore Codex...");
     codexVisible = true;
 
     // Dimensions
@@ -354,7 +354,7 @@ function setupLoreCodexKeys(scene) {
         else openLoreCodex(scene);
     };
     scene.input.keyboard.on('keydown-L', window.loreKeyHandler);
-    console.log('📖 Lore Codex keys initialized');
+    debugLog('📖 Lore Codex keys initialized');
 }
 
 window.setupLoreCodexKeys = setupLoreCodexKeys;

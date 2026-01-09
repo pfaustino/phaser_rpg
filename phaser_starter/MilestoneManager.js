@@ -30,7 +30,7 @@ class MilestoneManager {
         this.loadProgress();
         this.setupEventListeners();
 
-        console.log(`🏆 MilestoneManager initialized with ${this.milestones.length} milestones`);
+        debugLog(`🏆 MilestoneManager initialized with ${this.milestones.length} milestones`);
 
         // Check game_start triggers immediately
         this.checkTriggers('game_start', {});
@@ -73,7 +73,7 @@ class MilestoneManager {
             if (saved) {
                 const parsed = JSON.parse(saved);
                 parsed.forEach(id => this.completedMilestones.add(id));
-                console.log(`🏆 Loaded ${this.completedMilestones.size} completed milestones`);
+                debugLog(`🏆 Loaded ${this.completedMilestones.size} completed milestones`);
             }
         } catch (e) {
             console.warn('MilestoneManager: Failed to load progress', e);
@@ -212,7 +212,7 @@ class MilestoneManager {
      * Mark milestone as complete and issue rewards
      */
     completeMilestone(milestone) {
-        console.log(`🏆 Milestone Completed: ${milestone.name}`);
+        debugLog(`🏆 Milestone Completed: ${milestone.name}`);
         this.completedMilestones.add(milestone.id);
         this.saveProgress();
 
@@ -226,7 +226,7 @@ class MilestoneManager {
             const y = this.scene.cameras.main.midPoint.y - 150;
             window.showDamageNumber(x, y, msg, 0xFFD700);
         } else {
-            console.log(`[Toast] ${msg}`);
+            debugLog(`[Toast] ${msg}`);
         }
 
         // 2. Unlock Lore
@@ -274,7 +274,7 @@ class MilestoneManager {
             if (typeof window.addXp === 'function') {
                 window.addXp(unlocks.xp);
             } else {
-                console.log(`[Milestone] Awarded ${unlocks.xp} XP (Function missing)`);
+                debugLog(`[Milestone] Awarded ${unlocks.xp} XP (Function missing)`);
             }
         }
     }

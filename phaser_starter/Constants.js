@@ -8,6 +8,28 @@
  * with existing code in game.js.
  */
 
+// ============================================
+// DEBUG UTILITIES (Must be defined FIRST)
+// ============================================
+/**
+ * Debug log - only outputs to console when debugMode is enabled
+ * Defined here (in Constants.js) because it loads before other scripts
+ */
+window.debugLog = function (...args) {
+    if (window.GameState && window.GameState.debugMode) {
+        console.log(...args);
+    }
+};
+
+/**
+ * Debug warn - only outputs to console when debugMode is enabled
+ */
+window.debugWarn = function (...args) {
+    if (window.GameState && window.GameState.debugMode) {
+        console.warn(...args);
+    }
+};
+
 window.Constants = {
     // ============================================
     // MONSTER SPAWN SETTINGS
@@ -98,4 +120,4 @@ window.MONSTER_DEAGGRO_RADIUS = window.Constants.MONSTER_DEAGGRO_RADIUS;
 window.MONSTER_RESPAWN_THRESHOLD = window.Constants.MONSTER_RESPAWN_THRESHOLD;
 window.QUALITY_COLORS = window.Constants.QUALITY_COLORS;
 
-console.log('✅ Constants loaded');
+debugLog('✅ Constants loaded');

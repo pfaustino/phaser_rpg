@@ -41,13 +41,13 @@ const config = {
     }
 };
 
-console.log('🎮 GAME CONFIG CREATED - Preload function:', typeof preload);
+debugLog('🎮 GAME CONFIG CREATED - Preload function:', typeof preload);
 
 // Create the game instance
 const game = new Phaser.Game(config);
 window.game = game;
 
-console.log('🎮 PHASER GAME INSTANCE CREATED');
+debugLog('🎮 PHASER GAME INSTANCE CREATED');
 
 // Game state
 let player;
@@ -183,7 +183,7 @@ function executeQuestMigration() {
     const MIGRATION_KEY = 'migration_v0_9_186';
     if (localStorage.getItem(MIGRATION_KEY)) return;
 
-    console.log('🔄 STARTING QUEST ID MIGRATION...');
+    debugLog('🔄 STARTING QUEST ID MIGRATION...');
     let migratedCount = 0;
 
     // 1. Migrate localStorage 'playerStats'
@@ -198,7 +198,7 @@ function executeQuestMigration() {
                 if (stats.quests.active) {
                     stats.quests.active.forEach(q => {
                         if (QUEST_ID_MIGRATION_MAP[q.id]) {
-                            console.log(`  > Migrating Active Quest: ${q.id} -> ${QUEST_ID_MIGRATION_MAP[q.id]}`);
+                            debugLog(`  > Migrating Active Quest: ${q.id} -> ${QUEST_ID_MIGRATION_MAP[q.id]}`);
                             q.id = QUEST_ID_MIGRATION_MAP[q.id];
                             meaningfulChange = true;
                             migratedCount++;
@@ -209,7 +209,7 @@ function executeQuestMigration() {
                 if (stats.quests.completed) {
                     stats.quests.completed = stats.quests.completed.map(id => {
                         if (QUEST_ID_MIGRATION_MAP[id]) {
-                            // console.log(`  > Migrating Completed Quest: ${id} -> ${QUEST_ID_MIGRATION_MAP[id]}`);
+                            // debugLog(`  > Migrating Completed Quest: ${id} -> ${QUEST_ID_MIGRATION_MAP[id]}`);
                             migratedCount++;
                             return QUEST_ID_MIGRATION_MAP[id];
                         }
@@ -221,7 +221,7 @@ function executeQuestMigration() {
 
             if (meaningfulChange) {
                 localStorage.setItem('playerStats', JSON.stringify(stats));
-                console.log('✅ playerStats migrated successfully.');
+                debugLog('✅ playerStats migrated successfully.');
             }
         } catch (e) {
             console.error('❌ Migration Error (playerStats):', e);
@@ -254,7 +254,7 @@ function executeQuestMigration() {
 
             if (uqeChange) {
                 localStorage.setItem('uqe_state', JSON.stringify(uqeState));
-                console.log('✅ uqe_state migrated successfully.');
+                debugLog('✅ uqe_state migrated successfully.');
             }
         } catch (e) {
             console.error('❌ Migration Error (uqe_state):', e);
@@ -262,7 +262,7 @@ function executeQuestMigration() {
     }
 
     localStorage.setItem(MIGRATION_KEY, 'true');
-    console.log(`✨ Migration Complete. ${migratedCount} IDs updated.`);
+    debugLog(`✨ Migration Complete. ${migratedCount} IDs updated.`);
 }
 
 
@@ -330,7 +330,7 @@ window.dungeonMusic = null;
  * @param {number} volume - 0.0 to 1.0
  */
 window.updateMusicVolume = function (volume) {
-    console.log(`🔊 Updating Music Volume: ${volume.toFixed(2)}`);
+    debugLog(`🔊 Updating Music Volume: ${volume.toFixed(2)}`);
     window.musicVolume = volume;
     localStorage.setItem('musicVolume', volume.toString());
 
@@ -361,7 +361,7 @@ window.updateSFXVolume = function (volume) {
  * @param {boolean} enabled - Whether music should be enabled
  */
 window.toggleMusic = function (enabled) {
-    console.log(`🎵 Toggling music: ${enabled ? 'ON' : 'OFF'} (Global Volume: ${window.musicVolume})`);
+    debugLog(`🎵 Toggling music: ${enabled ? 'ON' : 'OFF'} (Global Volume: ${window.musicVolume})`);
 
     window.musicEnabled = enabled;
     localStorage.setItem('musicEnabled', enabled.toString());
@@ -369,7 +369,7 @@ window.toggleMusic = function (enabled) {
     // Update specific music tracks
     if (window.villageMusic) {
         if (enabled && !window.villageMusic.isPlaying) {
-            console.log('🎵 Resuming Village Music from toggleMusic');
+            debugLog('🎵 Resuming Village Music from toggleMusic');
             window.villageMusic.play();
         }
         window.villageMusic.setMute(!enabled);
@@ -378,7 +378,7 @@ window.toggleMusic = function (enabled) {
 
     if (window.wildernessMusic) {
         if (enabled && !window.wildernessMusic.isPlaying) {
-            console.log('🎵 Resuming Wilderness Music from toggleMusic');
+            debugLog('🎵 Resuming Wilderness Music from toggleMusic');
             window.wildernessMusic.play();
         }
         window.wildernessMusic.setMute(!enabled);
@@ -387,7 +387,7 @@ window.toggleMusic = function (enabled) {
 
     if (window.dungeonMusic) {
         if (enabled && !window.dungeonMusic.isPlaying) {
-            console.log('🎵 Resuming Dungeon Music from toggleMusic');
+            debugLog('🎵 Resuming Dungeon Music from toggleMusic');
             window.dungeonMusic.play();
         }
         window.dungeonMusic.setMute(!enabled);
@@ -400,7 +400,7 @@ window.toggleMusic = function (enabled) {
 
         const scene = game.scene.scenes[0];
         if (scene && scene.sound) {
-            console.log('🔊 Ensuring main sound manager is unmuted');
+            debugLog('🔊 Ensuring main sound manager is unmuted');
             scene.sound.mute = false;
         }
     }
@@ -412,13 +412,13 @@ window.toggleMusic = function (enabled) {
  */
 window.playBackgroundMusic = function (mapType) {
     if (!window.musicEnabled) {
-        console.log('🎵 Music disabled, skipping playBackgroundMusic');
+        debugLog('🎵 Music disabled, skipping playBackgroundMusic');
         return;
     }
 
-    console.log(`🎵 playBackgroundMusic: ${mapType} (Vol: ${window.musicVolume})`);
+    debugLog(`🎵 playBackgroundMusic: ${mapType} (Vol: ${window.musicVolume})`);
     if (typeof MapManager !== 'undefined') {
-        console.log(`🗺️ Current MapManager.currentMap: ${MapManager.currentMap}`);
+        debugLog(`🗺️ Current MapManager.currentMap: ${MapManager.currentMap}`);
     }
 
     // Stop other tracks
@@ -436,29 +436,29 @@ window.playBackgroundMusic = function (mapType) {
         if (mapType === 'town') {
             if (!window.villageMusic) {
                 window.villageMusic = scene.sound.add('village_music', { loop: true, volume: window.musicVolume });
-                console.log('🎵 Added Village Music instance');
+                debugLog('🎵 Added Village Music instance');
             }
             if (!window.villageMusic.isPlaying) {
                 window.villageMusic.play();
-                console.log('🎵 Playing Village Music');
+                debugLog('🎵 Playing Village Music');
             }
         } else if (mapType === 'wilderness') {
             if (!window.wildernessMusic) {
                 window.wildernessMusic = scene.sound.add('wilderness_music', { loop: true, volume: window.musicVolume });
-                console.log('🎵 Added Wilderness Music instance');
+                debugLog('🎵 Added Wilderness Music instance');
             }
             if (!window.wildernessMusic.isPlaying) {
                 window.wildernessMusic.play();
-                console.log('🎵 Playing Wilderness Music');
+                debugLog('🎵 Playing Wilderness Music');
             }
         } else if (mapType === 'dungeon' || mapType === 'tower_dungeon' || mapType === 'temple_ruins') {
             if (!window.dungeonMusic) {
                 window.dungeonMusic = scene.sound.add('dungeon_music', { loop: true, volume: window.musicVolume });
-                console.log('🎵 Added Dungeon Music instance');
+                debugLog('🎵 Added Dungeon Music instance');
             }
             if (!window.dungeonMusic.isPlaying) {
                 window.dungeonMusic.play();
-                console.log('🎵 Playing Dungeon Music');
+                debugLog('🎵 Playing Dungeon Music');
             }
         }
     } catch (e) {
@@ -533,7 +533,7 @@ function preload() {
     // Try to load actual images first, fall back to generated graphics if they don't exist
     // NOTE: For GitHub Pages, images must be in assets/ folder relative to index.html
 
-    console.log('🚀🚀🚀 PRELOAD FUNCTION CALLED 🚀🚀🚀');
+    debugLog('🚀🚀🚀 PRELOAD FUNCTION CALLED 🚀🚀🚀');
     console.trace('PRELOAD CALL STACK');
 
     // Load quest data
@@ -559,13 +559,13 @@ function preload() {
     // Add load event listeners for debugging - MUST be before load calls
     this.load.on('filecomplete', (key, type, data) => {
         if (key === 'grass') {
-            console.log('✅✅✅ Grass file loaded successfully:', key, type);
-            console.log('  File data:', data);
+            debugLog('✅✅✅ Grass file loaded successfully:', key, type);
+            debugLog('  File data:', data);
             if (data && data.src) {
-                console.log('  Source URL:', data.src);
+                debugLog('  Source URL:', data.src);
             }
             if (data && data.image) {
-                console.log('  Image dimensions:', data.image.width, 'x', data.image.height);
+                debugLog('  Image dimensions:', data.image.width, 'x', data.image.height);
             }
             // Mark that grass loaded successfully
             this.grassLoadedSuccessfully = true;
@@ -604,7 +604,7 @@ function preload() {
 
     // Dynamic NPC Loader
     this.load.on('filecomplete-json-npcData', (key, type, data) => {
-        console.log('✅ NPC Data loaded! Loading NPC assets dynamically...');
+        debugLog('✅ NPC Data loaded! Loading NPC assets dynamically...');
         if (Array.isArray(data)) {
             data.forEach(npc => {
                 // Load Sprite
@@ -614,14 +614,14 @@ function preload() {
                             frameWidth: npc.frameWidth || 64,
                             frameHeight: npc.frameHeight || 64
                         });
-                        console.log(`   + Loaded NPC sprite: ${npc.name} (${npc.spriteKey})`);
+                        debugLog(`   + Loaded NPC sprite: ${npc.name} (${npc.spriteKey})`);
                     }
                 }
                 // Load Portrait
                 if (npc.portraitKey && npc.portraitPath) {
                     if (!this.textures.exists(npc.portraitKey)) {
                         this.load.image(npc.portraitKey, npc.portraitPath);
-                        console.log(`   + Loaded NPC portrait: ${npc.name} (${npc.portraitKey})`);
+                        debugLog(`   + Loaded NPC portrait: ${npc.name} (${npc.portraitKey})`);
                     }
                 }
             });
@@ -630,14 +630,14 @@ function preload() {
 
     // Dynamic Interactables Loader
     this.load.on('filecomplete-json-interactables', (key, type, data) => {
-        console.log('✅ Interactables Data loaded! Loading interactable assets dynamically...');
+        debugLog('✅ Interactables Data loaded! Loading interactable assets dynamically...');
         if (Array.isArray(data)) {
             data.forEach(interactable => {
                 // Load Sprite
                 if (interactable.spriteKey && interactable.spritePath) {
                     if (!this.textures.exists(interactable.spriteKey)) {
                         this.load.image(interactable.spriteKey, interactable.spritePath);
-                        console.log(`   + Loaded Interactable sprite: ${interactable.name} (${interactable.spriteKey})`);
+                        debugLog(`   + Loaded Interactable sprite: ${interactable.name} (${interactable.spriteKey})`);
                     }
                 }
             });
@@ -653,9 +653,9 @@ function preload() {
     // Try relative path first (works better with local server)
     const grassPath = 'assets/tiles/grass.png';
     const fullGrassPath = new URL(grassPath, window.location.href).href;
-    console.log('🔄 PRELOAD: Attempting to load grass spritesheet from:', grassPath);
-    console.log('🔄 PRELOAD: Full resolved path:', fullGrassPath);
-    console.log('🔄 PRELOAD: Current working directory context:', window.location.href);
+    debugLog('🔄 PRELOAD: Attempting to load grass spritesheet from:', grassPath);
+    debugLog('🔄 PRELOAD: Full resolved path:', fullGrassPath);
+    debugLog('🔄 PRELOAD: Current working directory context:', window.location.href);
 
     // Initialize load success flag
     this.grassSpritesheetLoaded = false;
@@ -665,15 +665,15 @@ function preload() {
         frameHeight: 96
     });
 
-    console.log('🔄 PRELOAD: load.spritesheet() called for grass');
+    debugLog('🔄 PRELOAD: load.spritesheet() called for grass');
 
     this.load.once('filecomplete-spritesheet-grass', (key, type, data) => {
-        console.log('✅ Grass spritesheet loaded successfully!');
-        console.log('  Key:', key);
-        console.log('  Type:', type);
-        console.log('  Data:', data);
+        debugLog('✅ Grass spritesheet loaded successfully!');
+        debugLog('  Key:', key);
+        debugLog('  Type:', type);
+        debugLog('  Data:', data);
         if (data && data.src) {
-            console.log('  Source URL:', data.src);
+            debugLog('  Source URL:', data.src);
         }
         this.grassSpritesheetLoaded = true;
     });
@@ -718,18 +718,18 @@ function preload() {
 
     // Dynamic Quest Asset Loader (for modding support)
     this.load.on('filecomplete-json-questDataV2', (key, type, data) => {
-        console.log('✅ Quest Data V2 loaded! Loading quest assets dynamically...');
+        debugLog('✅ Quest Data V2 loaded! Loading quest assets dynamically...');
         if (data && data.quests) {
             Object.values(data.quests).forEach(quest => {
                 if (quest.assets && Array.isArray(quest.assets)) {
                     quest.assets.forEach(asset => {
                         // Skip if already loaded (unless we want to allow overrides)
                         if (this.textures.exists(asset.key) && asset.type !== 'audio') {
-                            console.log(`   Detailed: Asset ${asset.key} already exists, skipping.`);
+                            debugLog(`   Detailed: Asset ${asset.key} already exists, skipping.`);
                             return;
                         }
 
-                        console.log(`   + Loading quest asset: ${asset.key} (${asset.path})`);
+                        debugLog(`   + Loading quest asset: ${asset.key} (${asset.path})`);
 
                         switch (asset.type) {
                             case 'image':
@@ -769,7 +769,7 @@ function preload() {
 
     // Track successful image loads (set up handlers BEFORE loading)
     this.load.on('filecomplete-json-itemDefinitions', (key, type, data) => {
-        console.log('📦 items.json loaded, parsing definitions...');
+        debugLog('📦 items.json loaded, parsing definitions...');
         ItemManager.definitions = data;
         ItemManager.isLoaded = true;
         ItemManager.loadAllSprites(this);
@@ -779,46 +779,46 @@ function preload() {
 
     this.load.on('filecomplete-image-item_weapon', () => {
         this.customItemImagesLoaded.weapon = true;
-        console.log('✅ Custom weapon image loaded');
+        debugLog('✅ Custom weapon image loaded');
     });
 
     this.load.on('filecomplete-image-item_armor', () => {
         this.customItemImagesLoaded.armor = true;
-        console.log('✅ Custom armor image loaded');
+        debugLog('✅ Custom armor image loaded');
     });
     this.load.on('filecomplete-image-item_helmet', () => {
         this.customItemImagesLoaded.helmet = true;
-        console.log('✅ Custom helmet image loaded');
+        debugLog('✅ Custom helmet image loaded');
     });
     this.load.on('filecomplete-image-item_amulet', () => {
         this.customItemImagesLoaded.amulet = true;
-        console.log('✅ Custom amulet image loaded');
+        debugLog('✅ Custom amulet image loaded');
     });
     this.load.on('filecomplete-image-item_boots', () => {
         this.customItemImagesLoaded.boots = true;
-        console.log('✅ Custom boots image loaded');
+        debugLog('✅ Custom boots image loaded');
     });
     this.load.on('filecomplete-image-item_gloves', () => {
         this.customItemImagesLoaded.gloves = true;
-        console.log('✅ Custom gloves image loaded');
+        debugLog('✅ Custom gloves image loaded');
     });
     this.load.on('filecomplete-image-item_belt', () => {
         this.customItemImagesLoaded.belt = true;
-        console.log('✅ Custom belt image loaded');
+        debugLog('✅ Custom belt image loaded');
     });
     this.load.on('filecomplete-image-item_ring', () => {
         this.customItemImagesLoaded.ring = true;
-        console.log('✅ Custom ring image loaded');
+        debugLog('✅ Custom ring image loaded');
     });
 
     this.load.on('filecomplete-image-item_consumable', () => {
         this.customItemImagesLoaded.consumable = true;
-        console.log('✅ Custom consumable image loaded');
+        debugLog('✅ Custom consumable image loaded');
     });
 
     // Load Assets Manifest
     this.load.on('filecomplete-json-assets', (key, type, data) => {
-        console.log('📦 assets.json loaded, processing...');
+        debugLog('📦 assets.json loaded, processing...');
         // Load Images
         if (data.images) {
             for (const [assetKey, path] of Object.entries(data.images)) {
@@ -888,7 +888,7 @@ function preload() {
     // Generate fallback graphics AFTER preload completes
     // This prevents "texture key already in use" errors
     this.load.once('complete', () => {
-        console.log('📦 Preload complete - generating fallback textures if needed...');
+        debugLog('📦 Preload complete - generating fallback textures if needed...');
 
         // Create fallback player sprite (yellow circle with border) - only if not loaded
         if (!this.textures.exists('player')) {
@@ -898,7 +898,7 @@ function preload() {
                 .lineStyle(2, 0x000000)
                 .strokeCircle(16, 16, 14)
                 .generateTexture('player', 32, 32);
-            console.log('  ✅ Generated fallback player texture');
+            debugLog('  ✅ Generated fallback player texture');
         }
 
         // Create wall tile (dark gray with border) - only if not loaded from file
@@ -912,7 +912,7 @@ function preload() {
                 .fillRect(2, 2, 28, 2)
                 .fillRect(2, 2, 2, 28)
                 .generateTexture('wall', 32, 32);
-            console.log('  ✅ Generated fallback wall texture');
+            debugLog('  ✅ Generated fallback wall texture');
         }
 
         // Create dirt tile (brown) - only if not loaded from file  
@@ -925,7 +925,7 @@ function preload() {
                 .fillStyle(0x9d5a2a)
                 .fillRect(8, 8, 16, 16)
                 .generateTexture('dirt', 32, 32);
-            console.log('  ✅ Generated fallback dirt texture');
+            debugLog('  ✅ Generated fallback dirt texture');
         }
 
         // Create stone tile (light gray checkerboard pattern) - only if not loaded from file
@@ -940,7 +940,7 @@ function preload() {
                 .fillRect(16, 0, 16, 16)
                 .fillRect(0, 16, 16, 16)
                 .generateTexture('stone', 32, 32);
-            console.log('  ✅ Generated fallback stone texture');
+            debugLog('  ✅ Generated fallback stone texture');
         }
 
         // Procedural monster generation - create different monster types with unique appearances
@@ -955,14 +955,14 @@ function preload() {
     // Create grass tile (green with pattern) - only if spritesheet failed to load
     // Wait longer for the texture to load, then check
     this.time.delayedCall(500, () => {
-        console.log('🔍 Checking grass texture after load delay...');
-        console.log('  grassLoadedSuccessfully flag:', this.grassLoadedSuccessfully);
+        debugLog('🔍 Checking grass texture after load delay...');
+        debugLog('  grassLoadedSuccessfully flag:', this.grassLoadedSuccessfully);
 
         if (this.textures.exists('grass')) {
             const grassTexture = this.textures.get('grass');
-            console.log('  Texture exists:', true);
-            console.log('  Frame total:', grassTexture.frameTotal);
-            console.log('  Source:', grassTexture.source);
+            debugLog('  Texture exists:', true);
+            debugLog('  Frame total:', grassTexture.frameTotal);
+            debugLog('  Source:', grassTexture.source);
 
             // Check if it's a real spritesheet (has frames and source image) or just a placeholder
             const hasRealSource = grassTexture.source && grassTexture.source[0] && grassTexture.source[0].image;
@@ -975,9 +975,9 @@ function preload() {
                 const src = sourceImage.src || sourceImage.currentSrc || '';
                 hasValidImageSrc = src && src !== window.location.href && !src.includes('data:') && !src.includes('canvas');
                 const isCanvas = sourceImage.isCanvas || (sourceImage.tagName && sourceImage.tagName === 'CANVAS');
-                console.log('  Source image src:', src);
-                console.log('  Is canvas:', isCanvas);
-                console.log('  Has valid image src:', hasValidImageSrc);
+                debugLog('  Source image src:', src);
+                debugLog('  Is canvas:', isCanvas);
+                debugLog('  Has valid image src:', hasValidImageSrc);
             }
 
             // If load failed or texture is a canvas (generated), create fallback
@@ -998,13 +998,13 @@ function preload() {
                     .fillRect(0, 0, 2, 32)
                     .fillRect(30, 0, 2, 32)
                     .generateTexture('grass', 32, 32);
-                console.log('✅ Created fallback grass texture');
+                debugLog('✅ Created fallback grass texture');
             } else {
-                console.log('✅ Grass spritesheet loaded successfully with', grassTexture.frameTotal, 'frames');
+                debugLog('✅ Grass spritesheet loaded successfully with', grassTexture.frameTotal, 'frames');
                 // Verify the source image has correct dimensions
                 if (sourceImage) {
-                    console.log('  Source image dimensions:', sourceImage.width, 'x', sourceImage.height);
-                    console.log('  Source image URL:', sourceImage.src || sourceImage.currentSrc || 'unknown');
+                    debugLog('  Source image dimensions:', sourceImage.width, 'x', sourceImage.height);
+                    debugLog('  Source image URL:', sourceImage.src || sourceImage.currentSrc || 'unknown');
                 }
             }
         } else {
@@ -1019,7 +1019,7 @@ function preload() {
                 .fillRect(0, 0, 2, 32)
                 .fillRect(30, 0, 2, 32)
                 .generateTexture('grass', 32, 32);
-            console.log('✅ Created fallback grass texture');
+            debugLog('✅ Created fallback grass texture');
         }
     });
 
@@ -1046,7 +1046,7 @@ function preload() {
 
         // Only create fallbacks if custom images didn't load (check both flag and texture)
         if (!this.customItemImagesLoaded.weapon && !isLoadedImage('item_weapon')) {
-            console.log('⚠️ Creating fallback for item_weapon (custom image not loaded)');
+            debugLog('⚠️ Creating fallback for item_weapon (custom image not loaded)');
             if (this.textures.exists('item_weapon')) {
                 this.textures.remove('item_weapon'); // Remove if it exists but isn't our custom image
             }
@@ -1062,7 +1062,7 @@ function preload() {
         }
 
         if (!this.customItemImagesLoaded.armor) {
-            console.log('⚠️ Creating fallback for item_armor (custom image not loaded)');
+            debugLog('⚠️ Creating fallback for item_armor (custom image not loaded)');
             if (this.textures.exists('item_armor')) {
                 this.textures.remove('item_armor');
             }
@@ -1078,7 +1078,7 @@ function preload() {
         }
 
         if (!this.customItemImagesLoaded.helmet) {
-            console.log('⚠️ Creating fallback for item_helmet (custom image not loaded)');
+            debugLog('⚠️ Creating fallback for item_helmet (custom image not loaded)');
             if (this.textures.exists('item_helmet')) {
                 this.textures.remove('item_helmet');
             }
@@ -1094,7 +1094,7 @@ function preload() {
         }
 
         if (!this.customItemImagesLoaded.amulet) {
-            console.log('⚠️ Creating fallback for item_amulet (custom image not loaded)');
+            debugLog('⚠️ Creating fallback for item_amulet (custom image not loaded)');
             if (this.textures.exists('item_amulet')) {
                 this.textures.remove('item_amulet');
             }
@@ -1110,7 +1110,7 @@ function preload() {
         }
 
         if (!this.customItemImagesLoaded.boots) {
-            console.log('⚠️ Creating fallback for item_boots (custom image not loaded)');
+            debugLog('⚠️ Creating fallback for item_boots (custom image not loaded)');
             if (this.textures.exists('item_boots')) {
                 this.textures.remove('item_boots');
             }
@@ -1126,7 +1126,7 @@ function preload() {
         }
 
         if (!this.customItemImagesLoaded.gloves) {
-            console.log('⚠️ Creating fallback for item_gloves (custom image not loaded)');
+            debugLog('⚠️ Creating fallback for item_gloves (custom image not loaded)');
             if (this.textures.exists('item_gloves')) {
                 this.textures.remove('item_gloves');
             }
@@ -1141,7 +1141,7 @@ function preload() {
         }
 
         if (!this.customItemImagesLoaded.belt) {
-            console.log('⚠️ Creating fallback for item_belt (custom image not loaded)');
+            debugLog('⚠️ Creating fallback for item_belt (custom image not loaded)');
             if (this.textures.exists('item_belt')) {
                 this.textures.remove('item_belt');
             }
@@ -1156,7 +1156,7 @@ function preload() {
         }
 
         if (!this.customItemImagesLoaded.ring && !isLoadedImage('item_ring')) {
-            console.log('⚠️ Creating fallback for item_ring (custom image not loaded)');
+            debugLog('⚠️ Creating fallback for item_ring (custom image not loaded)');
             if (this.textures.exists('item_ring')) {
                 this.textures.remove('item_ring');
             }
@@ -1171,7 +1171,7 @@ function preload() {
         }
 
         if (!this.customItemImagesLoaded.consumable && !isLoadedImage('item_consumable')) {
-            console.log('⚠️ Creating fallback for item_consumable (custom image not loaded)');
+            debugLog('⚠️ Creating fallback for item_consumable (custom image not loaded)');
             if (this.textures.exists('item_consumable')) {
                 this.textures.remove('item_consumable');
             }
@@ -1186,7 +1186,7 @@ function preload() {
                 .generateTexture('item_consumable', 32, 32);
         }
 
-        console.log('✅ Fallback textures check complete. Custom images loaded:', this.customItemImagesLoaded);
+        debugLog('✅ Fallback textures check complete. Custom images loaded:', this.customItemImagesLoaded);
     });
 
     // Create fallbacks only if custom images didn't load (will be checked in delayed call)
@@ -1315,17 +1315,17 @@ function preload() {
     this.load.audio('village_music', 'assets/audio/music/Village_Hearth_FULL_SONG_MusicGPT.mp3');
     this.load.audio('wilderness_music', 'assets/audio/music/Wilderness_of_Arcana_FULL_SONG_MusicGPT.mp3');
     this.load.audio('dungeon_music', 'assets/audio/music/Dungeon_of_Arcana_FULL_SONG_MusicGPT.mp3');
-    console.log('🎵 Loading music files...');
+    debugLog('🎵 Loading music files...');
 
     // Listen for music file load completion
     this.load.once('filecomplete-audio-village_music', () => {
-        console.log('✅ Village music file loaded successfully');
+        debugLog('✅ Village music file loaded successfully');
     });
     this.load.once('filecomplete-audio-wilderness_music', () => {
-        console.log('✅ Wilderness music file loaded successfully');
+        debugLog('✅ Wilderness music file loaded successfully');
     });
     this.load.once('filecomplete-audio-dungeon_music', () => {
-        console.log('✅ Dungeon music file loaded successfully');
+        debugLog('✅ Dungeon music file loaded successfully');
     });
 
     this.load.on('loaderror', (file) => {
@@ -1334,14 +1334,14 @@ function preload() {
         }
     });
 
-    console.log('📢 Attempting to load sound files from assets/audio/');
+    debugLog('📢 Attempting to load sound files from assets/audio/');
 
     // Sound Effects
     // Audio loaded from assets.json
 
     // Verify loading
-    this.load.on('filecomplete-audio-attack', () => console.log('✅ Loaded attack sound'));
-    this.load.on('filecomplete-audio-level_up', () => console.log('✅ Loaded level_up sound'));
+    this.load.on('filecomplete-audio-attack', () => debugLog('✅ Loaded attack sound'));
+    this.load.on('filecomplete-audio-level_up', () => debugLog('✅ Loaded level_up sound'));
 
 
     // Generate procedural textures using the new manager
@@ -1351,11 +1351,11 @@ function preload() {
         console.error('TextureManager not loaded!');
     }
 
-    console.log('✅ Assets loaded: player (yellow), procedural monsters, grass (green), wall (gray), dirt (brown), stone (light gray)');
-    console.log('✅ Item sprites created: weapon (blue), armor (green), consumable (red), gold (yellow)');
-    console.log('✅ NPC sprite created: npc (cyan)');
-    console.log('✅ Ability effects created: fireball, heal, shield');
-    console.log('💡 To use real images: uncomment image loading lines in preload() and add assets/ folder');
+    debugLog('✅ Assets loaded: player (yellow), procedural monsters, grass (green), wall (gray), dirt (brown), stone (light gray)');
+    debugLog('✅ Item sprites created: weapon (blue), armor (green), consumable (red), gold (yellow)');
+    debugLog('✅ NPC sprite created: npc (cyan)');
+    debugLog('✅ Ability effects created: fireball, heal, shield');
+    debugLog('💡 To use real images: uncomment image loading lines in preload() and add assets/ folder');
 }
 
 /**
@@ -1496,7 +1496,7 @@ function checkZoneInteraction() {
         const zoneData = game.scene.scenes[0].cache.json.get('zoneData');
         if (Array.isArray(zoneData)) {
             specialZones = zoneData;
-            console.log(`Initialized ${specialZones.length} zones from JSON`);
+            debugLog(`Initialized ${specialZones.length} zones from JSON`);
         }
     }
 
@@ -1639,24 +1639,24 @@ function updateZoneIndicators() {
 
 
 function spawnDungeonMonsters() {
-    console.log('[SpawnDebug] spawnDungeonMonsters called');
+    debugLog('[SpawnDebug] spawnDungeonMonsters called');
     const scene = game.scene.scenes[0];
-    console.log('[SpawnDebug] MapManager.currentDungeon:', MapManager.currentDungeon);
-    console.log('[SpawnDebug] MapManager.currentDungeon.rooms:', MapManager.currentDungeon?.rooms?.length || 'N/A');
+    debugLog('[SpawnDebug] MapManager.currentDungeon:', MapManager.currentDungeon);
+    debugLog('[SpawnDebug] MapManager.currentDungeon.rooms:', MapManager.currentDungeon?.rooms?.length || 'N/A');
 
     if (!MapManager.currentDungeon || !MapManager.currentDungeon.rooms) {
-        console.log('[SpawnDebug] EARLY RETURN - currentDungeon or rooms is null');
+        debugLog('[SpawnDebug] EARLY RETURN - currentDungeon or rooms is null');
         return;
     }
 
     // Spawn monsters in rooms (not entrance room, not exit room)
     const combatRooms = MapManager.currentDungeon.rooms.slice(1, -1); // Skip first and last room
-    console.log(`[SpawnDebug] combatRooms: ${combatRooms.length}, scene.tileSize: ${scene?.tileSize}`);
+    debugLog(`[SpawnDebug] combatRooms: ${combatRooms.length}, scene.tileSize: ${scene?.tileSize}`);
 
     combatRooms.forEach(room => {
         // Spawn 1-3 monsters per room
         const monsterCount = Phaser.Math.Between(1, 3);
-        console.log(`[SpawnDebug] Spawning ${monsterCount} monsters in room at (${room.x}, ${room.y})`);
+        debugLog(`[SpawnDebug] Spawning ${monsterCount} monsters in room at (${room.x}, ${room.y})`);
 
         // Use fallback tileSize if scene.tileSize is not set
         const tileSize = scene?.tileSize || 32;
@@ -1755,7 +1755,7 @@ function spawnDungeonMonsters() {
             const spawnAmount = selectedType.spawnAmount || [1, 1];
             const packSize = Phaser.Math.Between(spawnAmount[0], spawnAmount[1]);
 
-            console.log(`🦇 Dungeon pack spawn: ${selectedType.name} x${packSize}`);
+            debugLog(`🦇 Dungeon pack spawn: ${selectedType.name} x${packSize}`);
 
             // Spawn the pack clustered around the spawn point
             for (let p = 0; p < packSize; p++) {
@@ -1820,7 +1820,7 @@ function spawnBossMonster(x, y, level) {
     }
 
     if (!shouldSpawn) {
-        console.log(`info: No boss spawn for ${dungeonId} at level ${level}`);
+        debugLog(`info: No boss spawn for ${dungeonId} at level ${level}`);
         return;
     }
 
@@ -1858,7 +1858,7 @@ function spawnBossMonster(x, y, level) {
     const boss = spawnMonster(x, y, bossTypeData, bossTypeData.hp, bossTypeData.attack, bossTypeData.xp, true);
 
     if (boss) {
-        console.log(`👹 Boss spawned at level ${level} (${useProcedural ? 'Procedural' : 'Sprite'})`);
+        debugLog(`👹 Boss spawned at level ${level} (${useProcedural ? 'Procedural' : 'Sprite'})`);
     }
 }
 
@@ -1892,7 +1892,7 @@ function onBossDefeated(level, x, y) {
     // Drop boss loot
     dropBossLoot(x, y, level);
 
-    console.log(`✅ Dungeon level ${level} completed (Max: ${maxLevels})`);
+    debugLog(`✅ Dungeon level ${level} completed (Max: ${maxLevels})`);
 
     if (level >= maxLevels) {
         // FINAL VICTORY
@@ -2051,7 +2051,7 @@ function showVictoryCinematic(scene, imageKey, loreText) {
     });
 
     const closeCinematic = () => {
-        console.log('🎬 Closing Victory Cinematic');
+        debugLog('🎬 Closing Victory Cinematic');
         // Disable button immediately
         btn.disableInteractive();
 
@@ -2069,7 +2069,7 @@ function showVictoryCinematic(scene, imageKey, loreText) {
     };
 
     btn.on('pointerdown', () => {
-        console.log('🖱️ Continue Button Clicked!');
+        debugLog('🖱️ Continue Button Clicked!');
         closeCinematic();
     });
 
@@ -2228,7 +2228,7 @@ function dropBossLoot(x, y, level) {
 
         // Add to global items list
         items.push(item);
-        console.log(`✨ Added boss loot to items list: ${item.name}`);
+        debugLog(`✨ Added boss loot to items list: ${item.name}`);
 
         // Add Hover Effect
         if (typeof window.enableHoverEffect === 'function') {
@@ -2248,7 +2248,7 @@ function dropBossLoot(x, y, level) {
         uqe.eventBus.emit(UQE_EVENTS.GOLD_EARNED, { amount: goldAmount });
     }
 
-    console.log(`💰 Boss dropped ${numItems} items (quality: ${quality})`);
+    debugLog(`💰 Boss dropped ${numItems} items (quality: ${quality})`);
 
     // SPECIAL: Quest Item Drops
     const dungeonId = MapManager.currentDungeon ? MapManager.currentDungeon.id : null;
@@ -2279,7 +2279,7 @@ function dropBossLoot(x, y, level) {
 
         // Add to global items
         items.push(fragment);
-        console.log('✨ Quest Item Dropped: Artifact Fragment (Added to items list)');
+        debugLog('✨ Quest Item Dropped: Artifact Fragment (Added to items list)');
 
         // Hover Effect
         if (typeof window.enableHoverEffect === 'function') {
@@ -2297,7 +2297,7 @@ function dropBossLoot(x, y, level) {
 
         // Add to items list so it can be picked up
         items.push(fragment);
-        console.log('✨ Quest Item Dropped: Artifact Fragment');
+        debugLog('✨ Quest Item Dropped: Artifact Fragment');
     }
 }
 
@@ -2305,14 +2305,14 @@ function dropBossLoot(x, y, level) {
  * Create game objects (like pygame initialization)
  */
 function create() {
-    console.log('🚀 CREATE FUNCTION CALLED - Starting tileset processing');
+    debugLog('🚀 CREATE FUNCTION CALLED - Starting tileset processing');
 
     // [New] Check for Save Load Request (from Reload)
     const shouldLoad = localStorage.getItem('rpg_load_on_start');
     if (shouldLoad === 'true' && window.SaveManager) {
         localStorage.removeItem('rpg_load_on_start');
         const loadSlot = parseInt(localStorage.getItem('rpg_load_slot')) || 1;
-        console.log(`📂 Loading Game from Slot ${loadSlot} (Start-up)...`);
+        debugLog(`📂 Loading Game from Slot ${loadSlot} (Start-up)...`);
 
         const saveState = window.SaveManager.loadGame(loadSlot);
         if (saveState) {
@@ -2329,7 +2329,7 @@ function create() {
                 if (saveState.world.playerX) window.lastPlayerX = saveState.world.playerX;
                 if (saveState.world.playerY) window.lastPlayerY = saveState.world.playerY;
 
-                console.log(`   -> Map set to: ${saveState.world.currentMap}`);
+                debugLog(`   -> Map set to: ${saveState.world.currentMap}`);
             }
             // Note: PlayerStats (XP, Items) are already restored by SaveManager.loadGame() 
             // modifying the global GameState.playerStats object.
@@ -2339,7 +2339,7 @@ function create() {
     // CRITICAL: Ensure playerStats refers to the Global State
     if (typeof playerStats === 'undefined') {
         window.playerStats = window.GameState.playerStats;
-        console.log('🔗 Link established: global playerStats -> GameState.playerStats');
+        debugLog('🔗 Link established: global playerStats -> GameState.playerStats');
     } else if (playerStats !== window.GameState.playerStats) {
         console.warn('⚠️ DETECTED playerStats DISCONNECT! Re-linking...');
         playerStats = window.GameState.playerStats;
@@ -2397,13 +2397,13 @@ function create() {
     // F3 to toggle debug HUD
     this.input.keyboard.on('keydown-F3', () => {
         debugText.setVisible(!debugText.visible);
-        console.log(`Debug HUD: ${debugText.visible ? 'ON' : 'OFF'}`);
+        debugLog(`Debug HUD: ${debugText.visible ? 'ON' : 'OFF'}`);
     });
 
     // Initialize Map Manager
     if (typeof MapManager !== 'undefined') {
         MapManager.init(this);
-        console.log('✅ MapManager initialized');
+        debugLog('✅ MapManager initialized');
     } else {
         console.error('❌ MapManager not found!');
     }
@@ -2421,7 +2421,7 @@ function create() {
     // Load items data (weapon types, hit sounds, materials, etc.)
     if (typeof loadItemsData === 'function') {
         loadItemsData().then(() => {
-            console.log('✅ Items system initialized');
+            debugLog('✅ Items system initialized');
         }).catch(err => {
             console.warn('⚠️ Items data failed to load, using defaults');
         });
@@ -2440,7 +2440,7 @@ function create() {
     if (typeof ProjectileManager !== 'undefined') {
         window.projectileManager = new ProjectileManager(this);
         window.projectileManager.init();
-        console.log('✅ ProjectileManager initialized');
+        debugLog('✅ ProjectileManager initialized');
 
         // Initialize ESC Key for Settings
         try {
@@ -2481,7 +2481,7 @@ function create() {
         npcList.forEach(npc => {
             npcRegistry[npc.name] = npc;
         });
-        console.log(`✅ NPC Registry initialized with ${Object.keys(npcRegistry).length} NPCs`);
+        debugLog(`✅ NPC Registry initialized with ${Object.keys(npcRegistry).length} NPCs`);
     } else {
         console.warn('⚠️ npcData not found in cache - NPC portraits may be missing');
     }
@@ -2531,14 +2531,14 @@ function create() {
 
         // Check for deferred quest data from SaveManager
         if (window._pendingUqeQuests) {
-            console.log(`[Save/Load Debug] Found deferred quest data - loading now...`);
+            debugLog(`[Save/Load Debug] Found deferred quest data - loading now...`);
             window.uqe.loadSaveData(window._pendingUqeQuests);
             window._pendingUqeQuests = null;
         }
 
         // Handle V2 Quest Completion
         window.uqe.eventBus.on(UQE_EVENTS.QUEST_COMPLETED, (quest) => {
-            console.log(`🎁 [UQE Bridge] Handling completion for: ${quest.title}`);
+            debugLog(`🎁 [UQE Bridge] Handling completion for: ${quest.title}`);
 
             // BLOCK LEVEL UP EFFECT temporarily
             // This prevents the level up animation from playing BEFORE the quest dialog opens
@@ -2568,7 +2568,7 @@ function create() {
 
             // Show UI Notification (via Queue)
             // Deferred logic is now handled by the queue system automatically
-            console.log('✅ Queueing quest completion dialog');
+            debugLog('✅ Queueing quest completion dialog');
             queueDialog('QUEST_COMPLETED', quest);
 
             // Release the block after a short delay to allow dialog to open
@@ -2598,7 +2598,7 @@ function create() {
 
         // Handle Quest Accepted - update tracker HUD for auto-accepted quests
         uqe.eventBus.on(UQE_EVENTS.QUEST_ACCEPTED, (quest) => {
-            console.log(`📋 [UQE Bridge] Quest Accepted: ${quest.title}`);
+            debugLog(`📋 [UQE Bridge] Quest Accepted: ${quest.title}`);
             addChatMessage(`Quest Started: ${quest.title}`, 0x00ffff, '📜');
 
             // Show Toast
@@ -2609,7 +2609,7 @@ function create() {
             // Data-Driven Quest Start Events
             const def = window.uqe.allDefinitions[quest.id];
             if (def && def.startEvent && window.QuestEvents && window.QuestEvents[def.startEvent]) {
-                console.log(`▶️ Triggering Start Event: ${def.startEvent}`);
+                debugLog(`▶️ Triggering Start Event: ${def.startEvent}`);
                 if (typeof window.QuestEvents[def.startEvent].start === 'function') {
                     window.QuestEvents[def.startEvent].start();
                 }
@@ -2621,7 +2621,7 @@ function create() {
 
         // Handle Quest Completed - Rewards and Item Cleanup
         uqe.eventBus.on(UQE_EVENTS.QUEST_COMPLETED, (quest) => {
-            console.log(`🏆 [UQE Bridge] Quest Completed: ${quest.title}`);
+            debugLog(`🏆 [UQE Bridge] Quest Completed: ${quest.title}`);
             addChatMessage(`Quest Completed: ${quest.title}`, 0xffd700, '🏆');
 
             // Show Toast
@@ -2632,7 +2632,7 @@ function create() {
             // Data-Driven Quest Stop Events
             const defStop = window.uqe.allDefinitions[quest.id];
             if (defStop && defStop.stopEvent && window.QuestEvents && window.QuestEvents[defStop.stopEvent]) {
-                console.log(`⏹️ Triggering Stop Event: ${defStop.stopEvent}`);
+                debugLog(`⏹️ Triggering Stop Event: ${defStop.stopEvent}`);
                 if (typeof window.QuestEvents[defStop.stopEvent].stop === 'function') {
                     window.QuestEvents[defStop.stopEvent].stop();
                 }
@@ -2640,11 +2640,11 @@ function create() {
 
             // 1. Grant Rewards (XP and Gold)
             if (quest.rewards) {
-                console.log(`🎁 [Rewards Debug] Inspecting rewards for ${quest.id}:`, quest.rewards);
+                debugLog(`🎁 [Rewards Debug] Inspecting rewards for ${quest.id}:`, quest.rewards);
                 if (quest.rewards.xp) {
-                    console.log(`   granting ${quest.rewards.xp} XP (Type: ${typeof quest.rewards.xp})`);
+                    debugLog(`   granting ${quest.rewards.xp} XP (Type: ${typeof quest.rewards.xp})`);
                     addXp(quest.rewards.xp);
-                    console.log(`   + Awarded ${quest.rewards.xp} XP`);
+                    debugLog(`   + Awarded ${quest.rewards.xp} XP`);
                 }
                 if (quest.rewards.gold) {
                     playerStats.gold += quest.rewards.gold;
@@ -2669,10 +2669,10 @@ function create() {
                                 amountToRemove += (i.quantity || 1);
                             }
                         });
-                        console.log(`   - 'all' specified, calculated total to remove: ${amountToRemove}`);
+                        debugLog(`   - 'all' specified, calculated total to remove: ${amountToRemove}`);
                     }
 
-                    console.log(`   - Attempting to remove ${amountToRemove}x ${itemId}`);
+                    debugLog(`   - Attempting to remove ${amountToRemove}x ${itemId}`);
 
                     // Iterate backwards through inventory to safely remove items
                     for (let i = playerStats.inventory.length - 1; i >= 0; i--) {
@@ -2706,7 +2706,7 @@ function create() {
                         // Display original requested amount if 'all', or specific number
                         const displayAmount = itemCost.amount === 'all' ? 'All' : itemCost.amount;
                         addChatMessage(`Removed ${displayAmount} ${itemId}`, 0xffa500, '➖');
-                        console.log(`   - Successfully removed items`);
+                        debugLog(`   - Successfully removed items`);
                     }
                 });
 
@@ -2722,7 +2722,7 @@ function create() {
 
         // Handle Quest Available - show notification for chain quests
         uqe.eventBus.on(UQE_EVENTS.QUEST_AVAILABLE, (data) => {
-            console.log(`🔔 [UQE Bridge] New quest available: ${data.questId}`);
+            debugLog(`🔔 [UQE Bridge] New quest available: ${data.questId}`);
             const def = data.definition;
             addChatMessage(`New Quest Available: ${def.title}`, 0x00ffff, '📜');
 
@@ -2737,17 +2737,17 @@ function create() {
         // This runs after save data might have been loaded
         setTimeout(() => {
             if (uqe.activeQuests.length === 0 && uqe.completedQuests.length === 0) {
-                console.log('🎮 [UQE Bridge] New game detected - initializing starter quest');
+                debugLog('🎮 [UQE Bridge] New game detected - initializing starter quest');
                 uqe.initializeStarterQuests([
                     'main_01_001' // Tremors in the Earth (Elder Malik) - Main Quest Start
                 ]);
                 updateQuestTrackerHUD();
             } else {
-                console.log(`✅ [UQE Bridge] Existing save - ${uqe.activeQuests.length} active, ${uqe.completedQuests.length} completed`);
+                debugLog(`✅ [UQE Bridge] Existing save - ${uqe.activeQuests.length} active, ${uqe.completedQuests.length} completed`);
 
                 // Resume Resonant Frequencies if active
                 if (window.isQuestActive && window.isQuestActive('main_01_005')) {
-                    console.log('🛡️ Resuming active defense quest...');
+                    debugLog('🛡️ Resuming active defense quest...');
                     if (typeof startResonantFrequenciesEvent === 'function') {
                         startResonantFrequenciesEvent();
                     }
@@ -2774,7 +2774,7 @@ function create() {
             window.savedPlayerY = data.world.playerY;
 
             const map = data.world.currentMap || 'town';
-            console.log(`💾 Loading map from save (via early load): ${map}`);
+            debugLog(`💾 Loading map from save (via early load): ${map}`);
 
             if (typeof MapManager !== 'undefined') {
                 if (map === 'wilderness') {
@@ -2809,10 +2809,10 @@ function create() {
     }
 
     // Start village music on initial load
-    console.log('🎵 Checking for village music...');
-    console.log('   - Sound system exists:', !!this.sound);
-    console.log('   - Audio cache exists:', !!this.cache.audio);
-    console.log('   - Village music in cache:', this.cache.audio.exists('village_music'));
+    debugLog('🎵 Checking for village music...');
+    debugLog('   - Sound system exists:', !!this.sound);
+    debugLog('   - Audio cache exists:', !!this.cache.audio);
+    debugLog('   - Village music in cache:', this.cache.audio.exists('village_music'));
 
     // Start music on initial load (game starts in town)
     if (musicEnabled && this.sound && this.cache.audio.exists('village_music')) {
@@ -2828,20 +2828,20 @@ function create() {
             if (playResult && typeof playResult.then === 'function') {
                 // playResult is a Promise
                 playResult.then(() => {
-                    console.log('🎵 Started village music on game start successfully');
+                    debugLog('🎵 Started village music on game start successfully');
                 }).catch(err => {
                     console.warn('⚠️ Could not play music on start (may need user interaction):', err);
                 });
             } else {
                 // playResult is not a Promise (might be boolean or sound object)
-                console.log('🎵 Started village music on game start');
+                debugLog('🎵 Started village music on game start');
             }
         } catch (e) {
             console.error('❌ Error playing village music:', e);
         }
     } else {
         if (!musicEnabled) {
-            console.log('🎵 Music is disabled, skipping music on start');
+            debugLog('🎵 Music is disabled, skipping music on start');
         } else {
             console.warn('⚠️ Village music not available - sound system or cache issue');
             console.warn('   Available audio keys:', Object.keys(this.cache.audio.entries || {}));
@@ -2890,7 +2890,7 @@ function create() {
             yoyo: false
         });
 
-        console.log('✅ Player walking animations created');
+        debugLog('✅ Player walking animations created');
     }
 
     // Create monster animations (will be loaded from PixelLab assets)
@@ -2899,28 +2899,28 @@ function create() {
     // Create attack and fireball animations if sprite sheets are loaded
     if (this.textures.exists('player_attack')) {
         const attackFrames = this.anims.generateFrameNumbers('player_attack', { start: 0, end: -1 });
-        console.log('Attack frames generated:', attackFrames.length, 'frames');
+        debugLog('Attack frames generated:', attackFrames.length, 'frames');
         this.anims.create({
             key: 'attack',
             frames: attackFrames,
             frameRate: 12, // Faster for attack animation
             repeat: 0 // Play once, don't loop
         });
-        console.log('✅ Player attack animation created with', attackFrames.length, 'frames');
+        debugLog('✅ Player attack animation created with', attackFrames.length, 'frames');
     } else {
         console.warn('⚠️ player_attack texture not found');
     }
 
     if (this.textures.exists('player_fireball')) {
         const fireballFrames = this.anims.generateFrameNumbers('player_fireball', { start: 0, end: -1 });
-        console.log('Fireball frames generated:', fireballFrames.length, 'frames');
+        debugLog('Fireball frames generated:', fireballFrames.length, 'frames');
         this.anims.create({
             key: 'fireball_cast',
             frames: fireballFrames,
             frameRate: 10,
             repeat: 0 // Play once, don't loop
         });
-        console.log('✅ Player fireball animation created with', fireballFrames.length, 'frames');
+        debugLog('✅ Player fireball animation created with', fireballFrames.length, 'frames');
     } else {
         console.warn('⚠️ player_fireball texture not found');
     }
@@ -2929,7 +2929,7 @@ function create() {
     let playerTexture = 'player_walk_south'; // Default direction
     if (!this.textures.exists('player_walk_south')) {
         playerTexture = 'player'; // Fallback to generated sprite
-        console.log('⚠️ Player animations not found, using fallback sprite');
+        debugLog('⚠️ Player animations not found, using fallback sprite');
     }
 
     player = this.physics.add.sprite(400, 300, playerTexture);
@@ -2941,7 +2941,7 @@ function create() {
     if (typeof window.savedPlayerX !== 'undefined') {
         player.x = window.savedPlayerX;
         player.y = window.savedPlayerY;
-        console.log(`📍 Player position restored to (${player.x}, ${player.y})`);
+        debugLog(`📍 Player position restored to (${player.x}, ${player.y})`);
 
         // Clear temp vars
         window.savedPlayerX = undefined;
@@ -3121,7 +3121,7 @@ function create() {
     // CTRL Key (Modifier) - Kept for advanced debug combos if needed
     this.ctrlKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.CTRL);
 
-    console.log('✅ System keys initialized (F8, CTRL)');
+    debugLog('✅ System keys initialized (F8, CTRL)');
 
 
     // Initialize Controller System
@@ -3162,7 +3162,7 @@ function create() {
             this.sound.play('fireball_cast', { volume: 0 }); // Silent play to unlock
             this.sound.stopByKey('fireball_cast');
             audioUnlocked = true;
-            console.log('🔓 Audio context unlocked');
+            debugLog('🔓 Audio context unlocked');
 
             // Trigger music if it should be playing
             if (window.musicEnabled && typeof MapManager !== 'undefined') {
@@ -3205,7 +3205,7 @@ function create() {
                 });
 
                 this.longPressTimer = this.time.delayedCall(600, () => {
-                    console.log('👆 Long Press Detected: Triggering Interaction');
+                    debugLog('👆 Long Press Detected: Triggering Interaction');
                     if (this.longPressFeedback) {
                         this.longPressFeedback.destroy();
                         this.longPressFeedback = null;
@@ -3300,7 +3300,7 @@ function create() {
 
                 // Attack
                 playerAttack(this.time.now, true, angle);
-                console.log('📱 Tap-to-Fire triggered');
+                debugLog('📱 Tap-to-Fire triggered');
             }
         }
     });
@@ -3314,20 +3314,20 @@ function create() {
         // Only handle primary button (left click)
         if (pointer.button !== 0) return;
 
-        console.log('👉 GameObject Down:', gameObject.type, 'Key:', gameObject.texture ? gameObject.texture.key : 'no-texture', 'Depth:', gameObject.depth, 'isItem:', gameObject.isItem);
+        debugLog('👉 GameObject Down:', gameObject.type, 'Key:', gameObject.texture ? gameObject.texture.key : 'no-texture', 'Depth:', gameObject.depth, 'isItem:', gameObject.isItem);
 
         // Ignore UI elements (high depth)
         if (gameObject.depth > 1000) return;
 
         // Block interaction if any UI window is open
         if (typeof isAnyWindowOpen === 'function' && isAnyWindowOpen()) {
-            console.log('⛔ Interaction blocked by open window');
+            debugLog('⛔ Interaction blocked by open window');
             return;
         }
 
         // Check if it's an NPC or Monster
         if (gameObject.npcId || gameObject.monsterId) {
-            console.log('🎯 Clicked on entity:', gameObject.name || gameObject.monsterType);
+            debugLog('🎯 Clicked on entity:', gameObject.name || gameObject.monsterType);
 
             // Record click time to prevent update loop from immediately overriding this
             // with a "ground click" event
@@ -3345,7 +3345,7 @@ function create() {
         }
         // Handle Item Clicks
         else if (gameObject.isItem) {
-            console.log('🎒 Clicked on item:', gameObject.itemData ? gameObject.itemData.name : 'Unknown Item');
+            debugLog('🎒 Clicked on item:', gameObject.itemData ? gameObject.itemData.name : 'Unknown Item');
 
             this.lastEntityClickTime = this.time.now;
 
@@ -3435,7 +3435,7 @@ function create() {
             if (typeof playSound === 'function') playSound('menu_select');
         } else {
             // Fallback
-            console.log('Toggle Equipment');
+            debugLog('Toggle Equipment');
         }
 
         // Pulse animation
@@ -3485,13 +3485,13 @@ function create() {
             if (difficulty === 'casual') color = '#4CAF50';      // Green
             else if (difficulty === 'normal') color = '#FFC107'; // Yellow/Gold
             if (this.mapDiffIndicator && typeof this.mapDiffIndicator.setText === 'function') {
-                this.mapDiffIndicator.setText(`${versionStr} | ${mapName} (${diffName})`);
+                this.mapDiffIndicator.setText(`${mapName} (${diffName})`);
                 this.mapDiffIndicator.setColor(color);
             }
         }
     });
 
-    console.log('Game created');
+    debugLog('Game created');
 }
 
 /**
@@ -3520,14 +3520,14 @@ function checkNPCInteraction() {
     });
 
     if (closestNPC) {
-        console.log(`💬 Interacting with NPC: ${closestNPC.name} (${closestNPC.id})`);
+        debugLog(`💬 Interacting with NPC: ${closestNPC.name} (${closestNPC.id})`);
 
         // Emit UQE Event (Crucial for generic quest triggers like 'talk_thorne_return')
         if (window.uqe) {
             // Try ID from definition first, then instance ID
             const eventId = (closestNPC.definition ? closestNPC.definition.id : closestNPC.id) || closestNPC.name.toLowerCase().replace(' ', '_');
             window.uqe.eventBus.emit('NPC_TALK', { id: eventId, name: closestNPC.name });
-            console.log(`   -> Emitted NPC_TALK for ${eventId}`);
+            debugLog(`   -> Emitted NPC_TALK for ${eventId}`);
         }
 
         // Open Dialog UI
@@ -3624,11 +3624,11 @@ function triggerWorldInteraction() {
     }
 
     // Check transition markers
-    console.log(`[Debug] Checking ${MapManager.transitionMarkers.length} markers. Player at ${Math.floor(player.x)},${Math.floor(player.y)}`);
+    debugLog(`[Debug] Checking ${MapManager.transitionMarkers.length} markers. Player at ${Math.floor(player.x)},${Math.floor(player.y)}`);
     for (const marker of MapManager.transitionMarkers) {
         if (!marker || !marker.x || !marker.y) continue;
         const distance = Phaser.Math.Distance.Between(player.x, player.y, marker.x, marker.y);
-        // console.log(`[Debug] Marker dist: ${distance} (Rad: ${marker.radius})`); 
+        // debugLog(`[Debug] Marker dist: ${distance} (Rad: ${marker.radius})`); 
         if (distance <= marker.radius) {
             const targetLevel = marker.dungeonLevel || 1;
 
@@ -3658,7 +3658,7 @@ function triggerWorldInteraction() {
                 // Only block if level HAS a boss and it wasn't defeated
                 if (levelHasBoss && !previousLevelCompleted) {
                     showDamageNumber(player.x, player.y - 40, `Defeat Level ${previousLevel} Boss First!`, 0xff0000);
-                    console.log(`❌ Cannot go to level ${targetLevel} - level ${previousLevel} boss not defeated`);
+                    debugLog(`❌ Cannot go to level ${targetLevel} - level ${previousLevel} boss not defeated`);
                     addChatMessage(`Cannot go to level ${targetLevel} - level ${previousLevel} boss not defeated`, 0xff0000);
                     return true;
                 }
@@ -3668,7 +3668,7 @@ function triggerWorldInteraction() {
                 // if (livingMonsters.length > 0) { ... }
             }
 
-            console.log(`🚪 Transitioning to ${marker.targetMap} level ${targetLevel}`);
+            debugLog(`🚪 Transitioning to ${marker.targetMap} level ${targetLevel}`);
             try {
                 MapManager.transitionToMap(marker.targetMap, targetLevel, marker.dungeonId);
             } catch (e) {
@@ -3681,7 +3681,7 @@ function triggerWorldInteraction() {
     // If not near a marker, check building or NPC interaction
 
     // Debug Map State
-    console.log(`[Debug] MapManager.currentMap: '${MapManager.currentMap}'`);
+    debugLog(`[Debug] MapManager.currentMap: '${MapManager.currentMap}'`);
 
     // If building UI is open, close it (handled by caller usually, but good check)
     if (typeof buildingPanelVisible !== 'undefined' && buildingPanelVisible) {
@@ -3698,15 +3698,15 @@ function triggerWorldInteraction() {
     // Check MapManager.buildings first (in town), then NPCs
     if (typeof MapManager.currentMap !== 'undefined' && MapManager.currentMap === 'town') {
         if (typeof checkBuildingInteraction === 'function') {
-            console.log('[Debug] Calling checkBuildingInteraction()');
+            debugLog('[Debug] Calling checkBuildingInteraction()');
             checkBuildingInteraction();
             // If building UI opened, return true
             if (typeof buildingPanelVisible !== 'undefined' && buildingPanelVisible) return true;
         } else {
-            console.log('[Debug] checkBuildingInteraction is NOT a function');
+            debugLog('[Debug] checkBuildingInteraction is NOT a function');
         }
     } else {
-        console.log('[Debug] Skipping building check. Not in town or map undefined.');
+        debugLog('[Debug] Skipping building check. Not in town or map undefined.');
     }
 
     if (typeof checkNPCInteraction === 'function') {
@@ -3769,7 +3769,7 @@ function update(time, delta) {
 
     // DEBUG: SANITY CHECK
     // Debug log disabled (too spammy)
-    // if (Math.random() < 0.01) console.log(`🔄 Update Loop Running...`);
+    // if (Math.random() < 0.01) debugLog(`🔄 Update Loop Running...`);
     // Update Damage/Healing Numbers
     if (window.updateDamageNumbers) {
         window.updateDamageNumbers(time, delta);
@@ -3849,7 +3849,7 @@ function update(time, delta) {
         const inCombin = (typeof isInCombat === 'function') ? isInCombat() : false;
 
         if (!inCombin && !questCompletedModal) {
-            console.log('⚔️ Combat over - showing deferred quest completion modal');
+            debugLog('⚔️ Combat over - showing deferred quest completion modal');
             const quest = pendingCompletedQuest;
             pendingCompletedQuest = null;
 
@@ -4125,7 +4125,7 @@ function update(time, delta) {
                     // Check if a window just closed recently (within 500ms)
                     // This prevents clicks on "Accept/Complete" buttons from registering as movement
                     if (this.lastWindowCloseTime && this.time.now - this.lastWindowCloseTime < 500) {
-                        console.log('🛑 Movement blocked due to recent window close. Delta:', this.time.now - this.lastWindowCloseTime);
+                        debugLog('🛑 Movement blocked due to recent window close. Delta:', this.time.now - this.lastWindowCloseTime);
                         return;
                     }
 
@@ -4138,7 +4138,7 @@ function update(time, delta) {
 
                     // If clicking directly on the player, ignore (no need to move to where you are)
                     if (clickedPlayer && !clickedMonster && !clickedNPC && !clickedItem) {
-                        console.log('🛑 Ignoring click on player (already here)');
+                        debugLog('🛑 Ignoring click on player (already here)');
                         return;
                     }
 
@@ -4229,7 +4229,7 @@ function update(time, delta) {
 
                         // Handle Monster Attack
                         if (entity.monsterId) {
-                            console.log('⚔️ Auto-attacking monster:', entity.name);
+                            debugLog('⚔️ Auto-attacking monster:', entity.name);
                             // Face the monster
                             const angle = Phaser.Math.Angle.Between(player.x, player.y, entity.x, entity.y);
                             if (Math.abs(Math.cos(angle)) > Math.abs(Math.sin(angle))) {
@@ -4242,12 +4242,12 @@ function update(time, delta) {
                         }
                         // Handle NPC Interaction
                         else if (entity.npcId) {
-                            console.log('💬 Auto-interacting with NPC:', entity.name);
+                            debugLog('💬 Auto-interacting with NPC:', entity.name);
                             checkNPCInteraction();
                         }
                         // Handle Item Pickup
                         else if (entity.isItem) {
-                            console.log('🎒 Auto-pickup item:', entity.itemData ? entity.itemData.name : 'Unknown Item');
+                            debugLog('🎒 Auto-pickup item:', entity.itemData ? entity.itemData.name : 'Unknown Item');
 
                             // Iterate to find the index
                             const itemIndex = items.findIndex(i => i.sprite === entity || i === entity.itemData);
@@ -4652,7 +4652,7 @@ function update(time, delta) {
                     }
                 }
                 // After pushing out, stop checking - we'll handle collisions normally
-                console.log('⚠️ Player was stuck inside wall, pushed out');
+                debugLog('⚠️ Player was stuck inside wall, pushed out');
                 break;
             }
         }
@@ -4893,7 +4893,7 @@ function update(time, delta) {
     // Toggle Debug Visualization (F8)
     if (scene.debugKey && Phaser.Input.Keyboard.JustDown(scene.debugKey)) {
         scene.debugMode = !scene.debugMode;
-        console.log(`🔧 Debug Mode: ${scene.debugMode ? 'ON' : 'OFF'}`);
+        debugLog(`🔧 Debug Mode: ${scene.debugMode ? 'ON' : 'OFF'}`);
         addChatMessage(`Debug Mode: ${scene.debugMode ? 'Enabled' : 'Disabled'}`, 0xff00ff);
 
         // Physics Debug
@@ -4927,8 +4927,8 @@ function update(time, delta) {
                 });
             }
         });
-        console.log(`FOUND ${count} interactive objects.`);
-        console.log('Items List Size:', items.length);
+        debugLog(`FOUND ${count} interactive objects.`);
+        debugLog('Items List Size:', items.length);
     }
 
     // Update quest log if visible
@@ -5061,7 +5061,7 @@ function update(time, delta) {
             const spawnAmount = type.spawnAmount || [1, 1];
             const packSize = Phaser.Math.Between(spawnAmount[0], spawnAmount[1]);
 
-            console.log(`🐺 Pack spawn: ${type.name} x${packSize} (range: ${spawnAmount[0]}-${spawnAmount[1]})`);
+            debugLog(`🐺 Pack spawn: ${type.name} x${packSize} (range: ${spawnAmount[0]}-${spawnAmount[1]})`);
 
             // Spawn the pack clustered around the spawn point
             for (let p = 0; p < packSize && spawned < monstersNeeded; p++) {
@@ -5303,7 +5303,7 @@ function updateWeaponSprite() {
             weaponSprite.setOrigin(0.5, 1.0);
             weaponSprite.setVisible(false);
             weaponSprite.isAnimating = false;
-            console.log('🔧 Recreated weaponSprite after transition');
+            debugLog('🔧 Recreated weaponSprite after transition');
         } else {
             return; // Cannot create
         }
@@ -5313,7 +5313,7 @@ function updateWeaponSprite() {
 
     if (!equippedWeapon) {
         weaponSprite.setVisible(false);
-        console.log('⚠️ No weapon equipped - hiding weapon sprite');
+        debugLog('⚠️ No weapon equipped - hiding weapon sprite');
         return;
     }
 
@@ -5331,7 +5331,7 @@ function updateWeaponSprite() {
 
     weaponSprite.setVisible(true);
     updateWeaponPosition();
-    console.log(`✅ Weapon sprite updated: ${weaponType} (${weaponKey})`);
+    debugLog(`✅ Weapon sprite updated: ${weaponType} (${weaponKey})`);
 }
 window.updateWeaponSprite = updateWeaponSprite;
 
@@ -5539,7 +5539,7 @@ function updateWeaponPosition() {
  */
 function animateWeaponStrike(direction, weaponType = 'Sword') {
     if (!weaponSprite || !weaponSprite.visible) {
-        console.log('⚠️ Weapon sprite not visible - skipping animation');
+        debugLog('⚠️ Weapon sprite not visible - skipping animation');
         return;
     }
 
@@ -5600,8 +5600,8 @@ function animateWeaponStrike(direction, weaponType = 'Sword') {
     // The skipRotation flag will prevent it from resetting rotation during animation
     updateWeaponPosition();
 
-    console.log(`🎬 Animating weapon strike: ${weaponType} facing ${direction} `);
-    console.log(`   Base rotation: ${baseRotation} (${(baseRotation * 180 / Math.PI).toFixed(1)}°)`);
+    debugLog(`🎬 Animating weapon strike: ${weaponType} facing ${direction} `);
+    debugLog(`   Base rotation: ${baseRotation} (${(baseRotation * 180 / Math.PI).toFixed(1)}°)`);
 
     // Set initial flip state
     weaponSprite.setFlipX(isFlipped);
@@ -5698,7 +5698,7 @@ function animateWeaponStrike(direction, weaponType = 'Sword') {
         // Set initial rotation to start position
         weaponSprite.rotation = swingStart;
 
-        console.log(`   Swing: ${(swingStart * 180 / Math.PI).toFixed(1)}° → ${(swingEnd * 180 / Math.PI).toFixed(1)}°`);
+        debugLog(`   Swing: ${(swingStart * 180 / Math.PI).toFixed(1)}° → ${(swingEnd * 180 / Math.PI).toFixed(1)}°`);
 
         // Create step-based animation
         let currentStep = 0;
@@ -5715,7 +5715,7 @@ function animateWeaponStrike(direction, weaponType = 'Sword') {
                     onComplete: () => {
                         weaponSprite.isAnimating = false; // Clear animation flag
                         updateWeaponPosition();
-                        console.log(`   ✅ Animation complete, returned to base rotation`);
+                        debugLog(`   ✅ Animation complete, returned to base rotation`);
                     }
                 });
                 return;
@@ -5725,7 +5725,7 @@ function animateWeaponStrike(direction, weaponType = 'Sword') {
             const progress = stepAngles[currentStep];
             const targetRotation = swingStart + (swingEnd - swingStart) * progress;
 
-            console.log(`   Step ${currentStep + 1} /5: ${(targetRotation * 180 / Math.PI).toFixed(1)
+            debugLog(`   Step ${currentStep + 1} /5: ${(targetRotation * 180 / Math.PI).toFixed(1)
                 }° (${(progress * 100).toFixed(0)}%)`);
 
             // Animate to this step
@@ -6013,7 +6013,7 @@ function createSystemChatBox() {
     };
 
     chatMessages = [];
-    console.log('✅ System chat box created');
+    debugLog('✅ System chat box created');
 }
 
 /**
@@ -6141,7 +6141,7 @@ function addChatMessage(text, color = 0xffffff, icon = '') {
     const fullText = icon ? `${icon} ${text} ` : text;
     const colorHex = `#${color.toString(16).padStart(6, '0')} `;
 
-    console.log(`💬 Chat: ${fullText} `);
+    debugLog(`💬 Chat: ${fullText} `);
 
     // Create text object
     const msgText = scene.add.text(systemChatBox.padding, 0, fullText, {
@@ -6366,7 +6366,7 @@ function updateUI() {
             if (isNaN(manaPercent) || manaPercent < 0) {
                 console.error(`[UI Error] Invalid mana percent: ${manaPercent}, Mana: ${stats.mana}, Max: ${stats.maxMana} `);
             } else {
-                // console.log(`[UI Debug]Mana: ${ stats.mana }/${stats.maxMana} (${(manaPercent * 100).toFixed(1)}%), Width: ${manaBar.width}`);
+                // debugLog(`[UI Debug]Mana: ${ stats.mana }/${stats.maxMana} (${(manaPercent * 100).toFixed(1)}%), Width: ${manaBar.width}`);
             }
         }
 
@@ -6607,7 +6607,7 @@ function destroySettingsUI() {
  * showTooltip - Unified tooltip system
  */
 function showTooltip(item, x, y, context = 'inventory') {
-    console.log('🔗 game.js showTooltip calling UIManager...');
+    debugLog('🔗 game.js showTooltip calling UIManager...');
     if (window.UIManager) {
         window.UIManager.showTooltip(item, x, y, context);
     } else {
@@ -6652,7 +6652,7 @@ let lastInventoryCount = 0;
  * Force inventory refresh (call when items are added/removed)
  */
 function refreshInventory() {
-    console.log(`🔄 refreshInventory called - inventoryVisible: ${inventoryVisible}, equipmentVisible: ${equipmentVisible}, items: ${playerStats.inventory.length}`);
+    debugLog(`🔄 refreshInventory called - inventoryVisible: ${inventoryVisible}, equipmentVisible: ${equipmentVisible}, items: ${playerStats.inventory.length}`);
 
     // Refresh "I" inventory panel if open
     if (inventoryVisible && inventoryPanel) {
@@ -6702,7 +6702,7 @@ function equipItemFromInventory(item, inventoryIndex) {
 
     // Show feedback
     showDamageNumber(player.x, player.y - 40, `Equipped ${item.name}`, 0x00ffff);
-    console.log(`Equipped ${item.name} in ${slot} slot`);
+    debugLog(`Equipped ${item.name} in ${slot} slot`);
 
     // Update weapon sprite if weapon was equipped
     if (slot === 'weapon') {
@@ -6742,7 +6742,7 @@ function useConsumable(item, inventoryIndex) {
         showDamageNumber(player.x, player.y - 40, 'HP Full', 0xffff00);
     }
 
-    console.log(`Used ${item.name} - healed ${actualHeal} HP`);
+    debugLog(`Used ${item.name} - healed ${actualHeal} HP`);
 }
 
 /**
@@ -6766,7 +6766,7 @@ function unequipItem(slot) {
 
     // Show feedback
     showDamageNumber(player.x, player.y - 40, `Unequipped ${item.name}`, 0xffff00);
-    console.log(`Unequipped ${item.name} from ${slot} slot`);
+    debugLog(`Unequipped ${item.name} from ${slot} slot`);
 
     // Update weapon sprite if weapon was unequipped
     if (slot === 'weapon') {
@@ -7240,7 +7240,7 @@ function updateEquipmentInventoryItems() {
         return;
     }
 
-    console.log(`📦 updateEquipmentInventoryItems: Displaying ${playerStats.inventory.length} items in equipment panel`);
+    debugLog(`📦 updateEquipmentInventoryItems: Displaying ${playerStats.inventory.length} items in equipment panel`);
 
     // Clear existing inventory item displays
     // Force hide tooltip to prevent ghost tooltips (e.g. if hovering an item that gets destroyed)
@@ -7381,11 +7381,11 @@ function updateEquipmentInventoryItems() {
     const rowHeight = itemSize + spacing + 20; // itemSize + spacing + text space
     const totalContentHeight = totalRows * rowHeight;
 
-    console.log(`📦 Equipment panel: Rendering ${inventoryItems.length} items (${totalRows} rows)`);
-    console.log(`   Container exists: ${!!equipmentPanel.inventoryContainer}, active: ${equipmentPanel.inventoryContainer?.active}`);
+    debugLog(`📦 Equipment panel: Rendering ${inventoryItems.length} items (${totalRows} rows)`);
+    debugLog(`   Container exists: ${!!equipmentPanel.inventoryContainer}, active: ${equipmentPanel.inventoryContainer?.active}`);
 
     inventoryItems.forEach((item, index) => {
-        // console.log(`  - Equipment panel item ${index}: ${item.name} (type: ${item.type})`); // Reduced log spam
+        // debugLog(`  - Equipment panel item ${index}: ${item.name} (type: ${item.type})`); // Reduced log spam
         const row = Math.floor(index / itemsPerRow);
         const col = index % itemsPerRow;
         const x = startX + col * (itemSize + spacing);
@@ -7440,7 +7440,7 @@ function updateEquipmentInventoryItems() {
         // Add all items to container
         equipmentPanel.inventoryContainer.add([itemBg, itemSprite, borderRect, itemNameText]);
 
-        // console.log(`   Added item ${index} to container at relative position (${x}, ${y})`);
+        // debugLog(`   Added item ${index} to container at relative position (${x}, ${y})`);
 
         // Make clickable - equip if equippable, otherwise show tooltip
         const isEquippable = equippableTypes.includes(item.type);
@@ -7454,9 +7454,9 @@ function updateEquipmentInventoryItems() {
 
         const onHoverIn = (pointer) => {
             if (pointer) pointer.event.stopPropagation();
-            console.log('🔍 Tooltip Debug (Inv):', JSON.stringify(item));
+            debugLog('🔍 Tooltip Debug (Inv):', JSON.stringify(item));
             if (item.type) {
-                console.log('   -> item.type:', item.type);
+                debugLog('   -> item.type:', item.type);
                 window.lastHoveredType = item.type; // Update debug HUD
             } else {
                 window.lastHoveredType = 'UNDEFINED TYPE';
@@ -7498,7 +7498,7 @@ function updateEquipmentInventoryItems() {
     if (equipmentPanel.inventoryContainer) {
         if (equipmentPanel.maskGeometry) {
             equipmentPanel.inventoryContainer.setMask(equipmentPanel.maskGeometry);
-            // console.log(`📦 Mask applied to container`);
+            // debugLog(`📦 Mask applied to container`);
         } else {
             console.warn(`⚠️ No maskGeometry found for equipment panel container`);
         }
@@ -7521,7 +7521,7 @@ function updateEquipmentInventoryItems() {
         // Container position is managed by setScrollPosition, but we ensure it's initialized correctly
         equipmentPanel.inventoryContainer.y = inventoryStartY - containerOffset;
 
-        // console.log(`📦 Equipment panel container positioned at (${equipmentPanel.inventoryContainer.x}, ${equipmentPanel.inventoryContainer.y})`);
+        // debugLog(`📦 Equipment panel container positioned at (${equipmentPanel.inventoryContainer.x}, ${equipmentPanel.inventoryContainer.y})`);
     }
 
     // Force container to be visible and active
@@ -7578,16 +7578,16 @@ function createEquipmentSlot(slotName, x, y, size) {
             // For weapons, use weapon-specific sprite based on weaponType
             const weaponType = item.weaponType || 'Sword';
             const weaponKey = `weapon_${weaponType.toLowerCase()}`;
-            console.log(`🔍 Equipment screen - Weapon: ${item.name}, weaponType: ${weaponType}, weaponKey: ${weaponKey}`);
-            console.log(`   Full item object:`, JSON.stringify(item, null, 2));
+            debugLog(`🔍 Equipment screen - Weapon: ${item.name}, weaponType: ${weaponType}, weaponKey: ${weaponKey}`);
+            debugLog(`   Full item object:`, JSON.stringify(item, null, 2));
             // Check if weapon-specific sprite exists, otherwise fallback to item_weapon
             const textureExists = scene.textures.exists(weaponKey);
-            console.log(`   Texture ${weaponKey} exists: ${textureExists}`);
+            debugLog(`   Texture ${weaponKey} exists: ${textureExists}`);
             if (textureExists) {
                 spriteKey = weaponKey;
-                console.log(`✅ Using weapon sprite: ${weaponKey}`);
+                debugLog(`✅ Using weapon sprite: ${weaponKey}`);
             } else {
-                console.log(`⚠️ Weapon sprite ${weaponKey} not found, using fallback item_weapon`);
+                debugLog(`⚠️ Weapon sprite ${weaponKey} not found, using fallback item_weapon`);
                 spriteKey = 'item_weapon'; // Fallback
             }
         } else if (item.type === 'armor') spriteKey = 'item_armor';
@@ -7874,14 +7874,14 @@ function initializeQuests() {
             if (!isMigrated) {
                 firstMain.startValue = questManager.getStatValue(firstMain.type, playerStats);
                 playerStats.quests.main.push(firstMain);
-                console.log(`✅ Started primary main quest: ${firstMain.title}`);
+                debugLog(`✅ Started primary main quest: ${firstMain.title}`);
             } else {
-                console.log(`ℹ️ [UQE Bridge] Skipping legacy auto-start for migrated quest: ${firstMain.id}`);
+                debugLog(`ℹ️ [UQE Bridge] Skipping legacy auto-start for migrated quest: ${firstMain.id}`);
             }
         }
     }
 
-    console.log(`✅ Quests initialized: 0 initial side, ${playerStats.quests.available.length} available, ${playerStats.quests.main.length} main`);
+    debugLog(`✅ Quests initialized: 0 initial side, ${playerStats.quests.available.length} available, ${playerStats.quests.main.length} main`);
 }
 
 /**
@@ -7956,7 +7956,7 @@ function acceptAllAvailableQuests() {
     playerStats.quests.available.forEach(quest => {
         quest.startValue = questManager.getStatValue(quest.type, playerStats);
         playerStats.quests.active.push(quest);
-        console.log(`Quest accepted: ${quest.title}`);
+        debugLog(`Quest accepted: ${quest.title}`);
     });
 
     playerStats.quests.available = [];
@@ -7986,10 +7986,10 @@ function acceptMainQuest(questId) {
                 showQuestPreviewModalEnhanced(questId,
                     // On Accept
                     () => {
-                        console.log(`✅ acceptMainQuest: Adding ${questId} to main list`);
+                        debugLog(`✅ acceptMainQuest: Adding ${questId} to main list`);
                         quest.startValue = questManager.getStatValue(quest.type, playerStats);
                         playerStats.quests.main.push(quest);
-                        console.log(`Main quest accepted: ${quest.title}`);
+                        debugLog(`Main quest accepted: ${quest.title}`);
 
                         showDamageNumber(player.x, player.y - 60, "Quest Accepted!", 0x00ff00);
                         playSound('item_pickup');
@@ -8025,7 +8025,7 @@ function acceptSideQuest(questId) {
                     quest.startValue = questManager.getStatValue(quest.type, playerStats);
                     playerStats.quests.active.push(quest);
 
-                    console.log(`Side quest accepted: ${quest.title}`);
+                    debugLog(`Side quest accepted: ${quest.title}`);
                     showDamageNumber(player.x, player.y - 60, "Quest Accepted!", 0x00ff00);
                     playSound('item_pickup');
                     updateQuestTrackerHUD();
@@ -8075,7 +8075,7 @@ function completeQuest(quest, index) {
         if (nextQuest) {
             nextQuest.startValue = questManager.getStatValue(nextQuest.type, playerStats);
             playerStats.quests.active.push(nextQuest);
-            console.log(`New chain quest unlocked: ${nextQuest.title}`);
+            debugLog(`New chain quest unlocked: ${nextQuest.title}`);
             // Store to show after completed modal closes
             pendingNewQuest = nextQuest;
         }
@@ -8100,7 +8100,7 @@ function completeQuest(quest, index) {
         const nextStep = (quest.step || 0) + 1;
         const nextMain = allMainQuests.find(q => q.chapter === quest.chapter && q.step === nextStep);
         if (nextMain) {
-            console.log(`Next main quest available to pick up: ${nextMain.title}`);
+            debugLog(`Next main quest available to pick up: ${nextMain.title}`);
         }
     } else {
         playerStats.quests.active.splice(index, 1);
@@ -8121,7 +8121,7 @@ function completeQuest(quest, index) {
         refreshQuestLog();
     }
 
-    console.log(`✅ Quest completed: ${quest.title}`);
+    debugLog(`✅ Quest completed: ${quest.title}`);
     playSound('level_up');
 }
 
@@ -8360,7 +8360,7 @@ function hideQuestCompletedModal() {
         if (game.scene.scenes[0]) {
             const s = game.scene.scenes[0];
             s.lastWindowCloseTime = s.time.now;
-            console.log('🚫 Dialog closed at:', s.lastWindowCloseTime);
+            debugLog('🚫 Dialog closed at:', s.lastWindowCloseTime);
         }
     }
     // Note: Don't show pending new quest here - let the close handlers do it
@@ -8379,7 +8379,7 @@ function showNewQuestModal(quest) {
     // CRITICAL: Don't show if quest completed modal is still open
     // Wait for it to close first
     if (questCompletedModal) {
-        console.log('⏳ Quest completed modal is open, queuing new quest modal');
+        debugLog('⏳ Quest completed modal is open, queuing new quest modal');
         // Store it to show after completed modal closes
         pendingNewQuest = quest;
         return;
@@ -8559,7 +8559,7 @@ function hideNewQuestModal() {
         if (game.scene.scenes[0]) {
             const s = game.scene.scenes[0];
             s.lastWindowCloseTime = s.time.now;
-            console.log('🚫 Dialog closed at:', s.lastWindowCloseTime);
+            debugLog('🚫 Dialog closed at:', s.lastWindowCloseTime);
         }
     }
 }
@@ -8574,7 +8574,7 @@ var questPreviewModal = null;
  * @param {Function} onDecline - Callback when quest is declined
  */
 function showQuestPreviewModal(questId, onAccept, onDecline) {
-    console.log('[Quest Debug] START showQuestPreviewModal with ID:', questId);
+    debugLog('[Quest Debug] START showQuestPreviewModal with ID:', questId);
     const scene = game.scene.scenes[0];
 
     // Get quest definition from UQE
@@ -8701,10 +8701,10 @@ function showQuestPreviewModal(questId, onAccept, onDecline) {
 
     // Accept handler
     const acceptHandler = () => {
-        console.log('✅ Quest Preview: Accept Clicked');
+        debugLog('✅ Quest Preview: Accept Clicked');
         hideQuestPreviewModal();
         if (onAccept) {
-            console.log('   -> Calling onAccept callback');
+            debugLog('   -> Calling onAccept callback');
             onAccept();
         } else {
             console.warn('   -> No onAccept callback provided!');
@@ -8713,7 +8713,7 @@ function showQuestPreviewModal(questId, onAccept, onDecline) {
 
     // Decline handler  
     const declineHandler = () => {
-        console.log('❌ Quest Preview: Decline Clicked');
+        debugLog('❌ Quest Preview: Decline Clicked');
         if (typeof playSound === 'function') {
             playSound('quest_decline');
         }
@@ -8722,11 +8722,11 @@ function showQuestPreviewModal(questId, onAccept, onDecline) {
     };
 
     acceptBtn.setName('QuestAcceptBtn');
-    console.log('--- Registering Accept Handler ---');
+    debugLog('--- Registering Accept Handler ---');
     acceptBtn.on('pointerover', () => acceptBtn.setFillStyle(0x00cc00));
     acceptBtn.on('pointerout', () => acceptBtn.setFillStyle(0x00aa00));
     acceptBtn.on('pointerdown', acceptHandler);
-    console.log(`--- AcceptBtn Listeners: ${acceptBtn.listenerCount('pointerdown')} ---`);
+    debugLog(`--- AcceptBtn Listeners: ${acceptBtn.listenerCount('pointerdown')} ---`);
 
     acceptBtnText.setInteractive({ useHandCursor: true }).on('pointerdown', acceptHandler);
 
@@ -8746,8 +8746,8 @@ function showQuestPreviewModal(questId, onAccept, onDecline) {
     escKey.on('down', escHandler);
 
     // Assign to global variable for management
-    console.log('[Quest Debug] Assigning questPreviewModal global...');
-    console.log('[Quest Debug] acceptBtn is:', acceptBtn);
+    debugLog('[Quest Debug] Assigning questPreviewModal global...');
+    debugLog('[Quest Debug] acceptBtn is:', acceptBtn);
     questPreviewModal = {
         overlay, modalBg, header, questTitle, questDesc,
         objLabel, objectiveTexts, rewardsLabel, rewardTexts,
@@ -8756,7 +8756,7 @@ function showQuestPreviewModal(questId, onAccept, onDecline) {
     };
     // Explicitly expose to window for controller access
     window.questPreviewModal = questPreviewModal;
-    console.log('[Quest Debug] window.questPreviewModal assigned. Keys:', Object.keys(window.questPreviewModal));
+    debugLog('[Quest Debug] window.questPreviewModal assigned. Keys:', Object.keys(window.questPreviewModal));
 
     return questPreviewModal;
 }
@@ -8792,7 +8792,7 @@ function hideQuestPreviewModal() {
     if (game.scene.scenes[0]) {
         const s = game.scene.scenes[0];
         s.lastWindowCloseTime = s.time.now;
-        console.log('🚫 Quest Preview closed at:', s.lastWindowCloseTime);
+        debugLog('🚫 Quest Preview closed at:', s.lastWindowCloseTime);
     }
 }
 
@@ -8822,7 +8822,7 @@ function initializeNPCs(passedScene) {
         return;
     }
 
-    console.log(`Initialising ${npcData.length} NPCs from JSON...`);
+    debugLog(`Initialising ${npcData.length} NPCs from JSON...`);
 
     // Determine map dimensions safely (fallback to 1280x1280 for town)
     const mapWidth = (typeof map !== 'undefined' && map && map.widthInPixels) ? map.widthInPixels : 1280;
@@ -8887,7 +8887,7 @@ function initializeNPCs(passedScene) {
         npcs.push(npc);
     });
 
-    console.log('✅ NPCs initialized:', npcs.length, 'NPCs');
+    debugLog('✅ NPCs initialized:', npcs.length, 'NPCs');
 }
 
 
@@ -8901,7 +8901,7 @@ function saveSettings() {
             musicEnabled: musicEnabled
         };
         localStorage.setItem('pfaustino_rpg_settings', JSON.stringify(settings));
-        console.log('💾 Settings saved to localStorage');
+        debugLog('💾 Settings saved to localStorage');
     } catch (e) {
         console.error('❌ Error saving settings:', e);
     }
@@ -8917,7 +8917,7 @@ function loadSettings() {
             const settings = JSON.parse(savedSettings);
             if (settings.musicEnabled !== undefined) {
                 musicEnabled = settings.musicEnabled;
-                console.log('💾 Settings loaded from localStorage:', settings);
+                debugLog('💾 Settings loaded from localStorage:', settings);
             }
         }
     } catch (e) {
@@ -9223,7 +9223,7 @@ function updateBuildingIndicators() {
     MapManager.buildings.forEach((building, index) => {
         if (!building.rect || !building.rect.active) {
             if (building.type && ['inn', 'tavern', 'blacksmith'].includes(building.type)) {
-                console.log(`⚠️ Building ${index} (${building.type}) has no active rect`);
+                debugLog(`⚠️ Building ${index} (${building.type}) has no active rect`);
             }
             return;
         }
@@ -9274,7 +9274,7 @@ function updateBuildingIndicators() {
 
             building.showIndicator = true;
             if (['inn', 'tavern', 'blacksmith'].includes(building.type)) {
-                console.log(`✅ Showing indicator for ${building.type} (distance: ${distance.toFixed(0)})`);
+                debugLog(`✅ Showing indicator for ${building.type} (distance: ${distance.toFixed(0)})`);
             }
         } else if (!inRange && building.showIndicator) {
             if (building.interactionIndicator) {
@@ -9297,15 +9297,15 @@ function updateBuildingIndicators() {
  */
 function checkBuildingInteraction() {
     if (MapManager.currentMap !== 'town') {
-        console.log('❌ Not in town, skipping building interaction');
+        debugLog('❌ Not in town, skipping building interaction');
         return;
     }
     if (dialogVisible || shopVisible || inventoryVisible || settingsVisible || buildingPanelVisible) {
-        console.log('❌ UI already open, skipping building interaction');
+        debugLog('❌ UI already open, skipping building interaction');
         return;
     }
 
-    console.log(`🔍 Checking building interaction. Total MapManager.buildings: ${MapManager.buildings.length}`);
+    debugLog(`🔍 Checking building interaction. Total MapManager.buildings: ${MapManager.buildings.length}`);
 
     // Find nearest building in range
     let closestBuilding = null;
@@ -9313,7 +9313,7 @@ function checkBuildingInteraction() {
 
     MapManager.buildings.forEach((building, index) => {
         if (!building.rect || !building.rect.active) {
-            console.log(`⚠️ Building ${index} (${building.type}) has no active rect`);
+            debugLog(`⚠️ Building ${index} (${building.type}) has no active rect`);
             return;
         }
 
@@ -9331,32 +9331,32 @@ function checkBuildingInteraction() {
             building.centerX, building.centerY
         );
 
-        console.log(`  Building ${index}: ${building.type} at (${building.centerX.toFixed(0)}, ${building.centerY.toFixed(0)}), distance: ${distance.toFixed(0)}, radius: ${building.interactionRadius}`);
+        debugLog(`  Building ${index}: ${building.type} at (${building.centerX.toFixed(0)}, ${building.centerY.toFixed(0)}), distance: ${distance.toFixed(0)}, radius: ${building.interactionRadius}`);
 
         if (distance <= building.interactionRadius && distance < closestDistance) {
             closestDistance = distance;
             closestBuilding = building;
-            console.log(`  ✅ ${building.type} is in range!`);
+            debugLog(`  ✅ ${building.type} is in range!`);
         }
     });
 
     if (closestBuilding) {
         // Special handling for Dungeon Buildings
         if (closestBuilding.type === 'tower') {
-            console.log(`🏰 Entering Tower Dungeon from Town`);
+            debugLog(`🏰 Entering Tower Dungeon from Town`);
             MapManager.transitionToMap('dungeon', 1, 'tower_dungeon');
             return;
         }
         else if (closestBuilding.type === 'temple') {
-            console.log(`🏰 Entering Temple Ruins from Town`);
+            debugLog(`🏰 Entering Temple Ruins from Town`);
             MapManager.transitionToMap('dungeon', 1, 'temple_ruins');
             return;
         }
 
-        console.log(`🏠 Opening UI for ${closestBuilding.type} (distance: ${closestDistance.toFixed(0)})`);
+        debugLog(`🏠 Opening UI for ${closestBuilding.type} (distance: ${closestDistance.toFixed(0)})`);
         openBuildingUI(closestBuilding);
     } else {
-        console.log('❌ No building in range');
+        debugLog('❌ No building in range');
     }
 }
 
@@ -9389,14 +9389,14 @@ function checkNPCInteraction() {
     });
 
     if (closestNPC) {
-        console.log(`[DEBUG_DIALOG] Nearest NPC: ${closestNPC.name} (Dist: ${closestDistance.toFixed(1)}, Radius: ${closestNPC.interactionRadius})`);
+        debugLog(`[DEBUG_DIALOG] Nearest NPC: ${closestNPC.name} (Dist: ${closestDistance.toFixed(1)}, Radius: ${closestNPC.interactionRadius})`);
         addChatMessage(`[DEBUG] Nearest: ${closestNPC.name} (${closestDistance.toFixed(0)}/${closestNPC.interactionRadius})`, 0xaaaaaa);
     } else {
-        console.log(`[DEBUG_DIALOG] No NPC found in range`);
+        debugLog(`[DEBUG_DIALOG] No NPC found in range`);
     }
 
     if (closestNPC && closestNPC.dialogId) {
-        console.log(`[DEBUG_DIALOG] Starting dialog with ${closestNPC.name} (ID: ${closestNPC.dialogId})`);
+        debugLog(`[DEBUG_DIALOG] Starting dialog with ${closestNPC.name} (ID: ${closestNPC.dialogId})`);
         startDialog(closestNPC);
         return true; // Found an NPC to interact with
     }
@@ -9423,7 +9423,7 @@ async function loadDialogs() {
     try {
         const response = await fetch('dialogs.json');
         dialogDatabase = await response.json();
-        console.log('💬 Dialogs loaded:', Object.keys(dialogDatabase).length, 'dialogs');
+        debugLog('💬 Dialogs loaded:', Object.keys(dialogDatabase).length, 'dialogs');
     } catch (e) {
         console.error('❌ Failed to load dialogs.json:', e);
         // Fallback to empty generic dialog
@@ -9588,7 +9588,7 @@ function deepCloneDialog(obj) {
  */
 function startDialog(npc) {
     let dialogData = dialogDatabase[npc.dialogId];
-    console.log(`[DEBUG_DIALOG] startDialog called for ${npc.name}. DialogID: ${npc.dialogId}. Found data: ${!!dialogData}`);
+    debugLog(`[DEBUG_DIALOG] startDialog called for ${npc.name}. DialogID: ${npc.dialogId}. Found data: ${!!dialogData}`);
 
     if (!dialogData) {
         console.warn(`[DEBUG_DIALOG] Dialog data NOT FOUND for ${npc.dialogId}. Using generic fallback.`);
@@ -9779,7 +9779,7 @@ function updateDialogUI(node) {
                 } else {
                     result = evaluateDialogCondition(choice.condition, playerStats);
                 }
-                console.log(`[DEBUG_DIALOG] Choice '${choice.text}' condition result: ${result} (Condition: ${choice.condition})`);
+                debugLog(`[DEBUG_DIALOG] Choice '${choice.text}' condition result: ${result} (Condition: ${choice.condition})`);
                 if (result) visibleChoices++;
             } catch (err) {
                 console.error(`[DEBUG_DIALOG] Error evaluating condition for '${choice.text}':`, err);
@@ -9847,7 +9847,7 @@ function updateDialogUI(node) {
                 } else {
                     result = evaluateDialogCondition(choice.condition, playerStats);
                 }
-                console.log(`[UQE] Choice '${choice.text}' (Quest: ${choice.questId || 'none'}, Action: ${choice.action || 'next'}) condition: ${result}`);
+                debugLog(`[UQE] Choice '${choice.text}' (Quest: ${choice.questId || 'none'}, Action: ${choice.action || 'next'}) condition: ${result}`);
                 if (!result) return;
             } catch (err) {
                 console.error(`❌ [Dialog] Condition error for '${choice.text}':`, err);
@@ -9930,7 +9930,7 @@ function updateDialogUI(node) {
             if (action === 'unlock_lore' && choice.loreId) {
                 if (window.loreManager && typeof window.loreManager.unlock === 'function') {
                     window.loreManager.unlock(choice.loreId);
-                    console.log(`📖 [Dialog] Unlocked lore: ${choice.loreId}`);
+                    debugLog(`📖 [Dialog] Unlocked lore: ${choice.loreId}`);
                 } else {
                     // Fallback: directly add to localStorage
                     try {
@@ -9938,7 +9938,7 @@ function updateDialogUI(node) {
                         if (!unlockedLore.includes(choice.loreId)) {
                             unlockedLore.push(choice.loreId);
                             localStorage.setItem('rpg_unlocked_lore', JSON.stringify(unlockedLore));
-                            console.log(`📖 [Dialog] Unlocked lore (fallback): ${choice.loreId}`);
+                            debugLog(`📖 [Dialog] Unlocked lore (fallback): ${choice.loreId}`);
                             addChatMessage(`New lore discovered: Press L to read`, 0x9370DB, '📜');
                         }
                     } catch (e) {
@@ -9976,7 +9976,7 @@ function updateDialogUI(node) {
  
             } else if (action === 'quest_complete' || action === 'quest_turnin' || action === 'complete_quest') {
                 // Handle quest completion via dialog
-                console.log('✅ Action was quest completion - closing dialog to unblock queue');
+                debugLog('✅ Action was quest completion - closing dialog to unblock queue');
  
                 // Complete the quest via UQE
                 if (window.uqe && choice.questId) {
@@ -10014,7 +10014,7 @@ function updateDialogUI(node) {
                 // UNIFIED UQE BRIDGE REDIRECT with PREVIEW MODAL
                 const questEngine = window.uqe;
                 if (questId && typeof questEngine !== 'undefined' && questEngine.allDefinitions[questId]) {
-                    console.log(`🔗 [UQE Bridge] Showing preview for quest: ${questId}`);
+                    debugLog(`🔗 [UQE Bridge] Showing preview for quest: ${questId}`);
  
                     // Store current NPC for reopening dialog after accept/decline
                     const currentNPC = currentShopNPC;
@@ -10040,14 +10040,14 @@ function updateDialogUI(node) {
                             updateQuestTrackerHUD();
  
                             // Reopen dialog with NPC so player can continue talking
-                            console.log('📋 [Dialog] Accept callback - reopening dialog with:', currentNPC?.name);
+                            debugLog('📋 [Dialog] Accept callback - reopening dialog with:', currentNPC?.name);
                             if (currentNPC) {
                                 setTimeout(() => startDialog(currentNPC), 50);
                             }
                         },
                         // On Decline - reopen dialog with NPC
                         () => {
-                            console.log('📋 [Dialog] Decline callback - reopening dialog with:', currentNPC?.name);
+                            debugLog('📋 [Dialog] Decline callback - reopening dialog with:', currentNPC?.name);
                             if (currentNPC) {
                                 setTimeout(() => startDialog(currentNPC), 50);
                             }
@@ -10124,7 +10124,7 @@ const shopInventory = [
  * Choose player class and set initial stats/equipment
  */
 function chooseClass(className) {
-    console.log(`⚔️ Class Chosen: ${className}`);
+    debugLog(`⚔️ Class Chosen: ${className}`);
     playerStats.class = className;
 
     // Reset equipment
@@ -10188,7 +10188,7 @@ function chooseClass(className) {
                 obj.progress = obj.target;
                 obj.completed = true;
             });
-            console.log(`✅ Marked main_01_006 objectives complete for class: ${className}`);
+            debugLog(`✅ Marked main_01_006 objectives complete for class: ${className}`);
         }
         // The UQE update loop will detect completion and handle rewards
     }
@@ -10539,7 +10539,7 @@ function updateShopItems() {
                     .setScrollFactor(0)
                     .setDepth(401); // Behind sprite but visible
 
-                console.log(`Shop: Successfully created sprite for "${item.name}" using "${finalSpriteKey}"`);
+                debugLog(`Shop: Successfully created sprite for "${item.name}" using "${finalSpriteKey}"`);
             }
         } catch (error) {
             console.error(`Shop: Failed to create sprite for item "${item.name}":`, error);
@@ -11105,7 +11105,7 @@ function closeShop() {
     shopVisible = false;
     if (window.UIManager) window.UIManager.shopVisible = false;
     currentShopNPC = null;
-    console.log('🛒 Shop closed');
+    debugLog('🛒 Shop closed');
 }
 
 // ============================================
@@ -11120,7 +11120,7 @@ function openBuildingUI(building) {
     currentBuilding = building;
     buildingPanelVisible = true;
 
-    console.log(`🏠 Opening building UI for type: ${building.type}`);
+    debugLog(`🏠 Opening building UI for type: ${building.type}`);
 
     switch (building.type) {
         case 'inn':
@@ -11179,7 +11179,7 @@ function openBuildingUI(building) {
             }
             break;
         default:
-            console.log(`⚠️ Building type ${building.type} not implemented yet`);
+            debugLog(`⚠️ Building type ${building.type} not implemented yet`);
             showDamageNumber(player.x, player.y - 40, `${building.type} not yet available`, 0xff0000);
             buildingPanelVisible = false;
             currentBuilding = null;
@@ -11219,7 +11219,7 @@ function closeBuildingUI() {
 
     buildingPanelVisible = false;
     currentBuilding = null;
-    console.log('🏠 Building UI closed');
+    debugLog('🏠 Building UI closed');
 }
 
 
@@ -11245,7 +11245,7 @@ function closeBuildingUI() {
 // Global reset function
 window.resetGame = function () {
     if (confirm('Are you sure you want to RESET the game? All progress will be lost!')) {
-        console.log('🔄 Resetting Game State...');
+        debugLog('🔄 Resetting Game State...');
         // Clear legacy save key
         localStorage.removeItem('rpg_savegame');
         // Clear all save slots (SaveManager uses these)
@@ -11319,7 +11319,7 @@ function _LEGACY_saveGame_DO_NOT_USE() {
         localStorage.setItem('rpg_savegame', JSON.stringify(saveData));
 
         if (typeof addChatMessage === 'function') addChatMessage('Game Saved!', 0x00ffff, '💾');
-        console.log('✅ Game saved to localStorage');
+        debugLog('✅ Game saved to localStorage');
         return true;
     } catch (e) {
         console.error('Failed to save game:', e);
@@ -11339,7 +11339,7 @@ function _LEGACY_loadGame_DO_NOT_USE() {
     try {
         const saveDataStr = localStorage.getItem('rpg_savegame');
         if (!saveDataStr) {
-            console.log('No save game found');
+            debugLog('No save game found');
             return false;
         }
 
@@ -11378,7 +11378,7 @@ function _LEGACY_loadGame_DO_NOT_USE() {
             const consolidatedInventory = [];
             const itemStacks = {}; // Map key -> stacked item
 
-            console.log('📦 Migration: Starting inventory consolidation...');
+            debugLog('📦 Migration: Starting inventory consolidation...');
 
             playerStats.inventory.forEach(item => {
                 const isStackable = ItemManager.isStackable(item);
@@ -11393,13 +11393,13 @@ function _LEGACY_loadGame_DO_NOT_USE() {
                         const oldQty = itemStacks[stackKey].quantity || 1;
                         const addQty = item.quantity || 1;
                         itemStacks[stackKey].quantity = oldQty + addQty;
-                        console.log(`   Stacked: ${stackKey} (${oldQty} + ${addQty} = ${itemStacks[stackKey].quantity})`);
+                        debugLog(`   Stacked: ${stackKey} (${oldQty} + ${addQty} = ${itemStacks[stackKey].quantity})`);
                     } else {
                         // Create new stack
                         item.quantity = item.quantity || 1;
                         itemStacks[stackKey] = item;
                         consolidatedInventory.push(item);
-                        console.log(`   New stack: ${stackKey} (qty:${item.quantity})`);
+                        debugLog(`   New stack: ${stackKey} (qty:${item.quantity})`);
                     }
                 } else {
                     // Non-stackable items stay as-is
@@ -11408,7 +11408,7 @@ function _LEGACY_loadGame_DO_NOT_USE() {
             });
 
             playerStats.inventory = consolidatedInventory;
-            console.log('📦 Migration complete: consolidated items into stacks');
+            debugLog('📦 Migration complete: consolidated items into stacks');
         }
 
         // Restore UQE Quests
@@ -11424,7 +11424,7 @@ function _LEGACY_loadGame_DO_NOT_USE() {
 
         // Restore dungeon state
         if (saveData.dungeonSeeds) {
-            console.log('📦 Restoring dungeon seeds from save:', saveData.dungeonSeeds);
+            debugLog('📦 Restoring dungeon seeds from save:', saveData.dungeonSeeds);
             // Rebuild cache from seeds (lazy - only store seeds, regenerate when needed)
             Object.keys(saveData.dungeonSeeds).forEach(key => {
                 const seed = saveData.dungeonSeeds[key];
@@ -11435,12 +11435,12 @@ function _LEGACY_loadGame_DO_NOT_USE() {
 
                 if (!isNaN(level)) {
                     MapManager.dungeonCache[key] = { seed: seed, level: level };
-                    console.log(`  - ${key}: seed=${seed}, level=${level}`);
+                    debugLog(`  - ${key}: seed=${seed}, level=${level}`);
                 } else {
                     console.warn(`  ⚠️ Could not parse level from key: ${key}`);
                 }
             });
-            console.log('📦 Dungeon cache after restore:', Object.keys(MapManager.dungeonCache));
+            debugLog('📦 Dungeon cache after restore:', Object.keys(MapManager.dungeonCache));
         } else {
             console.warn('⚠️ No dungeon seeds found in save data');
         }
@@ -11476,7 +11476,7 @@ function _LEGACY_loadGame_DO_NOT_USE() {
 
                 // Ensure cache is populated
                 if (seedToUse && (!MapManager.dungeonCache[targetKey] || !MapManager.dungeonCache[targetKey].seed)) {
-                    console.log(`🔧 Ensuring seed is in cache for ${targetKey} before transition...`);
+                    debugLog(`🔧 Ensuring seed is in cache for ${targetKey} before transition...`);
                     MapManager.dungeonCache[targetKey] = {
                         seed: seedToUse,
                         level: savedLevel
@@ -11501,7 +11501,7 @@ function _LEGACY_loadGame_DO_NOT_USE() {
                     const validPos = MapManager.findValidSpawnPosition(savedPlayerPos.x, savedPlayerPos.y);
                     player.x = validPos.x;
                     player.y = validPos.y;
-                    console.log(`[loadGame] Validated spawn position: (${validPos.x.toFixed(0)}, ${validPos.y.toFixed(0)})`);
+                    debugLog(`[loadGame] Validated spawn position: (${validPos.x.toFixed(0)}, ${validPos.y.toFixed(0)})`);
                 } else {
                     player.x = savedPlayerPos.x;
                     player.y = savedPlayerPos.y;
@@ -11517,13 +11517,13 @@ function _LEGACY_loadGame_DO_NOT_USE() {
                     const scene = game.scene.scenes[0];
                     const npcData = scene.cache.json.get('npcData');
                     if (npcData && Array.isArray(npcData)) {
-                        console.log('[Fix] Refreshing NPCs from latest JSON...');
+                        debugLog('[Fix] Refreshing NPCs from latest JSON...');
                         npcs.forEach(npc => {
                             // Match by ID if available, otherwise loose match could be dangerous so stick to ID
                             const def = npcData.find(d => d.id === npc.id);
                             if (def) {
                                 if (npc.name !== def.name || npc.dialogId !== def.dialogId) {
-                                    console.log(`[Fix] Updating NPC ${npc.id}: "${npc.name}" -> "${def.name}", Dialog: "${npc.dialogId}" -> "${def.dialogId}"`);
+                                    debugLog(`[Fix] Updating NPC ${npc.id}: "${npc.name}" -> "${def.name}", Dialog: "${npc.dialogId}" -> "${def.dialogId}"`);
                                     npc.name = def.name;
                                     npc.dialogId = def.dialogId;
                                     // Update visual name if it exists
@@ -11565,7 +11565,7 @@ function _LEGACY_loadGame_DO_NOT_USE() {
         updateWeaponSprite();
 
         if (typeof addChatMessage === 'function') addChatMessage('Game Loaded!', 0x00ff00, '📂');
-        console.log('✅ Game loaded from localStorage');
+        debugLog('✅ Game loaded from localStorage');
 
         // Force UI refresh after a slight delay to ensure everything settles
         setTimeout(() => {
@@ -11576,7 +11576,7 @@ function _LEGACY_loadGame_DO_NOT_USE() {
 
         // Expose debug tool
         window.debugFixNPCs = function () {
-            console.log('🔧 Running NPC Fixer...');
+            debugLog('🔧 Running NPC Fixer...');
             const scene = game.scene.scenes[0];
             const npcData = scene.cache.json.get('npcData');
 
@@ -11585,7 +11585,7 @@ function _LEGACY_loadGame_DO_NOT_USE() {
                 return;
             }
 
-            console.log(`Found ${npcData.length} NPC definitions in JSON.`);
+            debugLog(`Found ${npcData.length} NPC definitions in JSON.`);
             let updated = 0;
 
             npcs.forEach(npc => {
@@ -11593,15 +11593,15 @@ function _LEGACY_loadGame_DO_NOT_USE() {
                 if (def) {
                     // Check for mismatches
                     if (npc.name !== def.name || npc.dialogId !== def.dialogId) {
-                        console.log(`Mismatch for ${npc.id}:`);
-                        console.log(`  Current: Name="${npc.name}", Dialog="${npc.dialogId}"`);
-                        console.log(`  Target:  Name="${def.name}", Dialog="${def.dialogId}"`);
+                        debugLog(`Mismatch for ${npc.id}:`);
+                        debugLog(`  Current: Name="${npc.name}", Dialog="${npc.dialogId}"`);
+                        debugLog(`  Target:  Name="${def.name}", Dialog="${def.dialogId}"`);
 
                         npc.name = def.name;
                         npc.dialogId = def.dialogId;
                         if (npc.nameText) npc.nameText.setText(def.name);
 
-                        console.log('  ✅ Fixed!');
+                        debugLog('  ✅ Fixed!');
                         updated++;
                     }
                 } else {
@@ -11609,7 +11609,7 @@ function _LEGACY_loadGame_DO_NOT_USE() {
                 }
             });
 
-            console.log(`🔧 Fix complete. Updated ${updated} NPCs.`);
+            debugLog(`🔧 Fix complete. Updated ${updated} NPCs.`);
             addChatMessage(`Fixed ${updated} NPCs. Try talking now!`, 0x00ff00);
         };
 
@@ -11635,7 +11635,7 @@ function showFallenDialog() {
     if (fallenDialogContainer) return;
 
     const scene = game.scene.scenes[0];
-    console.log('💀 Displaying Fallen Dialog');
+    debugLog('💀 Displaying Fallen Dialog');
 
     // Play death sound
     try {
@@ -11725,7 +11725,7 @@ function showFallenDialog() {
 
     // Hover effects
     fallenDialogContainer.respawnBtn.on('pointerover', () => {
-        console.log('👆 Hovering Respawn Button');
+        debugLog('👆 Hovering Respawn Button');
         if (fallenDialogContainer && fallenDialogContainer.respawnBtn) {
             fallenDialogContainer.respawnBtn.setFillStyle(0x555555);
             scene.input.setDefaultCursor('pointer');
@@ -11741,7 +11741,7 @@ function showFallenDialog() {
 
     // Shared Respawn Logic
     const handleRespawn = () => {
-        console.log('✨ Respawn Action Triggered - Starting Fade');
+        debugLog('✨ Respawn Action Triggered - Starting Fade');
 
         // 1. Disable button instantly to prevent double-clicks
         if (fallenDialogContainer && fallenDialogContainer.respawnBtn) {
@@ -11770,7 +11770,7 @@ function showFallenDialog() {
             ease: 'Power2',
             onComplete: () => {
                 // 4. Respawn Logic (Executed after screen is black)
-                console.log('🌑 Screen is black - Executing Respawn Stats Reset');
+                debugLog('🌑 Screen is black - Executing Respawn Stats Reset');
 
                 // Restore stats
                 playerStats.hp = playerStats.maxHp;
@@ -11823,7 +11823,7 @@ function showFallenDialog() {
                     });
                 }
 
-                console.log('✅ Respawn Complete');
+                debugLog('✅ Respawn Complete');
 
                 // 5. Cleanup Fader (Chain a quick fade out for smoothness, or destroy)
                 // User said "destroy dialog and respawn", implying we return to game.
@@ -11869,7 +11869,7 @@ function checkAutoLoad() {
  * Rate: 1 MP per 2 seconds
  */
 function startManaRegen() {
-    console.log('✨ Starting Mana Regeneration System');
+    debugLog('✨ Starting Mana Regeneration System');
     // Safety check for game/scene
     if (!game || !game.scene || !game.scene.scenes || !game.scene.scenes[0]) {
         console.warn('⚠️ Cannot start mana regen: Scene not ready');
@@ -11902,7 +11902,7 @@ function startManaRegen() {
  * Rate: 1 HP per 5 seconds
  */
 function startHpRegen() {
-    console.log('❤️ Starting HP Regeneration System');
+    debugLog('❤️ Starting HP Regeneration System');
     // Safety check for game/scene
     if (!game || !game.scene || !game.scene.scenes || !game.scene.scenes[0]) {
         console.warn('⚠️ Cannot start hp regen: Scene not ready');
@@ -11959,7 +11959,7 @@ function createAbilityBar() {
     const screenWidth = scene.cameras.main.width;
     const screenHeight = scene.cameras.main.height;
 
-    console.log('Creating ability bar...');
+    debugLog('Creating ability bar...');
 
     const bottomMargin = 15; // Shared bottom margin with chat box
     const abilityBarY = screenHeight - bottomMargin - 30; // 30 = half the button height (60/2)
@@ -12238,7 +12238,7 @@ function createAbilityBar() {
     // Initial update
     updatePotionSlots();
 
-    console.log(`✅ Ability bar created with ${abilityBar.buttons.length} abilities + 2 potion slots`);
+    debugLog(`✅ Ability bar created with ${abilityBar.buttons.length} abilities + 2 potion slots`);
 }
 
 /**
@@ -12677,7 +12677,7 @@ function castIceNova() {
             if (iceNovaSound && iceNovaSound.isPlaying) iceNovaSound.stop();
         });
     } catch (e) {
-        console.log('Ice Nova sound not loaded');
+        debugLog('Ice Nova sound not loaded');
     }
 
     const damage = 40 + playerStats.level * 5;
@@ -12831,7 +12831,7 @@ function updateAbilityBar() {
  * @param {number} abilityIndex - 1-based index matching hotbar position
  */
 window.useAbility = function (abilityIndex) {
-    console.log(`[Ability Debug] useAbility called with index: ${abilityIndex}`);
+    debugLog(`[Ability Debug] useAbility called with index: ${abilityIndex}`);
 
     // Get ability name from ABILITY_DEFINITIONS by index order
     const abilityNames = Object.keys(ABILITY_DEFINITIONS);
@@ -12898,7 +12898,7 @@ function triggerAbilityCooldown(abilityIndex) {
         return;
     }
 
-    console.log(`[Cooldown Debug] Triggering cooldown for ability ${abilityIndex}`);
+    debugLog(`[Cooldown Debug] Triggering cooldown for ability ${abilityIndex}`);
 
     // Get ability name from ABILITY_DEFINITIONS by index order
     const abilityNames = Object.keys(ABILITY_DEFINITIONS);
@@ -13175,7 +13175,7 @@ window.useAbility = useAbility;
  * Queue a dialog to be shown later
  */
 function queueDialog(type, data) {
-    console.log(`📥 Queueing dialog: ${type}`, data);
+    debugLog(`📥 Queueing dialog: ${type}`, data);
     dialogQueue.push({ type, data });
 }
 
@@ -13205,7 +13205,7 @@ function processDialogQueue() {
     // Start processing
     isDialogQueueProcessing = true;
 
-    console.log(`📤 Processing dialog queue item: ${item.type}`);
+    debugLog(`📤 Processing dialog queue item: ${item.type}`);
 
     try {
         if (item.type === 'QUEST_COMPLETED') {
@@ -13237,7 +13237,7 @@ function processDialogQueue() {
                     },
                     // On Decline
                     () => {
-                        console.log(`📋 Quest ${questDef.id} declined`);
+                        debugLog(`📋 Quest ${questDef.id} declined`);
                         // Modal close handles unblocking
                     }
                 );
@@ -13329,7 +13329,7 @@ function showQuestCompletedPopup(quest) {
 
     // Close Handler
     const handleClose = () => {
-        console.log('✅ Quest Completed Popup: Close button clicked');
+        debugLog('✅ Quest Completed Popup: Close button clicked');
 
         // Destroy all elements
         if (questCompletedModal) {
@@ -13338,7 +13338,7 @@ function showQuestCompletedPopup(quest) {
 
         // Check queue again after a short delay
         setTimeout(() => {
-            console.log('Checking queue after close...');
+            debugLog('Checking queue after close...');
             processDialogQueue();
         }, 100);
     };
@@ -13368,7 +13368,7 @@ function showQuestCompletedPopup(quest) {
     };
     questCompletedModal = window.questCompletedModal;
 
-    console.log('[Quest Debug] questCompletedModal (Standard) assigned with closeBtn');
+    debugLog('[Quest Debug] questCompletedModal (Standard) assigned with closeBtn');
 
     // Pulse animation (Manual tween on main elements)
     scene.tweens.add({
@@ -13459,7 +13459,7 @@ function showNewQuestPopup(quest) {
  * Cast an ability
  */
 function castAbility(abilityId, time) {
-    console.log(`Attempting to cast ability: ${abilityId} at time ${time}`);
+    debugLog(`Attempting to cast ability: ${abilityId} at time ${time}`);
 
     const ability = ABILITY_DEFINITIONS[abilityId];
     if (!ability) {
@@ -13478,18 +13478,18 @@ function castAbility(abilityId, time) {
     if (timeSinceLastUse < ability.cooldown) {
         const remainingCooldown = Math.ceil((ability.cooldown - timeSinceLastUse) / 1000);
         showDamageNumber(player.x, player.y - 40, `Cooldown: ${remainingCooldown}s`, 0xff0000);
-        console.log(`Ability on cooldown: ${remainingCooldown}s remaining`);
+        debugLog(`Ability on cooldown: ${remainingCooldown}s remaining`);
         return;
     }
 
     // Check mana
     if (playerStats.mana < ability.manaCost) {
         showDamageNumber(player.x, player.y - 40, 'Not enough mana!', 0xff0000);
-        console.log(`Not enough mana! Need ${ability.manaCost}, have ${playerStats.mana}`);
+        debugLog(`Not enough mana! Need ${ability.manaCost}, have ${playerStats.mana}`);
         return;
     }
 
-    console.log(`Casting ${ability.name}...`);
+    debugLog(`Casting ${ability.name}...`);
 
     // Cast ability
     playerStats.mana -= ability.manaCost;
@@ -13509,7 +13509,7 @@ function castAbility(abilityId, time) {
             // Visual effect
             createHealEffect(player.x, player.y);
             playSound('heal_cast');
-            console.log(`Healed for ${actualHeal} HP (Mana: ${playerStats.mana}/${playerStats.maxMana})`);
+            debugLog(`Healed for ${actualHeal} HP (Mana: ${playerStats.mana}/${playerStats.maxMana})`);
         } else {
             showDamageNumber(player.x, player.y - 40, 'Already at full health!', 0xffff00);
         }
@@ -13527,7 +13527,7 @@ function castAbility(abilityId, time) {
 
             // Play fireball animation
             player.play('fireball_cast');
-            console.log('Playing fireball_cast animation');
+            debugLog('Playing fireball_cast animation');
 
             // Resume walking animation after fireball animation completes
             player.once('animationcomplete', (animation) => {
@@ -13547,7 +13547,7 @@ function castAbility(abilityId, time) {
                 }
             });
         } else {
-            console.log('Fireball_cast animation not found - checking textures:', {
+            debugLog('Fireball_cast animation not found - checking textures:', {
                 hasFireballTexture: scene.textures.exists('player_fireball'),
                 hasFireballAnim: scene.anims.exists('fireball_cast')
             });
@@ -13586,10 +13586,10 @@ function castAbility(abilityId, time) {
         if (hitCount > 0) {
             showDamageNumber(player.x, player.y - 40, `Fireball! (${hitCount} hits)`, 0xff4400);
             playSound('fireball_cast');
-            console.log(`Fireball hit ${hitCount} monster(s)`);
+            debugLog(`Fireball hit ${hitCount} monster(s)`);
         } else {
             showDamageNumber(player.x, player.y - 40, 'No targets in range', 0xffff00);
-            console.log('Fireball: No monsters in range');
+            debugLog('Fireball: No monsters in range');
         }
     } else if (abilityId === 'shield') {
         // Apply temporary defense bonus
@@ -13600,18 +13600,18 @@ function castAbility(abilityId, time) {
         // Visual effect
         createShieldEffect(player.x, player.y);
         playSound('heal_cast'); // Reuse heal sound for shield
-        console.log(`Shield activated! Defense: ${playerStats.defense} (Mana: ${playerStats.mana}/${playerStats.maxMana})`);
+        debugLog(`Shield activated! Defense: ${playerStats.defense} (Mana: ${playerStats.mana}/${playerStats.maxMana})`);
 
         // Remove bonus after duration
         game.scene.scenes[0].time.delayedCall(ability.duration, () => {
             playerStats.defense -= ability.defenseBonus;
             showDamageNumber(player.x, player.y - 40, 'Shield expired', 0x888888);
             addChatMessage('Shield expired', 0x888888, '🛡️');
-            console.log(`Shield expired. Defense: ${playerStats.defense}`);
+            debugLog(`Shield expired. Defense: ${playerStats.defense}`);
         });
     }
 
-    console.log(`Ability cast: ${ability.name} (Mana remaining: ${playerStats.mana}/${playerStats.maxMana})`);
+    debugLog(`Ability cast: ${ability.name} (Mana remaining: ${playerStats.mana}/${playerStats.maxMana})`);
 }
 
 /**
@@ -13725,10 +13725,10 @@ function playSound(soundName) {
         if (scene.cache.audio.exists(soundName)) {
             // Play sound with volume - creates a new instance each time
             scene.sound.play(soundName, { volume: (typeof window.sfxVolume !== 'undefined') ? window.sfxVolume : 0.7 });
-            console.log(`🔊 Playing: ${soundName}`); // Debug logging
+            debugLog(`🔊 Playing: ${soundName}`); // Debug logging
         } else {
             // Sound not in cache
-            console.log(`⚠️ Sound not found: ${soundName} (not in cache - check loading errors)`);
+            debugLog(`⚠️ Sound not found: ${soundName} (not in cache - check loading errors)`);
         }
     } catch (e) {
         console.warn(`❌ Error playing sound ${soundName}:`, e.message);
@@ -13741,7 +13741,7 @@ function playSound(soundName) {
 function initializeSounds() {
     const scene = game.scene.scenes[0];
     if (!scene || !scene.sound) {
-        console.log('💡 Sound system not available');
+        debugLog('💡 Sound system not available');
         return;
     }
 
@@ -13751,28 +13751,28 @@ function initializeSounds() {
         'item_pickup', 'level_up', 'fireball_cast', 'heal_cast'
     ];
 
-    console.log('🔊 Initializing sound system...');
+    debugLog('🔊 Initializing sound system...');
     soundFiles.forEach(soundName => {
         try {
             // Check if audio is in cache (loaded successfully)
             if (scene.cache.audio.exists(soundName)) {
                 // Create sound object for later use
                 soundEffects[soundName] = scene.sound.add(soundName, { volume: (typeof window.sfxVolume !== 'undefined') ? window.sfxVolume : 0.7 });
-                console.log(`  ✅ Loaded: ${soundName}`);
+                debugLog(`  ✅ Loaded: ${soundName}`);
             } else {
-                console.log(`  ⚠️ Not in cache: ${soundName}`);
+                debugLog(`  ⚠️ Not in cache: ${soundName}`);
             }
         } catch (e) {
-            console.log(`  ❌ Error loading ${soundName}:`, e.message);
+            debugLog(`  ❌ Error loading ${soundName}:`, e.message);
         }
     });
 
     const loadedCount = Object.keys(soundEffects).length;
     if (loadedCount > 0) {
-        console.log(`✅ Sound system initialized: ${loadedCount}/${soundFiles.length} sounds loaded`);
+        debugLog(`✅ Sound system initialized: ${loadedCount}/${soundFiles.length} sounds loaded`);
     } else {
-        console.log('💡 No sound files loaded. Check browser console for loading errors.');
-        console.log('💡 Make sure audio files are in: phaser_starter/assets/audio/');
+        debugLog('💡 No sound files loaded. Check browser console for loading errors.');
+        debugLog('💡 Make sure audio files are in: phaser_starter/assets/audio/');
     }
 }
 
@@ -13923,7 +13923,7 @@ function spawnInitialMonsters(mapWidth, mapHeight) {
         const spawnAmount = type.spawnAmount || [1, 1];
         const packSize = Phaser.Math.Between(spawnAmount[0], spawnAmount[1]);
 
-        console.log(`🐺 Pack spawn: ${type.name} x${packSize} (range: ${spawnAmount[0]}-${spawnAmount[1]})`);
+        debugLog(`🐺 Pack spawn: ${type.name} x${packSize} (range: ${spawnAmount[0]}-${spawnAmount[1]})`);
 
         // Spawn the pack clustered around the spawn point
         for (let p = 0; p < packSize && spawned < MAX_MONSTERS; p++) {
@@ -13987,7 +13987,7 @@ function spawnMonster(x, y, type, hpOverride, attackOverride, xpOverride, isBoss
             }
 
             if (bp) {
-                console.log(`🧬 Injecting data-driven stats for ${type.name || type.id}`);
+                debugLog(`🧬 Injecting data-driven stats for ${type.name || type.id}`);
                 // Inject stats if missing
                 if (type.hp === undefined && bp.stats.hp) type.hp = bp.stats.hp;
                 if (type.attack === undefined && bp.stats.attack) type.attack = bp.stats.attack;
@@ -14027,7 +14027,7 @@ function spawnMonster(x, y, type, hpOverride, attackOverride, xpOverride, isBoss
     // Check if we should use Method 2 (procedural blueprints)
     if (!monster) {
         if (type.id === 'procedural_beholder' || type.isProcedural) {
-            console.log(`👾 spawnMonster Check for ${type.name}:`, {
+            debugLog(`👾 spawnMonster Check for ${type.name}:`, {
                 id: type.id,
                 isProcedural: type.isProcedural,
                 hasRenderer: !!monsterRenderer,
@@ -14041,7 +14041,7 @@ function spawnMonster(x, y, type, hpOverride, attackOverride, xpOverride, isBoss
             const blueprintId = type.id && monsterRenderer.monsterBlueprints[type.id] ? type.id :
                 (monsterRenderer.monsterBlueprints[type.name] ? type.name : type.name.toLowerCase());
 
-            console.log(`👾 Spawning Method 2 monster: ${type.name} (${blueprintId})`);
+            debugLog(`👾 Spawning Method 2 monster: ${type.name} (${blueprintId})`);
             monster = monsterRenderer.createMonster(x, y, blueprintId);
 
             monster.setData('isMethod2', true);
@@ -14155,7 +14155,7 @@ function spawnMonster(x, y, type, hpOverride, attackOverride, xpOverride, isBoss
         // Add Tooltip Listeners (if not already added by MonsterRenderer)
         if (!monster.getData('isMethod2')) {
             monster.on('pointerover', () => {
-                // console.log('🖱️ Mouse over monster (spawnMonster):', monster.monsterType);
+                // debugLog('🖱️ Mouse over monster (spawnMonster):', monster.monsterType);
                 if (window.UIManager && window.UIManager.showMonsterTooltip) {
                     window.UIManager.showMonsterTooltip(monster, monster.x, monster.y);
                 }
@@ -14448,7 +14448,7 @@ function destroyAssetsWindow() {
  * Toggle grass debug window visibility
  */
 function toggleGrassDebugWindow() {
-    console.log('🔍 Toggling grass debug window. Current state:', grassDebugVisible);
+    debugLog('🔍 Toggling grass debug window. Current state:', grassDebugVisible);
     if (grassDebugVisible) {
         destroyGrassDebugWindow();
     } else {
@@ -14461,11 +14461,11 @@ function toggleGrassDebugWindow() {
  */
 function createGrassDebugWindow() {
     if (grassDebugVisible) {
-        console.log('⚠️ Grass debug window already visible');
+        debugLog('⚠️ Grass debug window already visible');
         return;
     }
 
-    console.log('🔍 Creating grass debug window...');
+    debugLog('🔍 Creating grass debug window...');
     const scene = game.scene.scenes[0];
     // Center on camera viewport (screen coordinates, not world coordinates)
     const centerX = scene.cameras.main.centerX;
@@ -14478,7 +14478,7 @@ function createGrassDebugWindow() {
     bg.setStrokeStyle(3, 0x00ff00);
     bg.setScrollFactor(0); // Fixed to camera/screen
     bg.setDepth(250); // Higher than all other UI
-    console.log('✅ Created debug window background at depth 250');
+    debugLog('✅ Created debug window background at depth 250');
 
     // Title
     const title = scene.add.text(centerX, centerY - panelHeight / 2 + 30, 'Grass Spritesheet Debug', {
@@ -14542,7 +14542,7 @@ function createGrassDebugWindow() {
     inputElement.style.fontFamily = 'Arial';
     inputElement.style.zIndex = '10000';
     document.body.appendChild(inputElement);
-    console.log('✅ Created input element at position:', inputElement.style.left, inputElement.style.top);
+    debugLog('✅ Created input element at position:', inputElement.style.left, inputElement.style.top);
 
     // Update button
     const updateButton = scene.add.rectangle(centerX + 100, inputY, 120, 30, 0x00aa00, 0.9);
@@ -14564,7 +14564,7 @@ function createGrassDebugWindow() {
     updateButton.on('pointerdown', () => {
         const newFrameSize = parseInt(inputElement.value);
         if (newFrameSize >= 32 && newFrameSize <= 96) {
-            console.log('🔄 Updating grass spritesheet with frame size:', newFrameSize);
+            debugLog('🔄 Updating grass spritesheet with frame size:', newFrameSize);
             reloadGrassSpritesheet(newFrameSize);
         } else {
             alert('Please enter a value between 32 and 96');
@@ -14596,10 +14596,10 @@ function createGrassDebugWindow() {
 
     grassDebugVisible = true;
 
-    console.log('✅ Grass debug window created, calling updateGrassDebugWindow...');
+    debugLog('✅ Grass debug window created, calling updateGrassDebugWindow...');
     try {
         updateGrassDebugWindow();
-        console.log('✅ updateGrassDebugWindow completed');
+        debugLog('✅ updateGrassDebugWindow completed');
     } catch (error) {
         console.error('❌ Error in updateGrassDebugWindow:', error);
         const errorText = scene.add.text(centerX, centerY, 'Error updating window:\n' + error.message, {
@@ -14633,7 +14633,7 @@ function updateGrassDebugWindow() {
         return;
     }
 
-    console.log('🔄 Updating grass debug window...');
+    debugLog('🔄 Updating grass debug window...');
     // Clear existing content
     if (grassDebugPanel.spritesheetImage && grassDebugPanel.spritesheetImage.active) {
         grassDebugPanel.spritesheetImage.destroy();
@@ -14666,7 +14666,7 @@ function updateGrassDebugWindow() {
     let usingDebugTexture = false;
 
     if (scene.textures.exists(debugTextureKey)) {
-        console.log('Using debug texture for display:', debugTextureKey);
+        debugLog('Using debug texture for display:', debugTextureKey);
         grassTexture = scene.textures.get(debugTextureKey);
         usingDebugTexture = true;
     } else if (scene.textures.exists('grass')) {
@@ -14697,7 +14697,7 @@ function updateGrassDebugWindow() {
         return;
     }
 
-    console.log('✅ Grass texture found, continuing with update...');
+    debugLog('✅ Grass texture found, continuing with update...');
 
     // Get texture info
     const frameTotal = grassTexture.frameTotal || 1;
@@ -14730,16 +14730,16 @@ function updateGrassDebugWindow() {
     const expectedFramesY = Math.floor(sourceHeight / currentFrameSize);
     const expectedTotalFrames = expectedFramesX * expectedFramesY;
 
-    console.log('📊 Grass texture analysis:');
-    console.log('  Texture key:', textureKey);
-    console.log('  Image URL:', imageUrl);
-    console.log('  Source dimensions:', sourceWidth, 'x', sourceHeight);
-    console.log('  Current frame size:', currentFrameSize);
-    console.log('  Expected frames (' + currentFrameSize + 'x' + currentFrameSize + '):', expectedFramesX, 'x', expectedFramesY, '=', expectedTotalFrames);
-    console.log('  Actual frames detected:', frameTotal);
-    console.log('  Texture keys:', Object.keys(grassTexture.frames || {}));
-    console.log('  Source image:', sourceImage);
-    console.log('  Cache entry:', cacheEntry);
+    debugLog('📊 Grass texture analysis:');
+    debugLog('  Texture key:', textureKey);
+    debugLog('  Image URL:', imageUrl);
+    debugLog('  Source dimensions:', sourceWidth, 'x', sourceHeight);
+    debugLog('  Current frame size:', currentFrameSize);
+    debugLog('  Expected frames (' + currentFrameSize + 'x' + currentFrameSize + '):', expectedFramesX, 'x', expectedFramesY, '=', expectedTotalFrames);
+    debugLog('  Actual frames detected:', frameTotal);
+    debugLog('  Texture keys:', Object.keys(grassTexture.frames || {}));
+    debugLog('  Source image:', sourceImage);
+    debugLog('  Cache entry:', cacheEntry);
 
     // Display info
     const infoY = centerY - panelHeight / 2 + 120;
@@ -14787,7 +14787,7 @@ function updateGrassDebugWindow() {
         spritesheetScale = maxSpritesheetHeight / sourceHeight;
     }
 
-    console.log('Creating spritesheet image with scale:', spritesheetScale);
+    debugLog('Creating spritesheet image with scale:', spritesheetScale);
 
     // Try to display the full spritesheet - use frame 0 or the source image
     let spritesheetImage;
@@ -14808,7 +14808,7 @@ function updateGrassDebugWindow() {
         spritesheetImage.setScrollFactor(0);
         spritesheetImage.setDepth(251);
         spritesheetImage.setOrigin(0.5);
-        console.log('✅ Spritesheet image created');
+        debugLog('✅ Spritesheet image created');
     } catch (e) {
         console.error('❌ Error creating spritesheet image:', e);
         const errorMsg = scene.add.text(centerX, spritesheetY, 'Error displaying spritesheet', {
@@ -14862,7 +14862,7 @@ function updateGrassDebugWindow() {
     let currentX = startX;
     let framesInCurrentRow = 0;
 
-    console.log('Creating', frameTotal, 'frame images...');
+    debugLog('Creating', frameTotal, 'frame images...');
 
     for (let i = 0; i < frameTotal; i++) {
         try {
@@ -14926,7 +14926,7 @@ function updateGrassDebugWindow() {
         }
     }
 
-    console.log('✅ Created', grassDebugPanel.frameImages.length, 'frame displays');
+    debugLog('✅ Created', grassDebugPanel.frameImages.length, 'frame displays');
 }
 
 /**
@@ -14935,14 +14935,14 @@ function updateGrassDebugWindow() {
 function reloadGrassSpritesheet(frameSize) {
     const scene = game.scene.scenes[0];
 
-    console.log('🔄 Reloading grass spritesheet with frame size:', frameSize);
+    debugLog('🔄 Reloading grass spritesheet with frame size:', frameSize);
 
     // Use a temporary key first to avoid breaking existing references
     const tempKey = 'grass_debug_' + frameSize;
 
     // Check if temp texture already exists
     if (scene.textures.exists(tempKey)) {
-        console.log('✅ Using cached texture for frame size:', frameSize);
+        debugLog('✅ Using cached texture for frame size:', frameSize);
         // Just update the display with existing texture
         if (grassDebugPanel) {
             grassDebugPanel.currentFrameSize = frameSize;
@@ -14960,7 +14960,7 @@ function reloadGrassSpritesheet(frameSize) {
 
     // Wait for load to complete
     const onComplete = () => {
-        console.log('✅ Grass spritesheet loaded with frame size:', frameSize);
+        debugLog('✅ Grass spritesheet loaded with frame size:', frameSize);
 
         if (grassDebugPanel) {
             grassDebugPanel.currentFrameSize = frameSize;
@@ -15095,9 +15095,9 @@ function createMonsterAnimations() {
                     frameRate: 12, // Faster for attack
                     repeat: 0 // Play once
                 });
-                console.log(`✅ Created attack animation: ${attackAnimKey} from ${attackSpriteSheetKey}`);
+                debugLog(`✅ Created attack animation: ${attackAnimKey} from ${attackSpriteSheetKey}`);
             } else {
-                console.log(`⚠️ Attack spritesheet not found: ${attackSpriteSheetKey}`);
+                debugLog(`⚠️ Attack spritesheet not found: ${attackSpriteSheetKey}`);
             }
         });
 
@@ -15114,7 +15114,7 @@ function createMonsterAnimations() {
         }
     });
 
-    console.log('✅ Monster animation system initialized');
+    debugLog('✅ Monster animation system initialized');
 }
 
 /**
@@ -15241,11 +15241,11 @@ function playMonsterAttackAnimation(monster) {
 
     monster.animationState = 'attacking';
 
-    console.log(`🎬 Attempting to play attack animation: ${attackAnimKey} for ${monsterType} facing ${direction}`);
+    debugLog(`🎬 Attempting to play attack animation: ${attackAnimKey} for ${monsterType} facing ${direction}`);
 
     // Try directional attack animation first
     if (scene.anims.exists(attackAnimKey)) {
-        console.log(`✅ Found directional attack animation: ${attackAnimKey}`);
+        debugLog(`✅ Found directional attack animation: ${attackAnimKey}`);
         monster.play(attackAnimKey);
 
         // Return to walking/idle after attack completes
@@ -15258,7 +15258,7 @@ function playMonsterAttackAnimation(monster) {
     } else {
         // Fallback: try non-directional attack animation
         const fallbackAttackKey = `${monsterType}_attack`;
-        console.log(`⚠️ Directional animation not found, trying fallback: ${fallbackAttackKey}`);
+        debugLog(`⚠️ Directional animation not found, trying fallback: ${fallbackAttackKey}`);
         if (scene.anims.exists(fallbackAttackKey)) {
             monster.play(fallbackAttackKey);
             monster.once('animationcomplete', (animation) => {
@@ -15268,7 +15268,7 @@ function playMonsterAttackAnimation(monster) {
                 }
             });
         } else {
-            console.log(`❌ No attack animation found for ${monsterType}`);
+            debugLog(`❌ No attack animation found for ${monsterType}`);
             // No attack animation available, just reset state after a short delay
             scene.time.delayedCall(300, () => {
                 if (monster && monster.active) {
@@ -15657,7 +15657,7 @@ function showQuestCompletedPopupEnhanced(quest) {
 
     // Close Handler
     const handleClose = () => {
-        console.log('✅ Quest Completed Popup: Close button clicked');
+        debugLog('✅ Quest Completed Popup: Close button clicked');
 
         // Destroy all elements
         if (questCompletedModal && questCompletedModal.destroy) {
@@ -15668,7 +15668,7 @@ function showQuestCompletedPopupEnhanced(quest) {
         if (typeof pendingNewQuest !== 'undefined' && pendingNewQuest) {
             const quest = pendingNewQuest;
             pendingNewQuest = null;
-            console.log(`🔗 Showing pending chain quest: ${quest.title}`);
+            debugLog(`🔗 Showing pending chain quest: ${quest.title}`);
 
             // Show enhanced preview
             showQuestPreviewModalEnhanced(quest.id,
@@ -15683,7 +15683,7 @@ function showQuestCompletedPopupEnhanced(quest) {
                     if (qIdx > -1) {
                         playerStats.quests.active.splice(qIdx, 1);
                         playerStats.quests.available.push(quest);
-                        console.log(`Quest declined and moved to available: ${quest.title}`);
+                        debugLog(`Quest declined and moved to available: ${quest.title}`);
                     }
                 }
             );
@@ -15718,13 +15718,13 @@ function showQuestCompletedPopupEnhanced(quest) {
             if (game.scene.scenes[0]) {
                 const s = game.scene.scenes[0];
                 s.lastWindowCloseTime = s.time.now;
-                console.log('🚫 Quest Completed Modal (Enhanced) closed at:', s.lastWindowCloseTime);
+                debugLog('🚫 Quest Completed Modal (Enhanced) closed at:', s.lastWindowCloseTime);
             }
         }
     };
     questCompletedModal = window.questCompletedModal;
 
-    console.log('[Quest Debug] questCompletedModal (Enhanced) assigned with closeBtn');
+    debugLog('[Quest Debug] questCompletedModal (Enhanced) assigned with closeBtn');
 
     // Pulse animation
     scene.tweens.add({
@@ -15740,7 +15740,7 @@ function showQuestCompletedPopupEnhanced(quest) {
  * Enhanced Quest Preview Modal with Portrait and Details
  */
 function showQuestPreviewModalEnhanced(questId, onAccept, onDecline) {
-    console.log(`[Quest Debug] START showQuestPreviewModalEnhanced for ${questId}`);
+    debugLog(`[Quest Debug] START showQuestPreviewModalEnhanced for ${questId}`);
     const scene = game.scene.scenes[0];
 
     // Get quest definition from UQE
@@ -16009,7 +16009,7 @@ function showQuestPreviewModalEnhanced(questId, onAccept, onDecline) {
     };
     questPreviewModal = window.questPreviewModal;
 
-    console.log('[Quest Debug] questPreviewModal assigned with buttons:', {
+    debugLog('[Quest Debug] questPreviewModal assigned with buttons:', {
         acceptBtn: !!acceptBtn,
         declineBtn: !!declineBtn
     });
@@ -16035,7 +16035,7 @@ function updateDefenseQuestSpawner(time) {
 
     // Cleanup when quest becomes inactive
     if (!questActive && defenseSpawnerState.active) {
-        console.log('🛡️ Defense quest ended - cleaning up spawned monsters');
+        debugLog('🛡️ Defense quest ended - cleaning up spawned monsters');
         defenseSpawnerState.spawnedMonsters.forEach(m => {
             if (m && m.active) {
                 if (m.hpBarBg) m.hpBarBg.destroy();
@@ -16053,7 +16053,7 @@ function updateDefenseQuestSpawner(time) {
 
     // Initialize if quest just became active
     if (!defenseSpawnerState.active) {
-        console.log('🛡️ Defense quest started - initializing wave spawner');
+        debugLog('🛡️ Defense quest started - initializing wave spawner');
         defenseSpawnerState.active = true;
         defenseSpawnerState.lastSpawnTime = time;
         defenseSpawnerState.spawnedMonsters = [];
@@ -16073,7 +16073,7 @@ function updateDefenseQuestSpawner(time) {
             defenseSpawnerState.maxMonsters - activeCount
         );
 
-        console.log(`🛡️ Spawning defense wave: ${toSpawn} Echo Mites`);
+        debugLog(`🛡️ Spawning defense wave: ${toSpawn} Echo Mites`);
 
         // Echo Mite type for defense quest
         // Echo Mite type for defense quest (Procedural)
@@ -16169,7 +16169,7 @@ function createQuestMarker(targetId, target, type = 'talk') {
         type: type
     });
 
-    console.log(`📍 Created quest marker for: ${targetId} (${type})`);
+    debugLog(`📍 Created quest marker for: ${targetId} (${type})`);
 }
 
 /**
@@ -16182,7 +16182,7 @@ function removeQuestMarker(targetId) {
         if (marker.tween) marker.tween.stop();
         if (marker.sprite) marker.sprite.destroy();
         questMarkers.delete(targetId);
-        console.log(`📍 Removed quest marker for: ${targetId}`);
+        debugLog(`📍 Removed quest marker for: ${targetId}`);
     }
 }
 
@@ -16325,7 +16325,7 @@ window.enableHoverEffect = function (gameObject, scene) {
 // GLOBAL GAME RESET
 // ============================================
 window.resetGame = function () {
-    console.log('🔄 resetting game state...');
+    debugLog('🔄 resetting game state...');
 
     // Clear LocalStorage
     localStorage.removeItem('rpg_savegame');
@@ -16358,7 +16358,7 @@ window.isAnyWindowOpen = function () {
 let resonantFrequenciesTimer = null;
 
 function startResonantFrequenciesEvent() {
-    console.log('🛡️ STARTING Event: Resonant Frequencies Defense');
+    debugLog('🛡️ STARTING Event: Resonant Frequencies Defense');
     const scene = game.scene.scenes[0];
     if (!scene) return;
 
@@ -16431,7 +16431,7 @@ function startResonantFrequenciesEvent() {
 }
 
 function stopResonantFrequenciesEvent() {
-    console.log('✅ ENDING Event: Resonant Frequencies Defense');
+    debugLog('✅ ENDING Event: Resonant Frequencies Defense');
     if (resonantFrequenciesTimer) {
         resonantFrequenciesTimer.remove();
         resonantFrequenciesTimer = null;
@@ -16450,7 +16450,7 @@ window.stopResonantFrequenciesEvent = stopResonantFrequenciesEvent;
 var backlashEventTimer = null;
 
 function startBacklashEvent() {
-    console.log('⚡ STARTING Event: Obelisk Backlash');
+    debugLog('⚡ STARTING Event: Obelisk Backlash');
     const scene = game.scene.scenes[0];
     if (!scene) return;
 
@@ -16524,7 +16524,7 @@ function startBacklashEvent() {
 }
 
 function stopBacklashEvent() {
-    console.log('🛑 STOPPING Event: Obelisk Backlash');
+    debugLog('🛑 STOPPING Event: Obelisk Backlash');
     if (backlashEventTimer) {
         backlashEventTimer.remove();
         backlashEventTimer = null;
@@ -16566,13 +16566,13 @@ function unlockAbility(abilityName) {
 
     // Check if already unlocked
     if (playerStats.abilities[abilityName]) {
-        console.log(`Ability ${abilityName} already unlocked.`);
+        debugLog(`Ability ${abilityName} already unlocked.`);
         return;
     }
 
     // Unlock it
     playerStats.abilities[abilityName] = { lastUsed: 0 };
-    console.log(`✨ Ability Unlocked: ${abilityName}`);
+    debugLog(`✨ Ability Unlocked: ${abilityName}`);
 
     // Notify Player
     if (typeof addChatMessage === 'function') {
@@ -16603,7 +16603,7 @@ function chooseClass(className) {
     // I'll assume valid chooseClass signature from view.
     // Wait, the tool requires TARGET CONTENT to match.
     // I'll target the very last line shown.
-    console.log(`🛡️ Class Selected: ${className}`);
+    debugLog(`🛡️ Class Selected: ${className}`);
 
     // Set Class
     playerStats.class = className;

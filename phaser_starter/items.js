@@ -40,7 +40,7 @@ async function loadItemsData() {
         _audioFiles = data.audioFiles || {};
 
         itemsDataLoaded = true;
-        console.log('✅ Items data loaded:', {
+        debugLog('✅ Items data loaded:', {
             weaponTypes: Object.keys(_weaponTypes).length,
             materials: Object.keys(_materials).length,
             prefixes: Object.keys(_prefixes).length,

@@ -302,7 +302,7 @@ window.ForgeUI = {
         const nextTier = currentTier + 1;
 
         if (nextTier > this.materials.length) {
-            console.log('Max tier reached');
+            debugLog('Max tier reached');
             return;
         }
 
@@ -310,7 +310,7 @@ window.ForgeUI = {
         const playerGold = window.GameState.playerStats.gold || 0;
 
         if (playerGold < cost) {
-            console.log('Not enough gold');
+            debugLog('Not enough gold');
             if (this.panel && this.panel.btnText) {
                 this.panel.btnText.setText("NEED GOLD");
                 setTimeout(() => {
@@ -359,7 +359,7 @@ window.ForgeUI = {
         // --- 4. Visual Feedback ---
         if (typeof playSound === 'function') playSound('anvil_strike'); // Need to ensure sound exists or try fallback
 
-        console.log(`Upgraded to ${newItem.name}!`);
+        debugLog(`Upgraded to ${newItem.name}!`);
         if (window.UIManager && typeof window.UIManager.showToast === 'function') {
             window.UIManager.showToast(`Upgraded: ${newItem.name}`, 2000, 0xaaffaa);
         }

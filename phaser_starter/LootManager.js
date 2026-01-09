@@ -8,7 +8,7 @@ window.LootManager = {
 
     init(scene) {
         this.scene = scene;
-        console.log('📦 LootManager initialized');
+        debugLog('📦 LootManager initialized');
     },
 
     /**

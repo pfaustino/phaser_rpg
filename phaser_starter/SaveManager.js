@@ -16,7 +16,7 @@ window.SaveManager = {
      */
     init(scene) {
         this.scene = scene;
-        console.log('💾 SaveManager initialized. Checking migration...');
+        debugLog('💾 SaveManager initialized. Checking migration...');
         this.migrateLegacySave();
 
         // Check if this was a load-on-start (show message after delay)
@@ -56,10 +56,10 @@ window.SaveManager = {
         const slot1Data = localStorage.getItem(slot1Key);
 
         if (legacyData && !slot1Data) {
-            console.log('📦 Migrating Legacy SaveManager v1 to Slot 1...');
+            debugLog('📦 Migrating Legacy SaveManager v1 to Slot 1...');
             localStorage.setItem(slot1Key, legacyData);
             localStorage.setItem(this.LEGACY_SAVE_KEY + '_backup', legacyData);
-            console.log('✅ Migration complete.');
+            debugLog('✅ Migration complete.');
         }
 
         // Migration 2: Very old format (rpg_savegame) - merge UQE quests if missing
@@ -76,7 +76,7 @@ window.SaveManager = {
         try {
             const oldSave = JSON.parse(oldSaveJson);
             if (!oldSave.uqeQuests) {
-                console.log('[Migration] Old save has no UQE quests to migrate.');
+                debugLog('[Migration] Old save has no UQE quests to migrate.');
                 return;
             }
 
@@ -84,26 +84,26 @@ window.SaveManager = {
             const currentSlotKey = this.getSlotKey(this.currentSlot || 1);
             const currentJson = localStorage.getItem(currentSlotKey);
             if (!currentJson) {
-                console.log('[Migration] No current slot data to migrate into.');
+                debugLog('[Migration] No current slot data to migrate into.');
                 return;
             }
 
             const currentData = JSON.parse(currentJson);
             if (currentData.uqeQuests && Object.keys(currentData.uqeQuests).length > 0) {
-                console.log('[Migration] Current slot already has UQE quests, skipping migration.');
+                debugLog('[Migration] Current slot already has UQE quests, skipping migration.');
                 return;
             }
 
             // Migrate!
-            console.log('📦 Migrating UQE quests from old rpg_savegame to current slot...');
+            debugLog('📦 Migrating UQE quests from old rpg_savegame to current slot...');
             currentData.uqeQuests = oldSave.uqeQuests;
             localStorage.setItem(currentSlotKey, JSON.stringify(currentData));
-            console.log('✅ UQE quest migration complete! Reload to apply.');
+            debugLog('✅ UQE quest migration complete! Reload to apply.');
 
             // Also load into current session if uqe is ready
             if (window.uqe && typeof window.uqe.loadSaveData === 'function') {
                 window.uqe.loadSaveData(oldSave.uqeQuests);
-                console.log('✅ UQE quests loaded into current session!');
+                debugLog('✅ UQE quests loaded into current session!');
                 if (window.addChatMessage) {
                     window.addChatMessage('Quest data restored from old save!', 0x00ff00, '🎯');
                 }
@@ -177,7 +177,7 @@ window.SaveManager = {
             // VERIFY the save was written
 
 
-            console.log(`💾 Game Saved to Slot ${slot}! Size: ${json.length} bytes`);
+            debugLog(`💾 Game Saved to Slot ${slot}! Size: ${json.length} bytes`);
 
             if (!silent) {
                 if (window.showDamageNumber && window.player) {
@@ -320,4 +320,4 @@ window.loadGame = (slot) => {
     }
 };
 
-console.log('✅ SaveManager loaded');
+debugLog('✅ SaveManager loaded');

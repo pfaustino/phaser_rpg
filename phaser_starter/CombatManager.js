@@ -8,7 +8,7 @@ window.CombatManager = {
 
     init(scene) {
         this.scene = scene;
-        console.log('⚔️ CombatManager initialized');
+        debugLog('⚔️ CombatManager initialized');
     },
 
     /**
@@ -40,7 +40,7 @@ window.CombatManager = {
         const equippedWeapon = (stats.equipment && stats.equipment.weapon) ? stats.equipment.weapon : {};
 
         // Debug
-        // console.log('[Combat] Attack with:', equippedWeapon.name);
+        // debugLog('[Combat] Attack with:', equippedWeapon.name);
 
         let projectileType = equippedWeapon.projectile;
         let projectileSpeed = equippedWeapon.projectileSpeed;
@@ -241,7 +241,7 @@ window.CombatManager = {
 
         // Death Check
         if (window.playerStats.hp <= 0) {
-            console.log('💀 Player died via CombatManager');
+            debugLog('💀 Player died via CombatManager');
             if (window.showFallenDialog) window.showFallenDialog();
         }
     },
@@ -252,7 +252,7 @@ window.CombatManager = {
     handleMonsterDeath(monster) {
         if (!monster || monster.isDead) return;
 
-        console.log(`💀 Monster Death: ${monster.id}`);
+        debugLog(`💀 Monster Death: ${monster.id}`);
         monster.isDead = true;
 
         // UI Cleanup

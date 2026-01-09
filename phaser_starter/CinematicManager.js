@@ -14,7 +14,7 @@ class CinematicManager {
         this.cinematics = data.cinematics;
         this.loadProgress();
         this.setupEventListeners();
-        console.log(`🎬 CinematicManager initialized with ${this.cinematics.length} cinematics`);
+        debugLog(`🎬 CinematicManager initialized with ${this.cinematics.length} cinematics`);
 
         // Check for 'game_start' triggers immediately
         // But need to wait for scene to be ready?
@@ -69,7 +69,7 @@ class CinematicManager {
 
         if (cinematic) {
             if (!this.playedCinematics.has(cinematic.id)) {
-                console.log(`🎬 Triggering Cinematic: ${cinematic.title} (${triggerId})`);
+                debugLog(`🎬 Triggering Cinematic: ${cinematic.title} (${triggerId})`);
                 this.playCinematic(cinematic);
             }
         }

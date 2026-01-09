@@ -10,7 +10,7 @@ class DialogManager {
     }
 
     init() {
-        console.log('💬 DialogManager initialized');
+        debugLog('💬 DialogManager initialized');
         this.loadProgress();
     }
 
@@ -20,7 +20,7 @@ class DialogManager {
      */
     enableDialog(dialogId) {
         if (!this.enabledDialogs.has(dialogId)) {
-            console.log(`💬 Unlocking dialog option: ${dialogId}`);
+            debugLog(`💬 Unlocking dialog option: ${dialogId}`);
             this.enabledDialogs.add(dialogId);
             this.saveProgress();
 

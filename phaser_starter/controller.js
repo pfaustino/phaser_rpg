@@ -34,7 +34,7 @@ async function loadControllerConfig() {
         const response = await fetch('controller.json');
         controllerConfig = await response.json();
         window.controllerConfig = controllerConfig; // Ensure global access
-        console.log('🎮 Controller config loaded:', controllerConfig);
+        debugLog('🎮 Controller config loaded:', controllerConfig);
         return controllerConfig;
     } catch (error) {
         console.error('Failed to load controller.json:', error);
@@ -82,7 +82,7 @@ function initController(scene) {
             .setVisible(false)
             .setScrollFactor(0); // UI element
 
-        console.log('🎮 Virtual cursor created');
+        debugLog('🎮 Virtual cursor created');
     }
 
     // Create aim reticle (initially hidden)
@@ -95,7 +95,7 @@ function initController(scene) {
 
     // Listen for gamepad connection
     scene.input.gamepad.on('connected', (pad) => {
-        console.log('🎮 Controller connected:', pad.id);
+        debugLog('🎮 Controller connected:', pad.id);
         gamepadConnected = true;
         activeGamepad = pad;
         if (typeof addChatMessage === 'function') {
@@ -104,7 +104,7 @@ function initController(scene) {
     });
 
     scene.input.gamepad.on('disconnected', (pad) => {
-        console.log('🎮 Controller disconnected');
+        debugLog('🎮 Controller disconnected');
         gamepadConnected = false;
         activeGamepad = null;
         lastButtonStates = {};
@@ -118,13 +118,13 @@ function initController(scene) {
         activeGamepad = scene.input.gamepad.pad1;
         if (activeGamepad) {
             gamepadConnected = true;
-            console.log('🎮 Controller already connected:', activeGamepad.id);
+            debugLog('🎮 Controller already connected:', activeGamepad.id);
         }
     }
 
     // Initialize Keyboard Keys from Config
     if (controllerConfig && controllerConfig.keyboard) {
-        console.log('⌨️ Initializing Keyboard Controls...');
+        debugLog('⌨️ Initializing Keyboard Controls...');
         for (const [action, keyStr] of Object.entries(controllerConfig.keyboard)) {
             // keyStr can be "W,UP" -> split by comma
             const codes = keyStr.split(',').map(s => s.trim());
@@ -143,7 +143,7 @@ function initController(scene) {
                 if (keyCode) {
                     const keyObj = scene.input.keyboard.addKey(keyCode);
                     inputKeys[action].push(keyObj);
-                    // console.log(`   Mapped ${action} -> ${code}`);
+                    // debugLog(`   Mapped ${action} -> ${code}`);
                 } else {
                     console.warn(`⚠️ Invalid key code: ${code} for action: ${action}`);
                 }
@@ -154,7 +154,7 @@ function initController(scene) {
     // Set up ESC key handler for menu action - keep as backup or part of 'settings' action
     // (Now handled by isActionJustPressed('settings'))
 
-    console.log('🎮 Controller system initialized');
+    debugLog('🎮 Controller system initialized');
 }
 
 /**
@@ -259,7 +259,7 @@ function handleGamepadInput() {
             axisX = typeof pad.axes[0].getValue === 'function' ? pad.axes[0].getValue() : pad.axes[0];
             axisY = typeof pad.axes[1].getValue === 'function' ? pad.axes[1].getValue() : pad.axes[1];
         }
-        console.log('🎮 Gamepad state:', {
+        debugLog('🎮 Gamepad state:', {
             axisX: axisX.toFixed(3),
             axisY: axisY.toFixed(3),
             leftStick: pad.leftStick ? { x: pad.leftStick.x?.toFixed(3), y: pad.leftStick.y?.toFixed(3) } : 'N/A',
@@ -290,7 +290,7 @@ function handleGamepadInput() {
     // Debug quest modal state periodically
     debugCounter++;
     if (debugCounter % 300 === 0) { // Every 5 seconds roughly
-        console.log('🎮 Controller Menu State:', {
+        debugLog('🎮 Controller Menu State:', {
             inMenu, inDialog, inQuestModal,
             newQuestModal: modalNew ? 'PRESENT' : 'null',
             questCompletedModal: modalCompleted ? 'PRESENT' : 'null',
@@ -471,22 +471,22 @@ function updateVirtualCursorHover() {
     const now = Date.now();
     if (now - window.diagTimer > 2000) {
         window.diagTimer = now;
-        console.log(`[Virtual Cursor] HEARTBEAT:`);
-        console.log(`[Virtual Cursor]    -> window.questPreviewModal:`, window.questPreviewModal ? 'EXISTS' : 'UNDEFINED');
+        debugLog(`[Virtual Cursor] HEARTBEAT:`);
+        debugLog(`[Virtual Cursor]    -> window.questPreviewModal:`, window.questPreviewModal ? 'EXISTS' : 'UNDEFINED');
         if (window.questPreviewModal) {
-            console.log(`[Virtual Cursor]    -> acceptBtn:`, window.questPreviewModal.acceptBtn ? 'EXISTS' : 'MISSING');
+            debugLog(`[Virtual Cursor]    -> acceptBtn:`, window.questPreviewModal.acceptBtn ? 'EXISTS' : 'MISSING');
         }
         if (controllerScene) {
             const btn = controllerScene.children.list.find(c => c.name === 'QuestAcceptBtn');
-            console.log(`[Virtual Cursor]    -> Scene Scan for 'QuestAcceptBtn':`, btn ? 'FOUND' : 'NOT FOUND');
+            debugLog(`[Virtual Cursor]    -> Scene Scan for 'QuestAcceptBtn':`, btn ? 'FOUND' : 'NOT FOUND');
         } else {
-            console.log(`[Virtual Cursor]    -> controllerScene is UNDEFINED`);
+            debugLog(`[Virtual Cursor]    -> controllerScene is UNDEFINED`);
         }
     }
 
     // Aggregate all visible menu items
     let allItems = getVisibleMenuItems();
-    console.log(`[Virtual Cursor] Checking collision against ${allItems.length} items`);
+    debugLog(`[Virtual Cursor] Checking collision against ${allItems.length} items`);
 
     // Check overlap
     let hoveredItem = null;
@@ -511,7 +511,7 @@ function updateVirtualCursorHover() {
             hoveredItem = itemWrapper;
             // Debug hover
             if (hoveredItem !== lastHoveredItem) {
-                console.log('[Virtual Cursor] Hovered item', itemWrapper);
+                debugLog('[Virtual Cursor] Hovered item', itemWrapper);
             }
             break; // Found one
         }
@@ -540,14 +540,14 @@ function updateVirtualCursorHover() {
  */
 function triggerVirtualCursorClick() {
     if (lastHoveredItem) {
-        console.log('[Virtual Cursor] Clicked item:', lastHoveredItem, 'Source:', lastHoveredItem.source);
+        debugLog('[Virtual Cursor] Clicked item:', lastHoveredItem, 'Source:', lastHoveredItem.source);
         // Prioritize buyButton if present (for Shop)
         const target = lastHoveredItem.buyButton || lastHoveredItem.sprite || lastHoveredItem.bg || lastHoveredItem.borderRect;
 
         if (target) {
-            console.log(`[Virtual Cursor] Emitting pointerdown on target: ${target.name || 'Unnamed'} (${target.type})`);
+            debugLog(`[Virtual Cursor] Emitting pointerdown on target: ${target.name || 'Unnamed'} (${target.type})`);
             if (target.emit) {
-                console.log(`[Virtual Cursor] Target listener count for pointerdown: ${target.listenerCount('pointerdown')}`);
+                debugLog(`[Virtual Cursor] Target listener count for pointerdown: ${target.listenerCount('pointerdown')}`);
                 // Pass a mock pointer object with event.stopPropagation (needed by onClickItem)
                 const mockPointer = {
                     isDown: true,
@@ -558,7 +558,7 @@ function triggerVirtualCursorClick() {
                     }
                 };
                 target.emit('pointerdown', mockPointer);
-                console.log('[Virtual Cursor] pointerdown EMITTED');
+                debugLog('[Virtual Cursor] pointerdown EMITTED');
             } else {
                 console.warn('[Virtual Cursor] Target has no emit function!');
             }
@@ -566,7 +566,7 @@ function triggerVirtualCursorClick() {
             console.warn('[Virtual Cursor] No target found to click inside item wrapper');
         }
     } else {
-        console.log('[Virtual Cursor] Click - no target hovered');
+        debugLog('[Virtual Cursor] Click - no target hovered');
     }
 }
 
@@ -594,7 +594,7 @@ function getVisibleMenuItems() {
     if (!modalPreview && controllerScene) {
         const acceptBtn = controllerScene.children.list.find(c => c.name === 'QuestAcceptBtn');
         if (acceptBtn && acceptBtn.active && acceptBtn.visible) {
-            console.log('[Virtual Cursor] Found QuestAcceptBtn via Scene Scan (Global var missing?)');
+            debugLog('[Virtual Cursor] Found QuestAcceptBtn via Scene Scan (Global var missing?)');
             items.push({ bg: acceptBtn, source: 'QuestPreviewAccept_Fallback' });
         }
     }
@@ -602,7 +602,7 @@ function getVisibleMenuItems() {
     if (modalPreview) {
         if (modalPreview.acceptBtn) {
             items.push({ bg: modalPreview.acceptBtn, source: 'QuestPreviewAccept' });
-            console.log('[Virtual Cursor] Adding QuestPreviewAccept');
+            debugLog('[Virtual Cursor] Adding QuestPreviewAccept');
         }
         if (modalPreview.declineBtn) items.push({ bg: modalPreview.declineBtn, source: 'QuestPreviewDecline' });
     }
@@ -705,7 +705,7 @@ function onControllerA() {
  * B button action - Cancel/Close
  */
 function onControllerB() {
-    console.log('[Ability Debug] onControllerB called');
+    debugLog('[Ability Debug] onControllerB called');
     if (typeof inventoryVisible !== 'undefined' && inventoryVisible) {
         if (typeof closeInventory === 'function') closeInventory();
     } else if (typeof equipmentVisible !== 'undefined' && equipmentVisible) {
@@ -716,7 +716,7 @@ function onControllerB() {
         if (typeof closeDialog === 'function') closeDialog();
     } else {
         // No menu open - Use Ability 4 (Shield)
-        console.log('[Ability Debug] No menu open, attempting Ability 4 (Shield)');
+        debugLog('[Ability Debug] No menu open, attempting Ability 4 (Shield)');
         if (typeof useAbility === 'function') {
             useAbility(4);
         } else if (typeof window.useAbility === 'function') {
@@ -737,7 +737,7 @@ function onControllerX() {
     const inDialog = typeof dialogVisible !== 'undefined' && dialogVisible;
 
     if (!inMenu && !inDialog) {
-        console.log('[Ability Debug] X pressed (Ability 1)');
+        debugLog('[Ability Debug] X pressed (Ability 1)');
         if (typeof useAbility === 'function') {
             useAbility(1);
         } else if (typeof window.useAbility === 'function') {
@@ -756,7 +756,7 @@ function onControllerY() {
     const inDialog = typeof dialogVisible !== 'undefined' && dialogVisible;
 
     if (!inMenu && !inDialog) {
-        console.log('[Ability Debug] Y pressed (Ability 2)');
+        debugLog('[Ability Debug] Y pressed (Ability 2)');
         if (typeof useAbility === 'function') {
             useAbility(2);
         } else if (typeof window.useAbility === 'function') {
@@ -893,7 +893,7 @@ function destroyMenuCursor() {
  * Activate the currently selected menu item
  */
 function activateSelectedMenuItem() {
-    console.log('🎮 activateSelectedMenuItem called', {
+    debugLog('🎮 activateSelectedMenuItem called', {
         menuTotalItems: menuTotalItems,
         menuSelectionIndex: menuSelectionIndex,
         hasItems: currentMenuItems.length > 0
@@ -901,21 +901,21 @@ function activateSelectedMenuItem() {
 
     const item = currentMenuItems[menuSelectionIndex];
     if (!item) {
-        console.log('🎮 No item at index', menuSelectionIndex);
+        debugLog('🎮 No item at index', menuSelectionIndex);
         return;
     }
 
-    console.log('🎮 Activating item:', item);
+    debugLog('🎮 Activating item:', item);
 
     // Trigger the item's click handler
     if (item.sprite && item.sprite.active) {
-        console.log('🎮 Emitting pointerdown on sprite');
+        debugLog('🎮 Emitting pointerdown on sprite');
         item.sprite.emit('pointerdown');
     } else if (item.bg && item.bg.active) {
-        console.log('🎮 Emitting pointerdown on bg');
+        debugLog('🎮 Emitting pointerdown on bg');
         item.bg.emit('pointerdown');
     } else {
-        console.log('🎮 No valid target to emit on');
+        debugLog('🎮 No valid target to emit on');
     }
 }
 

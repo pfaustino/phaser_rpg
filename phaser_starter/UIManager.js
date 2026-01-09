@@ -1,4 +1,4 @@
-console.log('✅ UIManager.js v0.9.188.0021 LOADED');
+debugLog('✅ UIManager.js v0.9.188.0021 LOADED');
 
 window.UIManager = {
     // State Variables
@@ -728,7 +728,7 @@ window.UIManager = {
     hideTooltip: function (immediate = false) {
         const scene = game.scene.scenes[0];
         const performHide = () => {
-            // console.log(`🛡️ hideTooltip called. Active count: ${this.activeTooltips ? this.activeTooltips.length : 0}`);
+            // debugLog(`🛡️ hideTooltip called. Active count: ${this.activeTooltips ? this.activeTooltips.length : 0}`);
 
             // Destroy ALL active tooltips
             if (this.activeTooltips && this.activeTooltips.length > 0) {
@@ -1220,7 +1220,7 @@ window.UIManager = {
                         .setInteractive({ useHandCursor: true });
 
                     const onClick = () => {
-                        console.log('Quest Clicked:', i, quest.title);
+                        debugLog('Quest Clicked:', i, quest.title);
                         this.selectedQuestIndex = i;
                         this.updateQuestLogItems();
                     };
@@ -1233,8 +1233,8 @@ window.UIManager = {
                     titleText.on('pointerup', onClick);
 
                     // Add debug logs directly
-                    itemBg.on('pointerdown', () => console.log(`DEBUG: pointerdown on bg ${i}`));
-                    titleText.on('pointerdown', () => console.log(`DEBUG: pointerdown on text ${i}`));
+                    itemBg.on('pointerdown', () => debugLog(`DEBUG: pointerdown on bg ${i}`));
+                    titleText.on('pointerdown', () => debugLog(`DEBUG: pointerdown on text ${i}`));
 
                     this.questPanel.container.add([itemBg, titleText]);
 
@@ -1329,10 +1329,10 @@ window.UIManager = {
                     }).setScrollFactor(0).setDepth(302).setOrigin(0.5, 0.5);
 
                     const acceptQuest = () => {
-                        console.log(`[QuestLog] Clicking Accept for quest: ${quest.id}`);
+                        debugLog(`[QuestLog] Clicking Accept for quest: ${quest.id}`);
                         if (window.uqe && quest.isUQE) {
                             window.uqe.acceptQuest(quest.id);
-                            console.log(`[QuestLog] Quest ${quest.id} accepted via UQE.`);
+                            debugLog(`[QuestLog] Quest ${quest.id} accepted via UQE.`);
                         }
                         this.updateQuestLogItems();
                         if (typeof playSound === 'function') playSound('item_pickup');

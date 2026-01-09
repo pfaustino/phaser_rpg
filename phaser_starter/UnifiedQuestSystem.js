@@ -23,7 +23,7 @@ class UqeEventBus {
     emit(event, data) {
         // Skip logging for high-frequency events
         if (event !== 'time_survived' && event !== 'tile_traveled') {
-            // console.log(`📡 [UQE EventBus] ${event}`, data);
+            // debugLog(`📡 [UQE EventBus] ${event}`, data);
         }
         if (this.listeners[event]) {
             // Clone array to prevent issues if listeners remove themselves during emission
@@ -83,7 +83,7 @@ class UqeObjective {
         this.progress = Math.min(this.progress + amount, this.target);
 
         if (this.progress > prevProgress) {
-            // console.log(`📈 [UQE] Objective Progress: ${this.label} (${this.progress}/${this.target})`);
+            // debugLog(`📈 [UQE] Objective Progress: ${this.label} (${this.progress}/${this.target})`);
             if (this.eventBus) {
                 this.eventBus.emit(UQE_EVENTS.OBJECTIVE_UPDATED, {
                     objective: this,
@@ -94,7 +94,7 @@ class UqeObjective {
 
         if (this.progress >= this.target) {
             this.completed = true;
-            // console.log(`✅ [UQE] Objective Complete: ${this.label}`);
+            // debugLog(`✅ [UQE] Objective Complete: ${this.label}`);
         }
     }
 
@@ -155,7 +155,7 @@ class TalkObjective extends UqeObjective {
         super(data, eventBus);
         this.npcId = data.npcId;
         this.subscribe(UQE_EVENTS.NPC_TALK, (data) => {
-            // console.log(`🗣️ [UQE] TalkObjective checking: '${this.npcId}' vs '${data.id}'`);
+            // debugLog(`🗣️ [UQE] TalkObjective checking: '${this.npcId}' vs '${data.id}'`);
             if (data.id === this.npcId) this.updateProgress(1);
         });
     }
@@ -269,7 +269,7 @@ class LevelObjective extends UqeObjective {
             if (data.level >= this.target) {
                 this.progress = this.target;
                 this.completed = true;
-                // console.log(`✅ [UQE] Level Objective Complete: ${this.label}`);
+                // debugLog(`✅ [UQE] Level Objective Complete: ${this.label}`);
             } else {
                 this.progress = data.level;
             }
@@ -360,7 +360,7 @@ class Quest {
             }
 
             this.completed = true;
-            // console.log(`🏆 [UQE] QUEST COMPLETE: ${this.title}`);
+            // debugLog(`🏆 [UQE] QUEST COMPLETE: ${this.title}`);
         }
         return this.completed; // Return actual completed state
     }
@@ -396,7 +396,7 @@ class UqeEngine {
 
     init(definitions) {
         this.allDefinitions = definitions;
-        // console.log("🚀 [UQE Engine] Initialized with", Object.keys(definitions).length, "definitions");
+        // debugLog("🚀 [UQE Engine] Initialized with", Object.keys(definitions).length, "definitions");
     }
 
     /**
@@ -404,7 +404,7 @@ class UqeEngine {
      * @param {string[]} questIds - Array of quest IDs to auto-accept as starters
      */
     initializeStarterQuests(questIds) {
-        // console.log(`🎮 [UQE Engine] Initializing starter quests:`, questIds);
+        // debugLog(`🎮 [UQE Engine] Initializing starter quests:`, questIds);
         questIds.forEach(questId => {
             // Skip if already active or completed
             if (this.activeQuests.some(q => q.id === questId)) return;
@@ -412,17 +412,17 @@ class UqeEngine {
 
             this.acceptQuest(questId);
         });
-        // console.log(`✅ [UQE Engine] Starter quests initialized. Active: ${this.activeQuests.length}`);
+        // debugLog(`✅ [UQE Engine] Starter quests initialized. Active: ${this.activeQuests.length}`);
     }
 
     acceptQuest(questId) {
-        // console.log(`📝 [UQE Engine] acceptQuest called with: ${questId}`);
+        // debugLog(`📝 [UQE Engine] acceptQuest called with: ${questId}`);
         if (this.activeQuests.some(q => q.id === questId)) {
-            console.log(`⚠️ [UQE Engine] Quest already active: ${questId}`);
+            debugLog(`⚠️ [UQE Engine] Quest already active: ${questId}`);
             return;
         }
         if (this.completedQuests.some(q => q.id === questId)) {
-            console.log(`⚠️ [UQE Engine] Quest already completed: ${questId}`);
+            debugLog(`⚠️ [UQE Engine] Quest already completed: ${questId}`);
             return;
         }
 
@@ -430,8 +430,8 @@ class UqeEngine {
         if (def) {
             const quest = new Quest(def, this.eventBus);
             this.activeQuests.push(quest);
-            // console.log(`✅ [UQE Engine] Quest Accepted: ${quest.title} (ID: ${quest.id})`);
-            // console.log(`📊 [UQE Engine] Active quests now: ${this.activeQuests.length}`);
+            // debugLog(`✅ [UQE Engine] Quest Accepted: ${quest.title} (ID: ${quest.id})`);
+            // debugLog(`📊 [UQE Engine] Active quests now: ${this.activeQuests.length}`);
 
             // Play quest accept sound
             if (typeof playSound === 'function') {
@@ -442,7 +442,7 @@ class UqeEngine {
             this.eventBus.emit(UQE_EVENTS.QUEST_ACCEPTED, quest);
         } else {
             console.error(`❌ [UQE Engine] QUEST DEFINITION NOT FOUND: ${questId}`);
-            console.log(`📊 [UQE Engine] Available keys:`, Object.keys(this.allDefinitions));
+            debugLog(`📊 [UQE Engine] Available keys:`, Object.keys(this.allDefinitions));
         }
     }
 
@@ -462,11 +462,11 @@ class UqeEngine {
             if (def.requires && completedIds.includes(def.requires)) {
                 // If autoAccept is true, automatically accept the quest
                 if (def.autoAccept) {
-                    // console.log(`✅ [UQE Engine] Auto-accepting quest: ${questId}`);
+                    // debugLog(`✅ [UQE Engine] Auto-accepting quest: ${questId}`);
                     this.acceptQuest(questId);
                 } else if (!questId.startsWith('main_')) {
                     // Non-main quests go to pending (main quests require NPC dialog unless autoAccept)
-                    // console.log(`🔔 [UQE Engine] Quest available: ${questId} (Requires: ${def.requires})`);
+                    // debugLog(`🔔 [UQE Engine] Quest available: ${questId} (Requires: ${def.requires})`);
                     this.pendingQuests.push(questId);
                     this.eventBus.emit(UQE_EVENTS.QUEST_AVAILABLE, { questId, definition: def });
                 }
@@ -500,8 +500,8 @@ class UqeEngine {
     }
 
     loadSaveData(saveData) {
-        console.log(`[UQE Load] loadSaveData called with:`, saveData);
-        console.log(`[UQE Load] allDefinitions loaded:`, Object.keys(this.allDefinitions).length, 'quests');
+        debugLog(`[UQE Load] loadSaveData called with:`, saveData);
+        debugLog(`[UQE Load] allDefinitions loaded:`, Object.keys(this.allDefinitions).length, 'quests');
 
         if (!saveData) {
             console.warn(`[UQE Load] No save data provided!`);
@@ -516,7 +516,7 @@ class UqeEngine {
         const activeData = saveData.active || (Array.isArray(saveData) ? saveData : []);
         const completedData = saveData.completed || [];
 
-        console.log(`[UQE Load] Active quests in save: ${activeData.length}, Completed: ${completedData.length}`);
+        debugLog(`[UQE Load] Active quests in save: ${activeData.length}, Completed: ${completedData.length}`);
 
         activeData.forEach(qSave => {
             const def = this.allDefinitions[qSave.id];
@@ -524,7 +524,7 @@ class UqeEngine {
                 const quest = new Quest(def, this.eventBus);
                 quest.rehydrate(qSave);
                 this.activeQuests.push(quest);
-                console.log(`[UQE Load] ✅ Loaded active quest: ${qSave.id}`);
+                debugLog(`[UQE Load] ✅ Loaded active quest: ${qSave.id}`);
             } else {
                 console.warn(`[UQE Load] ❌ Definition not found for: ${qSave.id}`);
             }
@@ -543,7 +543,7 @@ class UqeEngine {
         // Restore pending quests
         this.pendingQuests = saveData.pending || [];
 
-        console.log(`[UQE Load] Result: ${this.activeQuests.length} active, ${this.completedQuests.length} completed, ${this.pendingQuests.length} pending`);
+        debugLog(`[UQE Load] Result: ${this.activeQuests.length} active, ${this.completedQuests.length} completed, ${this.pendingQuests.length} pending`);
     }
 
     update() {
@@ -558,7 +558,7 @@ class UqeEngine {
                 if (!quest) continue; // Safety: modification in event listeners might shift indices
 
                 if (quest.checkCompletion()) {
-                    // console.log(`🏁 [UQE Engine] Quest Completed: ${quest.title}`);
+                    // debugLog(`🏁 [UQE Engine] Quest Completed: ${quest.title}`);
 
                     // Unsubscribe listeners for completed quest to stop tracking
                     quest.dispose();
@@ -597,7 +597,7 @@ class UqeEngine {
 
             // Trigger completion logic immediately
             this.update();
-            console.log(`✅ [UQE] Force completed quest: ${questId}`);
+            debugLog(`✅ [UQE] Force completed quest: ${questId}`);
         } else {
             console.warn(`⚠️ [UQE] Cannot complete quest ${questId} - not active.`);
         }
@@ -607,4 +607,4 @@ class UqeEngine {
 // Global instance
 const uqe = new UqeEngine();
 window.uqe = uqe;
-// console.log("💎 [UQE Engine] Global instance created and attached to window.");
+// debugLog("💎 [UQE Engine] Global instance created and attached to window.");

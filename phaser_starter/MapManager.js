@@ -112,7 +112,7 @@ const MapManager = {
 
 
         const mapObjects = allInteractables.filter(obj => obj.map === mapName);
-        console.log(`🗿 [MapManager] Spawning ${mapObjects.length} interactables for ${mapName}`);
+        debugLog(`🗿 [MapManager] Spawning ${mapObjects.length} interactables for ${mapName}`);
 
         mapObjects.forEach(def => {
             const x = def.x * this.scene.tileSize;
@@ -157,16 +157,16 @@ const MapManager = {
 
         // Debug function accessible from console
         window.debugMapManager = () => {
-            console.log('=== MapManager Debug ===');
-            console.log('Current map:', this.currentMap);
-            console.log('Dungeon walls count:', this.dungeonWalls.length);
-            console.log('Buildings count:', this.buildings.length);
-            console.log('Scene mapWidth:', scene.mapWidth);
-            console.log('Scene mapHeight:', scene.mapHeight);
-            console.log('World bounds:', scene.physics.world.bounds);
+            debugLog('=== MapManager Debug ===');
+            debugLog('Current map:', this.currentMap);
+            debugLog('Dungeon walls count:', this.dungeonWalls.length);
+            debugLog('Buildings count:', this.buildings.length);
+            debugLog('Scene mapWidth:', scene.mapWidth);
+            debugLog('Scene mapHeight:', scene.mapHeight);
+            debugLog('World bounds:', scene.physics.world.bounds);
             if (this.dungeonWalls.length > 0) {
-                console.log('First wall:', this.dungeonWalls[0]);
-                console.log('Last wall:', this.dungeonWalls[this.dungeonWalls.length - 1]);
+                debugLog('First wall:', this.dungeonWalls[0]);
+                debugLog('Last wall:', this.dungeonWalls[this.dungeonWalls.length - 1]);
             }
         };
     },
@@ -182,7 +182,7 @@ const MapManager = {
     findValidSpawnPosition(pixelX, pixelY, tileSize = 32) {
         // Only works for dungeons with mapData
         if (!this.currentDungeon || !this.currentDungeon.mapData) {
-            console.log('[MapManager] findValidSpawnPosition: No dungeon mapData, returning original position');
+            debugLog('[MapManager] findValidSpawnPosition: No dungeon mapData, returning original position');
             return { x: pixelX, y: pixelY };
         }
 
@@ -197,7 +197,7 @@ const MapManager = {
         // Check if current position is valid (floor = 1)
         if (tileY >= 0 && tileY < mapHeight && tileX >= 0 && tileX < mapWidth) {
             if (mapData[tileY][tileX] === 1) {
-                console.log(`[MapManager] Position (${tileX}, ${tileY}) is valid floor tile`);
+                debugLog(`[MapManager] Position (${tileX}, ${tileY}) is valid floor tile`);
                 return { x: pixelX, y: pixelY };
             }
         }
@@ -233,7 +233,7 @@ const MapManager = {
                 if (mapData[ny][nx] === 1) {
                     const validX = nx * tileSize + tileSize / 2;
                     const validY = ny * tileSize + tileSize / 2;
-                    console.log(`[MapManager] Found valid floor at (${nx}, ${ny}), moving player to (${validX.toFixed(0)}, ${validY.toFixed(0)})`);
+                    debugLog(`[MapManager] Found valid floor at (${nx}, ${ny}), moving player to (${validX.toFixed(0)}, ${validY.toFixed(0)})`);
                     return { x: validX, y: validY };
                 }
 
@@ -540,7 +540,7 @@ const MapManager = {
                         if (dynamicLoc) {
                             worldX = dynamicLoc.x;
                             worldY = dynamicLoc.y;
-                            // console.log(`📍 [QuestViz] Resolved dynamic location '${zoneId}' to ${worldX},${worldY}`);
+                            // debugLog(`📍 [QuestViz] Resolved dynamic location '${zoneId}' to ${worldX},${worldY}`);
                         } else {
                             // Fallback to static JSON coordinates
                             const tx = (obj.definition && obj.definition.targetX !== undefined) ? obj.definition.targetX : obj.targetX;
@@ -578,7 +578,7 @@ const MapManager = {
                     }
                     // Destroy zone itself
                     zone.destroy();
-                    console.log(`🧹 [MapManager] Cleaned up completed quest zone: ${zoneId}`);
+                    debugLog(`🧹 [MapManager] Cleaned up completed quest zone: ${zoneId}`);
                 }
                 delete this.questZones[zoneId];
             }
@@ -658,7 +658,7 @@ const MapManager = {
      * @param {Phaser.GameObjects.Sprite} player - The player sprite
      */
     setupQuestInteractions(scene, player) {
-        console.log('🔧 [MapManager] setupQuestInteractions called');
+        debugLog('🔧 [MapManager] setupQuestInteractions called');
         if (!player) {
             console.warn('⚠️ [MapManager] setupQuestInteractions called without player');
             return;
@@ -693,7 +693,7 @@ const MapManager = {
         const mapHeight = 60;
 
         // DEBUG: Map Size
-        console.log(`🗺️ Generating Wilderness Map: ${mapWidth}x${mapHeight}`);
+        debugLog(`🗺️ Generating Wilderness Map: ${mapWidth}x${mapHeight}`);
 
         // CORRUPTION CHECK (Chapter 2+) - Check ONCE
         let isCorrupted = false;
@@ -713,7 +713,7 @@ const MapManager = {
         } catch (err) {
             console.error('Error checking corruption state:', err);
         }
-        console.log(`🔮 Wilderness Corruption State: ${isCorrupted}`);
+        debugLog(`🔮 Wilderness Corruption State: ${isCorrupted}`);
 
         /**
          * Local helper to draw a procedural flower using Graphics
@@ -980,7 +980,7 @@ const MapManager = {
             player.y = exitY + 50;
         }
 
-        console.log('✅ Wilderness map created');
+        debugLog('✅ Wilderness map created');
         if (typeof playBackgroundMusic === 'function') playBackgroundMusic('wilderness');
         this.updateQuestZones(scene);
     },
@@ -1136,7 +1136,7 @@ const MapManager = {
             scene.physics.world.setBounds(0, 0, dungeon.width * tileSize, dungeon.height * tileSize);
             // scene.cameras.main.setBounds(0, 0, dungeon.width * tileSize, dungeon.height * tileSize);
 
-            console.log(`✅ Dungeon Level ${level} created`);
+            debugLog(`✅ Dungeon Level ${level} created`);
 
             // Play Dungeon Music
             if (typeof playBackgroundMusic === 'function') playBackgroundMusic('dungeon');
@@ -1168,7 +1168,7 @@ const MapManager = {
         const interactables = dungeonDef.interactables.filter(i => level >= i.minLevel && level <= (i.maxLevel || 999));
         if (interactables.length === 0) return;
 
-        console.log(`🗿 [DungeonInteract] Level ${level}. Defs found: ${dungeonDef.interactables.length}, Filtered: ${interactables.length}`);
+        debugLog(`🗿 [DungeonInteract] Level ${level}. Defs found: ${dungeonDef.interactables.length}, Filtered: ${interactables.length}`);
 
         for (const def of interactables) {
             try {
@@ -1176,7 +1176,7 @@ const MapManager = {
                 const chance = def.chance || 0.5;
                 let count = 0;
 
-                console.log(`   -> Attempting to spawn ${def.id} (Limit: ${limit}, Chance: ${chance})`);
+                debugLog(`   -> Attempting to spawn ${def.id} (Limit: ${limit}, Chance: ${chance})`);
 
                 for (let i = 0; i < limit; i++) {
                     if (Math.random() > chance) continue;
@@ -1262,7 +1262,7 @@ const MapManager = {
 
                     }
                 }
-                console.log(`   -> Spawned ${count} of ${def.id}`);
+                debugLog(`   -> Spawned ${count} of ${def.id}`);
             } catch (err) {
                 console.error(`   -> Error spawning ${def.id}:`, err);
             }
@@ -1405,14 +1405,14 @@ const MapManager = {
             const config = level;
             level = config.dungeonLevel || 1;
             dungeonId = config.dungeonId || null;
-            console.log('[MapManager] Adapted object argument to params', { level, dungeonId });
+            debugLog('[MapManager] Adapted object argument to params', { level, dungeonId });
         }
 
         // RESET LOGIC: If checking into Level 1 from Wilderness/Town, reset the specific dungeon
         // This makes the dungeon REPEATABLE and ensures boss respawns.
         if (targetMap === 'dungeon' && level === 1 && this.currentMap !== 'dungeon') {
             const idToReset = dungeonId || 'tower_dungeon';
-            console.log(`♻️ Resetting dungeon state for ${idToReset}...`);
+            debugLog(`♻️ Resetting dungeon state for ${idToReset}...`);
 
             // Clear cache for this dungeon
             Object.keys(this.dungeonCache).forEach(key => {
@@ -1443,7 +1443,7 @@ const MapManager = {
             if (typeof player !== 'undefined') {
                 this.lastPlayerX = player.x;
                 this.lastPlayerY = player.y;
-                console.log(`[MapManager] Saved state: ${this.lastMap} @ ${this.lastPlayerX.toFixed(0)},${this.lastPlayerY.toFixed(0)}`);
+                debugLog(`[MapManager] Saved state: ${this.lastMap} @ ${this.lastPlayerX.toFixed(0)},${this.lastPlayerY.toFixed(0)}`);
             }
         }
 
@@ -1529,7 +1529,7 @@ const MapManager = {
             if (typeof spawnDungeonMonsters === 'function') {
                 spawnDungeonMonsters();
             } else {
-                console.log("Spawn dungeon monsters logic missing or global.");
+                debugLog("Spawn dungeon monsters logic missing or global.");
             }
         }
 
@@ -1538,7 +1538,7 @@ const MapManager = {
 
         scene.cameras.main.startFollow(player);
         scene.cameras.main.startFollow(player);
-        console.log(`Transitioned to ${targetMap}`);
+        debugLog(`Transitioned to ${targetMap}`);
 
 
         // RESTORE STATE: If returning to the previous map
@@ -1547,7 +1547,7 @@ const MapManager = {
             if (typeof player !== 'undefined') {
                 player.x = this.lastPlayerX;
                 player.y = this.lastPlayerY;
-                console.log(`[MapManager] Restored position to ${player.x.toFixed(0)},${player.y.toFixed(0)}`);
+                debugLog(`[MapManager] Restored position to ${player.x.toFixed(0)},${player.y.toFixed(0)}`);
             }
             // Optional: clear lastMap so we don't accidentally restore again? 
             // Better to keep it until next dungeon entry overwrites it, or clear it here.
@@ -1589,33 +1589,33 @@ const MapManager = {
                 // Create texture frames for floor tiles
                 if (scene.textures.exists('dungeon_floor_tileset')) {
                     this.createTilesetFrames('dungeon_floor_tileset', this.dungeonTilesets.floorMetadata, 'floor');
-                    console.log('✅ Dungeon floor tileset image loaded and frames created');
+                    debugLog('✅ Dungeon floor tileset image loaded and frames created');
                 } else {
                     console.warn('⚠️ Dungeon floor tileset image not found');
                 }
 
                 this.buildDungeonTileLookup('floor');
-                console.log('✅ Dungeon floor tileset metadata loaded');
+                debugLog('✅ Dungeon floor tileset metadata loaded');
             } else {
                 console.warn('⚠️ Dungeon floor metadata not found in cache');
             }
 
             if (scene.cache.text.exists('dungeon_wall_metadata')) {
-                console.log('📋 Found dungeon_wall_metadata in cache');
+                debugLog('📋 Found dungeon_wall_metadata in cache');
                 const wallMetadataText = scene.cache.text.get('dungeon_wall_metadata');
                 this.dungeonTilesets.wallMetadata = JSON.parse(wallMetadataText);
-                console.log('📋 Parsed wall metadata, tiles:', this.dungeonTilesets.wallMetadata?.tileset_data?.tiles?.length || 0);
+                debugLog('📋 Parsed wall metadata, tiles:', this.dungeonTilesets.wallMetadata?.tileset_data?.tiles?.length || 0);
 
                 // Create texture frames for wall tiles
                 if (scene.textures.exists('dungeon_wall_tileset')) {
                     this.createTilesetFrames('dungeon_wall_tileset', this.dungeonTilesets.wallMetadata, 'wall');
-                    console.log('✅ Dungeon wall tileset image loaded and frames created');
+                    debugLog('✅ Dungeon wall tileset image loaded and frames created');
                 } else {
                     console.warn('⚠️ Dungeon wall tileset image not found in textures');
                 }
 
                 this.buildDungeonTileLookup('wall');
-                console.log('✅ Dungeon wall tileset metadata loaded');
+                debugLog('✅ Dungeon wall tileset metadata loaded');
             } else {
                 console.warn('⚠️ Dungeon wall metadata not found in cache');
             }

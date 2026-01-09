@@ -30,12 +30,12 @@ class ProjectileManager {
         // Add collision with world bounds
         this.scene.physics.world.on('worldbounds', (body) => {
             if (body.gameObject && body.gameObject.isProjectile) {
-                console.log('💥 Projectile hit World Bounds (Ignored for Debug)');
+                debugLog('💥 Projectile hit World Bounds (Ignored for Debug)');
                 // this.destroyProjectile(body.gameObject); // DISABLE for debugging
             }
         });
 
-        console.log('✅ ProjectileManager initialized');
+        debugLog('✅ ProjectileManager initialized');
     }
 
     /**
@@ -45,16 +45,16 @@ class ProjectileManager {
      * @param {Object} config - Weapon config { speed, projectileType, damage, range }
      */
     fireProjectile(startPos, angle, config) {
-        console.log(`🔥 fireProjectile called: Type=${config.projectileType}, Speed=${config.speed}`);
+        debugLog(`🔥 fireProjectile called: Type=${config.projectileType}, Speed=${config.speed}`);
         const now = this.scene.time.now;
         if (now < this.nextFireTime) {
-            console.log(`⏳ Cooldown active: ${now} < ${this.nextFireTime}`);
+            debugLog(`⏳ Cooldown active: ${now} < ${this.nextFireTime}`);
             return false;
         }
 
         // Log World Bounds
         const bounds = this.scene.physics.world.bounds;
-        console.log(`🌍 World Bounds: x=${bounds.x}, y=${bounds.y}, w=${bounds.width}, h=${bounds.height}`);
+        debugLog(`🌍 World Bounds: x=${bounds.x}, y=${bounds.y}, w=${bounds.width}, h=${bounds.height}`);
 
         if (!this.projectiles) this.init();
 
@@ -121,8 +121,8 @@ class ProjectileManager {
             // Ensure visibility over map
             projectile.setDepth(2000); // Try extremely high depth
 
-            console.log(`🏹 Projectile Spawned: x=${projectile.x}, y=${projectile.y}, depth=${projectile.depth}, visible=${projectile.visible}, alpha=${projectile.alpha}, texture=${projectile.texture.key}, frame=${projectile.frame.name}`);
-            console.log(`   Velocity: x=${projectile.body.velocity.x}, y=${projectile.body.velocity.y}`);
+            debugLog(`🏹 Projectile Spawned: x=${projectile.x}, y=${projectile.y}, depth=${projectile.depth}, visible=${projectile.visible}, alpha=${projectile.alpha}, texture=${projectile.texture.key}, frame=${projectile.frame.name}`);
+            debugLog(`   Velocity: x=${projectile.body.velocity.x}, y=${projectile.body.velocity.y}`);
 
 
 
@@ -148,7 +148,7 @@ class ProjectileManager {
 
         const activeCount = this.projectiles.countActive(true);
         if (activeCount > 0) {
-            // console.log(`🔄 ProjectileManager.update. Active: ${activeCount}`);
+            // debugLog(`🔄 ProjectileManager.update. Active: ${activeCount}`);
         }
 
         this.projectiles.getChildren().forEach((projectile) => {
@@ -160,7 +160,7 @@ class ProjectileManager {
                 );
 
                 if (dist > projectile.maxRange) {
-                    console.log('📏 Projectile exceeded range');
+                    debugLog('📏 Projectile exceeded range');
                     if (projectile.debugRect) projectile.debugRect.destroy();
                     this.destroyProjectile(projectile);
                     return; // Continue forEach
@@ -235,7 +235,7 @@ class ProjectileManager {
         projectile.setVisible(false);
 
         // Debug collision
-        console.log('🎯 Projectile hit monster!', monster.id || monster.name);
+        debugLog('🎯 Projectile hit monster!', monster.id || monster.name);
 
         // Deal damage
         let damage = projectile.damage || 10; // Default to 10 if undefined
@@ -292,7 +292,7 @@ class ProjectileManager {
         // Trigger death if needed (handled in game.js usually, but good to ensure)
         if (monster.hp <= 0) {
             if (typeof window.handleMonsterDeath === 'function') {
-                console.log(`💀 Monster ${monster.id} killed by projectile.invoking death.`);
+                debugLog(`💀 Monster ${monster.id} killed by projectile.invoking death.`);
                 window.handleMonsterDeath(monster);
             } else if (typeof handleMonsterDeath === 'function') {
                 handleMonsterDeath(monster);
@@ -307,12 +307,12 @@ class ProjectileManager {
      */
     handleWallCollision(projectile, wall) {
         if (!projectile.active) return;
-        console.log('🧱 Projectile hit Wall at', wall.x, wall.y);
+        debugLog('🧱 Projectile hit Wall at', wall.x, wall.y);
         this.destroyProjectile(projectile);
     }
 
     destroyProjectile(projectile) {
-        console.log(`💀 Reacting to destroyProjectile.POS: ${projectile.x}, ${projectile.y} `);
+        debugLog(`💀 Reacting to destroyProjectile.POS: ${projectile.x}, ${projectile.y} `);
         // Impact effect
         if (this.scene && this.scene.add) {
             const burst = this.scene.add.circle(projectile.x, projectile.y, 5, 0xffffff, 0.8);

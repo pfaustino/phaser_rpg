@@ -97,6 +97,10 @@ window.GameState = {
     // ============================================
     isGamePaused: false,
 
+    // Debug mode - controls console.log output
+    // Loaded from localStorage, defaults to false for production
+    debugMode: localStorage.getItem('debugMode') === 'true',
+
     // Difficulty setting (casual, easy, normal, hard, nightmare)
     // Loaded from localStorage, defaults to 'normal'
     currentDifficulty: localStorage.getItem('gameDifficulty') || 'normal',
@@ -123,4 +127,27 @@ window.questTrackerEntries = window.GameState.questTrackerEntries;
 window.lastPlayerX = window.GameState.lastPlayerX;
 window.lastPlayerY = window.GameState.lastPlayerY;
 
-console.log('✅ GameState loaded');
+debugLog('✅ GameState loaded');
+
+// ============================================
+// DEBUG UTILITIES
+// ============================================
+/**
+ * Debug log - only outputs to console when debugMode is enabled
+ * Usage: debugLog('message') or debugLog('message', extraData)
+ */
+window.debugLog = function (...args) {
+    if (window.GameState && window.GameState.debugMode) {
+        debugLog(...args);
+    }
+};
+
+/**
+ * Debug warn - only outputs to console when debugMode is enabled
+ */
+window.debugWarn = function (...args) {
+    if (window.GameState && window.GameState.debugMode) {
+        console.warn(...args);
+    }
+};
+

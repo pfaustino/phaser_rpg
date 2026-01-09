@@ -17,7 +17,7 @@ class MonsterRenderer {
                 // Also allow lookup by ID
                 if (m.id) this.monsterBlueprints[m.id] = m;
             });
-            console.log('✅ MonsterRenderer initialized with', data.monsters.length, 'blueprints');
+            debugLog('✅ MonsterRenderer initialized with', data.monsters.length, 'blueprints');
         }
     }
 
@@ -89,9 +89,9 @@ class MonsterRenderer {
 
         // Tooltip Listeners
         container.on('pointerover', () => {
-            console.log('🖱️ Mouse over monster:', container.monsterType);
+            debugLog('🖱️ Mouse over monster:', container.monsterType);
             if (window.UIManager && window.UIManager.showMonsterTooltip) {
-                console.log('   -> Triggers Text Tooltip');
+                debugLog('   -> Triggers Text Tooltip');
                 // Pass the container which has the stats (hp, name, etc.)
                 window.UIManager.showMonsterTooltip(container, container.x, container.y);
             } else {
@@ -100,13 +100,13 @@ class MonsterRenderer {
         });
 
         container.on('pointerout', () => {
-            console.log('👋 Mouse out monster');
+            debugLog('👋 Mouse out monster');
             if (window.UIManager && window.UIManager.hideTooltip) {
                 window.UIManager.hideTooltip();
             }
         });
 
-        console.log(`✅ Monster interactive set for ${blueprintId}. Size: ${w}x${h}`);
+        debugLog(`✅ Monster interactive set for ${blueprintId}. Size: ${w}x${h}`);
 
         // Add Hover Effect
         if (typeof window.enableHoverEffect === 'function') {

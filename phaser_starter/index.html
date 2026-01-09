@@ -30,6 +30,11 @@
     <!-- Phaser from CDN -->
     <script src="https://cdn.jsdelivr.net/npm/phaser@3.80.1/dist/phaser.min.js"></script>
 
+    <!-- Core: Must load first (defines debugLog, GameState) -->
+    <script src="Constants.js"></script>
+    <script src="GameState.js"></script>
+
+    <!-- Game Scripts -->
     <script src="quests.js"></script>
     <script src="monsters.js"></script>
     <script src="UnifiedQuestSystem.js"></script>
@@ -41,8 +46,6 @@
     <script src="AStarPathfinding.js"></script>
     <script src="TextureManager.js"></script>
     <script src="MapManager.js"></script>
-    <script src="Constants.js"></script>
-    <script src="GameState.js"></script>
     <script src="DebugUtils.js"></script>
     <script src="DamageSystem.js"></script>
     <script src="UIManager_v2.js?v=0.9.199"></script>

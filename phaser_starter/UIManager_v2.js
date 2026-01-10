@@ -16,11 +16,7 @@ window.UIManager = {
         console.log('[UIManager] Initializing global hooks...');
         window.toggleSettings = () => this.toggleSettings();
         window.createSettingsUI = () => this.createSettingsUI(); // Ensure game.js can call it
-        window.toggleEquipment = () => {
-            // Defer to EquipmentManager
-            if (window.EquipmentManager) window.EquipmentManager.toggleEquipmentWindow();
-            else console.warn('EquipmentManager not found');
-        };
+
         // Ensure other managers can hook in
     },
 

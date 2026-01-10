@@ -1833,7 +1833,8 @@ function create() {
     }
 
     // CREATE DEBUG HUD (hidden by default - press F3 to toggle)
-    const debugText = this.add.text(10, 50, '', {
+    // CREATE DEBUG HUD (hidden by default - press F3 to toggle)
+    this.debugText = this.add.text(10, 50, '', {
         fontSize: '14px', fill: '#00ff00', backgroundColor: '#000000aa'
     }).setScrollFactor(0).setDepth(9999).setVisible(false);
 
@@ -1847,7 +1848,7 @@ function create() {
             if (!window.GameState) return;
 
             // Update debug HUD if visible
-            if (debugText.visible) {
+            if (this.debugText && this.debugText.visible) {
                 const pm = window.playerStats;
                 const inv = pm.inventory ? pm.inventory.length : 'ERR';
                 const gold = pm.gold;
@@ -1866,7 +1867,7 @@ function create() {
                     } catch (e) { saveTime = 'Corrupt'; }
                 }
 
-                debugText.setText(
+                this.debugText.setText(
                     `DEBUG HUD (v0.9.217.1)\n` +
                     `Map: ${map} | Slot: ${slot}\n` +
                     `Inv: ${inv} | Gold: ${gold}\n` +
@@ -1883,8 +1884,13 @@ function create() {
 
     // F3 to toggle debug HUD
     this.input.keyboard.on('keydown-F3', () => {
-        debugText.setVisible(!debugText.visible);
-        debugLog(`Debug HUD: ${debugText.visible ? 'ON' : 'OFF'}`);
+        if (this.debugText) {
+            this.debugText.setVisible(!this.debugText.visible);
+            debugLog(`Debug HUD: ${this.debugText.visible ? 'ON' : 'OFF'}`);
+
+            // Force update of Quest Tracker to show/hide IDs immediately
+            if (window.updateQuestTrackerHUD) window.updateQuestTrackerHUD();
+        }
     });
 
     // Initialize Map Manager
@@ -12741,7 +12747,12 @@ function updateQuestTrackerHUD() {
             const titleBg = scene.add.rectangle(startX + 130, startY + yOffset + 8, 280, 18, 0x000000, 0.65)
                 .setScrollFactor(0).setDepth(199).setOrigin(0.5, 0.5);
 
-            const titleText = scene.add.text(startX, startY + yOffset, quest.title, {
+            let displayTitle = quest.title;
+            if (scene.debugText && scene.debugText.visible) {
+                displayTitle += ` (${quest.id})`;
+            }
+
+            const titleText = scene.add.text(startX, startY + yOffset, displayTitle, {
                 fontSize: '14px',
                 fill: '#ffd700',
                 fontStyle: 'bold',

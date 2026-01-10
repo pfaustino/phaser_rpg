@@ -1796,6 +1796,7 @@ function create() {
     // [New] Check for Save Load Request (from Reload)
     const shouldLoad = localStorage.getItem('rpg_load_on_start');
     if (shouldLoad === 'true' && window.SaveManager) {
+        window._startupLoadAttempted = true;
         localStorage.removeItem('rpg_load_on_start');
         const loadSlot = parseInt(localStorage.getItem('rpg_load_slot')) || 1;
         debugLog(`📂 Loading Game from Slot ${loadSlot} (Start-up)...`);
@@ -1866,7 +1867,7 @@ function create() {
                 }
 
                 debugText.setText(
-                    `DEBUG HUD (v0.9.216.0)\n` +
+                    `DEBUG HUD (v0.9.217.1)\n` +
                     `Map: ${map} | Slot: ${slot}\n` +
                     `Inv: ${inv} | Gold: ${gold}\n` +
                     `Last Save: ${saveTime}\n` +
@@ -3079,6 +3080,87 @@ function create() {
     if (window.AbilityManager) {
         window.AbilityManager.init(this);
         window.AbilityManager.createAbilityBar();
+    }
+
+    // STARTUP SAVE CHECK
+    if (window.SaveManager && window.SaveManager.getLatestSaveSlot) {
+        // Check if we already attempted a load this session (flag set at top of create)
+        if (!window._startupLoadAttempted) {
+            const latestSlot = window.SaveManager.getLatestSaveSlot();
+            if (latestSlot) {
+                // Determine date string
+                const meta = window.SaveManager.getSlotMeta(latestSlot);
+                let dateStr = "Unknown Date";
+                if (meta && meta.timestamp) {
+                    dateStr = new Date(meta.timestamp).toLocaleString();
+                }
+
+                debugLog(`found latest save slot: ${latestSlot}`);
+
+                // Pause Game
+                this.physics.pause();
+
+                // Block Input
+                const camera = this.cameras.main;
+                const modalBg = this.add.rectangle(camera.width / 2, camera.height / 2, camera.width, camera.height, 0x000000, 0.7)
+                    .setScrollFactor(0).setDepth(100000).setInteractive();
+
+                const dialogBg = this.add.rectangle(camera.width / 2, camera.height / 2, 400, 250, 0x222222, 1)
+                    .setScrollFactor(0).setDepth(100001).setStrokeStyle(2, 0xffffff);
+
+                const title = this.add.text(camera.width / 2, camera.height / 2 - 80, "Welcome Back", {
+                    fontSize: '24px', fontStyle: 'bold', fill: '#ffffff'
+                }).setScrollFactor(0).setDepth(100002).setOrigin(0.5);
+
+                const desc = this.add.text(camera.width / 2, camera.height / 2 - 20, `Found save file (Slot ${latestSlot}) from:\n${dateStr}\n\nLoad latest save?`, {
+                    fontSize: '16px', fill: '#cccccc', align: 'center'
+                }).setScrollFactor(0).setDepth(100002).setOrigin(0.5);
+
+                // Continue Button
+                const btnContinue = this.add.rectangle(camera.width / 2 - 90, camera.height / 2 + 60, 140, 40, 0x22aa22)
+                    .setScrollFactor(0).setDepth(100002).setInteractive({ useHandCursor: true });
+                const txtContinue = this.add.text(camera.width / 2 - 90, camera.height / 2 + 60, "Load Game", {
+                    fontSize: '18px', fill: '#ffffff'
+                }).setScrollFactor(0).setDepth(100003).setOrigin(0.5);
+
+                // Cancel Button
+                const btnCancel = this.add.rectangle(camera.width / 2 + 90, camera.height / 2 + 60, 140, 40, 0xaa2222)
+                    .setScrollFactor(0).setDepth(100002).setInteractive({ useHandCursor: true });
+                const txtCancel = this.add.text(camera.width / 2 + 90, camera.height / 2 + 60, "New Game", {
+                    fontSize: '18px', fill: '#ffffff'
+                }).setScrollFactor(0).setDepth(100003).setOrigin(0.5);
+
+                // Interactions
+                const destroyDialog = () => {
+                    modalBg.destroy();
+                    dialogBg.destroy();
+                    title.destroy();
+                    desc.destroy();
+                    btnContinue.destroy();
+                    txtContinue.destroy();
+                    btnCancel.destroy();
+                    txtCancel.destroy();
+                    this.physics.resume();
+                };
+
+                btnContinue.on('pointerdown', () => {
+                    // Use global helper to trigger reload-based load
+                    if (window.loadGame) {
+                        window.loadGame(latestSlot);
+                    } else {
+                        // Fallback manual reload logic if alias missing
+                        localStorage.setItem('rpg_load_on_start', 'true');
+                        localStorage.setItem('rpg_load_slot', latestSlot.toString());
+                        localStorage.setItem('rpg_load_on_start_completed', latestSlot.toString());
+                        location.reload();
+                    }
+                });
+
+                btnCancel.on('pointerdown', () => {
+                    destroyDialog();
+                });
+            }
+        }
     }
 
     debugLog('Game created');

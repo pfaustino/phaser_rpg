@@ -297,6 +297,23 @@ window.SaveManager = {
             if (localStorage.getItem(this.getSlotKey(i))) return true;
         }
         return false;
+    },
+
+    /**
+     * Get the slot number with the latest timestamp
+     */
+    getLatestSaveSlot() {
+        let latestSlot = null;
+        let latestTime = 0;
+
+        for (let i = 1; i <= this.MAX_SLOTS; i++) {
+            const meta = this.getSlotMeta(i);
+            if (meta && meta.timestamp > latestTime) {
+                latestTime = meta.timestamp;
+                latestSlot = i;
+            }
+        }
+        return latestSlot;
     }
 };
 

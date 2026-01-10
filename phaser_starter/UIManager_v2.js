@@ -56,6 +56,8 @@ window.UIManager = {
             (window.TavernUI && window.TavernUI.visible) ||
             (window.ForgeUI && window.ForgeUI.visible) ||
             (window.InnUI && window.InnUI.visible) ||
+            (window.ApothecaryUI && window.ApothecaryUI.visible) ||
+            (window.LibraryUI && window.LibraryUI.visible) ||
             this.assetsVisible ||
             this.grassDebugVisible ||
             (window.questCompletedModal && (window.questCompletedModal.visible || window.questCompletedModal.closeBtn)) ||
@@ -98,6 +100,12 @@ window.UIManager = {
         }
         if (window.ForgeUI && window.ForgeUI.visible) {
             window.ForgeUI.close();
+        }
+        if (window.ApothecaryUI && window.ApothecaryUI.visible) {
+            window.ApothecaryUI.close();
+        }
+        if (window.LibraryUI && window.LibraryUI.visible) {
+            window.LibraryUI.close();
         }
 
         // Generic fallback

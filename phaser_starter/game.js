@@ -3146,6 +3146,71 @@ function checkNPCInteraction() {
 }
 
 /**
+ * Check for Building Interactions
+ * Checks distance to known building entrances
+ */
+function checkBuildingInteraction() {
+    // Debug Map and Position
+    // debugLog(`Checking Interaction. Map: ${MapManager.currentMap}, Player: ${player.x.toFixed(0)},${player.y.toFixed(0)}`);
+
+    if (!window.MapManager || MapManager.currentMap !== 'town') {
+        return false;
+    }
+
+    const px = player.x;
+    const py = player.y;
+    // const interactionRadius = 150; // Use building-specific radius
+
+    // Use MapManager.buildings (Dynamic) instead of hardcoded list
+    if (!MapManager.buildings || MapManager.buildings.length === 0) return false;
+
+    let interacted = false;
+
+    for (const b of MapManager.buildings) {
+        // Use center of building
+        const bx = b.centerX;
+        const by = b.centerY;
+        const dist = Phaser.Math.Distance.Between(px, py, bx, by);
+        const radius = b.interactionRadius || 120;
+
+        // debugLog(`Checking ${b.type}: ${dist.toFixed(0)}px (Max: ${radius})`);
+
+        if (dist < radius) {
+            // debugLog(`🏛️ Interacting with ${b.type}`);
+
+            if (b.type === 'apothecary') {
+                if (window.ApothecaryUI) window.ApothecaryUI.open();
+                interacted = true;
+            } else if (b.type === 'library') {
+                if (window.LibraryUI) window.LibraryUI.open();
+                interacted = true;
+            } else if (b.type === 'blacksmith' || b.type === 'forge') {
+                if (window.ForgeUI) window.ForgeUI.open();
+                else if (typeof window.ForgeUI !== 'undefined' && window.ForgeUI.open) window.ForgeUI.open();
+                else if (window.ForgeUI && window.ForgeUI.visible !== undefined) window.ForgeUI.visible = true;
+                interacted = true;
+            } else if (b.type === 'tavern') {
+                if (window.TavernUI) window.TavernUI.open();
+                interacted = true;
+            } else if (b.type === 'shop') { // General Store
+                if (window.ShopManager) window.ShopManager.openShop();
+                interacted = true;
+            } else if (b.type === 'guild') {
+                if (typeof addChatMessage === 'function') addChatMessage("The Guild Hall is closed for renovations.", 0xffff00);
+                interacted = true;
+            } else if (b.type === 'temple') {
+                if (typeof addChatMessage === 'function') addChatMessage("The Temple doors are locked.", 0xffff00);
+                interacted = true;
+            }
+
+            if (interacted) break; // Only interact with one at a time
+        }
+    }
+
+    return interacted;
+}
+
+/**
  * Handle World Interaction (F Key / Controller A)
  * Returns true if an interaction occurred (blocking other actions)
  */
@@ -3154,7 +3219,13 @@ function triggerWorldInteraction() {
     let nearMarker = false;
 
     // Check for zone interactions (Quests)
+    // Check for zone interactions (Quests)
     if (typeof checkZoneInteraction === 'function' && checkZoneInteraction()) {
+        return true;
+    }
+
+    // Check for Building Interactions (Apothecary, Library, etc.)
+    if (checkBuildingInteraction()) {
         return true;
     }
 
@@ -3523,6 +3594,13 @@ function update(time, delta) {
         // But Attack/Interact should be blocked.
 
         const isUIOpen = isAnyWindowOpen();
+
+        // Interaction (F / A Button) - Only if UI is not open
+        if (!isUIOpen && isActionJustPressed('interact')) {
+            if (typeof triggerWorldInteraction === 'function') {
+                triggerWorldInteraction();
+            }
+        }
 
         // Attack (SPACE / A Button / RT)
         if (!isUIOpen && (isActionJustPressed('attack') || isActionJustPressed('fire'))) {
@@ -8997,74 +9075,6 @@ function updateBuildingIndicators() {
             building.interactionIndicator.y = building.y - 20;
         }
     });
-}
-
-/**
- * Check for building interaction when F is pressed
- */
-function checkBuildingInteraction() {
-    if (MapManager.currentMap !== 'town') {
-        debugLog('❌ Not in town, skipping building interaction');
-        return;
-    }
-    if (dialogVisible || (window.ShopManager && window.ShopManager.shopVisible) || inventoryVisible || settingsVisible || buildingPanelVisible) {
-        debugLog('❌ UI already open, skipping building interaction');
-        return;
-    }
-
-    debugLog(`🔍 Checking building interaction. Total MapManager.buildings: ${MapManager.buildings.length}`);
-
-    // Find nearest building in range
-    let closestBuilding = null;
-    let closestDistance = Infinity;
-
-    MapManager.buildings.forEach((building, index) => {
-        if (!building.rect || !building.rect.active) {
-            debugLog(`⚠️ Building ${index} (${building.type}) has no active rect`);
-            return;
-        }
-
-        // Ensure building has centerX and centerY
-        if (building.centerX === undefined || building.centerY === undefined) {
-            building.centerX = building.x + building.width / 2;
-            building.centerY = building.y + building.height / 2;
-        }
-        if (building.interactionRadius === undefined) {
-            building.interactionRadius = 120; // Increased from 80
-        }
-
-        const distance = Phaser.Math.Distance.Between(
-            player.x, player.y,
-            building.centerX, building.centerY
-        );
-
-        debugLog(`  Building ${index}: ${building.type} at (${building.centerX.toFixed(0)}, ${building.centerY.toFixed(0)}), distance: ${distance.toFixed(0)}, radius: ${building.interactionRadius}`);
-
-        if (distance <= building.interactionRadius && distance < closestDistance) {
-            closestDistance = distance;
-            closestBuilding = building;
-            debugLog(`  ✅ ${building.type} is in range!`);
-        }
-    });
-
-    if (closestBuilding) {
-        // Special handling for Dungeon Buildings
-        if (closestBuilding.type === 'tower') {
-            debugLog(`🏰 Entering Tower Dungeon from Town`);
-            MapManager.transitionToMap('dungeon', 1, 'tower_dungeon');
-            return;
-        }
-        else if (closestBuilding.type === 'temple') {
-            debugLog(`🏰 Entering Temple Ruins from Town`);
-            MapManager.transitionToMap('dungeon', 1, 'temple_ruins');
-            return;
-        }
-
-        debugLog(`🏠 Opening UI for ${closestBuilding.type} (distance: ${closestDistance.toFixed(0)})`);
-        openBuildingUI(closestBuilding);
-    } else {
-        debugLog('❌ No building in range');
-    }
 }
 
 /**

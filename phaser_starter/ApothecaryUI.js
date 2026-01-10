@@ -16,6 +16,25 @@ window.ApothecaryUI = {
         { id: 'elixir_strength', name: 'Elixir of Strength', price: 150, desc: '+5 Atk (Temp)', image: 'item_consumable' }
     ],
 
+    currentTab: 'buy', // 'buy' or 'craft'
+
+    recipes: [
+        {
+            id: 'greater_health_potion',
+            name: 'Greater Health Potion',
+            desc: 'Restores 100 HP',
+            input: { id: 'health_potion', name: 'Health Potion', quantity: 3 },
+            output: { id: 'greater_health_potion', name: 'Greater Health Potion', quantity: 1, healAmount: 100, rarity: 'Uncommon', image: 'item_consumable' }
+        },
+        {
+            id: 'greater_mana_potion',
+            name: 'Greater Mana Potion',
+            desc: 'Restores 60 Mana',
+            input: { id: 'mana_potion', name: 'Mana Potion', quantity: 3 },
+            output: { id: 'greater_mana_potion', name: 'Greater Mana Potion', quantity: 1, manaAmount: 60, rarity: 'Uncommon', image: 'mana_potion' }
+        }
+    ],
+
     open: function () {
         if (this.visible) return;
 
@@ -26,6 +45,7 @@ window.ApothecaryUI = {
 
         this.visible = true;
         this.scene = window.game.scene.scenes[0];
+        this.currentTab = 'buy'; // Default tab
 
         // Notify game that building UI is open
         if (typeof window.buildingPanelVisible !== 'undefined') {
@@ -87,7 +107,7 @@ window.ApothecaryUI = {
 
         // Background
         const bg = scene.add.rectangle(centerX, centerY, panelWidth, panelHeight, 0x1a1a1a, 0.95)
-            .setScrollFactor(0).setDepth(1000).setStrokeStyle(3, 0x228822); // Greenish tint for nature/herbs
+            .setScrollFactor(0).setDepth(1000).setStrokeStyle(3, 0x228822);
 
         // Title
         const title = scene.add.text(centerX, centerY - panelHeight / 2 + 30, 'The Alchemist\'s Corner', {
@@ -133,20 +153,104 @@ window.ApothecaryUI = {
             elements: []
         };
 
-        // Render Shop Items (Default View)
-        this.renderShop(centerX, centerY, panelWidth, panelHeight);
+        // Render Tabs and Initial Content
+        this.renderTabs(centerX, centerY, panelWidth, panelHeight);
+        this.refreshContent(centerX, centerY, panelWidth, panelHeight);
+    },
+
+    renderTabs: function (x, y, w, h) {
+        const scene = this.scene;
+        const tabY = y - h / 2 + 70;
+        const tabW = 150;
+        const tabH = 40;
+        const spacing = 20;
+
+        const tabs = [
+            { id: 'buy', label: 'Buy Potions' },
+            { id: 'craft', label: 'Craft Upgrades' }
+        ];
+
+        let startX = x - ((tabs.length * tabW) + ((tabs.length - 1) * spacing)) / 2 + tabW / 2;
+
+        tabs.forEach((tab, index) => {
+            const tabX = startX + index * (tabW + spacing);
+            const isSelected = this.currentTab === tab.id;
+            const color = isSelected ? 0x228822 : 0x333333;
+
+            const btn = scene.add.rectangle(tabX, tabY, tabW, tabH, color)
+                .setScrollFactor(0).setDepth(1001).setInteractive({ useHandCursor: true })
+                .setStrokeStyle(1, isSelected ? 0xaaffaa : 0x666666);
+
+            const text = scene.add.text(tabX, tabY, tab.label, {
+                fontSize: '16px', fill: isSelected ? '#ffffff' : '#aaaaaa', fontStyle: 'bold'
+            }).setScrollFactor(0).setDepth(1002).setOrigin(0.5);
+
+            btn.on('pointerdown', () => {
+                if (this.currentTab !== tab.id) {
+                    this.currentTab = tab.id;
+                    if (typeof playSound === 'function') playSound('ui_click');
+                    // Completely refresh UI elements
+                    this.refreshContent(x, y, w, h);
+                    // Re-render tabs to update selection state
+                    // (Actually we can just update colors here but full refresh is safer for prototype)
+                    this.destroyTabs(); // Helper to clear old tabs
+                    this.renderTabs(x, y, w, h);
+                }
+            });
+
+            this.panel.elements.push(btn, text);
+            // Tag tabs so we can destroy them separately if needed?
+            // For now, destroyUI clears all elements, but switching tabs needs to clear only content.
+            // We should separate "Persistent Elements" (Bg, Title) from "Tab Elements"
+
+            // To handle simple redraw, we'll mark these as part of panel.elements.
+            // But we need a way to clear just the content area. 
+        });
+    },
+
+    // Helper to clear existing content elements
+    clearContent: function () {
+        if (this.panel.elements) {
+            this.panel.elements.forEach(el => {
+                // Determine if element is tab or content?
+                // For simplicity, let's just destroy all and re-create static + content.
+                // But efficient way:
+                if (el.destroy) el.destroy();
+            });
+            this.panel.elements = [];
+        }
+        // Re-add Tabs (Recursion danger if called from renderTabs... wait)
+        // Correct approach: renderTabs adds to a specific tracked list OR we just redraw everything.
+        // Let's use `this.panel.elements` for EVERYTHING dynamic.
+    },
+
+    destroyTabs: function () {
+        // Since we are redrawing everything in refreshContent loop conceptually, 
+        // actually we should just clear elements.
+    },
+
+    refreshContent: function (x, y, w, h) {
+        // Clear all dynamic elements (Tabs + Content)
+        if (this.panel.elements) {
+            this.panel.elements.forEach(el => { if (el.destroy) el.destroy(); });
+            this.panel.elements = [];
+        }
+
+        // Re-draw Tabs
+        this.renderTabs(x, y, w, h);
+
+        // Draw Content based on Tab
+        if (this.currentTab === 'buy') {
+            this.renderShop(x, y, w, h);
+        } else {
+            this.renderCrafting(x, y, w, h);
+        }
     },
 
     renderShop: function (x, y, w, h) {
-        const startY = y - 100;
+        const startY = y - 50;
         const itemHeight = 60;
         const scene = this.scene;
-
-        // Subtitle
-        const sub = scene.add.text(x, y - h / 2 + 70, 'Potions & Elixirs', {
-            fontSize: '20px', fill: '#88dd88'
-        }).setOrigin(0.5).setDepth(1001).setScrollFactor(0);
-        this.panel.elements.push(sub);
 
         this.stock.forEach((item, index) => {
             const itemY = startY + (index * (itemHeight + 10));
@@ -158,6 +262,11 @@ window.ApothecaryUI = {
             let iconKey = item.image;
             if (!scene.textures.exists(iconKey)) iconKey = 'item_consumable';
             const icon = scene.add.sprite(x - 220, itemY, iconKey).setScrollFactor(0).setDepth(1002).setScale(1.2);
+
+            if (window.ItemManager) {
+                const def = window.ItemManager.getItemDef(item.id);
+                if (def && def.uiTint !== undefined) icon.setTint(def.uiTint);
+            }
 
             // Text
             const nameText = scene.add.text(x - 180, itemY - 10, item.name, {
@@ -186,34 +295,10 @@ window.ApothecaryUI = {
                 const stats = window.GameState.playerStats;
                 if (stats.gold >= item.price) {
                     stats.gold -= item.price;
-
-                    // Add to inventory
-                    const newItem = {
-                        type: 'consumable',
-                        id: item.id,
-                        name: item.name,
-                        description: item.desc,
-                        quantity: 1,
-                        price: Math.floor(item.price / 2),
-                        rarity: 'Common',
-                        healAmount: (item.id === 'health_potion') ? 50 : 0,
-                        manaAmount: (item.id === 'mana_potion') ? 50 : 0,
-                        stackable: true
-                    };
-
-                    // Stack logic
-                    const inv = stats.inventory;
-                    const existing = inv.find(i => i.id === newItem.id);
-                    if (existing) {
-                        existing.quantity = (existing.quantity || 1) + 1;
-                    } else {
-                        inv.push(newItem);
-                    }
-
+                    this.addItemToInventory(item);
                     if (typeof window.updatePlayerStats === 'function') window.updatePlayerStats();
                     if (typeof window.showDamageNumber === 'function') window.showDamageNumber(window.player.x, window.player.y - 40, `Bought ${item.name}`, 0x00ff00);
                     if (typeof playSound === 'function') playSound('coin');
-
                 } else {
                     if (typeof window.showDamageNumber === 'function') window.showDamageNumber(window.player.x, window.player.y - 40, 'Not Enough Gold', 0xff0000);
                     if (typeof playSound === 'function') playSound('ui_error');
@@ -229,5 +314,121 @@ window.ApothecaryUI = {
 
             this.panel.elements.push(itemBg, icon, nameText, descText, priceText, buyBg, buyText);
         });
+    },
+
+    renderCrafting: function (x, y, w, h) {
+        const startY = y - 50;
+        const itemHeight = 70;
+        const scene = this.scene;
+
+        if (this.recipes.length === 0) {
+            const noRecipes = scene.add.text(x, y, "No recipes learned yet.", { fontSize: '18px', fill: '#888' }).setOrigin(0.5).setDepth(1002).setScrollFactor(0);
+            this.panel.elements.push(noRecipes);
+            return;
+        }
+
+        this.recipes.forEach((recipe, index) => {
+            const itemY = startY + (index * (itemHeight + 10));
+
+            const itemBg = scene.add.rectangle(x, itemY, 550, itemHeight, 0x333333, 0.8)
+                .setScrollFactor(0).setDepth(1001).setStrokeStyle(1, 0x666666);
+
+            // Output Icon
+            let iconKey = recipe.output.image || 'item_consumable';
+            if (!scene.textures.exists(iconKey)) iconKey = 'item_consumable';
+            const icon = scene.add.sprite(x - 240, itemY, iconKey).setScrollFactor(0).setDepth(1002).setScale(1.2);
+
+            if (window.ItemManager) {
+                const def = window.ItemManager.getItemDef(recipe.output.id);
+                if (def && def.uiTint !== undefined) icon.setTint(def.uiTint);
+            }
+
+            // Output Name & Desc
+            const nameText = scene.add.text(x - 200, itemY - 15, recipe.output.name, {
+                fontSize: '18px', fill: '#ffffff', fontStyle: 'bold'
+            }).setScrollFactor(0).setDepth(1002).setOrigin(0, 0.5);
+
+            const descText = scene.add.text(x - 200, itemY + 10, recipe.desc, {
+                fontSize: '12px', fill: '#aaaaaa'
+            }).setScrollFactor(0).setDepth(1002).setOrigin(0, 0.5);
+
+            // Required Ingredients
+            const requiredText = scene.add.text(x - 200, itemY + 25, `Requires: ${recipe.input.quantity}x ${recipe.input.name}`, {
+                fontSize: '12px', fill: '#ffcc00'
+            }).setScrollFactor(0).setDepth(1002).setOrigin(0, 0.5);
+
+            // Check Player Inventory
+            const playerInv = window.GameState.playerStats.inventory;
+            const inputItem = playerInv.find(i => i.id === recipe.input.id || (i.name && i.name === recipe.input.name));
+            const playerQty = inputItem ? inputItem.quantity : 0;
+            const canCraft = playerQty >= recipe.input.quantity;
+
+            // Craft Button
+            const btnColor = canCraft ? 0x228822 : 0x444444;
+            const craftBg = scene.add.rectangle(x + 200, itemY, 100, 40, btnColor)
+                .setScrollFactor(0).setDepth(1002).setStrokeStyle(1, canCraft ? 0x44aa44 : 0x666666);
+
+            if (canCraft) craftBg.setInteractive({ useHandCursor: true });
+
+            const craftText = scene.add.text(x + 200, itemY, 'CRAFT', {
+                fontSize: '16px', fill: canCraft ? '#ffffff' : '#888888', fontStyle: 'bold'
+            }).setScrollFactor(0).setDepth(1003).setOrigin(0.5);
+
+            // Craft Action
+            const craftAction = () => {
+                if (!canCraft) return;
+
+                // Remove Inputs
+                if (inputItem) {
+                    inputItem.quantity -= recipe.input.quantity;
+                    if (inputItem.quantity <= 0) {
+                        playerInv.splice(playerInv.indexOf(inputItem), 1);
+                    }
+                }
+
+                // Add Output
+                this.addItemToInventory(recipe.output);
+
+                if (typeof window.updatePlayerStats === 'function') window.updatePlayerStats();
+                if (typeof playSound === 'function') playSound('combine'); // Need a sound? 'coin' or 'heal' works
+                if (typeof window.showDamageNumber === 'function') window.showDamageNumber(window.player.x, window.player.y - 40, `Crafted ${recipe.output.name}!`, 0x00ff00);
+
+                // Refresh to update quantities
+                this.refreshContent(x, y, w, h);
+            };
+
+            if (canCraft) {
+                craftBg.on('pointerdown', craftAction);
+                craftText.setInteractive({ useHandCursor: true }).on('pointerdown', craftAction);
+                craftBg.on('pointerover', () => craftBg.setFillStyle(0x33aa33));
+                craftBg.on('pointerout', () => craftBg.setFillStyle(0x228822));
+            }
+
+            this.panel.elements.push(itemBg, icon, nameText, descText, requiredText, craftBg, craftText);
+        });
+    },
+
+    addItemToInventory: function (itemData) {
+        const stats = window.GameState.playerStats;
+        const newItem = {
+            type: 'consumable',
+            id: itemData.id,
+            name: itemData.name,
+            description: itemData.desc || itemData.description,
+            quantity: itemData.quantity || 1,
+            price: Math.floor((itemData.price || 0) / 2),
+            rarity: itemData.rarity || 'Common',
+            healAmount: itemData.healAmount || 0,
+            manaAmount: itemData.manaAmount || 0,
+            stackable: true
+        };
+
+        const inv = stats.inventory;
+        const existing = inv.find(i => i.id === newItem.id || i.name === newItem.name);
+        if (existing) {
+            existing.quantity = (existing.quantity || 1) + newItem.quantity;
+        } else {
+            inv.push(newItem);
+        }
     }
 };

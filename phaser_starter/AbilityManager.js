@@ -24,6 +24,11 @@ class AbilityManager {
                 icon: 'ice_nova_effect', color: 0x00ffff, manaCost: 25, cooldown: 6000, damage: 40, aoe: true
             }
         };
+
+        this.preferredPotions = {
+            health: null, // e.g., 'health_potion' or 'greater_health_potion'
+            mana: null
+        };
     }
 
     init(scene) {
@@ -32,9 +37,14 @@ class AbilityManager {
 
         // Expose global hooks for legacy compatibility and input mapping
         window.useAbility = (index) => this.useAbility(index);
-        window.useItem = (index) => console.warn('useItem deprecated, use inventory system'); // Potion slots use direct logic now or specific item use
+        window.useItem = (index) => console.warn('useItem deprecated, use inventory system');
         // Note: The original code called window.useItem(index) for potions. 
         // We need to ensure we handle potion usage correctly.
+
+        // Disable context menu to allow right-click cycling
+        if (this.scene && this.scene.input && this.scene.input.mouse) {
+            this.scene.input.mouse.disableContextMenu();
+        }
     }
 
     /**
@@ -202,9 +212,16 @@ class AbilityManager {
 
         bg.on('pointerover', () => {
             bg.setStrokeStyle(2, 0xffffff);
+            const activePotion = this.getActivePotionData(type);
+            const displayDesc = activePotion ? activePotion.description : `Restores ${type === 'health' ? 'HP' : 'MP'}.`;
+            const displayName = activePotion ? activePotion.name : name;
+
             if (window.UIManager && window.UIManager.showTooltip) {
                 window.UIManager.showTooltip({
-                    type: 'consumable', name: name, description: `Restores ${type === 'health' ? 'HP' : 'MP'}. Key: ${key}`, quality: 'Common'
+                    type: 'consumable',
+                    name: displayName,
+                    description: `${displayDesc}\n(Right-Click to Switch)`,
+                    quality: 'Common'
                 }, x, y - 60, 'hotbar');
             }
         });
@@ -216,7 +233,15 @@ class AbilityManager {
 
         bg.on('pointerdown', (pointer, localX, localY, event) => {
             if (event && event.stopPropagation) event.stopPropagation();
-            this.usePotion(type);
+
+            if (pointer.rightButtonDown()) {
+                // Cycle Potion Type
+                this.cyclePotionType(type);
+            } else {
+                // Use Potion
+                this.usePotion(type);
+            }
+
             this.scene.tweens.add({ targets: bg, scale: 0.9, duration: 50, yoyo: true });
         });
 
@@ -247,35 +272,143 @@ class AbilityManager {
     }
 
     /**
-     * Update potion slot quantities from inventory
+     * Get the currently active potion data (for tooltip/icon)
+     */
+    getActivePotionData(type) {
+        if (!window.playerStats || !window.playerStats.inventory) return null;
+
+        // 1. Check preferred
+        const preferredId = this.preferredPotions[type];
+        if (preferredId) {
+            const item = window.playerStats.inventory.find(i => i.id === preferredId);
+            if (item && item.quantity > 0) return item; // Only return if quantity > 0
+        }
+
+        // 2. Fallback to any matching with quantity > 0
+        const backup = window.playerStats.inventory.find(item => {
+            if (item.type !== 'consumable' || item.quantity <= 0) return false;
+            if (type === 'health') return (item.name && item.name.toLowerCase().includes('health')) || (item.healAmount && !item.manaAmount);
+            if (type === 'mana') return (item.name && item.name.toLowerCase().includes('mana')) || item.manaAmount;
+            return false;
+        });
+        return backup;
+    }
+
+    /**
+     * Cycles to the next available potion of the given type
+     */
+    cyclePotionType(type) {
+        if (!window.playerStats || !window.playerStats.inventory) return;
+
+        // Find all unique potion IDs of this type that have quantity > 0
+        const availableIds = [];
+        window.playerStats.inventory.forEach(item => {
+            if (item.type !== 'consumable' || item.quantity <= 0) return;
+
+            // Runtime Fix for Legacy Items (Missing IDs)
+            if (!item.id) {
+                if (item.name === 'Health Potion') item.id = 'health_potion';
+                else if (item.name === 'Mana Potion') item.id = 'mana_potion';
+                else if (item.name === 'Greater Health Potion') item.id = 'greater_health_potion';
+                else if (item.name === 'Greater Mana Potion') item.id = 'greater_mana_potion';
+
+                if (item.id) console.log(`[AbilityManager] Fixed missing ID for ${item.name} -> ${item.id}`);
+            }
+
+            let isMatch = false;
+            if (type === 'health' && ((item.name && item.name.toLowerCase().includes('health')) || (item.healAmount && !item.manaAmount))) isMatch = true;
+            if (type === 'mana' && ((item.name && item.name.toLowerCase().includes('mana')) || item.manaAmount)) isMatch = true;
+
+            if (isMatch && item.id && !availableIds.includes(item.id)) {
+                availableIds.push(item.id);
+            }
+        });
+
+        if (availableIds.length === 0) {
+            if (window.addChatMessage) window.addChatMessage(`No ${type} potions to cycle to!`, 0xff6666);
+            return;
+        }
+
+        const currentId = this.preferredPotions[type];
+        let nextIndex = 0;
+
+        if (currentId) {
+            const currentIndex = availableIds.indexOf(currentId);
+            if (currentIndex !== -1) {
+                nextIndex = (currentIndex + 1) % availableIds.length;
+            }
+        }
+
+        this.preferredPotions[type] = availableIds[nextIndex];
+
+        if (window.playSound) window.playSound('ui_click');
+        if (window.addChatMessage) {
+            // Show name of selected potion
+            const selectedItem = window.playerStats.inventory.find(i => i.id === availableIds[nextIndex]);
+            if (selectedItem) window.addChatMessage(`Equipped: ${selectedItem.name}`, 0x88ff88);
+        }
+
+        this.updatePotionSlots();
+    }
+
+    /**
+     * Update potion slot quantities and icons from inventory
      */
     updatePotionSlots() {
         if (!this.abilityBar || !this.abilityBar.potionSlots || !window.playerStats) return;
 
-        let healthPotions = 0;
-        let manaPotions = 0;
+        ['health', 'mana'].forEach(type => {
+            const slot = this.abilityBar.potionSlots.find(s => s.type === type);
+            if (!slot) return;
 
-        window.playerStats.inventory.forEach(item => {
-            if (item.type === 'consumable') {
-                const qty = item.quantity || 1;
-                if (item.name && item.name.toLowerCase().includes('health')) healthPotions += qty;
-                else if (item.name && item.name.toLowerCase().includes('mana')) manaPotions += qty;
-                else if (item.healAmount && !item.manaAmount) healthPotions += qty;
-                else if (item.manaAmount) manaPotions += qty;
+            const activePotion = this.getActivePotionData(type);
+
+            if (activePotion) {
+                slot.quantityText.setText(`x${activePotion.quantity || 0}`);
+                slot.icon.setAlpha(1);
+
+                // Update Icon Texture if possible
+                // Assuming 'image' or specific sprite keys are consistent
+                // If not, we might stick with generic icons or use the item's spriteKey if loaded
+                // For now, let's stick to generic color tinting unless we have specific assets loaded
+                // But we can check if it's 'greater'
+
+                // Update Icon Visuals from Data Definition
+                let tint = 0xffffff;
+                let scale = 0.8;
+
+                if (window.ItemManager) {
+                    const def = window.ItemManager.getItemDef(activePotion.id);
+                    if (def) {
+                        if (def.uiTint !== undefined) tint = def.uiTint;
+                        if (def.uiScale !== undefined) scale = def.uiScale;
+                    }
+                } else {
+                    // Fallback if ItemManager not ready
+                    if (activePotion.name.includes('Greater')) {
+                        if (activePotion.name.includes('Health')) tint = 0xff0000;
+                        if (activePotion.name.includes('Mana')) tint = 0x0000ff;
+                        scale = 1.0;
+                    } else {
+                        if (activePotion.name.includes('Health')) tint = 0xff6666;
+                        if (activePotion.name.includes('Mana')) tint = 0x6666ff;
+                    }
+                }
+
+                slot.icon.setTint(tint);
+                slot.icon.setScale(scale);
+
+                // If preferred is null but we found a backup, set the backup as preferred
+                if (!this.preferredPotions[type]) {
+                    this.preferredPotions[type] = activePotion.id;
+                }
+            } else {
+                slot.quantityText.setText('x0');
+                slot.icon.setAlpha(0.3);
+                // If there are no active potions of this type, clear preferred
+                this.preferredPotions[type] = null;
             }
         });
-
-        const healthSlot = this.abilityBar.potionSlots.find(s => s.type === 'health');
-        const manaSlot = this.abilityBar.potionSlots.find(s => s.type === 'mana');
-
-        if (healthSlot) {
-            healthSlot.quantityText.setText(`x${healthPotions}`);
-            healthSlot.icon.setAlpha(healthPotions > 0 ? 1 : 0.3);
-        }
-        if (manaSlot) {
-            manaSlot.quantityText.setText(`x${manaPotions}`);
-            manaSlot.icon.setAlpha(manaPotions > 0 ? 1 : 0.3);
-        }
     }
 
     /**
@@ -358,23 +491,23 @@ class AbilityManager {
     }
 
     usePotion(type) {
-        // Find potion
+        // Find potion logic updated to respect preferred
+        const preferredId = this.preferredPotions[type];
         let potionIndex = -1;
-        for (let i = 0; i < window.playerStats.inventory.length; i++) {
-            const item = window.playerStats.inventory[i];
-            if (item.type !== 'consumable') continue;
 
-            if (type === 'health') {
-                if ((item.name && item.name.toLowerCase().includes('health')) || (item.healAmount && !item.manaAmount)) {
-                    potionIndex = i;
-                    break;
-                }
-            } else if (type === 'mana') {
-                if ((item.name && item.name.toLowerCase().includes('mana')) || item.manaAmount) {
-                    potionIndex = i;
-                    break;
-                }
-            }
+        if (preferredId) {
+            potionIndex = window.playerStats.inventory.findIndex(i => i.id === preferredId);
+        }
+
+        // Fallback checks
+        if (potionIndex === -1) {
+            // Try any matching
+            potionIndex = window.playerStats.inventory.findIndex(item => {
+                if (item.type !== 'consumable') return false;
+                if (type === 'health') return (item.name && item.name.toLowerCase().includes('health')) || (item.healAmount && !item.manaAmount);
+                if (type === 'mana') return (item.name && item.name.toLowerCase().includes('mana')) || item.manaAmount;
+                return false;
+            });
         }
 
         if (potionIndex === -1) {
@@ -392,6 +525,7 @@ class AbilityManager {
             potion.quantity--;
         } else {
             window.playerStats.inventory.splice(potionIndex, 1);
+            // If we ran out of preferred, clear it so next update picks backup (handled in updatePotionSlots)
         }
 
         this.updatePotionSlots();

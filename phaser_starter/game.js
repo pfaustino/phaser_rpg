@@ -1866,7 +1866,7 @@ function create() {
                 }
 
                 debugText.setText(
-                    `DEBUG HUD (v0.9.196)\n` +
+                    `DEBUG HUD (v0.9.216.0)\n` +
                     `Map: ${map} | Slot: ${slot}\n` +
                     `Inv: ${inv} | Gold: ${gold}\n` +
                     `Last Save: ${saveTime}\n` +
@@ -3199,7 +3199,20 @@ function checkBuildingInteraction() {
                 if (typeof addChatMessage === 'function') addChatMessage("The Guild Hall is closed for renovations.", 0xffff00);
                 interacted = true;
             } else if (b.type === 'temple') {
-                if (typeof addChatMessage === 'function') addChatMessage("The Temple doors are locked.", 0xffff00);
+                // Restoration of Temple Ruins Transition
+                debugLog(`🏰 Entering Temple Ruins from Town`);
+                if (typeof MapManager.transitionToMap === 'function') {
+                    MapManager.transitionToMap('dungeon', 1, 'temple_ruins');
+                } else {
+                    if (typeof addChatMessage === 'function') addChatMessage("The Temple doors are locked (MapManager Error).", 0xffff00);
+                }
+                interacted = true;
+            } else if (b.type === 'tower') {
+                // Restoration of Tower Dungeon Transition
+                debugLog(`🏰 Entering Tower Dungeon from Town`);
+                if (typeof MapManager.transitionToMap === 'function') {
+                    MapManager.transitionToMap('dungeon', 1, 'tower_dungeon');
+                }
                 interacted = true;
             }
 
@@ -7172,6 +7185,20 @@ function updateEquipmentInventoryItems() {
 
         const itemSprite = scene.add.sprite(x, y, spriteKey);
         itemSprite.setScrollFactor(0).setDepth(302).setScale(0.8);
+
+        // Visual Overrides (e.g. Potions)
+        const lookupId = item.id || (item.name === 'Health Potion' ? 'health_potion' :
+            item.name === 'Mana Potion' ? 'mana_potion' :
+                item.name === 'Greater Health Potion' ? 'greater_health_potion' :
+                    item.name === 'Greater Mana Potion' ? 'greater_mana_potion' : null);
+
+        if (window.ItemManager && lookupId) {
+            const def = window.ItemManager.getItemDef(lookupId);
+            if (def) {
+                if (def.uiTint !== undefined) itemSprite.setTint(def.uiTint);
+                if (def.uiScale !== undefined) itemSprite.setScale(def.uiScale);
+            }
+        }
 
         // Add quality border around the sprite
         const qualityColor = QUALITY_COLORS[item.quality] || QUALITY_COLORS['Common'];

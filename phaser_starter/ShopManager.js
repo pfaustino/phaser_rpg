@@ -334,6 +334,17 @@ window.ShopManager = {
                 itemSprite = scene.add.sprite(x - itemWidth / 2 + 30, itemY, finalSpriteKey)
                     .setScrollFactor(0).setDepth(40002).setScale(1.2);
 
+                // Potion Visuals
+                const lookupId = item.id || (item.name === 'Health Potion' ? 'health_potion' :
+                    item.name === 'Mana Potion' ? 'mana_potion' : null);
+
+                if (window.ItemManager && lookupId) {
+                    const def = window.ItemManager.getItemDef(lookupId);
+                    if (def && def.uiTint !== undefined) {
+                        itemSprite.setTint(def.uiTint);
+                    }
+                }
+
                 const customImageKeys = ['item_weapon', 'item_armor', 'item_helmet', 'item_amulet', 'item_boots', 'item_ring', 'item_consumable'];
                 if (!customImageKeys.includes(finalSpriteKey) || finalSpriteKey !== spriteKey) {
                     const qColor = QUALITY_COLORS[item.quality] || QUALITY_COLORS['Common'];
@@ -531,6 +542,20 @@ window.ShopManager = {
             let itemSprite;
             try {
                 itemSprite = scene.add.sprite(x, y, spriteKey).setScrollFactor(0).setDepth(40002).setScale(0.8);
+
+                // Potion Visuals
+                const lookupId = item.id || (item.name === 'Health Potion' ? 'health_potion' :
+                    item.name === 'Mana Potion' ? 'mana_potion' :
+                        item.name === 'Greater Health Potion' ? 'greater_health_potion' :
+                            item.name === 'Greater Mana Potion' ? 'greater_mana_potion' : null);
+
+                if (window.ItemManager && lookupId) {
+                    const def = window.ItemManager.getItemDef(lookupId);
+                    if (def) {
+                        if (def.uiTint !== undefined) itemSprite.setTint(def.uiTint);
+                        if (def.uiScale !== undefined) itemSprite.setScale(def.uiScale);
+                    }
+                }
             } catch (e) {
                 itemSprite = scene.add.rectangle(x, y, 32, 32, 0xff00ff).setScrollFactor(0).setDepth(40002);
             }

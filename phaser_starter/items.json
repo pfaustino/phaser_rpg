@@ -50,20 +50,54 @@
     },
     "consumables": {
         "health_potion": {
+            "id": "health_potion",
             "name": "Health Potion",
             "sprite": "assets/images/item_consumable.png",
             "spriteKey": "item_consumable",
             "stackable": true,
             "healAmount": 50,
-            "description": "Restores 50 HP"
+            "description": "Restores 50 HP",
+            "type": "consumable",
+            "uiTint": 16737894,
+            "uiScale": 0.8
         },
         "mana_potion": {
+            "id": "mana_potion",
             "name": "Mana Potion",
             "sprite": "assets/images/mana-potion.png",
             "spriteKey": "mana_potion",
             "stackable": true,
             "manaAmount": 30,
-            "description": "Restores 30 MP"
+            "description": "Restores 30 MP",
+            "type": "consumable",
+            "uiTint": 6711039,
+            "uiScale": 0.8
+        },
+        "greater_health_potion": {
+            "id": "greater_health_potion",
+            "name": "Greater Health Potion",
+            "sprite": "assets/images/item_consumable.png",
+            "spriteKey": "item_consumable",
+            "stackable": true,
+            "healAmount": 100,
+            "quality": "Uncommon",
+            "description": "Restores 100 HP",
+            "type": "consumable",
+            "uiTint": 16711680,
+            "uiScale": 1.0
+        },
+        "greater_mana_potion": {
+            "id": "greater_mana_potion",
+            "name": "Greater Mana Potion",
+            "sprite": "assets/images/mana-potion.png",
+            "spriteKey": "mana_potion",
+            "stackable": true,
+            "manaAmount": 60,
+            "quality": "Uncommon",
+            "description": "Restores 60 MP",
+            "type": "consumable",
+            "uiTint": 255,
+            "uiScale": 1.0
         },
         "stew": {
             "name": "Stew",

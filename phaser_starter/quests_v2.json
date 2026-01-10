@@ -1881,6 +1881,1166 @@
                 "xp": 10000,
                 "gold": 12500
             }
+        },
+        "side_kill_010": {
+            "id": "side_kill_010",
+            "title": "Legendary Hunter II",
+            "description": "Vanquish 250 monsters.",
+            "giver": "Captain Thorne",
+            "requires": "side_kill_009",
+            "objectives": [
+                {
+                    "id": "kill_obj_10",
+                    "type": "kill",
+                    "monsterId": "any",
+                    "label": "Defeat Monsters",
+                    "target": 250
+                }
+            ],
+            "rewards": {
+                "xp": 850,
+                "gold": 425
+            }
+        },
+        "side_kill_011": {
+            "id": "side_kill_011",
+            "title": "Legendary Hunter III",
+            "description": "Vanquish 300 monsters.",
+            "giver": "Captain Thorne",
+            "requires": "side_kill_010",
+            "objectives": [
+                {
+                    "id": "kill_obj_11",
+                    "type": "kill",
+                    "monsterId": "any",
+                    "label": "Defeat Monsters",
+                    "target": 300
+                }
+            ],
+            "rewards": {
+                "xp": 950,
+                "gold": 475
+            }
+        },
+        "side_kill_012": {
+            "id": "side_kill_012",
+            "title": "Legendary Hunter IV",
+            "description": "Vanquish 350 monsters.",
+            "giver": "Captain Thorne",
+            "requires": "side_kill_011",
+            "objectives": [
+                {
+                    "id": "kill_obj_12",
+                    "type": "kill",
+                    "monsterId": "any",
+                    "label": "Defeat Monsters",
+                    "target": 350
+                }
+            ],
+            "rewards": {
+                "xp": 1050,
+                "gold": 525
+            }
+        },
+        "side_kill_013": {
+            "id": "side_kill_013",
+            "title": "Legendary Hunter V",
+            "description": "Vanquish 400 monsters.",
+            "giver": "Captain Thorne",
+            "requires": "side_kill_012",
+            "objectives": [
+                {
+                    "id": "kill_obj_13",
+                    "type": "kill",
+                    "monsterId": "any",
+                    "label": "Defeat Monsters",
+                    "target": 400
+                }
+            ],
+            "rewards": {
+                "xp": 1150,
+                "gold": 575
+            }
+        },
+        "side_kill_014": {
+            "id": "side_kill_014",
+            "title": "Legendary Hunter VI",
+            "description": "Vanquish 450 monsters.",
+            "giver": "Captain Thorne",
+            "requires": "side_kill_013",
+            "objectives": [
+                {
+                    "id": "kill_obj_14",
+                    "type": "kill",
+                    "monsterId": "any",
+                    "label": "Defeat Monsters",
+                    "target": 450
+                }
+            ],
+            "rewards": {
+                "xp": 1250,
+                "gold": 625
+            }
+        },
+        "side_kill_015": {
+            "id": "side_kill_015",
+            "title": "Legendary Hunter VII",
+            "description": "Vanquish 500 monsters.",
+            "giver": "Captain Thorne",
+            "requires": "side_kill_014",
+            "objectives": [
+                {
+                    "id": "kill_obj_15",
+                    "type": "kill",
+                    "monsterId": "any",
+                    "label": "Defeat Monsters",
+                    "target": 500
+                }
+            ],
+            "rewards": {
+                "xp": 1350,
+                "gold": 675
+            }
+        },
+        "side_kill_016": {
+            "id": "side_kill_016",
+            "title": "Legendary Hunter VIII",
+            "description": "Vanquish 550 monsters.",
+            "giver": "Captain Thorne",
+            "requires": "side_kill_015",
+            "objectives": [
+                {
+                    "id": "kill_obj_16",
+                    "type": "kill",
+                    "monsterId": "any",
+                    "label": "Defeat Monsters",
+                    "target": 550
+                }
+            ],
+            "rewards": {
+                "xp": 1450,
+                "gold": 725
+            }
+        },
+        "side_kill_017": {
+            "id": "side_kill_017",
+            "title": "Legendary Hunter IX",
+            "description": "Vanquish 600 monsters.",
+            "giver": "Captain Thorne",
+            "requires": "side_kill_016",
+            "objectives": [
+                {
+                    "id": "kill_obj_17",
+                    "type": "kill",
+                    "monsterId": "any",
+                    "label": "Defeat Monsters",
+                    "target": 600
+                }
+            ],
+            "rewards": {
+                "xp": 1550,
+                "gold": 775
+            }
+        },
+        "side_kill_018": {
+            "id": "side_kill_018",
+            "title": "Legendary Hunter X",
+            "description": "Vanquish 650 monsters.",
+            "giver": "Captain Thorne",
+            "requires": "side_kill_017",
+            "objectives": [
+                {
+                    "id": "kill_obj_18",
+                    "type": "kill",
+                    "monsterId": "any",
+                    "label": "Defeat Monsters",
+                    "target": 650
+                }
+            ],
+            "rewards": {
+                "xp": 1650,
+                "gold": 825
+            }
+        },
+        "side_kill_019": {
+            "id": "side_kill_019",
+            "title": "Legendary Hunter XI",
+            "description": "Vanquish 700 monsters.",
+            "giver": "Captain Thorne",
+            "requires": "side_kill_018",
+            "objectives": [
+                {
+                    "id": "kill_obj_19",
+                    "type": "kill",
+                    "monsterId": "any",
+                    "label": "Defeat Monsters",
+                    "target": 700
+                }
+            ],
+            "rewards": {
+                "xp": 1750,
+                "gold": 875
+            }
+        },
+        "side_collect_010": {
+            "id": "side_collect_010",
+            "title": "Hoarder Supreme II",
+            "description": "Gather 200 items.",
+            "giver": "Merchant Lysa",
+            "requires": "side_collect_009",
+            "objectives": [
+                {
+                    "id": "collect_obj_10",
+                    "type": "collect",
+                    "itemId": "any",
+                    "label": "Collect Items",
+                    "target": 200
+                }
+            ],
+            "rewards": {
+                "xp": 780,
+                "gold": 390
+            }
+        },
+        "side_collect_011": {
+            "id": "side_collect_011",
+            "title": "Hoarder Supreme III",
+            "description": "Gather 220 items.",
+            "giver": "Merchant Lysa",
+            "requires": "side_collect_010",
+            "objectives": [
+                {
+                    "id": "collect_obj_11",
+                    "type": "collect",
+                    "itemId": "any",
+                    "label": "Collect Items",
+                    "target": 220
+                }
+            ],
+            "rewards": {
+                "xp": 860,
+                "gold": 430
+            }
+        },
+        "side_collect_012": {
+            "id": "side_collect_012",
+            "title": "Hoarder Supreme IV",
+            "description": "Gather 240 items.",
+            "giver": "Merchant Lysa",
+            "requires": "side_collect_011",
+            "objectives": [
+                {
+                    "id": "collect_obj_12",
+                    "type": "collect",
+                    "itemId": "any",
+                    "label": "Collect Items",
+                    "target": 240
+                }
+            ],
+            "rewards": {
+                "xp": 940,
+                "gold": 470
+            }
+        },
+        "side_collect_013": {
+            "id": "side_collect_013",
+            "title": "Hoarder Supreme V",
+            "description": "Gather 260 items.",
+            "giver": "Merchant Lysa",
+            "requires": "side_collect_012",
+            "objectives": [
+                {
+                    "id": "collect_obj_13",
+                    "type": "collect",
+                    "itemId": "any",
+                    "label": "Collect Items",
+                    "target": 260
+                }
+            ],
+            "rewards": {
+                "xp": 1020,
+                "gold": 510
+            }
+        },
+        "side_collect_014": {
+            "id": "side_collect_014",
+            "title": "Hoarder Supreme VI",
+            "description": "Gather 280 items.",
+            "giver": "Merchant Lysa",
+            "requires": "side_collect_013",
+            "objectives": [
+                {
+                    "id": "collect_obj_14",
+                    "type": "collect",
+                    "itemId": "any",
+                    "label": "Collect Items",
+                    "target": 280
+                }
+            ],
+            "rewards": {
+                "xp": 1100,
+                "gold": 550
+            }
+        },
+        "side_collect_015": {
+            "id": "side_collect_015",
+            "title": "Hoarder Supreme VII",
+            "description": "Gather 300 items.",
+            "giver": "Merchant Lysa",
+            "requires": "side_collect_014",
+            "objectives": [
+                {
+                    "id": "collect_obj_15",
+                    "type": "collect",
+                    "itemId": "any",
+                    "label": "Collect Items",
+                    "target": 300
+                }
+            ],
+            "rewards": {
+                "xp": 1180,
+                "gold": 590
+            }
+        },
+        "side_collect_016": {
+            "id": "side_collect_016",
+            "title": "Hoarder Supreme VIII",
+            "description": "Gather 320 items.",
+            "giver": "Merchant Lysa",
+            "requires": "side_collect_015",
+            "objectives": [
+                {
+                    "id": "collect_obj_16",
+                    "type": "collect",
+                    "itemId": "any",
+                    "label": "Collect Items",
+                    "target": 320
+                }
+            ],
+            "rewards": {
+                "xp": 1260,
+                "gold": 630
+            }
+        },
+        "side_collect_017": {
+            "id": "side_collect_017",
+            "title": "Hoarder Supreme IX",
+            "description": "Gather 340 items.",
+            "giver": "Merchant Lysa",
+            "requires": "side_collect_016",
+            "objectives": [
+                {
+                    "id": "collect_obj_17",
+                    "type": "collect",
+                    "itemId": "any",
+                    "label": "Collect Items",
+                    "target": 340
+                }
+            ],
+            "rewards": {
+                "xp": 1340,
+                "gold": 670
+            }
+        },
+        "side_collect_018": {
+            "id": "side_collect_018",
+            "title": "Hoarder Supreme X",
+            "description": "Gather 360 items.",
+            "giver": "Merchant Lysa",
+            "requires": "side_collect_017",
+            "objectives": [
+                {
+                    "id": "collect_obj_18",
+                    "type": "collect",
+                    "itemId": "any",
+                    "label": "Collect Items",
+                    "target": 360
+                }
+            ],
+            "rewards": {
+                "xp": 1420,
+                "gold": 710
+            }
+        },
+        "side_collect_019": {
+            "id": "side_collect_019",
+            "title": "Hoarder Supreme XI",
+            "description": "Gather 380 items.",
+            "giver": "Merchant Lysa",
+            "requires": "side_collect_018",
+            "objectives": [
+                {
+                    "id": "collect_obj_19",
+                    "type": "collect",
+                    "itemId": "any",
+                    "label": "Collect Items",
+                    "target": 380
+                }
+            ],
+            "rewards": {
+                "xp": 1500,
+                "gold": 750
+            }
+        },
+        "side_gold_009": {
+            "id": "side_gold_009",
+            "title": "Midas Touch II",
+            "description": "Amass 4000 gold pieces.",
+            "giver": "Merchant Lysa",
+            "requires": "side_gold_008",
+            "objectives": [
+                {
+                    "id": "gold_obj_9",
+                    "type": "gold",
+                    "label": "Earn Gold",
+                    "target": 4000
+                }
+            ],
+            "rewards": {
+                "xp": 750,
+                "gold": 375
+            }
+        },
+        "side_gold_010": {
+            "id": "side_gold_010",
+            "title": "Midas Touch III",
+            "description": "Amass 4500 gold pieces.",
+            "giver": "Merchant Lysa",
+            "requires": "side_gold_009",
+            "objectives": [
+                {
+                    "id": "gold_obj_10",
+                    "type": "gold",
+                    "label": "Earn Gold",
+                    "target": 4500
+                }
+            ],
+            "rewards": {
+                "xp": 850,
+                "gold": 425
+            }
+        },
+        "side_gold_011": {
+            "id": "side_gold_011",
+            "title": "Midas Touch IV",
+            "description": "Amass 5000 gold pieces.",
+            "giver": "Merchant Lysa",
+            "requires": "side_gold_010",
+            "objectives": [
+                {
+                    "id": "gold_obj_11",
+                    "type": "gold",
+                    "label": "Earn Gold",
+                    "target": 5000
+                }
+            ],
+            "rewards": {
+                "xp": 950,
+                "gold": 475
+            }
+        },
+        "side_gold_012": {
+            "id": "side_gold_012",
+            "title": "Midas Touch V",
+            "description": "Amass 5500 gold pieces.",
+            "giver": "Merchant Lysa",
+            "requires": "side_gold_011",
+            "objectives": [
+                {
+                    "id": "gold_obj_12",
+                    "type": "gold",
+                    "label": "Earn Gold",
+                    "target": 5500
+                }
+            ],
+            "rewards": {
+                "xp": 1050,
+                "gold": 525
+            }
+        },
+        "side_gold_013": {
+            "id": "side_gold_013",
+            "title": "Midas Touch VI",
+            "description": "Amass 6000 gold pieces.",
+            "giver": "Merchant Lysa",
+            "requires": "side_gold_012",
+            "objectives": [
+                {
+                    "id": "gold_obj_13",
+                    "type": "gold",
+                    "label": "Earn Gold",
+                    "target": 6000
+                }
+            ],
+            "rewards": {
+                "xp": 1150,
+                "gold": 575
+            }
+        },
+        "side_gold_014": {
+            "id": "side_gold_014",
+            "title": "Midas Touch VII",
+            "description": "Amass 6500 gold pieces.",
+            "giver": "Merchant Lysa",
+            "requires": "side_gold_013",
+            "objectives": [
+                {
+                    "id": "gold_obj_14",
+                    "type": "gold",
+                    "label": "Earn Gold",
+                    "target": 6500
+                }
+            ],
+            "rewards": {
+                "xp": 1250,
+                "gold": 625
+            }
+        },
+        "side_gold_015": {
+            "id": "side_gold_015",
+            "title": "Midas Touch VIII",
+            "description": "Amass 7000 gold pieces.",
+            "giver": "Merchant Lysa",
+            "requires": "side_gold_014",
+            "objectives": [
+                {
+                    "id": "gold_obj_15",
+                    "type": "gold",
+                    "label": "Earn Gold",
+                    "target": 7000
+                }
+            ],
+            "rewards": {
+                "xp": 1350,
+                "gold": 675
+            }
+        },
+        "side_gold_016": {
+            "id": "side_gold_016",
+            "title": "Midas Touch IX",
+            "description": "Amass 7500 gold pieces.",
+            "giver": "Merchant Lysa",
+            "requires": "side_gold_015",
+            "objectives": [
+                {
+                    "id": "gold_obj_16",
+                    "type": "gold",
+                    "label": "Earn Gold",
+                    "target": 7500
+                }
+            ],
+            "rewards": {
+                "xp": 1450,
+                "gold": 725
+            }
+        },
+        "side_gold_017": {
+            "id": "side_gold_017",
+            "title": "Midas Touch X",
+            "description": "Amass 8000 gold pieces.",
+            "giver": "Merchant Lysa",
+            "requires": "side_gold_016",
+            "objectives": [
+                {
+                    "id": "gold_obj_17",
+                    "type": "gold",
+                    "label": "Earn Gold",
+                    "target": 8000
+                }
+            ],
+            "rewards": {
+                "xp": 1550,
+                "gold": 775
+            }
+        },
+        "side_gold_018": {
+            "id": "side_gold_018",
+            "title": "Midas Touch XI",
+            "description": "Amass 8500 gold pieces.",
+            "giver": "Merchant Lysa",
+            "requires": "side_gold_017",
+            "objectives": [
+                {
+                    "id": "gold_obj_18",
+                    "type": "gold",
+                    "label": "Earn Gold",
+                    "target": 8500
+                }
+            ],
+            "rewards": {
+                "xp": 1650,
+                "gold": 825
+            }
+        },
+        "side_survive_009": {
+            "id": "side_survive_009",
+            "title": "Undying Legend II",
+            "description": "Survive for 65 minutes.",
+            "giver": "Captain Kael",
+            "requires": "side_survive_008",
+            "objectives": [
+                {
+                    "id": "survive_obj_9",
+                    "type": "survive",
+                    "label": "Survive",
+                    "target": 3900
+                }
+            ],
+            "rewards": {
+                "xp": 900,
+                "gold": 450
+            }
+        },
+        "side_survive_010": {
+            "id": "side_survive_010",
+            "title": "Undying Legend III",
+            "description": "Survive for 70 minutes.",
+            "giver": "Captain Kael",
+            "requires": "side_survive_009",
+            "objectives": [
+                {
+                    "id": "survive_obj_10",
+                    "type": "survive",
+                    "label": "Survive",
+                    "target": 4200
+                }
+            ],
+            "rewards": {
+                "xp": 1050,
+                "gold": 525
+            }
+        },
+        "side_survive_011": {
+            "id": "side_survive_011",
+            "title": "Undying Legend IV",
+            "description": "Survive for 75 minutes.",
+            "giver": "Captain Kael",
+            "requires": "side_survive_010",
+            "objectives": [
+                {
+                    "id": "survive_obj_11",
+                    "type": "survive",
+                    "label": "Survive",
+                    "target": 4500
+                }
+            ],
+            "rewards": {
+                "xp": 1200,
+                "gold": 600
+            }
+        },
+        "side_survive_012": {
+            "id": "side_survive_012",
+            "title": "Undying Legend V",
+            "description": "Survive for 80 minutes.",
+            "giver": "Captain Kael",
+            "requires": "side_survive_011",
+            "objectives": [
+                {
+                    "id": "survive_obj_12",
+                    "type": "survive",
+                    "label": "Survive",
+                    "target": 4800
+                }
+            ],
+            "rewards": {
+                "xp": 1350,
+                "gold": 675
+            }
+        },
+        "side_survive_013": {
+            "id": "side_survive_013",
+            "title": "Undying Legend VI",
+            "description": "Survive for 85 minutes.",
+            "giver": "Captain Kael",
+            "requires": "side_survive_012",
+            "objectives": [
+                {
+                    "id": "survive_obj_13",
+                    "type": "survive",
+                    "label": "Survive",
+                    "target": 5100
+                }
+            ],
+            "rewards": {
+                "xp": 1500,
+                "gold": 750
+            }
+        },
+        "side_survive_014": {
+            "id": "side_survive_014",
+            "title": "Undying Legend VII",
+            "description": "Survive for 90 minutes.",
+            "giver": "Captain Kael",
+            "requires": "side_survive_013",
+            "objectives": [
+                {
+                    "id": "survive_obj_14",
+                    "type": "survive",
+                    "label": "Survive",
+                    "target": 5400
+                }
+            ],
+            "rewards": {
+                "xp": 1650,
+                "gold": 825
+            }
+        },
+        "side_survive_015": {
+            "id": "side_survive_015",
+            "title": "Undying Legend VIII",
+            "description": "Survive for 95 minutes.",
+            "giver": "Captain Kael",
+            "requires": "side_survive_014",
+            "objectives": [
+                {
+                    "id": "survive_obj_15",
+                    "type": "survive",
+                    "label": "Survive",
+                    "target": 5700
+                }
+            ],
+            "rewards": {
+                "xp": 1800,
+                "gold": 900
+            }
+        },
+        "side_survive_016": {
+            "id": "side_survive_016",
+            "title": "Undying Legend IX",
+            "description": "Survive for 100 minutes.",
+            "giver": "Captain Kael",
+            "requires": "side_survive_015",
+            "objectives": [
+                {
+                    "id": "survive_obj_16",
+                    "type": "survive",
+                    "label": "Survive",
+                    "target": 6000
+                }
+            ],
+            "rewards": {
+                "xp": 1950,
+                "gold": 975
+            }
+        },
+        "side_survive_017": {
+            "id": "side_survive_017",
+            "title": "Undying Legend X",
+            "description": "Survive for 105 minutes.",
+            "giver": "Captain Kael",
+            "requires": "side_survive_016",
+            "objectives": [
+                {
+                    "id": "survive_obj_17",
+                    "type": "survive",
+                    "label": "Survive",
+                    "target": 6300
+                }
+            ],
+            "rewards": {
+                "xp": 2100,
+                "gold": 1050
+            }
+        },
+        "side_survive_018": {
+            "id": "side_survive_018",
+            "title": "Undying Legend XI",
+            "description": "Survive for 110 minutes.",
+            "giver": "Captain Kael",
+            "requires": "side_survive_017",
+            "objectives": [
+                {
+                    "id": "survive_obj_18",
+                    "type": "survive",
+                    "label": "Survive",
+                    "target": 6600
+                }
+            ],
+            "rewards": {
+                "xp": 2250,
+                "gold": 1125
+            }
+        },
+        "side_explore_004": {
+            "id": "side_explore_004",
+            "giver": "Elder Malik",
+            "title": "World Traveler II",
+            "description": "Journey across 2500 tiles of terrain.",
+            "requires": "side_explore_003",
+            "objectives": [
+                {
+                    "id": "explore_obj_4",
+                    "type": "explore",
+                    "label": "Travel Tiles",
+                    "target": 2500
+                }
+            ],
+            "rewards": {
+                "xp": 350,
+                "gold": 175
+            }
+        },
+        "side_explore_005": {
+            "id": "side_explore_005",
+            "giver": "Elder Malik",
+            "title": "World Traveler III",
+            "description": "Journey across 3000 tiles of terrain.",
+            "requires": "side_explore_004",
+            "objectives": [
+                {
+                    "id": "explore_obj_5",
+                    "type": "explore",
+                    "label": "Travel Tiles",
+                    "target": 3000
+                }
+            ],
+            "rewards": {
+                "xp": 450,
+                "gold": 225
+            }
+        },
+        "side_explore_006": {
+            "id": "side_explore_006",
+            "giver": "Elder Malik",
+            "title": "World Traveler IV",
+            "description": "Journey across 3500 tiles of terrain.",
+            "requires": "side_explore_005",
+            "objectives": [
+                {
+                    "id": "explore_obj_6",
+                    "type": "explore",
+                    "label": "Travel Tiles",
+                    "target": 3500
+                }
+            ],
+            "rewards": {
+                "xp": 550,
+                "gold": 275
+            }
+        },
+        "side_explore_007": {
+            "id": "side_explore_007",
+            "giver": "Elder Malik",
+            "title": "World Traveler V",
+            "description": "Journey across 4000 tiles of terrain.",
+            "requires": "side_explore_006",
+            "objectives": [
+                {
+                    "id": "explore_obj_7",
+                    "type": "explore",
+                    "label": "Travel Tiles",
+                    "target": 4000
+                }
+            ],
+            "rewards": {
+                "xp": 650,
+                "gold": 325
+            }
+        },
+        "side_explore_008": {
+            "id": "side_explore_008",
+            "giver": "Elder Malik",
+            "title": "World Traveler VI",
+            "description": "Journey across 4500 tiles of terrain.",
+            "requires": "side_explore_007",
+            "objectives": [
+                {
+                    "id": "explore_obj_8",
+                    "type": "explore",
+                    "label": "Travel Tiles",
+                    "target": 4500
+                }
+            ],
+            "rewards": {
+                "xp": 750,
+                "gold": 375
+            }
+        },
+        "side_explore_009": {
+            "id": "side_explore_009",
+            "giver": "Elder Malik",
+            "title": "World Traveler VII",
+            "description": "Journey across 5000 tiles of terrain.",
+            "requires": "side_explore_008",
+            "objectives": [
+                {
+                    "id": "explore_obj_9",
+                    "type": "explore",
+                    "label": "Travel Tiles",
+                    "target": 5000
+                }
+            ],
+            "rewards": {
+                "xp": 850,
+                "gold": 425
+            }
+        },
+        "side_explore_010": {
+            "id": "side_explore_010",
+            "giver": "Elder Malik",
+            "title": "World Traveler VIII",
+            "description": "Journey across 5500 tiles of terrain.",
+            "requires": "side_explore_009",
+            "objectives": [
+                {
+                    "id": "explore_obj_10",
+                    "type": "explore",
+                    "label": "Travel Tiles",
+                    "target": 5500
+                }
+            ],
+            "rewards": {
+                "xp": 950,
+                "gold": 475
+            }
+        },
+        "side_explore_011": {
+            "id": "side_explore_011",
+            "giver": "Elder Malik",
+            "title": "World Traveler IX",
+            "description": "Journey across 6000 tiles of terrain.",
+            "requires": "side_explore_010",
+            "objectives": [
+                {
+                    "id": "explore_obj_11",
+                    "type": "explore",
+                    "label": "Travel Tiles",
+                    "target": 6000
+                }
+            ],
+            "rewards": {
+                "xp": 1050,
+                "gold": 525
+            }
+        },
+        "side_explore_012": {
+            "id": "side_explore_012",
+            "giver": "Elder Malik",
+            "title": "World Traveler X",
+            "description": "Journey across 6500 tiles of terrain.",
+            "requires": "side_explore_011",
+            "objectives": [
+                {
+                    "id": "explore_obj_12",
+                    "type": "explore",
+                    "label": "Travel Tiles",
+                    "target": 6500
+                }
+            ],
+            "rewards": {
+                "xp": 1150,
+                "gold": 575
+            }
+        },
+        "side_explore_013": {
+            "id": "side_explore_013",
+            "giver": "Elder Malik",
+            "title": "World Traveler XI",
+            "description": "Journey across 7000 tiles of terrain.",
+            "requires": "side_explore_012",
+            "objectives": [
+                {
+                    "id": "explore_obj_13",
+                    "type": "explore",
+                    "label": "Travel Tiles",
+                    "target": 7000
+                }
+            ],
+            "rewards": {
+                "xp": 1250,
+                "gold": 625
+            }
+        },
+        "side_level_008": {
+            "id": "side_level_008",
+            "title": "Godlike II",
+            "description": "Reach level 30. Few mortals ever achieve this power.",
+            "giver": "Mage Elara",
+            "requires": "side_level_007",
+            "objectives": [
+                {
+                    "id": "level_obj_8",
+                    "type": "level",
+                    "label": "Reach Level 25",
+                    "target": 30
+                }
+            ],
+            "rewards": {
+                "xp": 15000,
+                "gold": 15000
+            }
+        },
+        "side_level_009": {
+            "id": "side_level_009",
+            "title": "Godlike III",
+            "description": "Reach level 35. Few mortals ever achieve this power.",
+            "giver": "Mage Elara",
+            "requires": "side_level_008",
+            "objectives": [
+                {
+                    "id": "level_obj_9",
+                    "type": "level",
+                    "label": "Reach Level 25",
+                    "target": 35
+                }
+            ],
+            "rewards": {
+                "xp": 20000,
+                "gold": 17500
+            }
+        },
+        "side_level_010": {
+            "id": "side_level_010",
+            "title": "Godlike IV",
+            "description": "Reach level 40. Few mortals ever achieve this power.",
+            "giver": "Mage Elara",
+            "requires": "side_level_009",
+            "objectives": [
+                {
+                    "id": "level_obj_10",
+                    "type": "level",
+                    "label": "Reach Level 25",
+                    "target": 40
+                }
+            ],
+            "rewards": {
+                "xp": 25000,
+                "gold": 20000
+            }
+        },
+        "side_level_011": {
+            "id": "side_level_011",
+            "title": "Godlike V",
+            "description": "Reach level 45. Few mortals ever achieve this power.",
+            "giver": "Mage Elara",
+            "requires": "side_level_010",
+            "objectives": [
+                {
+                    "id": "level_obj_11",
+                    "type": "level",
+                    "label": "Reach Level 25",
+                    "target": 45
+                }
+            ],
+            "rewards": {
+                "xp": 30000,
+                "gold": 22500
+            }
+        },
+        "side_level_012": {
+            "id": "side_level_012",
+            "title": "Godlike VI",
+            "description": "Reach level 50. Few mortals ever achieve this power.",
+            "giver": "Mage Elara",
+            "requires": "side_level_011",
+            "objectives": [
+                {
+                    "id": "level_obj_12",
+                    "type": "level",
+                    "label": "Reach Level 25",
+                    "target": 50
+                }
+            ],
+            "rewards": {
+                "xp": 35000,
+                "gold": 25000
+            }
+        },
+        "side_level_013": {
+            "id": "side_level_013",
+            "title": "Godlike VII",
+            "description": "Reach level 55. Few mortals ever achieve this power.",
+            "giver": "Mage Elara",
+            "requires": "side_level_012",
+            "objectives": [
+                {
+                    "id": "level_obj_13",
+                    "type": "level",
+                    "label": "Reach Level 25",
+                    "target": 55
+                }
+            ],
+            "rewards": {
+                "xp": 40000,
+                "gold": 27500
+            }
+        },
+        "side_level_014": {
+            "id": "side_level_014",
+            "title": "Godlike VIII",
+            "description": "Reach level 60. Few mortals ever achieve this power.",
+            "giver": "Mage Elara",
+            "requires": "side_level_013",
+            "objectives": [
+                {
+                    "id": "level_obj_14",
+                    "type": "level",
+                    "label": "Reach Level 25",
+                    "target": 60
+                }
+            ],
+            "rewards": {
+                "xp": 45000,
+                "gold": 30000
+            }
+        },
+        "side_level_015": {
+            "id": "side_level_015",
+            "title": "Godlike IX",
+            "description": "Reach level 65. Few mortals ever achieve this power.",
+            "giver": "Mage Elara",
+            "requires": "side_level_014",
+            "objectives": [
+                {
+                    "id": "level_obj_15",
+                    "type": "level",
+                    "label": "Reach Level 25",
+                    "target": 65
+                }
+            ],
+            "rewards": {
+                "xp": 50000,
+                "gold": 32500
+            }
+        },
+        "side_level_016": {
+            "id": "side_level_016",
+            "title": "Godlike X",
+            "description": "Reach level 70. Few mortals ever achieve this power.",
+            "giver": "Mage Elara",
+            "requires": "side_level_015",
+            "objectives": [
+                {
+                    "id": "level_obj_16",
+                    "type": "level",
+                    "label": "Reach Level 25",
+                    "target": 70
+                }
+            ],
+            "rewards": {
+                "xp": 55000,
+                "gold": 35000
+            }
+        },
+        "side_level_017": {
+            "id": "side_level_017",
+            "title": "Godlike XI",
+            "description": "Reach level 75. Few mortals ever achieve this power.",
+            "giver": "Mage Elara",
+            "requires": "side_level_016",
+            "objectives": [
+                {
+                    "id": "level_obj_17",
+                    "type": "level",
+                    "label": "Reach Level 25",
+                    "target": 75
+                }
+            ],
+            "rewards": {
+                "xp": 60000,
+                "gold": 37500
+            }
         }
     }
 }

@@ -137,13 +137,43 @@ window.ForgeUI = {
             elements: []
         };
 
-        // Close Button
-        const closeBtn = scene.add.text(centerX + panelWidth / 2 - 20, centerY - panelHeight / 2 + 20, 'X', {
-            fontSize: '24px', fill: '#ff4444', fontStyle: 'bold'
-        }).setOrigin(0.5).setScrollFactor(0).setDepth(1002).setInteractive({ useHandCursor: true });
+        // Close Instruction Text
+        const closeText = scene.add.text(centerX + panelWidth / 2 - 20, centerY - panelHeight / 2 + 20, 'Press ESC to Close', {
+            fontSize: '14px',
+            fill: '#aaaaaa'
+        }).setScrollFactor(0).setDepth(1001).setOrigin(1, 0);
 
-        closeBtn.on('pointerdown', () => this.close());
-        this.panel.elements.push(closeBtn);
+        // Close Button (X)
+        const closeBtnSize = 30;
+        const closeBtnX = centerX + panelWidth / 2 - 20;
+        const closeBtnY = centerY - panelHeight / 2 + 20;
+
+        // Adjust closeText position
+        closeText.setPosition(closeBtnX - 40, closeBtnY + 8);
+
+        const closeBtnBg = scene.add.rectangle(closeBtnX, closeBtnY + 8, closeBtnSize, closeBtnSize, 0xcc0000)
+            .setScrollFactor(0).setDepth(1001).setInteractive({ useHandCursor: true })
+            .setStrokeStyle(1, 0xffffff);
+
+        const closeBtnSymbol = scene.add.text(closeBtnX, closeBtnY + 8, 'X', {
+            fontSize: '20px',
+            fill: '#ffffff',
+            fontStyle: 'bold'
+        }).setScrollFactor(0).setDepth(1002).setOrigin(0.5);
+
+        const onCloseClick = () => {
+            this.close();
+            if (typeof playSound === 'function') playSound('ui_click');
+        };
+
+        closeBtnBg.on('pointerdown', onCloseClick);
+        closeBtnSymbol.on('pointerdown', onCloseClick);
+
+        // Hover effects
+        closeBtnBg.on('pointerover', () => closeBtnBg.setFillStyle(0xff0000));
+        closeBtnBg.on('pointerout', () => closeBtnBg.setFillStyle(0xcc0000));
+
+        this.panel.elements.push(closeText, closeBtnBg, closeBtnSymbol);
 
         // Populate List
         this.populateInventoryList(scene, listX, listY, listWidth, listHeight);

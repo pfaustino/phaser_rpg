@@ -53,6 +53,9 @@ window.UIManager = {
             this.shopVisible ||
             this.buildingPanelVisible ||
             (typeof window.buildingPanelVisible !== 'undefined' && window.buildingPanelVisible) ||
+            (window.TavernUI && window.TavernUI.visible) ||
+            (window.ForgeUI && window.ForgeUI.visible) ||
+            (window.InnUI && window.InnUI.visible) ||
             this.assetsVisible ||
             this.grassDebugVisible ||
             (window.questCompletedModal && (window.questCompletedModal.visible || window.questCompletedModal.closeBtn)) ||
@@ -86,14 +89,21 @@ window.UIManager = {
         }
 
         // Handle Building UIs
+        // Handle Building UIs (Explicitly Check Managers First)
+        if (window.TavernUI && window.TavernUI.visible) {
+            window.TavernUI.close();
+        }
+        if (window.InnUI && window.InnUI.visible) {
+            window.InnUI.close();
+        }
+        if (window.ForgeUI && window.ForgeUI.visible) {
+            window.ForgeUI.close();
+        }
+
+        // Generic fallback
         if (typeof window.buildingPanelVisible !== 'undefined' && window.buildingPanelVisible) {
             if (typeof window.closeBuildingUI === 'function') {
                 window.closeBuildingUI();
-            } else {
-                // Manual fallback for specific buildings
-                if (window.TavernUI && window.TavernUI.visible) window.TavernUI.close();
-                if (window.InnUI && window.InnUI.visible) window.InnUI.close();
-                if (window.ForgeUI && window.ForgeUI.visible) window.ForgeUI.close();
             }
             window.buildingPanelVisible = false;
             this.buildingPanelVisible = false;
@@ -105,10 +115,11 @@ window.UIManager = {
     // ============================================
 
     toggleSettings: function () {
-        // If settings is already open, close it (handled by closeAllInterfaces via isAnyWindowOpen check, but explicit check here is fine too)
+        // If settings is already open, close it
         if (this.settingsVisible) {
             this.settingsVisible = false;
             this.destroySettingsUI();
+            if (typeof playSound === 'function') playSound('menu_close');
             return;
         }
 
@@ -122,6 +133,19 @@ window.UIManager = {
         // Now open settings (only if nothing else was open)
         this.settingsVisible = true;
         this.createSettingsUI();
+
+        // Auto-select first item for controller
+        if (this.settingsPanel && this.settingsPanel.interactiveItems.length > 0) {
+            this.settingsPanel.selectedIndex = 0;
+            // Defer update slightly to ensure UI is ready
+            setTimeout(() => {
+                if (window.updateSettingsHighlight) {
+                    window.updateSettingsHighlight(this.settingsPanel);
+                }
+            }, 50);
+        }
+
+        if (typeof playSound === 'function') playSound('menu_open');
     },
 
     // --- Save/Load Modal ---
@@ -573,34 +597,20 @@ window.UIManager = {
         }
     },
 
-    toggleSettings: function () {
-        this.settingsVisible = !this.settingsVisible;
-        if (this.settingsVisible) {
-            this.createSettingsUI();
 
-            // Auto-select first item for controller
-            if (this.settingsPanel && this.settingsPanel.interactiveItems.length > 0) {
-                this.settingsPanel.selectedIndex = 0;
-                // Defer update slightly to ensure UI is ready
-                setTimeout(() => {
-                    if (window.updateSettingsHighlight) {
-                        window.updateSettingsHighlight(this.settingsPanel);
-                    }
-                }, 50);
-            }
-
-            if (typeof playSound === 'function') playSound('menu_open');
-        } else {
-            this.destroySettingsUI();
-            if (typeof playSound === 'function') playSound('menu_close');
-        }
-    },
 
     // ============================================
     // INVENTORY UI (DEPRECATED)
     // ============================================
     // NOTE: The standalone Inventory UI has been removed.
     // Use the Equipment panel (E key / D-pad UP) which shows both equipment and inventory.
+
+    destroyEquipmentUI: function () {
+        if (typeof window.destroyEquipmentUI === 'function') {
+            window.destroyEquipmentUI();
+        }
+        this.equipmentVisible = false;
+    },
 
     // Use the Equipment panel (E key / D-pad UP) which shows both equipment and inventory.
 

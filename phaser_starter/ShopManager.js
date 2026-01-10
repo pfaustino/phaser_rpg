@@ -156,9 +156,10 @@ window.ShopManager = {
             rightTitle: scene.add.text(rightPanelX, 30, 'Your Inventory (Click to Sell)', {
                 fontSize: '24px', fill: '#ffffff', fontStyle: 'bold'
             }).setScrollFactor(0).setDepth(40001).setOrigin(0.5, 0),
-            closeText: scene.add.text(gameWidth - 20, 20, 'Press F to Close', {
+            closeText: scene.add.text(gameWidth - 20, 20, 'Press ESC to Close', {
                 fontSize: '14px', fill: '#aaaaaa'
             }).setScrollFactor(0).setDepth(40001).setOrigin(1, 0),
+            closeBtn: null,
             goldText: null,
             items: [],
             inventoryItems: [],
@@ -175,6 +176,32 @@ window.ShopManager = {
         this.shopPanel.goldText = scene.add.text(leftPanelX - panelWidth / 2 + 20, 15, `Gold: ${playerStats.gold}`, {
             fontSize: '20px', fill: '#ffd700', fontStyle: 'bold'
         }).setScrollFactor(0).setDepth(40001).setOrigin(0, 0);
+
+        // Add Close Button
+        const closeBtnSize = 30;
+        const closeBtnX = gameWidth - 20;
+        const closeBtnY = 50; // Below text
+
+        const closeBtnBg = scene.add.rectangle(closeBtnX, closeBtnY, closeBtnSize, closeBtnSize, 0xcc0000)
+            .setScrollFactor(0).setDepth(40001).setInteractive({ useHandCursor: true })
+            .setStrokeStyle(1, 0xffffff).setOrigin(1, 0);
+
+        const closeBtnSymbol = scene.add.text(closeBtnX - closeBtnSize / 2, closeBtnY + closeBtnSize / 2, 'X', {
+            fontSize: '20px', fill: '#ffffff', fontStyle: 'bold'
+        }).setScrollFactor(0).setDepth(40002).setOrigin(0.5);
+
+        const onCloseClick = () => {
+            if (typeof playSound === 'function') playSound('ui_click');
+            this.closeShop();
+        };
+
+        closeBtnBg.on('pointerdown', onCloseClick);
+        closeBtnSymbol.on('pointerdown', onCloseClick);
+
+        closeBtnBg.on('pointerover', () => closeBtnBg.setFillStyle(0xff0000));
+        closeBtnBg.on('pointerout', () => closeBtnBg.setFillStyle(0xcc0000));
+
+        this.shopPanel.closeBtn = { bg: closeBtnBg, symbol: closeBtnSymbol };
 
         this.createShopTabs();
         this.updateShopItems();
@@ -495,8 +522,10 @@ window.ShopManager = {
             const { item, row, x } = data;
             const y = rowY[row];
 
+            const qColor = (window.QUALITY_COLORS && window.QUALITY_COLORS[item.quality]) ? window.QUALITY_COLORS[item.quality] : 0x9d9d9d;
+
             const itemBg = scene.add.rectangle(x, y, itemSize, itemSize, 0x222222, 0.8)
-                .setScrollFactor(0).setDepth(40000).setStrokeStyle(1, 0x444444);
+                .setScrollFactor(0).setDepth(40000).setStrokeStyle(2, qColor);
 
             let spriteKey = (typeof ItemManager !== 'undefined') ? ItemManager.getSpriteKey(item) : 'item_weapon';
             let itemSprite;
@@ -575,6 +604,10 @@ window.ShopManager = {
             if (sp.leftTitle) sp.leftTitle.destroy();
             if (sp.rightTitle) sp.rightTitle.destroy();
             if (sp.closeText) sp.closeText.destroy();
+            if (sp.closeBtn) {
+                if (sp.closeBtn.bg) sp.closeBtn.bg.destroy();
+                if (sp.closeBtn.symbol) sp.closeBtn.symbol.destroy();
+            }
             if (sp.goldText) sp.goldText.destroy();
             if (sp.shopMask) sp.shopMask.destroy();
             if (sp.inventoryMask) sp.inventoryMask.destroy();

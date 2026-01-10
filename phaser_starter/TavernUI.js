@@ -80,13 +80,40 @@ window.TavernUI = {
         }).setScrollFactor(0).setDepth(401).setOrigin(0.5, 0.5);
 
         // Close text
-        const closeText = scene.add.text(centerX + panelWidth / 2 - 20, centerY - panelHeight / 2 + 20, 'Press F to Close', {
+        const closeText = scene.add.text(centerX + panelWidth / 2 - 20, centerY - panelHeight / 2 + 20, 'Press ESC to Close', {
             fontSize: '14px',
             fill: '#aaaaaa'
-        }).setScrollFactor(0).setDepth(401).setOrigin(1, 0)
-            .setInteractive({ useHandCursor: true });
+        }).setScrollFactor(0).setDepth(401).setOrigin(1, 0);
 
-        closeText.on('pointerdown', () => this.close());
+        // Close Button (X)
+        const closeBtnSize = 30;
+        const closeBtnX = centerX + panelWidth / 2 - 20; // Aligned with panel right edge minus padding
+        const closeBtnY = centerY - panelHeight / 2 + 20;
+
+        // Adjust closeText position to be to the left of Close Button
+        closeText.setPosition(closeBtnX - 40, closeBtnY + 8);
+
+        const closeBtnBg = scene.add.rectangle(closeBtnX, closeBtnY + 8, closeBtnSize, closeBtnSize, 0xcc0000)
+            .setScrollFactor(0).setDepth(401).setInteractive({ useHandCursor: true })
+            .setStrokeStyle(1, 0xffffff);
+
+        const closeBtnSymbol = scene.add.text(closeBtnX, closeBtnY + 8, 'X', {
+            fontSize: '20px',
+            fill: '#ffffff',
+            fontStyle: 'bold'
+        }).setScrollFactor(0).setDepth(402).setOrigin(0.5);
+
+        const onCloseClick = () => {
+            this.close();
+            if (typeof playSound === 'function') playSound('ui_click');
+        };
+
+        closeBtnBg.on('pointerdown', onCloseClick);
+        closeBtnSymbol.on('pointerdown', onCloseClick);
+
+        // Hover effects
+        closeBtnBg.on('pointerover', () => closeBtnBg.setFillStyle(0xff0000));
+        closeBtnBg.on('pointerout', () => closeBtnBg.setFillStyle(0xcc0000));
 
         // Welcome message
         const welcomeText = scene.add.text(centerX, centerY - 140, 'Pull up a chair! Best ale in the kingdom.', {
@@ -238,6 +265,7 @@ window.TavernUI = {
 
         this.panel = {
             bg, title, closeText, welcomeText,
+            closeBtn: { bg: closeBtnBg, symbol: closeBtnSymbol },
             itemButtons,
             rumorBtn: { bg: rumorButtonBg, text: rumorButtonText }
         };
@@ -249,6 +277,10 @@ window.TavernUI = {
         if (this.panel.bg) this.panel.bg.destroy();
         if (this.panel.title) this.panel.title.destroy();
         if (this.panel.closeText) this.panel.closeText.destroy();
+        if (this.panel.closeBtn) {
+            if (this.panel.closeBtn.bg) this.panel.closeBtn.bg.destroy();
+            if (this.panel.closeBtn.symbol) this.panel.closeBtn.symbol.destroy();
+        }
         if (this.panel.welcomeText) this.panel.welcomeText.destroy();
 
         if (this.panel.itemButtons) {

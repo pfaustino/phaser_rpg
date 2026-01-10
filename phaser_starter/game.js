@@ -1999,6 +1999,11 @@ function create() {
     if (window.DialogManager) {
         window.DialogManager.init(this);
         window.DialogManager.loadDialogs(); // Essential for loading dialog content
+
+        // --- Movement & Input State ---
+        this.clickMoveTarget = null;
+        this.isMovingToClick = false;
+
     }
 
     this.milestoneManager = new MilestoneManager(this);
@@ -2844,6 +2849,9 @@ function create() {
 
     // Handle clicks on interactive objects (Monsters, NPCs)
     // Initialize click tracking variables
+    this.isMovingToClick = false;
+    this.clickMoveTarget = null;
+    this.clickTargetEntity = null;
     this.lastEntityClickTime = 0;
     this.lastWindowCloseTime = 0;
 
@@ -3565,8 +3573,22 @@ function update(time, delta) {
                 else if (window.UIManager && typeof window.UIManager.toggleQuestLog === 'function') window.UIManager.toggleQuestLog();
             }
             if (isActionJustPressed('settings')) {
-                if (typeof toggleSettings === 'function') toggleSettings();
-                else if (window.UIManager && typeof window.UIManager.toggleSettings === 'function') window.UIManager.toggleSettings();
+                // Modified behavior: ESC closes any open window first, otherwise toggles settings
+                // Explicitly check global flags first to be safe, then UIManager
+                const isEquipmentOpen = (typeof equipmentVisible !== 'undefined' && equipmentVisible);
+                const isInventoryOpen = (typeof inventoryVisible !== 'undefined' && inventoryVisible);
+                const anyWindowOpen = isEquipmentOpen || isInventoryOpen || (window.UIManager && window.UIManager.isAnyWindowOpen());
+
+                debugLog('🛡️ Settings Handle: isAnyWindowOpen:', anyWindowOpen, 'Equip:', isEquipmentOpen);
+
+                if (anyWindowOpen) {
+                    debugLog('🛡️ Closing all interfaces...');
+                    if (window.UIManager) window.UIManager.closeAllInterfaces();
+                } else {
+                    debugLog('🛡️ Opening Settings...');
+                    if (typeof toggleSettings === 'function') toggleSettings();
+                    else if (window.UIManager && typeof window.UIManager.toggleSettings === 'function') window.UIManager.toggleSettings();
+                }
             }
             if (isActionJustPressed('debug_assets') && this.ctrlKey && this.ctrlKey.isDown) {
                 if (typeof toggleAssetsWindow === 'function') toggleAssetsWindow();
@@ -3591,24 +3613,74 @@ function update(time, delta) {
             if (isActionJustPressed('ability1')) window.useAbility(1);
             if (isActionJustPressed('ability2')) window.useAbility(2);
             if (isActionJustPressed('ability3')) window.useAbility(3);
-            if (isActionJustPressed('ability4')) window.useAbility(4);
-        }
-        if (window.AbilityManager) {
-            if (isActionJustPressed('healthPotion')) window.AbilityManager.usePotion('health');
-            if (isActionJustPressed('manaPotion')) window.AbilityManager.usePotion('mana');
-        }
-
-        // Save/Load - Use SaveManager (window.saveGame/loadGame aliases)
-        // NOTE: Do NOT call the local loadGame() function - it's legacy and uses wrong localStorage key!
-        if (isActionJustPressed('save') && typeof window.saveGame === 'function') {
-            window.saveGame();
-            this.isMovingToClick = false; // Cancel any pending click movement
-        }
-        if (isActionJustPressed('load') && typeof window.loadGame === 'function') {
-            window.loadGame();
-            this.isMovingToClick = false; // Cancel any pending click movement
+            if (isActionJustPressed('health_potion')) window.useConsumable('health_potion');
+            if (isActionJustPressed('mana_potion')) window.useConsumable('mana_potion');
         }
     }
+
+    // --- MOUSE MOVEMENT LOGIC ---
+    // Handle click-to-move (must be outside the action check to run every frame)
+    if (this.isMovingToClick && this.clickMoveTarget) {
+        // Cancel if any detailed movement keys are pressed
+        if ((typeof isActionActive === 'function' && (isActionActive('move_up') || isActionActive('move_down') || isActionActive('move_left') || isActionActive('move_right'))) ||
+            (typeof isStickActive === 'function' && isStickActive())) {
+            this.isMovingToClick = false;
+            this.clickMoveTarget = null;
+        } else {
+            const distance = Phaser.Math.Distance.Between(player.x, player.y, this.clickMoveTarget.x, this.clickMoveTarget.y);
+            const stopDistance = 10; // Stop when close enough (increased to prevent jitter)
+
+            if (distance > stopDistance) {
+                // Move towards target
+                const speed = playerStats.speed * 60; // Approximate FPS fix, or use physics.moveToObject which uses speed in px/sec?
+                // Phaser Arcade Physics use px/sec. playerStats.speed is likely around 2-5? No, check stats.
+                // Standard speed is usually 160.
+
+                let moveSpeed = playerStats.speed;
+                if (moveSpeed < 10) moveSpeed = 160; // Safety fallback
+
+                this.physics.moveToObject(player, this.clickMoveTarget, moveSpeed);
+
+                // Manually set facing direction for animation logic
+                const angle = Phaser.Math.Angle.Between(player.x, player.y, this.clickMoveTarget.x, this.clickMoveTarget.y);
+                if (Math.abs(Math.cos(angle)) > Math.abs(Math.sin(angle))) {
+                    player.facingDirection = (Math.cos(angle) > 0) ? 'east' : 'west';
+                } else {
+                    player.facingDirection = (Math.sin(angle) > 0) ? 'south' : 'north';
+                }
+
+                // Update animation manually if needed, or let standard logic handle it based on velocity
+                // Standard logic checks body.velocity, so it should just work.
+            } else {
+                // Arrived
+                player.body.setVelocity(0);
+                this.isMovingToClick = false;
+                this.clickMoveTarget = null;
+            }
+        }
+    } else if (this.isMovingToClick) {
+        // Fallback cleanup
+        this.isMovingToClick = false;
+        player.body.setVelocity(0);
+    }
+    if (isActionJustPressed('ability3')) window.useAbility(3);
+    if (isActionJustPressed('ability4')) window.useAbility(4);
+    if (window.AbilityManager) {
+        if (isActionJustPressed('healthPotion')) window.AbilityManager.usePotion('health');
+        if (isActionJustPressed('manaPotion')) window.AbilityManager.usePotion('mana');
+    }
+
+    // Save/Load - Use SaveManager (window.saveGame/loadGame aliases)
+    // NOTE: Do NOT call the local loadGame() function - it's legacy and uses wrong localStorage key!
+    if (isActionJustPressed('save') && typeof window.saveGame === 'function') {
+        window.saveGame();
+        this.isMovingToClick = false; // Cancel any pending click movement
+    }
+    if (isActionJustPressed('load') && typeof window.loadGame === 'function') {
+        window.loadGame();
+        this.isMovingToClick = false; // Cancel any pending click movement
+    }
+
 
     // Process dialog queue
     processDialogQueue();
@@ -4986,12 +5058,22 @@ function updateWeaponPosition() {
         // Check Controller Aim (Right Stick)
         if (typeof isControllerConnected === 'function' && isControllerConnected()) {
             // Access controller directly if available (or via wrapper)
+            // Fix: Check threshold to allow mouse fallback
             if (activeGamepad && (Math.abs(activeGamepad.rightStick.x) > 0.1 || Math.abs(activeGamepad.rightStick.y) > 0.1)) {
                 angle = Math.atan2(activeGamepad.rightStick.y, activeGamepad.rightStick.x);
                 if (player) player.aimAngle = angle; // Ensure we keep it sync'd
             } else if (player && typeof player.aimAngle === 'number') {
-                // Stick is idle, use last known aim angle (prevents snap to mouse)
-                angle = player.aimAngle;
+                // Stick is idle.
+                // CHECK MOUSE: If mouse has moved recently or user clicked, we might want to use mouse aim?
+                // For now, if stick is idle, let's fall back to mouse pointer position essentially
+                // This fixes the "Mouse aim broken when controller plugged in" issue
+                const scene = game.scene.scenes[0];
+                const pointer = scene.input.activePointer;
+                const worldPoint = pointer.positionToCamera(scene.cameras.main);
+
+                // Only use mouse if it's actually in window/active? 
+                // Phaser's activePointer is always defined.
+                angle = Phaser.Math.Angle.Between(player.x, player.y, worldPoint.x, worldPoint.y);
             } else {
                 // Fallback to mouse only if no previous aim
                 const scene = game.scene.scenes[0];
@@ -6175,6 +6257,8 @@ function closeAllInterfaces() {
  * Toggle settings visibility
  */
 function toggleSettings() {
+    debugLog('🛡️ toggleSettings CALLED! Stack trace:');
+    console.trace();
     UIManager.toggleSettings();
 }
 
@@ -7280,6 +7364,7 @@ function refreshEquipment() {
 /**
  * Destroy equipment UI
  */
+window.destroyEquipmentUI = destroyEquipmentUI; // Ensure global access
 function destroyEquipmentUI() {
     const scene = game.scene.scenes[0];
 

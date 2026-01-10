@@ -950,6 +950,11 @@ function onControllerB() {
     if (typeof inventoryVisible !== 'undefined' && inventoryVisible) {
         if (typeof closeInventory === 'function') closeInventory();
     }
+    // 1.5. Settings
+    else if (window.UIManager && window.UIManager.settingsVisible) {
+        if (window.toggleSettings) window.toggleSettings();
+        else if (window.UIManager.toggleSettings) window.UIManager.toggleSettings();
+    }
     // 2. Equipment
     else if (typeof equipmentVisible !== 'undefined' && equipmentVisible) {
         if (typeof destroyEquipmentUI === 'function') destroyEquipmentUI();

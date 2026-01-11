@@ -1546,6 +1546,15 @@ const MapManager = {
         });
         this.transitionMarkers = [];
 
+        // Clear interactables
+        this.interactables.forEach(obj => {
+            if (obj.sprite) {
+                if (obj.sprite.collisionBody) obj.sprite.collisionBody.destroy();
+                obj.sprite.destroy();
+            }
+        });
+        this.interactables = [];
+
         // Aggressive cleanup: destroy all world objects that aren't the player
         // This catches orphaned graphics, particles, etc.
         if (scene.physics && scene.physics.world) {

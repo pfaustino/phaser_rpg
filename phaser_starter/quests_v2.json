@@ -576,7 +576,7 @@
                     "type": "collect",
                     "itemId": "artifact_fragment",
                     "icon": "item_fragment",
-                    "label": "Defeat Boss to Get Artifact Fragment",
+                    "label": "Kill Boss for Artifact Fragment",
                     "target": 1,
                     "locationId": "temple_ruins",
                     "visualEffect": "strange_energy"
@@ -641,7 +641,8 @@
                     "type": "talk",
                     "npcId": "Captain Thorne",
                     "label": "Present Findings to Thorne",
-                    "target": 1
+                    "target": 1,
+                    "autoComplete": false
                 }
             ],
             "rewards": {

@@ -274,7 +274,7 @@ window.CombatManager = {
         else if (window.PlayerStatsManager) window.PlayerStatsManager.addXp(xpGain);
 
         // Loot
-        if (window.dropItemsFromMonster) window.dropItemsFromMonster(monster.x, monster.y, baseXp);
+        if (window.dropItemsFromMonster) window.dropItemsFromMonster(monster.x, monster.y, baseXp, monster.isBoss);
 
         // Visuals (Death Anim)
         if (window.createDeathEffects) window.createDeathEffects(monster.x, monster.y);

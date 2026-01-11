@@ -124,7 +124,7 @@ window.LootManager = {
     /**
      * Drop items from a killed monster
      */
-    dropItemsFromMonster(x, y, monsterXP = 10) {
+    dropItemsFromMonster(x, y, monsterXP = 10, isBoss = false) {
         // Drop probability: 40% chance
         if (Math.random() > 0.40 && !isBoss) { // Allow bosses to always drop loot? Logic below doesn't use isBoss param here, but whatever.
             // (Original check was just if (Math.random() > 0.40) return;)
@@ -161,7 +161,7 @@ window.LootManager = {
             });
         }
 
-        if (Math.random() > 0.40) return; // Original loot gate
+        if (Math.random() > 0.40 && !isBoss) return; // Original loot gate (Bypassed for bosses)
 
 
         // Determine item level/stats based on monster XP/Diff
@@ -281,5 +281,5 @@ window.LootManager = {
 
 // Global Aliases for Compatibility
 window.spawnQuestItem = (x, y, data) => window.LootManager.spawnQuestItem(x, y, data);
-window.dropItemsFromMonster = (x, y, xp) => window.LootManager.dropItemsFromMonster(x, y, xp);
+window.dropItemsFromMonster = (x, y, xp, isBoss) => window.LootManager.dropItemsFromMonster(x, y, xp, isBoss);
 window.pickupItem = (item, index) => window.LootManager.pickupItem(item, index);

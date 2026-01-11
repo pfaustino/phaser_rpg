@@ -503,12 +503,15 @@ class DungeonManager {
 
         // SPECIAL: Quest Item Drops
         const dungeonId = MapManager.currentDungeon ? MapManager.currentDungeon.id : null;
+        debugLog(`🎁 dropBossLoot: dungeonId=${dungeonId}, currentDungeon=`, MapManager.currentDungeon);
 
         // Temple Ruins: Drop Artifact Fragment (Quest: main_02_003)
         // Always drop it if we are in the Temple Ruins and kill the boss
         if (dungeonId === 'temple_ruins') {
+            debugLog('🎁 DROPPING ARTIFACT FRAGMENT!');
             const fragment = {
                 type: 'quest_item',
+                id: 'artifact_fragment', // Used by UQE for quest tracking
                 itemId: 'artifact_fragment',
                 name: 'Artifact Fragment',
                 description: 'A pulsating shard of ancient energy.',

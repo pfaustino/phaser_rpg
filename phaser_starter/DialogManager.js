@@ -157,10 +157,15 @@ window.DialogManager = {
                     const quest = window.uqe.activeQuests.find(q => q.id === questId);
                     if (quest) {
                         // Check all specified objectives are complete
-                        return objectiveIds.every(objId => {
-                            const obj = quest.objectives.find(o => o.id === objId.trim());
-                            return obj && obj.isComplete();
+                        const result = objectiveIds.every(objId => {
+                            const trimmedId = objId.trim();
+                            const obj = quest.objectives.find(o => o.id === trimmedId);
+                            const isComp = obj && obj.isComplete();
+                            console.warn(`🔍 [Condition] Checking obj '${trimmedId}': ${isComp ? 'COMPLETE' : 'INCOMPLETE'}`);
+                            return isComp;
                         });
+                        console.warn(`🔍 [Condition] quest_objectives_complete result for [${objectiveIds}]: ${result}`);
+                        return result;
                     }
                 }
                 return false;
@@ -175,6 +180,7 @@ window.DialogManager = {
      * Start dialog with an NPC
      */
     startDialog(npc) {
+        console.warn(`🗣️ [Dialog] Starting dialog with ${npc.name} (ID: ${npc.dialogId})`);
         this.currentDialogNPC = npc;
         window.currentDialogNPC = npc; // Sync global
 

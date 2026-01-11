@@ -133,7 +133,7 @@
         "spritePath": "assets/images/crystal-shard.png",
         "width": 32,
         "height": 32,
-        "interactionRadius": 40,
+        "interactionRadius": 60,
         "interactionType": "produce_item",
         "producedItemId": "echo_crystal",
         "producedAmount": 1,

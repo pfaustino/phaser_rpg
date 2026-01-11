@@ -145,6 +145,26 @@ window.DialogManager = {
                 }
                 return false;
 
+            // New: Check if MULTIPLE objectives are complete
+            // Format: quest_objectives_complete:questId:obj1,obj2,obj3
+            case 'quest_objectives_complete':
+                if (parts.length < 3) return false;
+                const questId = parts[1];
+                const objectiveIds = parts[2].split(',');
+
+                if (!window.isQuestActive(questId)) return false;
+                if (window.uqe) {
+                    const quest = window.uqe.activeQuests.find(q => q.id === questId);
+                    if (quest) {
+                        // Check all specified objectives are complete
+                        return objectiveIds.every(objId => {
+                            const obj = quest.objectives.find(o => o.id === objId.trim());
+                            return obj && obj.isComplete();
+                        });
+                    }
+                }
+                return false;
+
             default:
                 console.warn(`Unknown dialog condition type: ${type}`);
                 return true;

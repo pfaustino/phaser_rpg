@@ -456,7 +456,7 @@
                     {
                         "text": "I interrogated the suspects. Here's what I found. (Present Findings)",
                         "next": "suspects_findings",
-                        "condition": "quest_objective_active:main_02_004:return_thorne_suspects",
+                        "condition": "quest_objectives_complete:main_02_004:talk_bram,talk_seren,talk_lysa",
                         "isQuest": true,
                         "action": "complete_objective",
                         "questId": "main_02_004",

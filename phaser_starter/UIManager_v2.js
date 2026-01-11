@@ -671,7 +671,7 @@ window.UIManager = {
 
         // Background
         const bg = scene.add.rectangle(centerX, centerY, panelWidth, panelHeight, 0x000000, 0.9)
-            .setScrollFactor(0).setDepth(400).setStrokeStyle(4, 0xffffff);
+            .setScrollFactor(0).setDepth(10400).setStrokeStyle(4, 0xffffff);
 
         // Portrait
         let portraitImage = null;
@@ -679,7 +679,7 @@ window.UIManager = {
 
         if (npc && npc.portraitKey && scene.textures.exists(npc.portraitKey)) {
             portraitImage = scene.add.image(centerX, centerY - 100, npc.portraitKey)
-                .setScrollFactor(0).setDepth(401);
+                .setScrollFactor(0).setDepth(10401);
 
             const maxPortraitHeight = 150;
             if (portraitImage.height > maxPortraitHeight) {
@@ -692,7 +692,7 @@ window.UIManager = {
         // Name
         const npcNameText = scene.add.text(centerX, centerY - 100, npc.name || 'Unknown', {
             fontSize: '24px', fill: '#ffd700', fontStyle: 'bold'
-        }).setScrollFactor(0).setDepth(401).setOrigin(0.5);
+        }).setScrollFactor(0).setDepth(10401).setOrigin(0.5);
 
         this.dialogPanel = {
             bg: bg,
@@ -765,7 +765,7 @@ window.UIManager = {
         const textY = centerY - dynamicPanelHeight / 2 + portraitHeight + 65;
         this.dialogPanel.dialogText = scene.add.text(textX, textY, node.text, {
             fontSize: '18px', fill: '#ffffff', wordWrap: { width: panelWidth - 40 }
-        }).setScrollFactor(0).setDepth(401).setOrigin(0, 0);
+        }).setScrollFactor(0).setDepth(10401).setOrigin(0, 0);
 
         // Buttons
         const startY = centerY - dynamicPanelHeight / 2 + headerHeight + textHeight;
@@ -775,7 +775,7 @@ window.UIManager = {
             const buttonWidth = panelWidth - 40;
 
             const buttonBg = scene.add.rectangle(centerX, buttonY, buttonWidth, buttonHeight, 0x333333, 0.9)
-                .setScrollFactor(0).setDepth(401).setStrokeStyle(2, 0x666666).setInteractive({ useHandCursor: true });
+                .setScrollFactor(0).setDepth(10401).setStrokeStyle(2, 0x666666).setInteractive({ useHandCursor: true });
 
             let displayText = choice.text;
             let textColor = '#ffffff';
@@ -805,7 +805,7 @@ window.UIManager = {
 
             const buttonText = scene.add.text(centerX, buttonY, displayText, {
                 fontSize: '16px', fill: textColor
-            }).setScrollFactor(0).setDepth(402).setOrigin(0.5, 0.5);
+            }).setScrollFactor(0).setDepth(10402).setOrigin(0.5, 0.5);
 
             buttonBg.on('pointerover', () => buttonBg.setFillStyle(0x444444));
             buttonBg.on('pointerout', () => buttonBg.setFillStyle(0x333333));

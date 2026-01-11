@@ -9516,7 +9516,7 @@ function evaluateDialogCondition(conditionStr, stats) {
                 const oId = parts[2];
 
                 const active = isQuestActive(qId);
-                console.warn(`🔍 [Cond] quest_objective_active: ${qId}:${oId} -> QuestActive: ${active}`);
+                // console.warn(`🔍 [Cond] quest_objective_active: ${qId}:${oId} -> QuestActive: ${active}`);
 
                 if (!active) return false;
                 if (window.uqe) {
@@ -9524,7 +9524,7 @@ function evaluateDialogCondition(conditionStr, stats) {
                     if (quest) {
                         const obj = quest.objectives.find(o => o.id === oId);
                         const isComplete = obj && obj.isComplete();
-                        console.warn(`🔍 [Cond] Obj ${oId} found: ${!!obj}, Complete: ${isComplete}`);
+                        // console.warn(`🔍 [Cond] Obj ${oId} found: ${!!obj}, Complete: ${isComplete}`);
                         return obj && !isComplete;
                     }
                 }

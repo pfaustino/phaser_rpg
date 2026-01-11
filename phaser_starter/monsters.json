@@ -2167,6 +2167,125 @@
                     }
                 }
             }
+        },
+        {
+            "id": "corrupted_guardian",
+            "name": "Corrupted Guardian",
+            "generationType": "mask_based",
+            "proceduralConfig": {
+                "scale": 4
+            },
+            "stats": {
+                "hp": 60,
+                "attack": 10,
+                "speed": 35,
+                "xp": 25,
+                "spawnAmount": [
+                    1,
+                    1
+                ]
+            },
+            "appearance": {
+                "baseSize": 48,
+                "layers": [
+                    {
+                        "name": "body",
+                        "type": "shape",
+                        "shape": "rect",
+                        "width": 32,
+                        "height": 44,
+                        "color": "#2a1a3a",
+                        "z": 10
+                    },
+                    {
+                        "name": "armor",
+                        "type": "shape",
+                        "shape": "rect",
+                        "width": 36,
+                        "height": 30,
+                        "color": "#1a0a2a",
+                        "offset": {
+                            "x": 0,
+                            "y": -5
+                        },
+                        "z": 11
+                    },
+                    {
+                        "name": "head",
+                        "type": "shape",
+                        "shape": "circle",
+                        "radius": 14,
+                        "color": "#3a2a4a",
+                        "offset": {
+                            "x": 0,
+                            "y": -26
+                        },
+                        "z": 20
+                    },
+                    {
+                        "name": "helmet",
+                        "type": "shape",
+                        "shape": "rect",
+                        "width": 28,
+                        "height": 10,
+                        "color": "#1a0a2a",
+                        "offset": {
+                            "x": 0,
+                            "y": -32
+                        },
+                        "z": 21
+                    },
+                    {
+                        "name": "eye_left",
+                        "type": "shape",
+                        "shape": "circle",
+                        "radius": 3,
+                        "color": "#ff00ff",
+                        "offset": {
+                            "x": -5,
+                            "y": -26
+                        },
+                        "z": 30
+                    },
+                    {
+                        "name": "eye_right",
+                        "type": "shape",
+                        "shape": "circle",
+                        "radius": 3,
+                        "color": "#ff00ff",
+                        "offset": {
+                            "x": 5,
+                            "y": -26
+                        },
+                        "z": 30
+                    },
+                    {
+                        "name": "corruption_glow",
+                        "type": "shape",
+                        "shape": "circle",
+                        "radius": 30,
+                        "color": "#8800aa",
+                        "alpha": 0.2,
+                        "offset": {
+                            "x": 0,
+                            "y": -10
+                        },
+                        "z": 1
+                    }
+                ],
+                "animations": {
+                    "idle": {
+                        "type": "pulse",
+                        "property": "scale",
+                        "to": 1.05,
+                        "duration": 1500
+                    },
+                    "walk": {
+                        "type": "slide",
+                        "speed": 0.6
+                    }
+                }
+            }
         }
     ]
 }

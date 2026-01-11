@@ -177,10 +177,18 @@ class DungeonManager {
 
         // Data-driven Check
         const completionKey = `${dungeonId}_level_${level}`;
-        if (MapManager.dungeonCompletions && MapManager.dungeonCompletions[completionKey]) {
-            debugLog(`✅ Level ${level} already completed. Spawning exit directly.`);
-            this.spawnDungeonExit(scene, x, y);
-            return;
+        const legacyKey = `level_${level}`;
+
+        debugLog(`🔍 Checking Boss Spawn: ${completionKey} / ${legacyKey}`);
+        if (MapManager.dungeonCompletions) {
+            debugLog(`   -> Completions:`, JSON.stringify(MapManager.dungeonCompletions));
+            if (MapManager.dungeonCompletions[completionKey] || MapManager.dungeonCompletions[legacyKey]) {
+                debugLog(`✅ Level ${level} already completed (Key: ${MapManager.dungeonCompletions[completionKey] ? completionKey : legacyKey}). Spawning exit directly.`);
+                this.spawnDungeonExit(scene, x, y);
+                return;
+            }
+        } else {
+            debugLog(`⚠️ MapManager.dungeonCompletions is missing!`);
         }
 
         if (dungeonDef) {

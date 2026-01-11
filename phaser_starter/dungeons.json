@@ -139,6 +139,11 @@
                     "id": "procedural_backlash",
                     "minLevel": 3,
                     "chance": 0.3
+                },
+                {
+                    "id": "void_cultist",
+                    "minLevel": 1,
+                    "chance": 0.3
                 }
             ],
             "interactables": [
@@ -146,21 +151,21 @@
                     "id": "ritual_altar",
                     "minLevel": 2,
                     "maxLevel": 2,
-                    "chance": 1.0,
+                    "chance": 1,
                     "limit": 6
                 },
                 {
                     "id": "void_tear",
                     "minLevel": 3,
                     "maxLevel": 3,
-                    "chance": 1.0,
+                    "chance": 1,
                     "limit": 1
                 }
             ],
             "bosses": [
                 {
                     "level": 2,
-                    "monsterId": "malagor_boss"
+                    "monsterId": "malakor_boss"
                 },
                 {
                     "level": 3,
@@ -168,6 +173,57 @@
                 }
             ],
             "storyline_lore": "You have breached the Traitor's Stronghold. The air is thick with dark magic."
+        },
+        "void_dimension": {
+            "id": "void_dimension",
+            "name": "The Void Dimension",
+            "levels": 1,
+            "tileset": {
+                "floor": "dungeon_floor",
+                "wall": "dungeon_wall"
+            },
+            "generation": {
+                "width": 80,
+                "height": 80,
+                "roomCount": {
+                    "min": 5,
+                    "max": 8
+                },
+                "roomSize": {
+                    "min": 10,
+                    "max": 20
+                },
+                "corridorWidth": 4,
+                "isVoid": true
+            },
+            "monsters": [
+                {
+                    "id": "shadow_wisp",
+                    "chance": 0.4
+                },
+                {
+                    "id": "void_lasher",
+                    "chance": 0.3
+                },
+                {
+                    "id": "void_cultist",
+                    "chance": 0.2
+                }
+            ],
+            "bosses": [
+                {
+                    "level": 1,
+                    "monsterId": "void_walker"
+                }
+            ],
+            "interactables": [
+                {
+                    "id": "void_source_crystal",
+                    "chance": 1,
+                    "limit": 1
+                }
+            ],
+            "storyline_lore": "Reality dissolves here. Gravity is merely a suggestion. The Void Walker watches..."
         }
     }
 }

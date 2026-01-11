@@ -71,7 +71,7 @@
                     "idle": {
                         "type": "pulse",
                         "property": "scaleY",
-                        "from": 1.0,
+                        "from": 1,
                         "to": 0.8,
                         "duration": 1000
                     },
@@ -1300,7 +1300,7 @@
                     },
                     "walk": {
                         "type": "slide",
-                        "speed": 1.0
+                        "speed": 1
                     }
                 }
             }
@@ -1699,7 +1699,7 @@
                     },
                     "walk": {
                         "type": "slide",
-                        "speed": 1.0
+                        "speed": 1
                     }
                 }
             }
@@ -1795,6 +1795,375 @@
                         "type": "lunge",
                         "distance": 10,
                         "duration": 500
+                    }
+                }
+            }
+        },
+        {
+            "id": "shadow_wisp",
+            "name": "Shadow Wisp",
+            "generationType": "mask_based",
+            "proceduralConfig": {
+                "scale": 3
+            },
+            "stats": {
+                "hp": 40,
+                "attack": 8,
+                "speed": 70,
+                "xp": 25,
+                "spawnAmount": [
+                    2,
+                    4
+                ]
+            },
+            "appearance": {
+                "baseSize": 24,
+                "layers": [
+                    {
+                        "name": "core",
+                        "type": "shape",
+                        "shape": "circle",
+                        "radius": 10,
+                        "color": "#4B0082",
+                        "z": 10
+                    },
+                    {
+                        "name": "glow",
+                        "type": "shape",
+                        "shape": "circle",
+                        "radius": 14,
+                        "color": "#9400D3",
+                        "alpha": 0.5,
+                        "z": 5
+                    }
+                ],
+                "animations": {
+                    "idle": {
+                        "type": "pulse",
+                        "property": "scale",
+                        "to": 1.2,
+                        "duration": 800
+                    },
+                    "walk": {
+                        "type": "float",
+                        "range": 5
+                    }
+                }
+            }
+        },
+        {
+            "id": "cultist_scout",
+            "name": "Cultist Scout",
+            "generationType": "mask_based",
+            "proceduralConfig": {
+                "scale": 4
+            },
+            "stats": {
+                "hp": 60,
+                "attack": 12,
+                "speed": 55,
+                "xp": 35,
+                "spawnAmount": [
+                    1,
+                    2
+                ]
+            },
+            "appearance": {
+                "baseSize": 32,
+                "layers": [
+                    {
+                        "name": "role",
+                        "type": "shape",
+                        "shape": "rect",
+                        "width": 20,
+                        "height": 30,
+                        "color": "#2F4F4F",
+                        "z": 10
+                    },
+                    {
+                        "name": "hood",
+                        "type": "shape",
+                        "shape": "triangle",
+                        "points": [
+                            0,
+                            0,
+                            10,
+                            20,
+                            -10,
+                            20
+                        ],
+                        "color": "#2F4F4F",
+                        "offset": {
+                            "x": 0,
+                            "y": -20
+                        },
+                        "z": 20
+                    }
+                ],
+                "animations": {
+                    "idle": {
+                        "type": "pulse",
+                        "property": "scaleY",
+                        "to": 1.05,
+                        "duration": 1000
+                    },
+                    "walk": {
+                        "type": "slide",
+                        "speed": 1
+                    }
+                }
+            }
+        },
+        {
+            "id": "void_cultist",
+            "name": "Void Cultist",
+            "generationType": "mask_based",
+            "proceduralConfig": {
+                "scale": 4
+            },
+            "stats": {
+                "hp": 100,
+                "attack": 18,
+                "speed": 45,
+                "xp": 50,
+                "spawnAmount": [
+                    1,
+                    3
+                ]
+            },
+            "appearance": {
+                "baseSize": 32,
+                "layers": [
+                    {
+                        "name": "robe",
+                        "type": "shape",
+                        "shape": "rect",
+                        "width": 24,
+                        "height": 36,
+                        "color": "#483D8B",
+                        "z": 10
+                    },
+                    {
+                        "name": "hood",
+                        "type": "shape",
+                        "shape": "circle",
+                        "radius": 10,
+                        "color": "#483D8B",
+                        "offset": {
+                            "x": 0,
+                            "y": -22
+                        },
+                        "z": 20
+                    }
+                ],
+                "animations": {
+                    "idle": {
+                        "type": "pulse",
+                        "property": "scaleX",
+                        "to": 1.1,
+                        "duration": 1200
+                    },
+                    "walk": {
+                        "type": "slide",
+                        "speed": 0.8
+                    }
+                }
+            }
+        },
+        {
+            "id": "malakor_boss",
+            "name": "High Priest Malakor",
+            "isBoss": true,
+            "generationType": "mask_based",
+            "proceduralConfig": {
+                "scale": 6
+            },
+            "stats": {
+                "hp": 800,
+                "attack": 30,
+                "speed": 35,
+                "xp": 500,
+                "spawnAmount": [
+                    1,
+                    1
+                ]
+            },
+            "appearance": {
+                "baseSize": 48,
+                "layers": [
+                    {
+                        "name": "robe",
+                        "type": "shape",
+                        "shape": "rect",
+                        "width": 40,
+                        "height": 60,
+                        "color": "#800080",
+                        "z": 10
+                    },
+                    {
+                        "name": "staff",
+                        "type": "shape",
+                        "shape": "rect",
+                        "width": 4,
+                        "height": 70,
+                        "color": "#FFD700",
+                        "offset": {
+                            "x": 25,
+                            "y": 0
+                        },
+                        "z": 15
+                    },
+                    {
+                        "name": "head",
+                        "type": "shape",
+                        "shape": "circle",
+                        "radius": 15,
+                        "color": "#4B0082",
+                        "offset": {
+                            "x": 0,
+                            "y": -35
+                        },
+                        "z": 20
+                    }
+                ],
+                "animations": {
+                    "idle": {
+                        "type": "float",
+                        "range": 10,
+                        "duration": 2000
+                    },
+                    "walk": {
+                        "type": "slide",
+                        "speed": 0.5
+                    }
+                }
+            }
+        },
+        {
+            "id": "void_lasher",
+            "name": "Void Lasher",
+            "generationType": "cellular_automata",
+            "proceduralConfig": {
+                "scale": 5,
+                "density": 0.6,
+                "minPixels": 20
+            },
+            "stats": {
+                "hp": 150,
+                "attack": 25,
+                "speed": 60,
+                "xp": 80,
+                "spawnAmount": [
+                    2,
+                    3
+                ]
+            },
+            "appearance": {
+                "baseSize": 40,
+                "layers": [
+                    {
+                        "name": "core",
+                        "type": "shape",
+                        "shape": "circle",
+                        "radius": 15,
+                        "color": "#000000",
+                        "z": 10
+                    },
+                    {
+                        "name": "tentacle1",
+                        "type": "shape",
+                        "shape": "rect",
+                        "width": 4,
+                        "height": 30,
+                        "color": "#800080",
+                        "offset": {
+                            "x": -10,
+                            "y": 10
+                        },
+                        "z": 5
+                    },
+                    {
+                        "name": "tentacle2",
+                        "type": "shape",
+                        "shape": "rect",
+                        "width": 4,
+                        "height": 30,
+                        "color": "#800080",
+                        "offset": {
+                            "x": 10,
+                            "y": 10
+                        },
+                        "z": 5
+                    }
+                ],
+                "animations": {
+                    "idle": {
+                        "type": "pulse",
+                        "property": "scale",
+                        "to": 1.3,
+                        "duration": 600
+                    },
+                    "walk": {
+                        "type": "squash_and_stretch",
+                        "speed": 2
+                    }
+                }
+            }
+        },
+        {
+            "id": "void_walker",
+            "name": "Void Walker",
+            "isBoss": true,
+            "generationType": "mask_based",
+            "proceduralConfig": {
+                "scale": 8
+            },
+            "stats": {
+                "hp": 1200,
+                "attack": 50,
+                "speed": 50,
+                "xp": 1000,
+                "spawnAmount": [
+                    1,
+                    1
+                ]
+            },
+            "appearance": {
+                "baseSize": 64,
+                "layers": [
+                    {
+                        "name": "body",
+                        "type": "shape",
+                        "shape": "rect",
+                        "width": 50,
+                        "height": 80,
+                        "color": "#000000",
+                        "alpha": 0.8,
+                        "z": 10
+                    },
+                    {
+                        "name": "eyes",
+                        "type": "shape",
+                        "shape": "rect",
+                        "width": 40,
+                        "height": 10,
+                        "color": "#FF00FF",
+                        "offset": {
+                            "x": 0,
+                            "y": -20
+                        },
+                        "z": 20
+                    }
+                ],
+                "animations": {
+                    "idle": {
+                        "type": "float",
+                        "range": 20,
+                        "duration": 3000
+                    },
+                    "walk": {
+                        "type": "slide",
+                        "speed": 0.4
                     }
                 }
             }

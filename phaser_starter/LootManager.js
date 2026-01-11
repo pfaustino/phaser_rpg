@@ -146,7 +146,6 @@ window.LootManager = {
                         });
                     }
                 }
-                // Main 03-010: Void Essence
                 if (q.id === 'main_03_010') {
                     if (Math.random() < 0.50) {
                         this.spawnQuestItem(x, y, {
@@ -157,6 +156,17 @@ window.LootManager = {
                             quality: 'Rare'
                         });
                     }
+                }
+                // Main 01-013: Shard of Resonance (From Boss)
+                if (q.id === 'main_01_013' && isBoss) {
+                    this.spawnQuestItem(x, y, {
+                        id: 'shard_resonance',
+                        name: 'Shard of Resonance',
+                        type: 'quest_item',
+                        quantity: 1,
+                        sprite: 'assets/images/crystal-shard.png', // Dynamic load
+                        quality: 'Epic'
+                    });
                 }
             });
         }

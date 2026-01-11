@@ -241,12 +241,32 @@ window.DialogManager = {
             const def = uqe.allDefinitions[quest.id];
 
             // 1a. AUTO-COMPLETE 'talk' objectives just by opening dialog
+            // BUT: Skip if dialog has a custom choice with complete_objective action for this objective
             const pendingTalkObj = quest.objectives.find(o => !o.completed && o.type === 'talk' && o.npcId === npc.name);
             if (pendingTalkObj) {
-                if (window.uqe) {
-                    window.uqe.completeObjective(quest.id, pendingTalkObj.id);
-                    // Force save immediately
-                    if (window.saveGame) window.saveGame(null, false, "Objective Updated Autosave");
+                // Check if any node in the dialog has a choice that explicitly completes this objective
+                let hasCustomDialogChoice = false;
+                for (const nodeId in activeDialog.nodes) {
+                    const node = activeDialog.nodes[nodeId];
+                    if (node.choices) {
+                        const matchingChoice = node.choices.find(c =>
+                            c.action === 'complete_objective' &&
+                            c.questId === quest.id &&
+                            c.objectiveId === pendingTalkObj.id
+                        );
+                        if (matchingChoice) {
+                            hasCustomDialogChoice = true;
+                            break;
+                        }
+                    }
+                }
+
+                // Only auto-complete if there's NO custom dialog choice for this objective
+                if (!hasCustomDialogChoice) {
+                    if (window.uqe) {
+                        window.uqe.completeObjective(quest.id, pendingTalkObj.id);
+                        if (window.saveGame) window.saveGame(null, false, "Objective Updated Autosave");
+                    }
                 }
             }
 

@@ -620,21 +620,24 @@
                     "type": "talk",
                     "npcId": "Guard Bram",
                     "label": "Interrogate Guard Bram",
-                    "target": 1
+                    "target": 1,
+                    "autoComplete": false
                 },
                 {
                     "id": "talk_seren",
                     "type": "talk",
                     "npcId": "Scholar Seren",
                     "label": "Interrogate Scholar Seren",
-                    "target": 1
+                    "target": 1,
+                    "autoComplete": false
                 },
                 {
                     "id": "talk_lysa",
                     "type": "talk",
                     "npcId": "Merchant Lysa",
                     "label": "Interrogate Merchant Lysa",
-                    "target": 1
+                    "target": 1,
+                    "autoComplete": false
                 },
                 {
                     "id": "return_thorne_suspects",

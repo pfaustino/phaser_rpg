@@ -66,5 +66,47 @@
         "height": 64,
         "interactionRadius": 80,
         "interactionType": "quest_trigger"
+    },
+    {
+        "id": "void_anchor",
+        "name": "Void Anchor (North)",
+        "map": "wilderness",
+        "x": 10,
+        "y": 10,
+        "spriteKey": "obelisk",
+        "spritePath": "assets/images/obelisk.png",
+        "width": 64,
+        "height": 128,
+        "interactionRadius": 60,
+        "interactionType": "quest_trigger",
+        "tint": 5373982
+    },
+    {
+        "id": "void_anchor",
+        "name": "Void Anchor (East)",
+        "map": "wilderness",
+        "x": 50,
+        "y": 12,
+        "spriteKey": "obelisk",
+        "spritePath": "assets/images/obelisk.png",
+        "width": 64,
+        "height": 128,
+        "interactionRadius": 60,
+        "interactionType": "quest_trigger",
+        "tint": 5373982
+    },
+    {
+        "id": "void_anchor",
+        "name": "Void Anchor (South)",
+        "map": "wilderness",
+        "x": 30,
+        "y": 50,
+        "spriteKey": "obelisk",
+        "spritePath": "assets/images/obelisk.png",
+        "width": 64,
+        "height": 128,
+        "interactionRadius": 60,
+        "interactionType": "quest_trigger",
+        "tint": 5373982
     }
 ]

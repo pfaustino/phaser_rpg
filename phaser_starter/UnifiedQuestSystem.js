@@ -154,8 +154,17 @@ class TalkObjective extends UqeObjective {
     constructor(data, eventBus) {
         super(data, eventBus);
         this.npcId = data.npcId;
+        this.autoComplete = data.autoComplete !== false; // Default true if undefined
+
         this.subscribe(UQE_EVENTS.NPC_TALK, (data) => {
             // debugLog(`🗣️ [UQE] TalkObjective checking: '${this.npcId}' vs '${data.id}'`);
+
+            // If autoComplete is disabled, ignore the event (must be completed manually)
+            if (!this.autoComplete) {
+                // console.warn(`🛑 [UQE] TalkObjective for ${this.npcId} requires manual completion. Ignoring event.`);
+                return;
+            }
+
             if (data.id === this.npcId) this.updateProgress(1);
         });
     }

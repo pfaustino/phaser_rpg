@@ -1010,22 +1010,22 @@
         "main_03_001": {
             "id": "main_03_001",
             "title": "The Dark Seal",
-            "description": "The traitor was seeking the Void Key. Speak to Elder Malik to secure the key before the enemy can regroup.",
+            "description": "The Sigil hums with a dark energy. It is a key, but also a beacon. Speak to Mage Elara immediately. She must ward it before it draws unwanted attention.",
             "giver": "Elder Malik",
             "step": 1,
             "requires": "main_02_020",
             "objectives": [
                 {
-                    "id": "talk_malik_key",
+                    "id": "talk_elara_ward",
                     "type": "talk",
-                    "npcId": "Elder Malik",
-                    "label": "Retrieve Void Key",
+                    "npcId": "Mage Elara",
+                    "label": "Speak to Elara",
                     "target": 1
                 }
             ],
             "rewards": {
-                "xp": 650,
-                "gold": 325
+                "xp": 1000,
+                "gold": 500
             }
         },
         "side_kill_001": {
@@ -2862,7 +2862,7 @@
                 {
                     "id": "level_obj_8",
                     "type": "level",
-                    "label": "Reach Level 25",
+                    "label": "Reach Level 30",
                     "target": 30
                 }
             ],
@@ -2881,7 +2881,7 @@
                 {
                     "id": "level_obj_9",
                     "type": "level",
-                    "label": "Reach Level 25",
+                    "label": "Reach Level 35",
                     "target": 35
                 }
             ],
@@ -2900,7 +2900,7 @@
                 {
                     "id": "level_obj_10",
                     "type": "level",
-                    "label": "Reach Level 25",
+                    "label": "Reach Level 40",
                     "target": 40
                 }
             ],
@@ -2919,7 +2919,7 @@
                 {
                     "id": "level_obj_11",
                     "type": "level",
-                    "label": "Reach Level 25",
+                    "label": "Reach Level 45",
                     "target": 45
                 }
             ],
@@ -2938,7 +2938,7 @@
                 {
                     "id": "level_obj_12",
                     "type": "level",
-                    "label": "Reach Level 25",
+                    "label": "Reach Level 50",
                     "target": 50
                 }
             ],
@@ -2957,7 +2957,7 @@
                 {
                     "id": "level_obj_13",
                     "type": "level",
-                    "label": "Reach Level 25",
+                    "label": "Reach Level 55",
                     "target": 55
                 }
             ],
@@ -2976,7 +2976,7 @@
                 {
                     "id": "level_obj_14",
                     "type": "level",
-                    "label": "Reach Level 25",
+                    "label": "Reach Level 60",
                     "target": 60
                 }
             ],
@@ -2995,7 +2995,7 @@
                 {
                     "id": "level_obj_15",
                     "type": "level",
-                    "label": "Reach Level 25",
+                    "label": "Reach Level 65",
                     "target": 65
                 }
             ],
@@ -3014,7 +3014,7 @@
                 {
                     "id": "level_obj_16",
                     "type": "level",
-                    "label": "Reach Level 25",
+                    "label": "Reach Level 70",
                     "target": 70
                 }
             ],
@@ -3033,13 +3033,306 @@
                 {
                     "id": "level_obj_17",
                     "type": "level",
-                    "label": "Reach Level 25",
+                    "label": "Reach Level 75",
                     "target": 75
                 }
             ],
             "rewards": {
                 "xp": 60000,
                 "gold": 37500
+            }
+        },
+        "main_03_002": {
+            "id": "main_03_002",
+            "title": "Shadows in the Mist",
+            "description": "The Sigil is active. It has already called out to them. Seek out the 'Shadow Manifestations' near the forest edge and disperse them.",
+            "giver": "Mage Elara",
+            "step": 2,
+            "requires": "main_03_001",
+            "objectives": [
+                {
+                    "id": "kill_shadow_wisps",
+                    "type": "kill",
+                    "monsterId": "shadow_wisp",
+                    "label": "Disperse Shadow Wisps",
+                    "target": 10
+                }
+            ],
+            "rewards": {
+                "xp": 1100,
+                "gold": 550
+            }
+        },
+        "main_03_003": {
+            "id": "main_03_003",
+            "title": "Cultist Trails",
+            "description": "These aren't just monsters. Someone is summoning them. Find the Cultist Scout in the Wilderness and end his spying.",
+            "giver": "Captain Thorne",
+            "step": 3,
+            "requires": "main_03_002",
+            "objectives": [
+                {
+                    "id": "kill_cultist_scout",
+                    "type": "kill",
+                    "monsterId": "cultist_scout",
+                    "label": "Defeat Cultist Scout",
+                    "target": 1
+                }
+            ],
+            "rewards": {
+                "xp": 1200,
+                "gold": 600
+            }
+        },
+        "main_03_004": {
+            "id": "main_03_004",
+            "title": "Dark Scriptures",
+            "description": "This script... it hurts to look at. Take it to the Librarian in town. Maybe he can decipher this madness.",
+            "giver": "Captain Thorne",
+            "step": 4,
+            "requires": "main_03_003",
+            "objectives": [
+                {
+                    "id": "talk_librarian",
+                    "type": "talk",
+                    "npcId": "Librarian",
+                    "label": "Consult Librarian",
+                    "target": 1
+                }
+            ],
+            "rewards": {
+                "xp": 1000,
+                "gold": 250
+            }
+        },
+        "main_03_005": {
+            "id": "main_03_005",
+            "title": "The Ritual Sites",
+            "description": "They are weakening reality. Search the Wilderness for 'Void Anchors'. They look like dark obelisks. Destroy them!",
+            "giver": "Librarian",
+            "step": 5,
+            "requires": "main_03_004",
+            "objectives": [
+                {
+                    "id": "destroy_void_anchors",
+                    "type": "interact",
+                    "targetObjectId": "void_anchor",
+                    "label": "Destroy Void Anchors",
+                    "target": 3
+                }
+            ],
+            "rewards": {
+                "xp": 1500,
+                "gold": 750
+            }
+        },
+        "main_03_006": {
+            "id": "main_03_006",
+            "title": "The Cult's Stronghold",
+            "description": "They are hiding in the ruins to the North. Assault the Cultist Camp and thin their numbers.",
+            "giver": "Captain Thorne",
+            "step": 6,
+            "requires": "main_03_005",
+            "objectives": [
+                {
+                    "id": "kill_void_cultists",
+                    "type": "kill",
+                    "monsterId": "void_cultist",
+                    "label": "Defeat Void Cultists",
+                    "target": 20
+                }
+            ],
+            "rewards": {
+                "xp": 1800,
+                "gold": 900
+            }
+        },
+        "main_03_007": {
+            "id": "main_03_007",
+            "title": "The High Priest",
+            "description": "The High Priest Malakor is orchestrating this. Bring me his staff.",
+            "giver": "Captain Thorne",
+            "step": 7,
+            "requires": "main_03_006",
+            "objectives": [
+                {
+                    "id": "kill_malakor",
+                    "type": "kill",
+                    "monsterId": "malakor_boss",
+                    "label": "Defeat High Priest Malakor",
+                    "target": 1
+                }
+            ],
+            "rewards": {
+                "xp": 2000,
+                "gold": 1000
+            }
+        },
+        "main_03_008": {
+            "id": "main_03_008",
+            "title": "A Tear in Reality",
+            "description": "The sky is cracking. Go to the Ritual Site. We cannot close it from this side. You must enter the Void.",
+            "giver": "Mage Elara",
+            "step": 8,
+            "requires": "main_03_007",
+            "objectives": [
+                {
+                    "id": "enter_void",
+                    "type": "explore_location",
+                    "locationId": "void_dimension",
+                    "label": "Enter Void Dimension",
+                    "target": 1
+                }
+            ],
+            "rewards": {
+                "xp": 1500,
+                "gold": 0
+            }
+        },
+        "main_03_009": {
+            "id": "main_03_009",
+            "title": "Into the Abyss",
+            "description": "Survive the initial onslaught of the Void. Establish a foothold.",
+            "giver": "System",
+            "step": 9,
+            "requires": "main_03_008",
+            "objectives": [
+                {
+                    "id": "survive_void",
+                    "type": "survive",
+                    "label": "Survive the Void",
+                    "target": 120
+                }
+            ],
+            "rewards": {
+                "xp": 2000,
+                "gold": 500
+            }
+        },
+        "main_03_010": {
+            "id": "main_03_010",
+            "title": "Strange Matter",
+            "description": "I can hear you... barely. Gather 'Void Essence' from the creatures there. I can conjure a return portal if I understand their energy.",
+            "giver": "Mage Elara",
+            "step": 10,
+            "requires": "main_03_009",
+            "objectives": [
+                {
+                    "id": "collect_void_essence",
+                    "type": "collect",
+                    "itemId": "void_essence",
+                    "label": "Collect Void Essence",
+                    "target": 10
+                }
+            ],
+            "rewards": {
+                "xp": 2200,
+                "gold": 1100
+            }
+        },
+        "main_03_011": {
+            "id": "main_03_011",
+            "title": "The Void Walker",
+            "description": "A presence is blocking the return signal. It's hunting you. Turn the tables. Hunt the Void Walker.",
+            "giver": "Mage Elara",
+            "step": 11,
+            "requires": "main_03_010",
+            "objectives": [
+                {
+                    "id": "kill_void_walker",
+                    "type": "kill",
+                    "monsterId": "void_walker",
+                    "label": "Defeat Void Walker",
+                    "target": 1
+                }
+            ],
+            "rewards": {
+                "xp": 3000,
+                "gold": 1500
+            }
+        },
+        "main_03_012": {
+            "id": "main_03_012",
+            "title": "The Source Crystal",
+            "description": "That crystal... it's the tether! Shatter it, and the connection to our world will be severed!",
+            "giver": "Mage Elara",
+            "step": 12,
+            "requires": "main_03_011",
+            "objectives": [
+                {
+                    "id": "destroy_source_crystal",
+                    "type": "interact",
+                    "targetObjectId": "void_source_crystal",
+                    "label": "Destroy Source Crystal",
+                    "target": 1
+                }
+            ],
+            "rewards": {
+                "xp": 2500,
+                "gold": 0
+            }
+        },
+        "main_03_013": {
+            "id": "main_03_013",
+            "title": "The Escape",
+            "description": "The world is shaking! Run back to the portal before it closes!",
+            "giver": "System",
+            "step": 13,
+            "requires": "main_03_012",
+            "objectives": [
+                {
+                    "id": "escape_void",
+                    "type": "explore_location",
+                    "locationId": "town",
+                    "label": "Return to Portal",
+                    "target": 1
+                }
+            ],
+            "rewards": {
+                "xp": 3000,
+                "gold": 0
+            }
+        },
+        "main_03_014": {
+            "id": "main_03_014",
+            "title": "Returned",
+            "description": "You made it... and the rift is gone. But for a moment, I saw eyes looking back from the dark. Speak to Elder Malik.",
+            "giver": "Mage Elara",
+            "step": 14,
+            "requires": "main_03_013",
+            "objectives": [
+                {
+                    "id": "talk_malik_end",
+                    "type": "talk",
+                    "npcId": "Elder Malik",
+                    "label": "Report to Malik",
+                    "target": 1
+                }
+            ],
+            "rewards": {
+                "xp": 1000,
+                "gold": 500
+            }
+        },
+        "main_03_015": {
+            "id": "main_03_015",
+            "title": "The Looming Threat",
+            "description": "You stopped the invasion, but you have drawn the gaze of Mal'Gazar. He knows your name now. Train. Prepare. He will come.",
+            "giver": "Elder Malik",
+            "step": 15,
+            "requires": "main_03_014",
+            "objectives": [
+                {
+                    "id": "chapter_3_complete",
+                    "type": "talk",
+                    "npcId": "Elder Malik",
+                    "label": "Complete Chapter 3",
+                    "target": 1
+                }
+            ],
+            "rewards": {
+                "xp": 5000,
+                "gold": 2500
             }
         }
     }

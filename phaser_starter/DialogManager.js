@@ -264,6 +264,8 @@ window.DialogManager = {
             // BUT: Skip if dialog has a custom choice with complete_objective action for this objective
             const pendingTalkObj = quest.objectives.find(o => !o.completed && o.type === 'talk' && o.npcId === npc.name);
             if (pendingTalkObj) {
+                console.warn(`🔍 [AutoComplete] Found pending talk objective: ${pendingTalkObj.id} for NPC: ${npc.name}`);
+
                 // Check if any node in the dialog has a choice that explicitly completes this objective
                 let hasCustomDialogChoice = false;
                 for (const nodeId in activeDialog.nodes) {
@@ -276,6 +278,7 @@ window.DialogManager = {
                         );
                         if (matchingChoice) {
                             hasCustomDialogChoice = true;
+                            console.warn(`✅ [AutoComplete] Found custom dialog choice in node '${nodeId}' - SKIPPING auto-complete`);
                             break;
                         }
                     }
@@ -283,6 +286,7 @@ window.DialogManager = {
 
                 // Only auto-complete if there's NO custom dialog choice for this objective
                 if (!hasCustomDialogChoice) {
+                    console.warn(`⚠️ [AutoComplete] No custom dialog found - AUTO-COMPLETING objective: ${pendingTalkObj.id}`);
                     if (window.uqe) {
                         window.uqe.completeObjective(quest.id, pendingTalkObj.id);
                         if (window.saveGame) window.saveGame(null, false, "Objective Updated Autosave");

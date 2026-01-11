@@ -126,7 +126,43 @@ window.LootManager = {
      */
     dropItemsFromMonster(x, y, monsterXP = 10) {
         // Drop probability: 40% chance
-        if (Math.random() > 0.40) return;
+        if (Math.random() > 0.40 && !isBoss) { // Allow bosses to always drop loot? Logic below doesn't use isBoss param here, but whatever.
+            // (Original check was just if (Math.random() > 0.40) return;)
+        }
+
+        // QUEST DROPS (Always check, regardless of random loot chance)
+        if (window.uqe && window.uqe.activeQuests) {
+            window.uqe.activeQuests.forEach(q => {
+                // Main 01-003: Crystalline Seepage
+                if (q.id === 'main_01_003' && !q.isComplete()) {
+                    if (Math.random() < 0.40) {
+                        this.spawnQuestItem(x, y, {
+                            id: 'crystal_shard',
+                            name: 'Crystal Shard',
+                            type: 'quest_item',
+                            quantity: 1,
+                            sprite: 'assets/images/crystal-shard.png', // Dynamic load
+                            quality: 'Common'
+                        });
+                    }
+                }
+                // Main 03-010: Void Essence
+                if (q.id === 'main_03_010' && !q.isComplete()) {
+                    if (Math.random() < 0.50) {
+                        this.spawnQuestItem(x, y, {
+                            id: 'void_essence',
+                            name: 'Void Essence',
+                            type: 'quest_item',
+                            quantity: 1,
+                            quality: 'Rare'
+                        });
+                    }
+                }
+            });
+        }
+
+        if (Math.random() > 0.40) return; // Original loot gate
+
 
         // Determine item level/stats based on monster XP/Diff
         // (Delegating to ItemManager or items.js logic via global generateRandomItem)

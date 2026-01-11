@@ -3353,7 +3353,7 @@ function triggerWorldInteraction() {
                 const qty = closestObj.definition.producedAmount || 1;
 
                 // Create item data
-                const itemDef = window.ItemManager ? window.ItemManager.getItem(itemId) : { name: itemId, type: 'quest_item', quality: 'Common' };
+                const itemDef = window.ItemManager ? window.ItemManager.getItemDef(itemId) : { name: itemId, type: 'quest_item', quality: 'Common' };
                 const item = {
                     ...itemDef,
                     id: itemId,

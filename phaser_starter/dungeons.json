@@ -36,6 +36,15 @@
                     "chance": 0.3
                 }
             ],
+            "interactables": [
+                {
+                    "id": "echo_crystal_node",
+                    "minLevel": 2,
+                    "maxLevel": 3,
+                    "chance": 0.8,
+                    "limit": 10
+                }
+            ],
             "bosses": [
                 {
                     "level": 1,

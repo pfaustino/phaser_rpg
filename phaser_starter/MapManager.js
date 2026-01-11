@@ -1222,11 +1222,18 @@ const MapManager = {
                                     ease: 'Sine.easeInOut'
                                 });
                                 collisionBody = scene.add.rectangle(pixelX, pixelY, 48, 48, 0x000000, 0);
+                            } else if (def.id === 'echo_crystal_node') {
+                                // Echo Crystal Node - Cyan Diamond
+                                visual = scene.add.rectangle(pixelX, pixelY, 24, 24, 0x00FFFF).setDepth(8);
+                                visual.setRotation(Math.PI / 4);
+                                scene.add.rectangle(pixelX, pixelY, 16, 16, 0xCCFFFF).setDepth(9).setRotation(Math.PI / 4);
+                                collisionBody = scene.add.rectangle(pixelX, pixelY, 32, 32, 0x000000, 0);
                             } else {
                                 // Generic fallback - gray rectangle
                                 visual = scene.add.rectangle(pixelX, pixelY, 32, 32, 0x666666).setDepth(8);
                                 collisionBody = scene.add.rectangle(pixelX, pixelY, 32, 32, 0x000000, 0);
                             }
+
 
                             scene.physics.add.existing(collisionBody, true);
 

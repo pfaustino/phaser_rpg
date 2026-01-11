@@ -3347,6 +3347,39 @@ function triggerWorldInteraction() {
         }
 
         if (closestObj) {
+            // PRODUCE ITEM INTERACTION (Mining/Harvesting)
+            if (closestObj.definition.interactionType === 'produce_item') {
+                const itemId = closestObj.definition.producedItemId;
+                const qty = closestObj.definition.producedAmount || 1;
+
+                // Create item data
+                const itemDef = window.ItemManager ? window.ItemManager.getItem(itemId) : { name: itemId, type: 'quest_item', quality: 'Common' };
+                const item = {
+                    ...itemDef,
+                    id: itemId,
+                    quantity: qty,
+                    type: itemDef.type || 'quest_item',
+                    name: itemDef.name || itemId,
+                    sprite: null // No physics sprite to clean up
+                };
+
+                // Trigger Pickup Logic (Handles Inventory, UI, Events)
+                if (window.pickupItem) {
+                    window.pickupItem(item);
+                }
+
+                // Destroy the Node (Limit 1 implies single use per spawn)
+                if (closestObj.definition.limit === 1) {
+                    if (closestObj.sprite) {
+                        if (closestObj.sprite.collisionBody) closestObj.sprite.collisionBody.destroy();
+                        closestObj.sprite.destroy();
+                    }
+                    const idx = MapManager.interactables.indexOf(closestObj);
+                    if (idx > -1) MapManager.interactables.splice(idx, 1);
+                }
+                return true;
+            }
+
             if (closestObj.definition.interactionType === 'forge') {
                 if (window.ForgeUI) window.ForgeUI.toggle();
                 return true;

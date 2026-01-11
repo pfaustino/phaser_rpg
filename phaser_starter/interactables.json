@@ -122,5 +122,22 @@
         "interactionRadius": 80,
         "interactionType": "quest_trigger",
         "tint": 15000000
+    },
+    {
+        "id": "echo_crystal_node",
+        "name": "Echo Crystal Formation",
+        "map": "procedural_only",
+        "x": 0,
+        "y": 0,
+        "spriteKey": "crystal",
+        "spritePath": "assets/images/crystal-shard.png",
+        "width": 32,
+        "height": 32,
+        "interactionRadius": 40,
+        "interactionType": "produce_item",
+        "producedItemId": "echo_crystal",
+        "producedAmount": 1,
+        "cooldown": 999999,
+        "limit": 1
     }
 ]

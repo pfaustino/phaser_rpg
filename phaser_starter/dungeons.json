@@ -19,7 +19,7 @@
                     "min": 3,
                     "max": 8
                 },
-                "corridorWidth": 1
+                "corridorWidth": 2
             },
             "monsters": [
                 {

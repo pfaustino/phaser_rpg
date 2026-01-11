@@ -134,7 +134,7 @@ window.LootManager = {
         if (window.uqe && window.uqe.activeQuests) {
             window.uqe.activeQuests.forEach(q => {
                 // Main 01-003: Crystalline Seepage
-                if (q.id === 'main_01_003' && !q.isComplete()) {
+                if (q.id === 'main_01_003') {
                     if (Math.random() < 0.40) {
                         this.spawnQuestItem(x, y, {
                             id: 'crystal_shard',
@@ -147,7 +147,7 @@ window.LootManager = {
                     }
                 }
                 // Main 03-010: Void Essence
-                if (q.id === 'main_03_010' && !q.isComplete()) {
+                if (q.id === 'main_03_010') {
                     if (Math.random() < 0.50) {
                         this.spawnQuestItem(x, y, {
                             id: 'void_essence',

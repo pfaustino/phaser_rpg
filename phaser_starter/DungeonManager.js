@@ -176,6 +176,13 @@ class DungeonManager {
         let shouldSpawn = true;
 
         // Data-driven Check
+        const completionKey = `${dungeonId}_level_${level}`;
+        if (MapManager.dungeonCompletions && MapManager.dungeonCompletions[completionKey]) {
+            debugLog(`✅ Level ${level} already completed. Spawning exit directly.`);
+            this.spawnDungeonExit(scene, x, y);
+            return;
+        }
+
         if (dungeonDef) {
             if (dungeonDef.bosses) {
                 // Find boss for this level

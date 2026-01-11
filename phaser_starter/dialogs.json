@@ -454,6 +454,15 @@
                 "text": "The town is safe for now, but I remain vigilant. How can I help you, citizen?",
                 "choices": [
                     {
+                        "text": "I interrogated the suspects. Here's what I found. (Present Findings)",
+                        "next": "suspects_findings",
+                        "condition": "quest_objective_active:main_02_004:return_thorne_suspects",
+                        "isQuest": true,
+                        "action": "complete_objective",
+                        "questId": "main_02_004",
+                        "objectiveId": "return_thorne_suspects"
+                    },
+                    {
                         "text": "What was that shockwave?",
                         "next": "mq_01_briefing",
                         "condition": "quest_objective_active:main_02_001:talk_thorne_intro",
@@ -476,6 +485,15 @@
                     },
                     {
                         "text": "Goodbye",
+                        "next": "end"
+                    }
+                ]
+            },
+            "suspects_findings": {
+                "text": "Interesting... Guard Bram seems nervous, Scholar Seren claims academic interest, and Merchant Lysa denies any involvement. One of them is lying. We need to dig deeper. Track down any evidence of their recent movements.",
+                "choices": [
+                    {
+                        "text": "I'll find the truth.",
                         "next": "end"
                     }
                 ]

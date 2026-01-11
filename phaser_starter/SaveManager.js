@@ -141,6 +141,8 @@ window.SaveManager = {
                 version: 1,
                 slot: slot,
                 playerStats: window.GameState.playerStats,
+                // Map Completions (Boss defeats, etc.)
+                dungeonCompletions: window.MapManager ? window.MapManager.dungeonCompletions : {},
                 // UQE Quest system data (for quest progress)
                 uqeQuests: window.uqe && typeof window.uqe.getSaveData === 'function' ? window.uqe.getSaveData() : null,
                 world: {
@@ -230,6 +232,12 @@ window.SaveManager = {
 
             if (data.settings && data.settings.difficulty && window.GameState) {
                 window.GameState.currentDifficulty = data.settings.difficulty;
+            }
+
+            // Restore Map Completions
+            if (data.dungeonCompletions && window.MapManager) {
+                window.MapManager.dungeonCompletions = data.dungeonCompletions;
+                debugLog('✅ Restored dungeon completions:', Object.keys(data.dungeonCompletions));
             }
 
             // Restore settings

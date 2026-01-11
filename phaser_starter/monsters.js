@@ -242,13 +242,13 @@ class MonsterRenderer {
         }
 
         // Movement Logic
-        if (monster.isAggro && distance > 32) { // 32 is "stop distance" to prevent clipping
+        if (monster.isAggro && distance > 16) { // Reduced stop distance to allow closer pursuit
             const monsterSpeed = monster.speed || 50;
 
             // --- Universal Separation Calculation (Boids-style) ---
             let separationX = 0;
             let separationY = 0;
-            const separationRadius = 48; // Pixel radius
+            const separationRadius = 32; // Reduced radius (was 48) to allow tighter packing
 
             // Use monsterGroup if available, otherwise fall back to global monsters array
             let neighbors = [];
@@ -268,8 +268,8 @@ class MonsterRenderer {
                     }
                 }
             });
-            const sepForceX = separationX * 3.0; // Strong separation weight
-            const sepForceY = separationY * 3.0;
+            const sepForceX = separationX * 1.2; // Reduced separation weight (was 3.0)
+            const sepForceY = separationY * 1.2;
 
             if (currentMap === 'dungeon' && pathfinder) {
                 // --- Dungeon: Use Pathfinding ---

@@ -1232,6 +1232,43 @@ const MapManager = {
 
                             if (typeof player !== 'undefined' && player && player.body) {
                                 scene.physics.add.collider(player, collisionBody);
+
+                                // SPECIAL: Void Tear Interaction (Enter Void Dimension)
+                                if (def.id === 'void_tear') {
+                                    scene.physics.add.overlap(player, collisionBody, () => {
+                                        // Check Quest Condition
+                                        const questId = 'main_03_008';
+                                        let canEnter = false;
+                                        if (window.uqe && window.uqe.activeQuests) {
+                                            const hasQuest = window.uqe.activeQuests.some(q => q.id === questId);
+                                            const completedQuest = window.uqe.completedQuests.some(q => q.id === questId);
+                                            if (hasQuest || completedQuest) canEnter = true;
+                                        }
+
+                                        if (canEnter) {
+                                            // Emit event to progress objective
+                                            if (window.uqe) window.uqe.eventBus.emit('location_explored', { id: 'void_tear' });
+
+                                            // Debounce transition
+                                            if (!this.isTransitioning) {
+                                                this.isTransitioning = true;
+                                                // Visual feedback
+                                                if (window.showDamageNumber) window.showDamageNumber(player.x, player.y - 50, "Entering Void...", 0xAA00FF);
+
+                                                scene.time.delayedCall(1000, () => {
+                                                    this.transitionToMap('dungeon', 1, 'void_dimension');
+                                                    this.isTransitioning = false;
+                                                });
+                                            }
+                                        } else {
+                                            // Feedback if closed
+                                            if (!this.lastVoidMsg || Date.now() - this.lastVoidMsg > 3000) {
+                                                this.lastVoidMsg = Date.now();
+                                                if (window.showDamageNumber) window.showDamageNumber(player.x, player.y - 50, "The tear is sealed.", 0x888888);
+                                            }
+                                        }
+                                    });
+                                }
                             }
 
                             // Get the definition for interaction tracking

@@ -559,7 +559,7 @@
         "main_02_003": {
             "id": "main_02_003",
             "title": "The Source",
-            "description": "Mage Elara has identified the source of the corruption as ancient ruins in the wilderness. Retrieve the artifact fragment she sensed.",
+            "description": "Mage Elara has identified the source of the corruption as ancient ruins in the wilderness. Defeat the corrupted guardian boss to retrieve the artifact fragment.",
             "giver": "Mage Elara",
             "step": 3,
             "requires": "main_02_002",
@@ -576,7 +576,7 @@
                     "type": "collect",
                     "itemId": "artifact_fragment",
                     "icon": "item_fragment",
-                    "label": "Retrieve Artifact Fragment",
+                    "label": "Defeat Boss to Get Artifact Fragment",
                     "target": 1,
                     "locationId": "temple_ruins",
                     "visualEffect": "strange_energy"

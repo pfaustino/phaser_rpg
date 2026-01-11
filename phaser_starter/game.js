@@ -3529,20 +3529,26 @@ function showDungeonLevelSelector(dungeonId, maxLevels) {
         return;
     }
 
+    debugLog(`🗺️ showDungeonLevelSelector called: dungeonId=${dungeonId}, maxLevels=${maxLevels}`);
+    debugLog(`   Current completions:`, JSON.stringify(MapManager.dungeonCompletions));
+
     // Determine highest unlocked level based on completions
     let highestUnlocked = 1;
     if (MapManager.dungeonCompletions) {
         for (let lvl = 1; lvl < maxLevels; lvl++) {
             const key = `${dungeonId}_level_${lvl}`;
             const legacyKey = `level_${lvl}`;
+            debugLog(`   Checking lvl ${lvl}: key='${key}' (${MapManager.dungeonCompletions[key]}), legacy='${legacyKey}' (${MapManager.dungeonCompletions[legacyKey]})`);
             if (MapManager.dungeonCompletions[key] || MapManager.dungeonCompletions[legacyKey]) {
                 highestUnlocked = lvl + 1; // Unlocked the NEXT level
+                debugLog(`   -> Level ${lvl} completed, unlocking ${lvl + 1}`);
             }
         }
     }
 
     // Cap at max levels
     highestUnlocked = Math.min(highestUnlocked, maxLevels);
+    debugLog(`   Final highestUnlocked: ${highestUnlocked}`);
 
     // If only level 1 is available, skip dialog and enter directly
     if (highestUnlocked <= 1) {

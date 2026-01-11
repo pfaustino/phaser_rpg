@@ -3296,9 +3296,12 @@ function checkBuildingInteraction() {
                 }
                 interacted = true;
             } else if (b.type === 'tower') {
-                // Restoration of Tower Dungeon Transition
-                debugLog(`🏰 Entering Tower Dungeon from Town`);
-                if (typeof MapManager.transitionToMap === 'function') {
+                // Tower Dungeon with Level Selector (Waypoint System)
+                debugLog(`🏰 Opening Tower Dungeon Level Selector`);
+                if (typeof showDungeonLevelSelector === 'function') {
+                    showDungeonLevelSelector('tower_dungeon', 3);
+                } else {
+                    // Fallback: direct entry
                     MapManager.transitionToMap('dungeon', 1, 'tower_dungeon');
                 }
                 interacted = true;
@@ -3512,6 +3515,116 @@ function triggerWorldInteraction() {
     return false;
 }
 window.triggerWorldInteraction = triggerWorldInteraction;
+
+/**
+ * Show Dungeon Level Selector Dialog
+ * Allows players to skip to previously cleared levels
+ * @param {string} dungeonId - The dungeon identifier (e.g., 'tower_dungeon')
+ * @param {number} maxLevels - Maximum number of levels in this dungeon
+ */
+function showDungeonLevelSelector(dungeonId, maxLevels) {
+    const scene = game.scene.scenes[0];
+    if (!scene) {
+        debugLog('❌ showDungeonLevelSelector: Scene not found');
+        return;
+    }
+
+    // Determine highest unlocked level based on completions
+    let highestUnlocked = 1;
+    if (MapManager.dungeonCompletions) {
+        for (let lvl = 1; lvl < maxLevels; lvl++) {
+            const key = `${dungeonId}_level_${lvl}`;
+            const legacyKey = `level_${lvl}`;
+            if (MapManager.dungeonCompletions[key] || MapManager.dungeonCompletions[legacyKey]) {
+                highestUnlocked = lvl + 1; // Unlocked the NEXT level
+            }
+        }
+    }
+
+    // Cap at max levels
+    highestUnlocked = Math.min(highestUnlocked, maxLevels);
+
+    // If only level 1 is available, skip dialog and enter directly
+    if (highestUnlocked <= 1) {
+        debugLog('🏰 Only Level 1 unlocked, entering directly');
+        MapManager.transitionToMap('dungeon', 1, dungeonId);
+        return;
+    }
+
+    debugLog(`🗺️ Showing level selector. Highest unlocked: ${highestUnlocked}`);
+
+    // Pause physics
+    scene.physics.pause();
+
+    // Create modal background
+    const cam = scene.cameras.main;
+    const modalBg = scene.add.rectangle(cam.width / 2, cam.height / 2, cam.width, cam.height, 0x000000, 0.7)
+        .setScrollFactor(0).setDepth(100000).setInteractive();
+
+    // Dialog box
+    const dialogWidth = Math.min(400, cam.width - 40);
+    const dialogHeight = 180;
+    const dialogBg = scene.add.rectangle(cam.width / 2, cam.height / 2, dialogWidth, dialogHeight, 0x222233, 1)
+        .setScrollFactor(0).setDepth(100001).setStrokeStyle(2, 0x8888ff);
+
+    // Title
+    const title = scene.add.text(cam.width / 2, cam.height / 2 - 60, 'Select Starting Level', {
+        fontSize: '20px', fontStyle: 'bold', fill: '#ffffff'
+    }).setScrollFactor(0).setDepth(100002).setOrigin(0.5);
+
+    // Create level buttons
+    const buttons = [];
+    const buttonWidth = 80;
+    const buttonSpacing = 10;
+    const totalWidth = highestUnlocked * buttonWidth + (highestUnlocked - 1) * buttonSpacing;
+    const startX = cam.width / 2 - totalWidth / 2 + buttonWidth / 2;
+
+    for (let lvl = 1; lvl <= highestUnlocked; lvl++) {
+        const bx = startX + (lvl - 1) * (buttonWidth + buttonSpacing);
+        const by = cam.height / 2;
+
+        const btn = scene.add.rectangle(bx, by, buttonWidth, 40, 0x336699)
+            .setScrollFactor(0).setDepth(100002).setInteractive({ useHandCursor: true });
+        const txt = scene.add.text(bx, by, `Level ${lvl}`, {
+            fontSize: '16px', fill: '#ffffff'
+        }).setScrollFactor(0).setDepth(100003).setOrigin(0.5);
+
+        btn.on('pointerover', () => btn.setFillStyle(0x4488bb));
+        btn.on('pointerout', () => btn.setFillStyle(0x336699));
+        btn.on('pointerdown', () => {
+            // Cleanup and transition
+            cleanup();
+            MapManager.transitionToMap('dungeon', lvl, dungeonId);
+        });
+
+        buttons.push(btn, txt);
+    }
+
+    // Cancel button
+    const cancelBtn = scene.add.rectangle(cam.width / 2, cam.height / 2 + 55, 100, 35, 0x993333)
+        .setScrollFactor(0).setDepth(100002).setInteractive({ useHandCursor: true });
+    const cancelTxt = scene.add.text(cam.width / 2, cam.height / 2 + 55, 'Cancel', {
+        fontSize: '14px', fill: '#ffffff'
+    }).setScrollFactor(0).setDepth(100003).setOrigin(0.5);
+
+    cancelBtn.on('pointerover', () => cancelBtn.setFillStyle(0xbb4444));
+    cancelBtn.on('pointerout', () => cancelBtn.setFillStyle(0x993333));
+    cancelBtn.on('pointerdown', () => {
+        cleanup();
+    });
+
+    // Cleanup function
+    function cleanup() {
+        modalBg.destroy();
+        dialogBg.destroy();
+        title.destroy();
+        buttons.forEach(b => b.destroy());
+        cancelBtn.destroy();
+        cancelTxt.destroy();
+        scene.physics.resume();
+    }
+}
+window.showDungeonLevelSelector = showDungeonLevelSelector;
 
 /**
  * Handle Item Pickup (Spacebar / Controller A)

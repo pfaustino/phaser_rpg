@@ -266,9 +266,10 @@ window.DialogManager = {
             if (pendingTalkObj) {
                 console.warn(`🔍 [AutoComplete] Found pending talk objective: ${pendingTalkObj.id} for NPC: ${npc.name}`);
 
-                // Check if any node in the dialog has a VISIBLE choice that explicitly completes this objective
-                // A choice is visible if it has no condition OR its condition evaluates to true
-                let hasVisibleCustomDialogChoice = false;
+                // Check if any node in the dialog has a choice that explicitly completes this objective
+                // If such a choice EXISTS (even with a failing condition), we should NOT auto-complete
+                // The user must explicitly click the choice when it becomes available
+                let hasDialogChoiceForObjective = false;
                 for (const nodeId in activeDialog.nodes) {
                     const node = activeDialog.nodes[nodeId];
                     if (node.choices) {
@@ -278,26 +279,16 @@ window.DialogManager = {
                             c.objectiveId === pendingTalkObj.id
                         );
                         if (matchingChoice) {
-                            // Check if the choice is VISIBLE (no condition OR condition passes)
-                            const conditionPasses = !matchingChoice.condition ||
-                                this.evaluateDialogCondition(matchingChoice.condition, window.playerStats);
-
-                            console.warn(`🔍 [AutoComplete] Found matching choice in '${nodeId}', condition: '${matchingChoice.condition || 'none'}', passes: ${conditionPasses}`);
-
-                            if (conditionPasses) {
-                                hasVisibleCustomDialogChoice = true;
-                                console.warn(`✅ [AutoComplete] Choice is VISIBLE - SKIPPING auto-complete`);
-                                break;
-                            } else {
-                                console.warn(`🚫 [AutoComplete] Choice condition FAILED - will not prevent auto-complete`);
-                            }
+                            hasDialogChoiceForObjective = true;
+                            console.warn(`✅ [AutoComplete] Found dialog choice for '${pendingTalkObj.id}' in node '${nodeId}' - SKIPPING auto-complete (user must click it)`);
+                            break;
                         }
                     }
                 }
 
-                // Only auto-complete if there's NO visible custom dialog choice for this objective
-                if (!hasVisibleCustomDialogChoice) {
-                    console.warn(`⚠️ [AutoComplete] No visible custom dialog found - AUTO-COMPLETING objective: ${pendingTalkObj.id}`);
+                // Only auto-complete if there's NO dialog choice for this objective
+                if (!hasDialogChoiceForObjective) {
+                    console.warn(`⚠️ [AutoComplete] No dialog choice found - AUTO-COMPLETING objective: ${pendingTalkObj.id}`);
                     if (window.uqe) {
                         window.uqe.completeObjective(quest.id, pendingTalkObj.id);
                         if (window.saveGame) window.saveGame(null, false, "Objective Updated Autosave");

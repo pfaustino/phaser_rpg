@@ -171,11 +171,29 @@
                 "text": "Welcome to my shop! I have the finest wares in the village. Are you looking to buy something, or perhaps you could help me with a business favor?",
                 "choices": [
                     {
+                        "text": "Captain Thorne has questions about the ruins. (Interrogate)",
+                        "next": "interrogate",
+                        "isQuest": true,
+                        "condition": "quest_objective_active:main_02_004:talk_lysa",
+                        "action": "complete_objective",
+                        "questId": "main_02_004",
+                        "objectiveId": "talk_lysa"
+                    },
+                    {
                         "text": "I'd like to browse your wares",
                         "action": "open_shop"
                     },
                     {
                         "text": "Goodbye",
+                        "next": "end"
+                    }
+                ]
+            },
+            "interrogate": {
+                "text": "The ruins? I... I do trade with travelers who come from that direction. But I assure you, my business is legitimate! I simply sell goods, nothing more.",
+                "choices": [
+                    {
+                        "text": "I see. Thank you for your time.",
                         "next": "end"
                     }
                 ]

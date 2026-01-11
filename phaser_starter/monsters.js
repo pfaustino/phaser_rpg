@@ -43,10 +43,10 @@ class MonsterRenderer {
         const w = bounds.width || (bounds.radius * 2) || 40;
         const h = bounds.height || (bounds.radius * 2) || 40;
 
-        // Cap physics size to 24px to allow navigation in 32px hallways
+        // Cap physics size to 16px to allow navigation in 32px hallways
         // This decouples visual size from collision size
-        const physicsW = Math.min(w, 24);
-        const physicsH = Math.min(h, 24);
+        const physicsW = Math.min(w, 16);
+        const physicsH = Math.min(h, 16);
 
         container.body.setSize(physicsW, physicsH);
         container.body.setOffset(-physicsW / 2, -physicsH / 2); // Center the body on the container (0,0)
@@ -106,7 +106,7 @@ class MonsterRenderer {
             }
         });
 
-        debugLog(`✅ Monster interactive set for ${blueprintId}. Size: ${w}x${h}`);
+        debugLog(`✅ Monster interactive set for ${blueprintId}. Vis: ${w}x${h}, Phys: ${physicsW}x${physicsH}`);
 
         // Add Hover Effect
         if (typeof window.enableHoverEffect === 'function') {

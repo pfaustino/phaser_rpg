@@ -1088,8 +1088,8 @@ const MapManager = {
 
             // Exits
             if (dungeon.entrance) {
-                const ex = dungeon.entrance.x * tileSize;
-                const ey = dungeon.entrance.y * tileSize;
+                const ex = dungeon.entrance.x * tileSize + tileSize / 2;
+                const ey = dungeon.entrance.y * tileSize + tileSize / 2;
                 const exitMarker = scene.add.rectangle(ex, ey, tileSize * 2, tileSize * 2, 0x00ff00, 0.5)
                     .setDepth(2)
                     .setStrokeStyle(4, 0x00ff00);
@@ -1114,8 +1114,8 @@ const MapManager = {
             // Check max levels from definition
             const maxLevels = dungeonDef.levels || 3;
             if (dungeon.exit && level < maxLevels) {
-                const ex = dungeon.exit.x * tileSize;
-                const ey = dungeon.exit.y * tileSize;
+                const ex = dungeon.exit.x * tileSize + tileSize / 2;
+                const ey = dungeon.exit.y * tileSize + tileSize / 2;
                 const nextMarker = scene.add.rectangle(ex, ey, tileSize * 2, tileSize * 2, 0xff0000, 0.5)
                     .setDepth(2)
                     .setStrokeStyle(4, 0xff0000);

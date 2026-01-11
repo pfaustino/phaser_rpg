@@ -153,8 +153,8 @@ class DungeonManager {
         // Spawn boss in exit room
         if (MapManager.currentDungeon.exit && MapManager.currentDungeon.rooms.length > 0) {
             const bossRoom = MapManager.currentDungeon.rooms[MapManager.currentDungeon.rooms.length - 1];
-            const bossX = bossRoom.centerX * scene.tileSize;
-            const bossY = bossRoom.centerY * scene.tileSize;
+            const bossX = bossRoom.centerX * scene.tileSize + scene.tileSize / 2;
+            const bossY = bossRoom.centerY * scene.tileSize + scene.tileSize / 2;
 
             this.spawnBossMonster(bossX, bossY, MapManager.dungeonLevel);
         }

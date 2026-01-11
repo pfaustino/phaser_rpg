@@ -600,6 +600,15 @@ class UqeEngine {
             if (obj) {
                 obj.progress = obj.target;
                 obj.completed = true;
+
+                // Emit event so UI updates
+                if (this.eventBus) {
+                    this.eventBus.emit(UQE_EVENTS.OBJECTIVE_UPDATED, {
+                        objective: obj,
+                        amount: 0
+                    });
+                }
+
                 // Check if this completes the whole quest
                 this.update();
                 debugLog(`✅ [UQE] Force completed objective: ${objectiveId} in quest ${questId}`);

@@ -185,9 +185,9 @@ window.DialogManager = {
         activeDialog.npcName = npc.name || activeDialog.npcName;
         activeDialog.npcTitle = npc.title || activeDialog.npcTitle;
 
-        // UQE Bridge Event
+        // UQE Bridge Event - use lowercase to match UQE_EVENTS.NPC_TALK = 'npc_talk'
         if (typeof uqe !== 'undefined') {
-            uqe.eventBus.emit('NPC_TALK', { id: npc.name });
+            uqe.eventBus.emit('npc_talk', { id: npc.name });
             uqe.update();
         }
 

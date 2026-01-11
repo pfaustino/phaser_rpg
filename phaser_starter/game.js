@@ -3204,8 +3204,9 @@ function checkNPCInteraction() {
         if (window.uqe) {
             // Try ID from definition first, then instance ID
             const eventId = (closestNPC.definition ? closestNPC.definition.id : closestNPC.id) || closestNPC.name.toLowerCase().replace(' ', '_');
-            window.uqe.eventBus.emit('NPC_TALK', { id: eventId, name: closestNPC.name });
-            debugLog(`   -> Emitted NPC_TALK for ${eventId}`);
+            // Emit both ID formats so quest can match by name OR by id
+            window.uqe.eventBus.emit('npc_talk', { id: closestNPC.name, name: closestNPC.name });
+            debugLog(`   -> Emitted npc_talk for '${closestNPC.name}'`);
         }
 
         // Open Dialog UI

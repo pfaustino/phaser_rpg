@@ -86,8 +86,8 @@ window.LootManager = {
 
         // Add to global items list (if used primarily for cleanup)
         if (window.items) window.items.push({
-            sprite: itemSprite,
-            ...itemData
+            ...itemData,
+            sprite: itemSprite // Ensure GameObject overwrites any 'sprite' data property
         });
 
         // Add interaction (Click to pickup) - Note: Collision is handled in game.js usually?

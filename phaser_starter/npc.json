@@ -55,7 +55,7 @@
         "spawnType": "absolute",
         "targetX": 20,
         "targetY": 30,
-        "dialogId": "generic_npc",
+        "dialogId": "captain_kael",
         "questGiver": true,
         "spriteKey": "npc_captain_kael",
         "portraitKey": "portrait_captain_kael",

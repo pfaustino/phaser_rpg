@@ -23,7 +23,21 @@
                         "loreId": "lore_ch1_intro"
                     },
                     {
+                        "text": "Any more lands to see?",
+                        "next": "no_more_travels",
+                        "condition": "quest_completed:side_explore_013"
+                    },
+                    {
                         "text": "Goodbye",
+                        "next": "end"
+                    }
+                ]
+            },
+            "no_more_travels": {
+                "text": "You have walked every path, climbed every peak. The map is complete because of you. There is nothing left to discover... for now.",
+                "choices": [
+                    {
+                        "text": "It was a long journey.",
                         "next": "end"
                     }
                 ]
@@ -194,6 +208,34 @@
                 "choices": [
                     {
                         "text": "I see. Thank you for your time.",
+                        "next": "end"
+                    },
+                    {
+                        "text": "Any more collection work?",
+                        "next": "no_more_collect",
+                        "condition": "quest_completed:side_collect_019"
+                    },
+                    {
+                        "text": "Any more investment opportunities?",
+                        "next": "no_more_gold",
+                        "condition": "quest_completed:side_gold_018"
+                    }
+                ]
+            },
+            "no_more_collect": {
+                "text": "My warehouse is bursting at the seams! I couldn't possibly store another pebble. You're the greatest scavenger I've ever known!",
+                "choices": [
+                    {
+                        "text": "Glad to help.",
+                        "next": "end"
+                    }
+                ]
+            },
+            "no_more_gold": {
+                "text": "We've cornered every market from here to the capital! My coffers are overflowing. We are wealthier than kings!",
+                "choices": [
+                    {
+                        "text": "A pleasure doing business.",
                         "next": "end"
                     }
                 ]
@@ -486,6 +528,20 @@
                     {
                         "text": "Goodbye",
                         "next": "end"
+                    },
+                    {
+                        "text": "Any more targets?",
+                        "next": "no_more_targets",
+                        "condition": "quest_completed:side_kill_019"
+                    }
+                ]
+            },
+            "no_more_targets": {
+                "text": "The wild is quiet... for now. You have done the work of a hundred guards. Rest, hero.",
+                "choices": [
+                    {
+                        "text": "I will.",
+                        "next": "end"
                     }
                 ]
             },
@@ -602,7 +658,21 @@
                         "next": "about"
                     },
                     {
+                        "text": "Have I reached my potential?",
+                        "next": "max_power",
+                        "condition": "quest_completed:side_level_015"
+                    },
+                    {
                         "text": "Goodbye",
+                        "next": "end"
+                    }
+                ]
+            },
+            "max_power": {
+                "text": "The mana flows through you as if you were born of it. Your power rivals the legends of old. There is nothing more I can teach you... for now.",
+                "choices": [
+                    {
+                        "text": "I will use it wisely.",
                         "next": "end"
                     }
                 ]
@@ -713,6 +783,39 @@
             },
             "end": {
                 "text": "Knowledge is power.",
+                "choices": []
+            }
+        }
+    },
+    "captain_kael": {
+        "npcName": "Captain Kael",
+        "npcTitle": "Captain of the Guard",
+        "nodes": {
+            "start": {
+                "text": "Stand fast, soldier. The survival of the village depends on our endurance.",
+                "choices": [
+                    {
+                        "text": "Is my legend secure?",
+                        "next": "undying_legend",
+                        "condition": "quest_completed:side_survive_018"
+                    },
+                    {
+                        "text": "Goodbye",
+                        "next": "end"
+                    }
+                ]
+            },
+            "undying_legend": {
+                "text": "You have faced death a thousand times and refused to yield. Your legend will be sung for generations. Rest now... you have earned it.",
+                "choices": [
+                    {
+                        "text": "I will.",
+                        "next": "end"
+                    }
+                ]
+            },
+            "end": {
+                "text": "Stand fast.",
                 "choices": []
             }
         }

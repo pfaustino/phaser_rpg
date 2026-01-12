@@ -124,7 +124,7 @@ window.LootManager = {
     /**
      * Drop items from a killed monster
      */
-    dropItemsFromMonster(x, y, monsterXP = 10, isBoss = false) {
+    dropItemsFromMonster(x, y, monsterXP = 10, isBoss = false, monsterId = null) {
         // Drop probability: 40% chance
         if (Math.random() > 0.40 && !isBoss) { // Allow bosses to always drop loot? Logic below doesn't use isBoss param here, but whatever.
             // (Original check was just if (Math.random() > 0.40) return;)
@@ -167,6 +167,63 @@ window.LootManager = {
                         sprite: 'assets/images/crystal-shard.png', // Dynamic load
                         quality: 'Epic'
                     });
+                }
+                // Main 02-007: Dark Orders (Orc Captains)
+                if (q.id === 'main_02_007') {
+                    if (monsterId === 'procedural_orc_captain' || monsterId === 'orc_captain') {
+                        // 100% Drop Rate for Quest Item to reduce frustration
+                        this.spawnQuestItem(x, y, {
+                            id: 'encrypted_orders',
+                            name: 'Encrypted Orders',
+                            type: 'quest_item',
+                            quantity: 1,
+                            sprite: 'assets/images/void-sigil.png',
+                            quality: 'Rare'
+                        });
+                        if (window.addChatMessage) window.addChatMessage("Orders Found!", 0x00ff00, '📜');
+                    }
+                }
+                // Main 02-008: Hidden Path (Camp Key)
+                if (q.id === 'main_02_008') {
+                    if (monsterId === 'procedural_traitor_lieutenant') {
+                        this.spawnQuestItem(x, y, {
+                            id: 'camp_key',
+                            name: 'Camp Key',
+                            type: 'quest_item',
+                            quantity: 1,
+                            sprite: 'assets/images/item_ring.png',
+                            quality: 'Rare'
+                        });
+                        if (window.addChatMessage) window.addChatMessage("Key Found!", 0x00ff00, '🔑');
+                    }
+                }
+                // Main 01-011: Echo Crystals (Skeletons in Watchtower deep)
+                if (q.id === 'main_01_011') {
+                    if (monsterId === 'procedural_skeleton' && Math.random() < 0.40) {
+                        this.spawnQuestItem(x, y, {
+                            id: 'echo_crystal',
+                            name: 'Echo Crystal',
+                            type: 'quest_item',
+                            quantity: 1,
+                            sprite: 'assets/images/echo-crystal.png',
+                            quality: 'Rare'
+                        });
+                    }
+                }
+                // Main 02-011: Stolen Crates (Elite Guards in Stronghold)
+                if (q.id === 'main_02_011') {
+                    if ((monsterId === 'procedural_elite_guard' || monsterId === 'void_cultist') && Math.random() < 0.50) {
+                        this.spawnQuestItem(x, y, {
+                            id: 'stolen_crate',
+                            name: 'Stolen Crate',
+                            type: 'quest_item',
+                            quantity: 1,
+                            sprite: 'assets/images/item_consumable.png',
+                            quality: 'Uncommon',
+                            uiTint: 0x8B4513
+                        });
+                        if (window.addChatMessage) window.addChatMessage("Crate Recovered!", 0x00ff00, '📦');
+                    }
                 }
             });
         }
@@ -291,5 +348,5 @@ window.LootManager = {
 
 // Global Aliases for Compatibility
 window.spawnQuestItem = (x, y, data) => window.LootManager.spawnQuestItem(x, y, data);
-window.dropItemsFromMonster = (x, y, xp, isBoss) => window.LootManager.dropItemsFromMonster(x, y, xp, isBoss);
+window.dropItemsFromMonster = (x, y, xp, isBoss, monsterId) => window.LootManager.dropItemsFromMonster(x, y, xp, isBoss, monsterId);
 window.pickupItem = (item, index) => window.LootManager.pickupItem(item, index);

@@ -698,7 +698,7 @@
         "main_02_007": {
             "id": "main_02_007",
             "title": "Dark Orders",
-            "description": "The mercenaries were carrying encrypted orders signed by 'General Vex.' Collect 3 sets of orders from Orc Captains for Elara to decode.",
+            "description": "The mercenaries were carrying encrypted orders signed by 'General Vex.' Collect 3 sets of orders from Orc Captains in the Traitor's Camp dungeon (Level 2+) for Elara to decode.",
             "giver": "Captain Thorne",
             "step": 7,
             "requires": "main_02_006",

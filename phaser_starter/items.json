@@ -46,6 +46,31 @@
             "stackable": true,
             "quality": "Epic",
             "description": "A powerful resonating crystal"
+        },
+        "encrypted_orders": {
+            "name": "Encrypted Orders",
+            "sprite": "assets/images/void-sigil.png",
+            "spriteKey": "void-sigil",
+            "stackable": true,
+            "quality": "Rare",
+            "description": "Sealed orders from General Vex"
+        },
+        "camp_key": {
+            "name": "Camp Key",
+            "sprite": "assets/images/item_ring.png",
+            "spriteKey": "item_ring",
+            "stackable": true,
+            "quality": "Rare",
+            "description": "A heavy iron key found on a Lieutenant"
+        },
+        "stolen_crate": {
+            "name": "Stolen Crate",
+            "sprite": "assets/images/item_consumable.png",
+            "spriteKey": "item_consumable",
+            "stackable": true,
+            "quality": "Uncommon",
+            "description": "Supplies stolen from the town",
+            "uiTint": 9127187
         }
     },
     "consumables": {

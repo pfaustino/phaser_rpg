@@ -2472,6 +2472,10 @@ function create() {
     window.player = player;
     this.player = player;
 
+    // Expose player globally for MapManager and other systems
+    window.player = player;
+    this.player = player;
+
     // Restore saved position if loaded
     if (typeof window.savedPlayerX !== 'undefined') {
         let spawnX = window.savedPlayerX;
@@ -2838,6 +2842,19 @@ function create() {
         // Check if it's a tap and NOT interacting with UI or entities (which block propagation usually, but just in case)
         if (duration < tapDuration && dist < dragThreshold) {
 
+            // FIX: Interaction Priority for Tap-to-Fire (Robust)
+            // Use multiple checks to ensure we don't fire when clicking an NPC
+            const timeSinceEntityClick = this.time.now - (this.lastEntityClickTime || 0);
+
+            // Check:
+            // 1. Recent entity click (500ms buffer - generous)
+            // 2. Active movement to click target
+            // 3. Just clicked an entity (clickTargetEntity is set)
+            if ((this.lastEntityClickTime && timeSinceEntityClick < 500) || this.isMovingToClick || this.clickTargetEntity) {
+                // debugLog('🛡️ Tap-to-Fire ignored (Entity Priority)');
+                return;
+            }
+
             const equippedWeapon = playerStats.equipment.weapon;
             const weaponType = equippedWeapon ? (equippedWeapon.weaponType || 'Sword') : 'Sword';
             const isRanged = ['Bow', 'Crossbow', 'Staff'].includes(weaponType);
@@ -2862,11 +2879,34 @@ function create() {
     this.lastEntityClickTime = 0;
     this.lastWindowCloseTime = 0;
 
+    // Handle mouse click / touch for movement (Global Pointer)
+    this.input.on('pointerdown', (pointer) => {
+        // Only handle primary button
+        if (pointer.button !== 0) return;
+
+        // FIX: Interaction Priority Check
+        // 1. Time buffer check (increased to 200ms)
+        // 2. State check (isMovingToClick) - if we just clicked an entity, we are already handling it.
+        const timeSinceEntityClick = this.time.now - this.lastEntityClickTime;
+
+        // Debug priority values
+        if (this.lastEntityClickTime > 0) {
+            // debugLog(`🕒 Priority Check: TimeSince=${timeSinceEntityClick.toFixed(2)}ms, MovingToClick=${this.isMovingToClick}`);
+        }
+
+        if ((this.lastEntityClickTime && timeSinceEntityClick < 200) || this.isMovingToClick) {
+            // debugLog('🛡️ Interaction Priority: Ignoring Attack/Move (Entity Clicked)');
+            return;
+        }
+
+        // debugLog('🌍 [Global PointerDown] WorldX:', pointer.worldX, 'WorldY:', pointer.worldY);
+
+        // Check for double tap (dash)
+    });
+
     this.input.on('gameobjectdown', (pointer, gameObject) => {
         // Only handle primary button (left click)
         if (pointer.button !== 0) return;
-
-        debugLog('👉 GameObject Down:', gameObject.type, 'Key:', gameObject.texture ? gameObject.texture.key : 'no-texture', 'Depth:', gameObject.depth, 'isItem:', gameObject.isItem);
 
         // Ignore UI elements (high depth)
         if (gameObject.depth > 1000) return;
@@ -3951,50 +3991,7 @@ function update(time, delta) {
     }
 
     // --- MOUSE MOVEMENT LOGIC ---
-    // Handle click-to-move (must be outside the action check to run every frame)
-    if (this.isMovingToClick && this.clickMoveTarget) {
-        // Cancel if any detailed movement keys are pressed
-        if ((typeof isActionActive === 'function' && (isActionActive('move_up') || isActionActive('move_down') || isActionActive('move_left') || isActionActive('move_right'))) ||
-            (typeof isStickActive === 'function' && isStickActive())) {
-            this.isMovingToClick = false;
-            this.clickMoveTarget = null;
-        } else {
-            const distance = Phaser.Math.Distance.Between(player.x, player.y, this.clickMoveTarget.x, this.clickMoveTarget.y);
-            const stopDistance = 10; // Stop when close enough (increased to prevent jitter)
-
-            if (distance > stopDistance) {
-                // Move towards target
-                const speed = playerStats.speed * 60; // Approximate FPS fix, or use physics.moveToObject which uses speed in px/sec?
-                // Phaser Arcade Physics use px/sec. playerStats.speed is likely around 2-5? No, check stats.
-                // Standard speed is usually 160.
-
-                let moveSpeed = playerStats.speed;
-                if (moveSpeed < 10) moveSpeed = 160; // Safety fallback
-
-                this.physics.moveToObject(player, this.clickMoveTarget, moveSpeed);
-
-                // Manually set facing direction for animation logic
-                const angle = Phaser.Math.Angle.Between(player.x, player.y, this.clickMoveTarget.x, this.clickMoveTarget.y);
-                if (Math.abs(Math.cos(angle)) > Math.abs(Math.sin(angle))) {
-                    player.facingDirection = (Math.cos(angle) > 0) ? 'east' : 'west';
-                } else {
-                    player.facingDirection = (Math.sin(angle) > 0) ? 'south' : 'north';
-                }
-
-                // Update animation manually if needed, or let standard logic handle it based on velocity
-                // Standard logic checks body.velocity, so it should just work.
-            } else {
-                // Arrived
-                player.body.setVelocity(0);
-                this.isMovingToClick = false;
-                this.clickMoveTarget = null;
-            }
-        }
-    } else if (this.isMovingToClick) {
-        // Fallback cleanup
-        this.isMovingToClick = false;
-        player.body.setVelocity(0);
-    }
+    // (Duplicate logic removed)
     if (isActionJustPressed('ability3')) window.useAbility(3);
     if (isActionJustPressed('ability4')) window.useAbility(4);
     if (window.AbilityManager) {
@@ -4183,90 +4180,93 @@ function update(time, delta) {
         }
 
         // Process movement towards target if active
+        // Process movement towards target if active
         if (!moving && this.isMovingToClick && this.clickMoveTarget) {
             const distance = Phaser.Math.Distance.Between(player.x, player.y, this.clickMoveTarget.x, this.clickMoveTarget.y);
 
-            if (distance > 10) {
-                // Determine effective target range based on entity type
-                let targetRange = 10;
-                if (this.clickTargetEntity) {
-                    // Update target position in case entity moved
-                    this.clickMoveTarget = { x: this.clickTargetEntity.x, y: this.clickTargetEntity.y };
+            // DEBUG TRACE
+            // debugLog(`🏃 MovingToClick Trace: Dist=${distance.toFixed(1)}, HasTarget=${!!this.clickTargetEntity}`);
 
-                    if (this.clickTargetEntity.monsterId) {
-                        targetRange = 40; // Attack range (reliable for 50px check)
-                    } else if (this.clickTargetEntity.npcId) {
-                        targetRange = 40; // Interaction range (reliable for 50px check)
-                    } else if (this.clickTargetEntity.isItem) {
-                        targetRange = 20; // Move closer for items
-                    }
+            // FIX: Allow interaction even if distance is 0 (Standing on top)
+            // Determine effective target range based on entity type
+            let targetRange = 10;
+            if (this.clickTargetEntity) {
+                // Update target position in case entity moved
+                this.clickMoveTarget = { x: this.clickTargetEntity.x, y: this.clickTargetEntity.y };
+
+                if (this.clickTargetEntity.monsterId) {
+                    targetRange = 40; // Attack range
+                } else if (this.clickTargetEntity.npcId) {
+                    targetRange = 40; // Interaction range
+                } else if (this.clickTargetEntity.isItem) {
+                    targetRange = 30; // Pickup range
                 }
+            }
 
-                // Move towards target if outside range
-                const distToTarget = Phaser.Math.Distance.Between(player.x, player.y, this.clickMoveTarget.x, this.clickMoveTarget.y);
+            // Move towards target if outside range AND strict distance > 10 (to prevent jitter on ground clicks)
+            // If targetEntity is set, we trust targetRange. If ground click, use 10px buffer. #bugfix
+            if (distance > targetRange && distance > 10) {
+                // Apply velocity
+                // Ensure speed is defined
+                const moveSpeed = (playerStats && playerStats.speed) ? playerStats.speed : 160;
+                this.physics.moveTo(player, this.clickMoveTarget.x, this.clickMoveTarget.y, moveSpeed);
+                moving = true;
 
-                if (distToTarget > targetRange) {
-                    this.physics.moveTo(player, this.clickMoveTarget.x, this.clickMoveTarget.y, speed);
-                    moving = true;
-
-                    // Update direction based on velocity
-                    if (Math.abs(player.body.velocity.x) > Math.abs(player.body.velocity.y)) {
-                        newDirection = player.body.velocity.x > 0 ? 'east' : 'west';
-                    } else {
-                        newDirection = player.body.velocity.y > 0 ? 'south' : 'north';
-                    }
+                // Update direction based on velocity
+                if (Math.abs(player.body.velocity.x) > Math.abs(player.body.velocity.y)) {
+                    newDirection = player.body.velocity.x > 0 ? 'east' : 'west';
                 } else {
-                    // Reached target (or close enough to interact)
-                    player.setVelocity(0);
-                    this.isMovingToClick = false;
-
-                    // Trigger interaction if we have a target entity
-                    if (this.clickTargetEntity) {
-                        const entity = this.clickTargetEntity;
-                        this.clickTargetEntity = null; // Clear target after interaction
-
-                        // Handle Monster Attack
-                        if (entity.monsterId) {
-                            debugLog('⚔️ Auto-attacking monster:', entity.name);
-                            // Face the monster
-                            const angle = Phaser.Math.Angle.Between(player.x, player.y, entity.x, entity.y);
-                            if (Math.abs(Math.cos(angle)) > Math.abs(Math.sin(angle))) {
-                                player.facingDirection = Math.cos(angle) > 0 ? 'east' : 'west';
-                            } else {
-                                player.facingDirection = Math.sin(angle) > 0 ? 'south' : 'north';
-                            }
-                            // Trigger attack
-                            playerAttack();
-                        }
-                        // Handle NPC Interaction
-                        else if (entity.npcId) {
-                            debugLog('💬 Auto-interacting with NPC:', entity.name);
-                            checkNPCInteraction();
-                        }
-                        // Handle Item Pickup
-                        else if (entity.isItem) {
-                            debugLog('🎒 Auto-pickup item:', entity.itemData ? entity.itemData.name : 'Unknown Item');
-
-                            // Iterate to find the index
-                            const itemIndex = items.findIndex(i => i.sprite === entity || i === entity.itemData);
-                            if (entity.itemData) {
-                                pickupItem(entity.itemData, itemIndex !== -1 ? itemIndex : -1);
-                            } else {
-                                // Fallback if itemData missing
-                                console.warn('Item missing itemData', entity);
-                                if (entity.destroy) entity.destroy();
-                            }
-                        }
-                    }
+                    newDirection = player.body.velocity.y > 0 ? 'south' : 'north';
                 }
             } else {
-                // Reached target (generic move)
+                // Reached target (or close enough to interact)
                 player.setVelocity(0);
                 this.isMovingToClick = false;
-            }
-        }
 
-        // Check if controller is providing movement
+                // debugLog('🏁 Reached Click Target (or within range)');
+
+                // Trigger interaction if we have a target entity
+                if (this.clickTargetEntity) {
+                    const entity = this.clickTargetEntity;
+                    // debugLog(`🏁 Executing Interaction for ${entity.name || 'Unknown'}`);
+
+                    this.clickTargetEntity = null; // Clear target after interaction
+
+                    // Handle Monster Attack
+                    if (entity.monsterId) {
+                        debugLog('⚔️ Auto-attacking monster:', entity.name);
+                        // Face the monster
+                        const angle = Phaser.Math.Angle.Between(player.x, player.y, entity.x, entity.y);
+                        if (Math.abs(Math.cos(angle)) > Math.abs(Math.sin(angle))) {
+                            player.facingDirection = Math.cos(angle) > 0 ? 'east' : 'west';
+                        } else {
+                            player.facingDirection = Math.sin(angle) > 0 ? 'south' : 'north';
+                        }
+                        // Trigger attack
+                        if (typeof playerAttack === 'function') playerAttack();
+                    }
+                    // Handle NPC Interaction
+                    else if (entity.npcId) {
+                        debugLog('💬 Auto-interacting with NPC:', entity.name);
+                        if (typeof checkNPCInteraction === 'function') checkNPCInteraction();
+                    }
+                    // Handle Item Pickup
+                    else if (entity.isItem) {
+                        debugLog('🎒 Auto-pickup item:', entity.itemData ? entity.itemData.name : 'Unknown Item');
+
+                        // Iterate to find the index
+                        const itemIndex = items.findIndex(i => i.sprite === entity || i === entity.itemData);
+                        if (entity.itemData) {
+                            if (typeof pickupItem === 'function') pickupItem(entity.itemData, itemIndex !== -1 ? itemIndex : -1);
+                        } else {
+                            // Fallback if itemData missing
+                            console.warn('Item missing itemData', entity);
+                            if (entity.destroy) entity.destroy();
+                        }
+                    }
+                }
+            }
+        }// Check if controller is providing movement
         if (controllerActive && !moving) {
             const velX = player.body.velocity.x;
             const velY = player.body.velocity.y;

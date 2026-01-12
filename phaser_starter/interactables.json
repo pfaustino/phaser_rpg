@@ -50,7 +50,7 @@
         "spritePath": "assets/images/obelisk-old.png",
         "width": 64,
         "height": 128,
-        "interactionRadius": 60,
+        "interactionRadius": 75,
         "interactionType": "quest_trigger",
         "tint": 13369548
     },

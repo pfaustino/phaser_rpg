@@ -1200,7 +1200,7 @@ const MapManager = {
                                 visual = scene.add.rectangle(pixelX, pixelY, 24, 64, 0x8B0000).setDepth(8);
                                 scene.add.rectangle(pixelX, pixelY - 24, 16, 16, 0xCC4444).setDepth(9);
                                 scene.add.circle(pixelX, pixelY, 28, 0xFF0000, 0.15).setDepth(7);
-                                collisionBody = scene.add.rectangle(pixelX, pixelY, 32, 80, 0x000000, 0);
+                                collisionBody = scene.add.rectangle(pixelX, pixelY, 24, 64, 0x000000, 0);
                             } else if (def.id === 'void_tear') {
                                 // Void Tear - purple/void themed with pulsing effect
                                 // Outer glow

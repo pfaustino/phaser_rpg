@@ -65,14 +65,94 @@ let dialogDatabase = {};
 // ABILITY_DEFINITIONS moved to AbilityManager.js
 
 let questMarkers = new Map(); // Quest objective markers (key: targetId, value: {sprite, tween})
-let defenseSpawnerState = {
-    active: false,
-    spawnedMonsters: [],
-    lastSpawnTime: 0,
-    waveInterval: 5000,
-    maxMonsters: 10,
-    monstersPerWave: 3
+// ============================================
+// RAID SYSTEM (Data-Driven Wave Spawners)
+// ============================================
+// Consolidated registry for all defense/survival events
+let RaidRegistry = {
+    // Quest: Resonant Frequencies (main_01_005)
+    "defense_town": {
+        questId: 'main_01_005',
+        mapId: 'town',
+        active: false,
+        lastSpawnTime: 0,
+        waveInterval: 5000,
+        maxMonsters: 10,
+        monstersPerWave: 3,
+        spawnedMonsters: [],
+        spawnLogic: (scene, player, config) => {
+            // Spawn near Blacksmith
+            const blacksmithX = 24 * 32;
+            const blacksmithY = 13 * 32;
+            // Only spawn if player is nearby (active defense)
+            if (player && Phaser.Math.Distance.Between(player.x, player.y, blacksmithX, blacksmithY) < 600) {
+                const spawnX = blacksmithX + Phaser.Math.Between(-150, 150);
+                const spawnY = blacksmithY + Phaser.Math.Between(-100, 150);
+                const miteType = { id: 'procedural_echo_mite', name: 'Echo_Mite', generationType: 'cellular_automata', isProcedural: true, spawnAmount: [1, 1] };
+                return spawnMonster(spawnX, spawnY, miteType);
+            }
+            return null;
+        },
+        onStart: () => {
+            addChatMessage("Protect the Blacksmith! Echoes are drawn to the sound!", 0xffa500);
+        }
+    },
+    // Quest: Survive the Void (main_03_009)
+    "defense_void": {
+        questId: 'main_03_009',
+        mapId: ['void_dimension', 'The Void Dimension'], // Support array for flexible matching
+        active: false,
+        lastSpawnTime: 0,
+        waveInterval: 3000,
+        maxMonsters: 12,
+        monstersPerWave: 2,
+        spawnedMonsters: [],
+        spawnLogic: (scene, player, config) => {
+            // Circle Player (Raid Assault)
+            const angle = Math.random() * Math.PI * 2;
+            const dist = 350 + Math.random() * 150;
+            let spawnX = player.x + Math.cos(angle) * dist;
+            let spawnY = player.y + Math.sin(angle) * dist;
+
+            // VALIDATE POSITION: Snap to nearest floor tile if inside a wall
+            if (typeof MapManager !== 'undefined' && MapManager.findValidSpawnPosition) {
+                const validPos = MapManager.findValidSpawnPosition(spawnX, spawnY);
+                spawnX = validPos.x;
+                spawnY = validPos.y;
+            }
+            const types = ['void_cultist', 'void_lasher', 'shadow_wisp', 'procedural_backlash'];
+            const type = types[Math.floor(Math.random() * types.length)];
+
+            debugLog(`[RAID] 🔮 Attempting to spawn raid monster: ${type} at ${Math.floor(spawnX)},${Math.floor(spawnY)}`);
+
+            const monster = spawnMonster(spawnX, spawnY, type);
+
+            if (monster) {
+                debugLog(`[RAID] ✅ Spawned ${monster.name || type}`);
+                monster.isAggressive = true;
+                monster.aggroRange = 3000;
+                monster.setAlpha(0);
+                scene.tweens.add({ targets: monster, alpha: 1, duration: 800 });
+            } else {
+                debugLog(`[RAID] ❌ Failed to spawn monster: ${type}`);
+            }
+            return monster;
+        },
+        onStart: () => {
+            addChatMessage("The Void detects your presence... A raid is forming!", 0x9900ff);
+        },
+        onTick: (time, config) => {
+            // Track Survival Time
+            if (!config.lastTimeCheck) config.lastTimeCheck = time;
+            if (time - config.lastTimeCheck >= 1000) {
+                // Global timer handles time_survived events now.
+                // Duplicate emit removed to fix double-counting speed.
+                config.lastTimeCheck = time;
+            }
+        }
+    }
 };
+window.RaidRegistry = RaidRegistry;
 
 let lastQuestMarkerUpdate = 0; // Throttle marker updates
 let specialZones = []; // Populated from zones.json
@@ -520,14 +600,16 @@ function preload() {
     // wind_effect loaded from assets.json
 
     // Load Method 2 monster data
-    this.load.json('monsterData', 'monsters.json');
+    // Cache bust monsters.json to ensure updates are seen immediately
+    const bust = '?v=' + Date.now();
+    this.load.json('monsterData', 'monsters.json' + bust);
+    this.load.json('monsters', 'monsters.json' + bust);
     this.load.json('milestoneData', 'milestones.json');
     this.load.json('npcData', 'npc.json');
     this.load.json('zoneData', 'zones.json');
     this.load.json('assets', 'assets.json');
     this.load.json('interactables', 'interactables.json');
     this.load.json('cinematicData', 'cinematics.json');
-    this.load.json('monsters', 'monsters.json');
     this.load.json('dungeonData', 'dungeons.json');
 
 
@@ -1791,6 +1873,27 @@ window.debugVictory = () => {
  * Create game objects (like pygame initialization)
  */
 function create() {
+    // --- UI LABEL LOGIC (EARLY INIT) ---
+    // Initialize global variable to capture MapManager updates that happen before UI creation
+    if (!window.currentLocationText) window.currentLocationText = "Loading...";
+
+    // Global hook
+    window.updateLocationLabel = (text) => {
+        window.currentLocationText = text;
+        // Update UI if it exists (captured in closure or accessed via scene reference if needed)
+        // note: 'this' here refers to scene context because create() is called on scene
+        if (this.mapDiffIndicator) {
+            const difficulty = (window.GameState && window.GameState.currentDifficulty) || 'normal';
+            const diffName = difficulty.charAt(0).toUpperCase() + difficulty.slice(1);
+            let color = '#ffffff';
+            if (difficulty === 'casual') color = '#4CAF50';
+            else if (difficulty === 'normal') color = '#FFC107';
+
+            this.mapDiffIndicator.setText(`${text} (${diffName})`);
+            this.mapDiffIndicator.setColor(color);
+        }
+    };
+
     debugLog('🚀 CREATE FUNCTION CALLED - Starting tileset processing');
 
     // [New] Check for Save Load Request (from Reload)
@@ -1907,8 +2010,24 @@ function create() {
     // Initialize procedural monster renderer (Method 2)
     monsterRenderer = new MonsterRenderer(this);
     window.monsterRenderer = monsterRenderer;
-    if (this.cache.json.exists('monsterData')) {
-        monsterRenderer.init(this.cache.json.get('monsterData'));
+
+    // Initialize Monster Compendium
+    if (typeof MonsterCompendium !== 'undefined') {
+        this.compendium = new MonsterCompendium(this);
+        this.input.keyboard.on('keydown-O', () => {
+            this.compendium.toggle();
+        });
+        console.log("📖 Monster Compendium initialized. Press 'O' to open.");
+    }
+
+    // Fix: Load from 'monsters' cache key, not 'monsterData'
+    // First try 'monsters', then fallback to 'monsterData' for legacy compatibility
+    const monsterData = this.cache.json.get('monsters') || this.cache.json.get('monsterData');
+    if (monsterData) {
+        monsterRenderer.init(monsterData);
+        debugLog('✅ Monster Blueprints loaded from JSON');
+    } else {
+        console.warn('⚠️ Failed to load monster blueprints: monsters.json not found in cache');
     }
 
     // Load items data (weapon types, hit sounds, materials, etc.)
@@ -2285,6 +2404,14 @@ function create() {
                     debugLog('🛡️ Resuming active defense quest...');
                     if (typeof startResonantFrequenciesEvent === 'function') {
                         startResonantFrequenciesEvent();
+                    }
+                }
+
+                // Resume Void Survival if active
+                if (window.isQuestActive && window.isQuestActive('main_03_009')) {
+                    debugLog('🌌 Resuming Void Survival...');
+                    if (typeof startVoidSurvivalEvent === 'function') {
+                        startVoidSurvivalEvent();
                     }
                 }
             }
@@ -2998,7 +3125,8 @@ function create() {
         .setDepth(1);
 
     // Map + Difficulty Indicator (below version number)
-    this.mapDiffIndicator = this.add.text(topTextX, 28, '', {
+    const initialLocText = window.currentLocationText || "Loading...";
+    this.mapDiffIndicator = this.add.text(topTextX, 28, `${initialLocText}`, {
         fontFamily: 'Arial',
         fontSize: '14px',
         color: '#ffffff',
@@ -3008,6 +3136,11 @@ function create() {
         .setOrigin(1, 0)
         .setScrollFactor(0)
         .setDepth(1);
+
+    // Global hook to update this label
+    window.updateLocationLabel = (text) => {
+        if (this.mapDiffIndicator) this.mapDiffIndicator.setText(text);
+    };
 
     // --- TOP RIGHT ICONS ---
 
@@ -3091,24 +3224,17 @@ function create() {
         if (this.updateHUDLabels) this.updateHUDLabels();
     });
 
-    // Initial Update
-    if (this.updateHUDLabels) this.updateHUDLabels();
-
-    // Store reference globally
-    // Store reference globally
-    window.mapDiffIndicator = this.mapDiffIndicator;
-
     // Update map/difficulty indicator every 500ms
     this.time.addEvent({
         delay: 500,
         loop: true,
         callback: () => {
             if (!window.MapManager || !window.GameState) return;
-            const map = window.MapManager.currentMap || 'unknown';
+            // Use the text set by MapManager, or fallback
+            const baseText = window.currentLocationText || "Unknown";
             const difficulty = window.GameState.currentDifficulty || 'normal';
 
             // Capitalize first letter
-            const mapName = map.charAt(0).toUpperCase() + map.slice(1);
             const diffName = difficulty.charAt(0).toUpperCase() + difficulty.slice(1);
 
             // Color based on difficulty
@@ -3116,7 +3242,7 @@ function create() {
             if (difficulty === 'casual') color = '#4CAF50';      // Green
             else if (difficulty === 'normal') color = '#FFC107'; // Yellow/Gold
             if (this.mapDiffIndicator && typeof this.mapDiffIndicator.setText === 'function') {
-                this.mapDiffIndicator.setText(`${mapName} (${diffName})`);
+                this.mapDiffIndicator.setText(`${baseText} (${diffName})`);
                 this.mapDiffIndicator.setColor(color);
             }
         }
@@ -3798,7 +3924,7 @@ function update(time, delta) {
     }
 
     // Defense Quest Wave Spawner
-    updateDefenseQuestSpawner(time);
+    updateRaidSystem(time);
 
     // Quest Markers (bobbing arrows above objectives)
     updateQuestMarkers(time);
@@ -4935,19 +5061,36 @@ function update(time, delta) {
     }
 
     // Track player movement for exploration quests
-    const currentTileX = Math.floor(player.x / scene.tileSize);
-    const currentTileY = Math.floor(player.y / scene.tileSize);
-    if (scene.lastPlayerTileX !== undefined && scene.lastPlayerTileY !== undefined) {
-        if (currentTileX !== scene.lastPlayerTileX || currentTileY !== scene.lastPlayerTileY) {
-            playerStats.questStats.tilesTraveled++;
+    // Track player movement for exploration quests (Distance Accumulation to prevent jitter)
+    if (scene.lastPlayerX === undefined) {
+        scene.lastPlayerX = player.x;
+        scene.lastPlayerY = player.y;
+        scene.travelAccumulator = 0;
+    }
+
+    // Calculate distance moved this frame
+    const distMoved = Phaser.Math.Distance.Between(player.x, player.y, scene.lastPlayerX, scene.lastPlayerY);
+
+    // Only accumulate meaningful movement (ignore micro-jitter < 0.1)
+    if (distMoved > 0.1) {
+        scene.travelAccumulator += distMoved;
+
+        // Check if we've traveled at least one tile (32px)
+        if (scene.travelAccumulator >= 32) {
+            const tiles = Math.floor(scene.travelAccumulator / 32);
+            playerStats.questStats.tilesTraveled += tiles;
+            scene.travelAccumulator -= (tiles * 32);
+
             // UQE: Emit tile traveled event
+            // Note: We emit 1 event per tile (or we could emit { amount: tiles })
             if (typeof uqe !== 'undefined') {
-                uqe.eventBus.emit(UQE_EVENTS.TILE_TRAVELED, { amount: 1 });
+                uqe.eventBus.emit(UQE_EVENTS.TILE_TRAVELED, { amount: tiles });
             }
         }
+
+        scene.lastPlayerX = player.x;
+        scene.lastPlayerY = player.y;
     }
-    scene.lastPlayerTileX = currentTileX;
-    scene.lastPlayerTileY = currentTileY;
 
     // Track survival time - handled in main update loop above (line ~4227)
     // Removed duplicate emission to prevent double counting
@@ -11644,8 +11787,27 @@ function spawnMonster(x, y, type, hpOverride, attackOverride, xpOverride, isBoss
                 graphics.generateTexture(fallbackKey, 32, 32);
             }
 
-            console.warn(`⚠️ No blueprint found for ${type.name}. Using default procedural placeholder.`);
-            monster = scene.physics.add.sprite(x, y, fallbackKey);
+            console.warn(`⚠️ No blueprint found for ${type.id}. Using default procedural placeholder.`);
+            const container = scene.add.container(x, y);
+            const fallbackGfx = scene.add.rectangle(0, 0, 32, 32, 0xff0000);
+            container.add(fallbackGfx);
+
+            // Debug Text for Modders
+            const debugText = scene.add.text(0, -20, `${type.id}\n(monsters.json)`, {
+                fontSize: '10px',
+                fill: '#ffffff',
+                align: 'center',
+                backgroundColor: '#000000aa'
+            }).setOrigin(0.5);
+            container.add(debugText);
+
+            // Add basic physics body if missing
+            if (!container.body) {
+                scene.physics.add.existing(container);
+                container.body.setSize(32, 32);
+                container.body.setOffset(-16, -16); // Center body
+            }
+            monster = container; // Assign the container to monster
             monster.setDepth(5);
             monster.isProcedural = true;
         }
@@ -13322,78 +13484,7 @@ function showQuestCompletedPopupEnhanced(quest) {
 /**
  * Update Defense Quest Spawner (for main_01_005 "Resonant Frequencies")
  */
-function updateDefenseQuestSpawner(time) {
-    const questActive = isQuestActive('main_01_005');
 
-    // Cleanup when quest becomes inactive
-    if (!questActive && defenseSpawnerState.active) {
-        debugLog('🛡️ Defense quest ended - cleaning up spawned monsters');
-        defenseSpawnerState.spawnedMonsters.forEach(m => {
-            if (m && m.active) {
-                if (m.hpBarBg) m.hpBarBg.destroy();
-                if (m.hpBar) m.hpBar.destroy();
-                m.destroy();
-            }
-        });
-        defenseSpawnerState.spawnedMonsters = [];
-        defenseSpawnerState.active = false;
-        return;
-    }
-
-    // Only run if quest is active
-    if (!questActive) return;
-
-    // Initialize if quest just became active
-    if (!defenseSpawnerState.active) {
-        debugLog('🛡️ Defense quest started - initializing wave spawner');
-        defenseSpawnerState.active = true;
-        defenseSpawnerState.lastSpawnTime = time;
-        defenseSpawnerState.spawnedMonsters = [];
-    }
-
-    // Clean up dead monsters from our tracking
-    defenseSpawnerState.spawnedMonsters = defenseSpawnerState.spawnedMonsters.filter(m => m && m.active && !m.isDead);
-
-    // Check if it's time to spawn a new wave
-    const activeCount = defenseSpawnerState.spawnedMonsters.length;
-    const timeSinceLastSpawn = time - defenseSpawnerState.lastSpawnTime;
-
-    if (timeSinceLastSpawn >= defenseSpawnerState.waveInterval && activeCount < defenseSpawnerState.maxMonsters) {
-        // Spawn a wave!
-        const toSpawn = Math.min(
-            defenseSpawnerState.monstersPerWave,
-            defenseSpawnerState.maxMonsters - activeCount
-        );
-
-        debugLog(`🛡️ Spawning defense wave: ${toSpawn} Echo Mites`);
-
-        // Echo Mite type for defense quest
-        // Echo Mite type for defense quest (Procedural)
-        const miteType = {
-            id: 'procedural_echo_mite',
-            name: 'Echo_Mite', // Matches monsters.json
-            generationType: 'cellular_automata',
-            isProcedural: true,
-            // Stats will be loaded from monsters.json/blueprints via spawnMonster lookup
-            // provided we use the correct ID/Name
-        };
-
-        for (let i = 0; i < toSpawn; i++) {
-            // Spawn around the player at random angles
-            const angle = Math.random() * Math.PI * 2;
-            const dist = 150 + Math.random() * 100; // 150-250 pixels away
-            const spawnX = player.x + Math.cos(angle) * dist;
-            const spawnY = player.y + Math.sin(angle) * dist;
-
-            const monster = spawnMonster(spawnX, spawnY, miteType);
-            if (monster) {
-                defenseSpawnerState.spawnedMonsters.push(monster);
-            }
-        }
-
-        defenseSpawnerState.lastSpawnTime = time;
-    }
-}
 
 // ========================================
 // QUEST MARKER SYSTEM
@@ -13826,6 +13917,36 @@ window.startBacklashEvent = startBacklashEvent;
 window.stopBacklashEvent = stopBacklashEvent;
 
 // ==========================================
+// Quest Event: Survive the Void (main_03_009)
+// ==========================================
+// DEPRECATED: Replaced by updateVoidDefenseSpawner in main loop for Raid mechanics
+// We keep the start/stop stub for compatibility with QuestEvents registry if needed,
+// but the main logic is now handled by the update loop state.
+
+function startVoidSurvivalEvent() {
+    // No-op: State is handled automatically by updateVoidDefenseSpawner detecting active quest
+    debugLog('🌌 Void Survival Event triggered (Auto-managed by Raid Spawner)');
+}
+
+/* DEPRECATED BLOCK START
+    const scene = game.scene.scenes[0];
+    if (!scene) return;
+
+    if (voidSurvivalTimer) {
+        voidSurvivalTimer.remove();
+        voidSurvivalTimer = null;
+    }
+*/
+
+
+function stopVoidSurvivalEvent() {
+    // No-op: Cleanup handled by updateVoidDefenseSpawner
+    debugLog('✅ Void Survival Event stopped (Auto-managed)');
+}
+window.startVoidSurvivalEvent = startVoidSurvivalEvent;
+window.stopVoidSurvivalEvent = stopVoidSurvivalEvent;
+
+// ==========================================
 // Quest Event Registry (Data-Driven Support)
 // ==========================================
 window.QuestEvents = {
@@ -13836,6 +13957,10 @@ window.QuestEvents = {
     "backlash_event": {
         start: startBacklashEvent,
         stop: stopBacklashEvent
+    },
+    "void_survival": {
+        start: startVoidSurvivalEvent,
+        stop: stopVoidSurvivalEvent
     }
 };
 
@@ -14027,3 +14152,180 @@ function resize(gameSize) {
         }
     }
 }
+
+
+
+
+
+
+/**
+ * Generic Raid System Update
+ * Iterates through all registered raids in RaidRegistry
+ */
+function updateRaidSystem(time) {
+    if (!window.RaidRegistry) {
+        console.warn("⚠️ RaidRegistry not found!");
+        return;
+    }
+
+    // Throttle debug log to once every 5 seconds to avoid spam
+    if (!window._lastRaidDebugTime || time - window._lastRaidDebugTime > 5000) {
+        window._lastRaidDebugTime = time;
+        // Check Void Raid status specifically
+        const voidRaid = window.RaidRegistry['defense_void'];
+        if (voidRaid) {
+            const qa = isQuestActive(voidRaid.questId);
+            const currentMap = MapManager.currentMap;
+
+            // Check Map Match Manually for Debug
+            const currentDungeonId = MapManager.currentDungeon ? MapManager.currentDungeon.id : null;
+            const mapMatch = Array.isArray(voidRaid.mapId)
+                ? (voidRaid.mapId.includes(currentMap) || (currentDungeonId && voidRaid.mapId.includes(currentDungeonId)))
+                : (currentMap === voidRaid.mapId || (currentDungeonId && currentDungeonId === voidRaid.mapId));
+
+            debugLog(`[RAID] 🔍 Raid Debug: Quest '${voidRaid.questId}' Active? ${qa}, Map: '${currentMap}', Dungeon: '${currentDungeonId}' (Match: ${mapMatch})`);
+
+            if (qa && !mapMatch) {
+                debugLog(`[RAID] ⚠️ Raid blocked by map mismatch! Expected: ${voidRaid.mapId}, Got: ${currentMap} / ${currentDungeonId}`);
+            }
+        }
+    }
+
+    Object.values(window.RaidRegistry).forEach(raid => {
+        const questActive = isQuestActive(raid.questId);
+
+        // robust map checking
+        const currentDungeonId = MapManager.currentDungeon ? MapManager.currentDungeon.id : null;
+        const mapMatch = Array.isArray(raid.mapId)
+            ? (raid.mapId.includes(MapManager.currentMap) || (currentDungeonId && raid.mapId.includes(currentDungeonId)))
+            : (MapManager.currentMap === raid.mapId || (currentDungeonId && currentDungeonId === raid.mapId));
+
+        // Cleanup if inactive but was running
+        if ((!questActive || !mapMatch) && raid.active) {
+            debugLog(`🛡️ Raid ended: ${raid.questId}`);
+            raid.spawnedMonsters.forEach(m => {
+                if (m && m.active && !m.isDead) m.destroy();
+            });
+            raid.spawnedMonsters = [];
+            raid.active = false;
+            return;
+        }
+
+        // Only process valid conditions
+        if (!questActive || !mapMatch) return;
+
+        // Initialize
+        if (!raid.active) {
+            debugLog(`[RAID] 🛡️ Raid started: ${raid.questId}`);
+            raid.active = true;
+            raid.lastSpawnTime = time;
+            raid.spawnedMonsters = []; // Ensure clean slate
+            if (raid.onStart) raid.onStart();
+        }
+
+        // Custom Tick Logic (e.g. survival timer)
+        if (raid.onTick) raid.onTick(time, raid);
+
+        // CHECK OBJECTIVE COMPLETION: Stop raid if objective is met
+        if (window.uqe && window.uqe.getQuestObjective) {
+            // Hardcoded assumption: Void Raid uses 'survive_void' objective
+            // Ideally this would be config-driven, but for now we fix the bug
+            const obj = window.uqe.getQuestObjective(raid.questId, 'survive_void');
+            if (obj && obj.completed) {
+                if (raid.active) {
+                    debugLog(`[RAID] 🏆 Objective Complete! Stopping Raid: ${raid.questId}`);
+                    raid.active = false;
+                    // Kill existing monsters
+                    raid.spawnedMonsters.forEach(m => {
+                        if (m && m.active && !m.isDead) {
+                            m.currentPath = null; // Stop moving
+                            m.isAggro = false;
+                            // Fade out?
+                            game.scene.scenes[0].tweens.add({
+                                targets: m,
+                                alpha: 0,
+                                duration: 1000,
+                                onComplete: () => m.destroy()
+                            });
+                        }
+                    });
+                    raid.spawnedMonsters = [];
+                }
+                return;
+            }
+        }
+
+        // Cleanup Dead
+        raid.spawnedMonsters = raid.spawnedMonsters.filter(m => m && m.active && !m.isDead);
+
+        // Spawn Wave
+        const timeSince = time - raid.lastSpawnTime;
+        const activeCount = raid.spawnedMonsters.length;
+
+        if (timeSince >= raid.waveInterval && activeCount < raid.maxMonsters) {
+            const toSpawn = Math.min(raid.monstersPerWave, raid.maxMonsters - activeCount);
+            if (toSpawn > 0) {
+                debugLog(`⚔️ Raid Wave: Spawning ${toSpawn} for ${raid.questId}`);
+                const scene = game.scene.scenes[0];
+                for (let i = 0; i < toSpawn; i++) {
+                    if (raid.spawnLogic) {
+                        const m = raid.spawnLogic(scene, player, raid);
+                        if (m) raid.spawnedMonsters.push(m);
+                    }
+                }
+                raid.lastSpawnTime = time;
+            }
+        }
+    });
+}
+
+/**
+ * DEBUG: Reset Void Quest for Testing
+ * Allows re-running the raid without valid save/load
+ */
+window.resetVoidQuest = () => {
+    const questId = 'main_03_009';
+
+    // 1. Remove from Completed Quests
+    const completedIdx = window.uqe.completedQuests.findIndex(q => q.id === questId);
+    if (completedIdx > -1) {
+        window.uqe.completedQuests.splice(completedIdx, 1);
+        debugLog('   - Removed from Completed Quests');
+    }
+
+    // 2. Remove from Active Quests (to force re-accept)
+    const activeIdx = window.uqe.activeQuests.findIndex(q => q.id === questId);
+    if (activeIdx > -1) {
+        if (window.uqe.activeQuests[activeIdx].dispose) {
+            window.uqe.activeQuests[activeIdx].dispose(); // Clean up listeners
+        }
+        window.uqe.activeQuests.splice(activeIdx, 1);
+        debugLog('   - Removed from Active Quests');
+    }
+
+    // 3. FORCE CLEANUP: Clear all 'time_survived' listeners to prevent double-counting
+    if (window.uqe && window.uqe.eventBus && window.uqe.eventBus.listeners['time_survived']) {
+        const count = window.uqe.eventBus.listeners['time_survived'].length;
+        window.uqe.eventBus.listeners['time_survived'] = [];
+        debugLog(`   - Force cleared ${count} 'time_survived' listeners`);
+    }
+
+    // 4. Reset Raid Registry
+    if (window.RaidRegistry && window.RaidRegistry['defense_void']) {
+        const raid = window.RaidRegistry['defense_void'];
+        // Kill existing
+        raid.spawnedMonsters.forEach(m => {
+            if (m && m.active && !m.isDead) m.destroy();
+        });
+        raid.spawnedMonsters = [];
+        raid.active = false;
+        raid.lastSpawnTime = 0;
+        debugLog('   - Raid Registry reset');
+    }
+
+    // 4. Re-Accept Quest
+    window.uqe.acceptQuest(questId);
+    debugLog('[RAID] ✅ Quest Reset Complete! Raid should start shortly.');
+    if (window.updateQuestTrackerHUD) window.updateQuestTrackerHUD();
+};
+

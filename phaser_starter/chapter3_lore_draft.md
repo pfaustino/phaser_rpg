@@ -76,7 +76,7 @@ Following General Vex's defeat, the hero discovers that Vex was merely a puppet.
 *   **Location:** **Void Dimension**
 *   **Giver:** Mage Elara (Via Communication Crystal)
 *   **Context:** Elara's voice comes through faintly. She needs samples to understand this place.
-*   **Objective:** "I can hear you... barely. Gather 'Void Essence' from the creatures there. I can conjure a return portal if I understand their energy."
+*   **Objective:** "I can hear you... barely. Gather 'Void Essence' from the creatures there. We need to study their energy to find a way out."
 *   **Action:** Collect 10 Void Essence from monsters in the **Void Dimension**.
 
 ### 11. The Void Walker (main_03_011)

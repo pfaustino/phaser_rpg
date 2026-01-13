@@ -11,6 +11,7 @@
 // ============================================
 // DEBUG UTILITIES (Must be defined FIRST)
 // ============================================
+window.GAME_VERSION = "0.9.265.1";
 /**
  * Debug log - only outputs to console when debugMode is enabled
  * Defined here (in Constants.js) because it loads before other scripts

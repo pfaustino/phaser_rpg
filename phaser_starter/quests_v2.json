@@ -3091,7 +3091,7 @@
         "main_03_004": {
             "id": "main_03_004",
             "title": "Dark Scriptures",
-            "description": "This script... it hurts to look at. Take it to the Librarian in town. Maybe he can decipher this madness.",
+            "description": "This script... it hurts to look at. Take it to the Librarian in town. Maybe she can decipher this madness.",
             "giver": "Captain Thorne",
             "step": 4,
             "requires": "main_03_003",
@@ -3099,8 +3099,8 @@
                 {
                     "id": "talk_librarian",
                     "type": "talk",
-                    "npcId": "Librarian",
-                    "label": "Consult Librarian",
+                    "npcId": "Scholar Seren",
+                    "label": "Consult Scholar Seren",
                     "target": 1
                 }
             ],
@@ -3113,7 +3113,7 @@
             "id": "main_03_005",
             "title": "The Ritual Sites",
             "description": "They are weakening reality. Search the Wilderness for 'Void Anchors'. They look like dark obelisks. Destroy them!",
-            "giver": "Librarian",
+            "giver": "Scholar Seren",
             "step": 5,
             "requires": "main_03_004",
             "objectives": [
@@ -3154,16 +3154,16 @@
         "main_03_007": {
             "id": "main_03_007",
             "title": "The High Priest",
-            "description": "The High Priest Malakor is orchestrating this. Bring me his staff.",
+            "description": "The High Priest Voresh is orchestrating this from the Cultist Main Camp (Level 3). Bring me his staff.",
             "giver": "Captain Thorne",
             "step": 7,
             "requires": "main_03_006",
             "objectives": [
                 {
-                    "id": "kill_malakor",
+                    "id": "kill_voresh",
                     "type": "kill",
-                    "monsterId": "malakor_boss",
-                    "label": "Defeat High Priest Malakor",
+                    "monsterId": "void_priest_voresh",
+                    "label": "Defeat High Priest Voresh",
                     "target": 1
                 }
             ],
@@ -3179,6 +3179,7 @@
             "giver": "Mage Elara",
             "step": 8,
             "requires": "main_03_007",
+            "autoComplete": true,
             "objectives": [
                 {
                     "id": "enter_void",
@@ -3200,6 +3201,10 @@
             "giver": "System",
             "step": 9,
             "requires": "main_03_008",
+            "autoAccept": true,
+            "autoComplete": true,
+            "startEvent": "void_survival",
+            "stopEvent": "void_survival",
             "objectives": [
                 {
                     "id": "survive_void",
@@ -3216,7 +3221,7 @@
         "main_03_010": {
             "id": "main_03_010",
             "title": "Strange Matter",
-            "description": "I can hear you... barely. Gather 'Void Essence' from the creatures there. I can conjure a return portal if I understand their energy.",
+            "description": "I can hear you... barely. Gather 'Void Essence' from the creatures there. We need to study their energy to find a way out.",
             "giver": "Mage Elara",
             "step": 10,
             "requires": "main_03_009",

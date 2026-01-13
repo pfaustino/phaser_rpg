@@ -51,6 +51,10 @@ class MonsterRenderer {
         container.body.setSize(physicsW, physicsH);
         container.body.setOffset(-physicsW / 2, -physicsH / 2); // Center the body on the container (0,0)
 
+        const visuals = this.scene.add.container(0, 0);
+        container.visuals = visuals; // Store reference for animations
+        container.add(visuals);
+
         appearance.layers.sort((a, b) => (a.z || 0) - (b.z || 0)).forEach(layer => {
             let element;
             if (layer.type === 'shape') {
@@ -62,7 +66,7 @@ class MonsterRenderer {
                     element.x = layer.offset.x;
                     element.y = layer.offset.y;
                 }
-                container.add(element);
+                visuals.add(element);
             }
         });
 
@@ -147,6 +151,8 @@ class MonsterRenderer {
         const bp = container.getData('blueprint');
         if (!bp || !bp.appearance.animations) return;
 
+        // Target visuals container to avoid messing with physics body
+        const target = container.visuals || container;
         const anims = bp.appearance.animations;
 
         // Idle animation
@@ -155,7 +161,7 @@ class MonsterRenderer {
             if (idle.type === 'pulse') {
                 const property = idle.property || 'scaleY';
                 const tweenConfig = {
-                    targets: container,
+                    targets: target,
                     duration: idle.duration || 1000,
                     yoyo: true,
                     repeat: -1,
@@ -164,9 +170,11 @@ class MonsterRenderer {
                 tweenConfig[property] = idle.to || 0.8;
                 this.scene.tweens.add(tweenConfig);
             } else if (idle.type === 'float') {
+                // Float relative to local 0
+                const base = (target === container) ? container.y : 0;
                 this.scene.tweens.add({
-                    targets: container,
-                    y: container.y - (idle.range || 10),
+                    targets: target,
+                    y: base - (idle.range || 10),
                     duration: idle.duration || 1500,
                     yoyo: true,
                     repeat: -1,
@@ -187,30 +195,34 @@ class MonsterRenderer {
         const bp = container.getData('blueprint');
         if (!bp || !bp.appearance.animations) return;
 
+        const target = container.visuals || container;
         const walk = bp.appearance.animations.walk;
         if (!walk) return;
 
         if (isMoving) {
             if (walk.type === 'hop' && !container.getData('isHopping')) {
                 container.setData('isHopping', true);
+                const base = (target === container) ? container.y : 0;
                 this.scene.tweens.add({
-                    targets: container,
-                    y: container.y - 10,
+                    targets: target,
+                    y: base - 10,
                     duration: 200 / (walk.speed || 1),
                     yoyo: true,
                     repeat: -1,
                     ease: 'Quad.easeOut'
                 });
             } else if (walk.type === 'jitter') {
-                container.x += (Math.random() - 0.5) * (walk.range || 2);
-                container.y += (Math.random() - 0.5) * (walk.range || 2);
+                // Jitter visually around center, don't drift physics body
+                target.x = (Math.random() - 0.5) * (walk.range || 2);
+                target.y = (Math.random() - 0.5) * (walk.range || 2);
             }
             // 'slide' is mostly visual, maybe a slight tilt?
         } else {
             if (container.getData('isHopping')) {
-                this.scene.tweens.killTweensOf(container, 'y');
+                this.scene.tweens.killTweensOf(target, 'y');
                 container.setData('isHopping', false);
-                // Reset y if needed, but the scene will update it based on physics
+                // Reset y if visual container
+                if (target !== container) target.y = 0;
             }
         }
     }

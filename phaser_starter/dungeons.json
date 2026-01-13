@@ -255,6 +255,72 @@
             ],
             "storyline_lore": "The inner sanctum of the traitor's forces."
         },
+        "cultist_camp": {
+            "id": "cultist_camp",
+            "name": "Cultist Main Camp",
+            "levels": 3,
+            "tileset": {
+                "floor": "dungeon_floor",
+                "wall": "dungeon_wall"
+            },
+            "generation": {
+                "width": 55,
+                "height": 55,
+                "roomCount": {
+                    "min": 10,
+                    "max": 14
+                },
+                "roomSize": {
+                    "min": 5,
+                    "max": 12
+                },
+                "corridorWidth": 2
+            },
+            "monsters": [
+                {
+                    "id": "void_cultist",
+                    "minLevel": 1,
+                    "chance": 0.6
+                },
+                {
+                    "id": "procedural_backlash",
+                    "minLevel": 3,
+                    "chance": 0.2
+                },
+                {
+                    "id": "procedural_elite_guard",
+                    "minLevel": 1,
+                    "chance": 0.2
+                }
+            ],
+            "interactables": [
+                {
+                    "id": "ritual_altar",
+                    "minLevel": 1,
+                    "maxLevel": 3,
+                    "chance": 1,
+                    "limit": 4
+                },
+                {
+                    "id": "void_tear",
+                    "minLevel": 3,
+                    "maxLevel": 3,
+                    "chance": 1,
+                    "limit": 3
+                }
+            ],
+            "bosses": [
+                {
+                    "level": 2,
+                    "monsterId": "void_cultist"
+                },
+                {
+                    "level": 3,
+                    "monsterId": "void_priest_voresh"
+                }
+            ],
+            "storyline_lore": "You have found the main encampment of the void cult. The air hums with dark chanting."
+        },
         "void_dimension": {
             "id": "void_dimension",
             "name": "The Void Dimension",
@@ -274,7 +340,7 @@
                     "min": 10,
                     "max": 20
                 },
-                "corridorWidth": 4,
+                "corridorWidth": 5,
                 "isVoid": true
             },
             "monsters": [

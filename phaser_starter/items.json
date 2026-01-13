@@ -15,6 +15,14 @@
             "quality": "Uncommon",
             "description": "A fragment of corrupted echo energy"
         },
+        "void_essence": {
+            "name": "Void Essence",
+            "sprite": "assets/images/void-crystal.png",
+            "spriteKey": "void_essence",
+            "stackable": true,
+            "quality": "Rare",
+            "description": "A coalesced fragment of pure void energy"
+        },
         "echo_crystal": {
             "name": "Echo Crystal",
             "sprite": "assets/images/echo-crystal.png",
@@ -47,13 +55,13 @@
             "quality": "Epic",
             "description": "A powerful resonating crystal"
         },
-        "encrypted_orders": {
-            "name": "Encrypted Orders",
+        "void_sigil": {
+            "name": "Void Sigil",
             "sprite": "assets/images/void-sigil.png",
             "spriteKey": "void-sigil",
             "stackable": true,
             "quality": "Rare",
-            "description": "Sealed orders from General Vex"
+            "description": "A dark sigil emitting faint void energy"
         },
         "camp_key": {
             "name": "Camp Key",

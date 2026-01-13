@@ -11,6 +11,7 @@ window.UIManager = {
     buildingPanelVisible: false,
     assetsVisible: false,
     grassDebugVisible: false,
+    compendiumVisible: false,
 
     init: function () {
         console.log('[UIManager] Initializing global hooks...');
@@ -62,7 +63,8 @@ window.UIManager = {
             this.grassDebugVisible ||
             (window.questCompletedModal && (window.questCompletedModal.visible || window.questCompletedModal.closeBtn)) ||
             (window.newQuestModal && window.newQuestModal.visible) ||
-            (window.questPreviewModal !== null); // Assuming questPreviewModal remains global or moves here later
+            (window.questPreviewModal !== null) ||
+            this.compendiumVisible; // Added Compendium check
     },
 
     /**

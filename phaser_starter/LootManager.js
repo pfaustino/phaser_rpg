@@ -257,6 +257,19 @@ window.LootManager = {
             spriteKey: 'item_gold' // Assuming existence
         };
         this.spawnQuestItem(x, y, goldItem);
+
+        // SPECIAL BOSS DROPS (Always drop, regardless of quest state)
+        if (monsterId === 'general_vex') {
+            this.spawnQuestItem(x, y, {
+                id: 'void_sigil',
+                name: 'Void Sigil',
+                type: 'quest_item',
+                quantity: 1,
+                sprite: 'assets/images/void-sigil.png',
+                quality: 'Legendary'
+            });
+            if (window.addChatMessage) window.addChatMessage("Void Sigil Dropped!", 0x9900ff, '🔮');
+        }
     },
 
     /**

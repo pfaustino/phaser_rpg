@@ -10,7 +10,10 @@ class UqeEventBus {
 
     on(event, callback) {
         if (!this.listeners[event]) this.listeners[event] = [];
-        this.listeners[event].push(callback);
+        // Prevent duplicate aliases/listeners for the same event
+        if (!this.listeners[event].includes(callback)) {
+            this.listeners[event].push(callback);
+        }
         // Return unsubscribe function
         return () => {
             const index = this.listeners[event].indexOf(callback);
@@ -319,6 +322,7 @@ class Quest {
         this.isTurnedIn = false; // Track manual turn-in
         this.rewards = data.rewards || {};
         this.requires = data.requires;
+        this.autoComplete = data.autoComplete; // Support auto-completion even with giver
     }
 
     dispose() {
@@ -363,8 +367,8 @@ class Quest {
         const allDone = this.objectives.every(o => o.isComplete());
 
         if (allDone) {
-            // If quest has a giver, require manual turn-in
-            if (this.giver && !this.isTurnedIn) {
+            // If quest has a giver, require manual turn-in (unless auto-complete is forced)
+            if (this.giver && !this.isTurnedIn && !this.autoComplete) {
                 return false; // Wait for dialog interaction
             }
 
@@ -401,6 +405,13 @@ class UqeEngine {
         this.pendingQuests = []; // Available but not yet accepted
         this.allDefinitions = {};
         this.isUpdating = false; // Re-entrancy guard
+
+        // Listen for objective updates to trigger completion checks
+        this.eventBus.on(UQE_EVENTS.OBJECTIVE_UPDATED, () => {
+            if (!this.isUpdating) {
+                this.update();
+            }
+        });
     }
 
     init(definitions) {

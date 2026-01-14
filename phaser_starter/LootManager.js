@@ -270,6 +270,55 @@ window.LootManager = {
             });
             if (window.addChatMessage) window.addChatMessage("Void Sigil Dropped!", 0x9900ff, '🔮');
         }
+
+        // ---------------------------------------------------------
+        // DATA-DRIVEN LOOT (From monsters.json)
+        // ---------------------------------------------------------
+        if (monsterId && this.scene && this.scene.cache.json.exists('monsterData')) {
+            const monsterData = this.scene.cache.json.get('monsterData');
+
+            // Flatten the monster lists if structured as { monsters: [...] }
+            const allMonsters = monsterData.monsters ? monsterData.monsters : monsterData;
+
+            if (Array.isArray(allMonsters)) {
+                const def = allMonsters.find(m => m.id === monsterId);
+                if (def && def.loot && Array.isArray(def.loot)) {
+                    // Process explicit loot table on the monster
+                    def.loot.forEach(drop => {
+                        if (Math.random() <= drop.chance) {
+                            const qty = Phaser.Math.Between(drop.min || 1, drop.max || 1);
+
+                            // Construct item object (Minimal, will be hydrated by spawnQuestItem potentially)
+                            // Ideally we should look up item name/sprite from items.json, but for now passing ID
+                            debugLog(`💎 [Loot] Data-driven drop: ${drop.itemId} x${qty}`);
+
+                            // Quick Quest Item/Specific Item lookup helper or pass raw
+                            // If it's the void crystal, we know it's a quest item
+                            let type = 'resource';
+                            let name = drop.itemId;
+                            let quality = 'Common';
+
+                            if (drop.itemId === 'void_source_crystal') {
+                                type = 'quest_item';
+                                name = 'Void Source Crystal';
+                                quality = 'Epic';
+                            }
+
+                            this.spawnQuestItem(x, y, {
+                                id: drop.itemId,
+                                name: name,
+                                type: type,
+                                quantity: qty,
+                                quality: quality,
+                                sprite: drop.sprite // Optional overlap
+                            });
+
+                            if (window.addChatMessage) window.addChatMessage(`${name} Dropped!`, 0x00ff00, '💎');
+                        }
+                    });
+                }
+            }
+        }
     },
 
     /**
@@ -356,6 +405,35 @@ window.LootManager = {
             const ty = item.sprite ? item.sprite.y : window.player.y;
             window.showDamageNumber(tx, ty, text, color);
         }
+    },
+
+    /**
+     * Drop an item from inventory to the ground
+     * @param {object} item - Item object from inventory
+     * @param {number} index - Index in inventory array
+     */
+    dropItemFromInventory(item, index) {
+        if (!item || !window.playerStats || index < 0) return;
+
+        // Remove from inventory first to prevent duplication issues
+        window.playerStats.inventory.splice(index, 1);
+
+        // Spawn in world at player position
+        // Use random offset to prevent stacking
+        const player = window.player;
+        if (player) {
+            this.spawnQuestItem(player.x, player.y, item);
+        }
+
+        // UI Feedback
+        if (window.addChatMessage) window.addChatMessage(`Dropped ${item.name}`, 0xaaaaaa, '🗑️');
+        if (typeof window.playSound === 'function') window.playSound('menu_cancel');
+
+        // Update UIs
+        if (typeof window.refreshInventory === 'function') window.refreshInventory();
+        if (typeof window.updateEquipmentInventoryItems === 'function') window.updateEquipmentInventoryItems();
+        if (typeof window.updatePlayerStatsUI === 'function') window.updatePlayerStatsUI();
+        // Also update equipment if visible? updateEquipmentInventoryItems covers it.
     }
 };
 
@@ -363,3 +441,4 @@ window.LootManager = {
 window.spawnQuestItem = (x, y, data) => window.LootManager.spawnQuestItem(x, y, data);
 window.dropItemsFromMonster = (x, y, xp, isBoss, monsterId) => window.LootManager.dropItemsFromMonster(x, y, xp, isBoss, monsterId);
 window.pickupItem = (item, index) => window.LootManager.pickupItem(item, index);
+window.dropItemFromInventory = (item, index) => window.LootManager.dropItemFromInventory(item, index);

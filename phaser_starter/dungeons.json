@@ -148,11 +148,6 @@
                     "id": "procedural_backlash",
                     "minLevel": 3,
                     "chance": 0.3
-                },
-                {
-                    "id": "void_cultist",
-                    "minLevel": 1,
-                    "chance": 0.3
                 }
             ],
             "interactables": [
@@ -162,13 +157,6 @@
                     "maxLevel": 2,
                     "chance": 1,
                     "limit": 6
-                },
-                {
-                    "id": "void_tear",
-                    "minLevel": 3,
-                    "maxLevel": 3,
-                    "chance": 1,
-                    "limit": 1
                 }
             ],
             "bosses": [
@@ -183,77 +171,55 @@
             ],
             "storyline_lore": "You have breached the Traitor's Stronghold. The air is thick with dark magic."
         },
-        "traitor_stronghold": {
-            "id": "traitor_stronghold",
-            "name": "Traitor's Stronghold",
-            "levels": 3,
+        "void_dimension": {
+            "id": "void_dimension",
+            "name": "The Void Dimension",
+            "levels": 1,
             "tileset": {
                 "floor": "dungeon_floor",
                 "wall": "dungeon_wall"
             },
             "generation": {
-                "width": 60,
-                "height": 60,
+                "width": 30,
+                "height": 30,
                 "roomCount": {
-                    "min": 12,
-                    "max": 18
+                    "min": 3,
+                    "max": 5
                 },
                 "roomSize": {
-                    "min": 6,
-                    "max": 14
+                    "min": 8,
+                    "max": 15
                 },
                 "corridorWidth": 3
             },
             "monsters": [
                 {
-                    "id": "procedural_elite_guard",
-                    "minLevel": 1,
-                    "chance": 0.4
-                },
-                {
-                    "id": "procedural_traitor_lieutenant",
-                    "minLevel": 1,
-                    "maxLevel": 1,
-                    "chance": 0.2
-                },
-                {
                     "id": "void_cultist",
                     "minLevel": 1,
-                    "chance": 0.4
+                    "chance": 0.5
                 },
                 {
-                    "id": "procedural_orc_captain",
-                    "minLevel": 2,
-                    "chance": 0.3
+                    "id": "procedural_echo_mite",
+                    "minLevel": 1,
+                    "chance": 0.5
                 }
             ],
             "interactables": [
                 {
-                    "id": "ritual_altar",
-                    "minLevel": 2,
-                    "maxLevel": 2,
-                    "chance": 1,
-                    "limit": 6
-                },
-                {
-                    "id": "void_tear",
-                    "minLevel": 3,
-                    "maxLevel": 3,
+                    "id": "void_source_crystal",
+                    "minLevel": 1,
+                    "maxLevel": 1,
                     "chance": 1,
                     "limit": 1
                 }
             ],
             "bosses": [
                 {
-                    "level": 2,
-                    "monsterId": "malagor_boss"
-                },
-                {
-                    "level": 3,
-                    "monsterId": "general_vex"
+                    "level": 1,
+                    "monsterId": "void_walker"
                 }
             ],
-            "storyline_lore": "The inner sanctum of the traitor's forces."
+            "storyline_lore": "You have entered the source of the corruption. Reality bends and twists here."
         },
         "cultist_camp": {
             "id": "cultist_camp",
@@ -306,7 +272,7 @@
                     "minLevel": 3,
                     "maxLevel": 3,
                     "chance": 1,
-                    "limit": 3
+                    "limit": 1
                 }
             ],
             "bosses": [

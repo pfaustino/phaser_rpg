@@ -136,12 +136,38 @@ class MonsterRenderer {
             g.fillEllipse(0, 0, w, h);
         } else if (layer.shape === 'rect') {
             g.fillRect(-layer.width / 2, -layer.height / 2, layer.width, layer.height);
-        } else if (layer.shape === 'triangle' && layer.points) {
-            g.fillTriangle(
-                layer.points[0], layer.points[1],
-                layer.points[2], layer.points[3],
-                layer.points[4], layer.points[5]
-            );
+        } else if (layer.shape === 'triangle') {
+            if (layer.points) {
+                g.fillTriangle(
+                    layer.points[0], layer.points[1],
+                    layer.points[2], layer.points[3],
+                    layer.points[4], layer.points[5]
+                );
+            } else {
+                // Auto-generate triangle from width/height
+                const w = layer.width || 32;
+                const h = layer.height || 32;
+                g.fillTriangle(
+                    0, -h / 2,     // Top Center
+                    -w / 2, h / 2, // Bottom Left
+                    w / 2, h / 2   // Bottom Right
+                );
+            }
+        } else if (layer.shape === 'star') {
+            const points = 5;
+            const outerRadius = (layer.width || 64) / 2;
+            const innerRadius = outerRadius / 2;
+            const starPoints = [];
+
+            for (let i = 0; i < points * 2; i++) {
+                const radius = (i % 2 === 0) ? outerRadius : innerRadius;
+                const angle = (i * Math.PI) / points - Math.PI / 2;
+                starPoints.push({
+                    x: Math.cos(angle) * radius,
+                    y: Math.sin(angle) * radius
+                });
+            }
+            g.fillPoints(starPoints, true);
         }
 
         return g;

@@ -23,6 +23,14 @@
             "quality": "Rare",
             "description": "A coalesced fragment of pure void energy"
         },
+        "void_source_crystal": {
+            "name": "Void Source Crystal",
+            "sprite": "assets/images/void-crystal.png",
+            "spriteKey": "void_essence",
+            "stackable": true,
+            "quality": "Epic",
+            "description": "A refined crystal glowing with concentrated void energy"
+        },
         "echo_crystal": {
             "name": "Echo Crystal",
             "sprite": "assets/images/echo-crystal.png",

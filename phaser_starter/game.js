@@ -1971,7 +1971,7 @@ function create() {
                 }
 
                 this.debugText.setText(
-                    `DEBUG HUD (v0.9.217.1)\n` +
+                    `DEBUG HUD (v0.9.266.2)\n` +
                     `Map: ${map} | Slot: ${slot}\n` +
                     `Inv: ${inv} | Gold: ${gold}\n` +
                     `Last Save: ${saveTime}\n` +
@@ -2014,8 +2014,10 @@ function create() {
     // Initialize Monster Compendium
     if (typeof MonsterCompendium !== 'undefined') {
         this.compendium = new MonsterCompendium(this);
-        this.input.keyboard.on('keydown-O', () => {
-            this.compendium.toggle();
+        this.input.keyboard.on('keydown-O', (event) => {
+            if (!event.shiftKey) { // Ignore if Shift is pressed (handled by Compendium for Toggle Mode)
+                this.compendium.toggle();
+            }
         });
         console.log("📖 Monster Compendium initialized. Press 'O' to open.");
     }
@@ -2187,6 +2189,10 @@ function create() {
         if (window._pendingUqeQuests) {
             debugLog(`[Save/Load Debug] Found deferred quest data - loading now...`);
             window.uqe.loadSaveData(window._pendingUqeQuests);
+
+            // CRITICAL FIX: Check for new auto-accept quests after deferred load
+            window.uqe.checkNewQuests();
+
             window._pendingUqeQuests = null;
         }
 
@@ -7634,23 +7640,58 @@ function updateEquipmentInventoryItems() {
             hideTooltip();
         };
         const onClickItem = (pointer) => {
-            if (pointer) pointer.event.stopPropagation();
+            if (pointer && pointer.event) pointer.event.stopPropagation();
             hideTooltip(true); // Hide tooltip immediately
-            if (isEquippable) {
-                // Equip the item
-                const invIndex = playerStats.inventory.indexOf(item);
-                if (invIndex !== -1) {
+
+            const invIndex = playerStats.inventory.indexOf(item);
+
+            // RIGHT CLICK: DROP ITEM
+            if (pointer.rightButtonDown()) {
+                if (window.LootManager && typeof window.LootManager.dropItemFromInventory === 'function') {
+                    window.LootManager.dropItemFromInventory(item, invIndex);
+                } else if (typeof window.dropItemFromInventory === 'function') {
+                    window.dropItemFromInventory(item, invIndex);
+                }
+                return;
+            }
+
+            // LEFT CLICK: EQUIP OR USE
+            if (inventoryItems.includes(item) && invIndex !== -1) { // Verify item is still valid
+                if (isEquippable) {
                     equipItemFromInventory(item, invIndex);
+                } else if (item.type === 'consumable') {
+                    // Use consumable logic (if implemented globally, otherwise placeholder)
+                    if (typeof useConsumable === 'function') {
+                        useConsumable(item, invIndex);
+                    } else {
+                        // Simple usage logic if global function missing
+                        if (item.name.toLowerCase().includes('health')) {
+                            playerStats.hp = Math.min(playerStats.maxHp, playerStats.hp + 50);
+                            showDamageNumber(player.x, player.y - 40, "+50 HP", 0x00ff00);
+                            playerStats.inventory.splice(invIndex, 1);
+                            if (window.refreshInventory) window.refreshInventory();
+                            if (window.updateEquipmentInventoryItems) window.updateEquipmentInventoryItems();
+                            updatePlayerStatsUI();
+                        } else if (item.name.toLowerCase().includes('mana')) {
+                            playerStats.mana = Math.min(playerStats.maxMana, playerStats.mana + 30);
+                            showDamageNumber(player.x, player.y - 40, "+30 MP", 0x0000ff);
+                            playerStats.inventory.splice(invIndex, 1);
+                            if (window.refreshInventory) window.refreshInventory();
+                            if (window.updateEquipmentInventoryItems) window.updateEquipmentInventoryItems();
+                            updatePlayerStatsUI();
+                        }
+                    }
                 }
             }
         };
 
-        itemSprite.on('pointerover', onHoverIn);
-        itemSprite.on('pointerout', onHoverOut);
         itemSprite.on('pointerdown', onClickItem);
-        itemBg.on('pointerover', onHoverIn);
-        itemBg.on('pointerout', onHoverOut);
+        // itemSprite.on('pointerout', onHoverOut); // Already set above
+        // itemSprite.on('pointerover', onHoverIn); // Already set above
+
         itemBg.on('pointerdown', onClickItem);
+        // itemBg.on('pointerout', onHoverOut);
+        // itemBg.on('pointerover', onHoverIn);
 
         equipmentPanel.inventoryItems.push({
             bg: itemBg,

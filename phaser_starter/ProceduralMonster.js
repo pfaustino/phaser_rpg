@@ -9,7 +9,7 @@
 const ProceduralMonster = {
     // Texture cache to avoid regenerating (disabled for now to fix shading issues)
     cache: {},
-    useCache: false, // Set to true once shading is verified working
+    useCache: true, // Set to true once shading is verified working
     enableOutline: true, // Toggle for 1px outline
 
     // Clear the texture cache (useful for debugging)
@@ -202,22 +202,44 @@ const ProceduralMonster = {
      * @param {Phaser.Scene} scene - The Phaser scene
      * @param {string} monsterType - Type of monster (slime, goblin, etc.)
      * @param {number} seed - Optional seed for consistent generation
+     * @param {object} options - Configuration overrides (scale, colors, etc.)
      * @returns {string} Texture key for the generated sprite
      */
-    generate: function (scene, monsterType, seed = null) {
+    generate: function (scene, monsterType, seed = null, options = {}) {
         const type = monsterType.toLowerCase().replace(' ', '_');
         const template = this.templates[type] || this.templates.slime;
-        const paletteOptions = this.palettes[type] || this.palettes.slime;
+        let paletteOptions = this.palettes[type] || this.palettes.slime;
 
         // Use seed or random
         const rng = seed !== null ? this.seededRandom(seed) : Math.random;
-        const palette = paletteOptions[Math.floor(rng() * paletteOptions.length)];
+
+        let palette;
+        // Check for Custom Palette in Options
+        if (options && (options.primaryColor || options.body)) {
+            const parseHex = (hex) => {
+                if (!hex) return 0xffffff;
+                if (typeof hex === 'number') return hex;
+                return parseInt(hex.replace('#', '').replace('0x', ''), 16);
+            };
+
+            // Create custom palette from options
+            palette = {
+                body: parseHex(options.primaryColor || options.body),
+                dark: parseHex(options.secondaryColor || options.dark),
+                light: parseHex(options.tertiaryColor || options.light),
+                eyes: parseHex(options.eyes)
+            };
+        } else {
+            palette = paletteOptions[Math.floor(rng() * paletteOptions.length)];
+        }
 
         // Generate unique key
-        const key = `proc_monster_${type}_${Date.now()}_${Math.floor(rng() * 10000)}`;
+        // Include partial config in key to allow re-gen if config changes
+        const configHash = options ? (options.scale || 4) : 4;
+        const key = `proc_monster_${type}_${Date.now()}_${Math.floor(rng() * 1000)}_s${configHash}`;
 
         // Check cache
-        if (this.cache[key]) {
+        if (this.cache[key] && this.useCache) {
             return key;
         }
 
@@ -225,7 +247,8 @@ const ProceduralMonster = {
         const pixels = this.generatePixels(template, palette, rng);
 
         // Render to canvas and create texture
-        this.renderToTexture(scene, key, pixels, template.width, template.height, 4, palette.dark);
+        const scale = (options && options.scale) ? options.scale : 4;
+        this.renderToTexture(scene, key, pixels, template.width, template.height, scale, palette.dark);
 
         this.cache[key] = true;
         return key;

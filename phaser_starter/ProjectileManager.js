@@ -72,6 +72,9 @@ class ProjectileManager {
             case 'bolt':
                 spriteKey = 'arrow';
                 break;
+            case 'void_bolt':
+                spriteKey = 'fireball_effect';
+                break;
         }
 
         // Texture safety check
@@ -113,6 +116,9 @@ class ProjectileManager {
             if (config.projectileType === 'fireball') {
                 projectile.setTint(0xffaa00);
                 projectile.setScale(1.5);
+            } else if (config.projectileType === 'void_bolt') {
+                projectile.setTint(0x8800FF);
+                projectile.setScale(1.0);
             } else {
                 projectile.setTint(0xffffff);
                 projectile.setScale(0.8);
@@ -182,6 +188,7 @@ class ProjectileManager {
                         });
                     }
                 }
+
 
                 // --- MANUAL COLLISION FALLBACK (Fixes Arrows missing after Load) ---
                 if (window.monsters) {

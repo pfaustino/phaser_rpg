@@ -1012,9 +1012,14 @@ window.UIManager = {
             if (equippableTypes.includes(item.type)) {
                 tooltipLines.push('');
                 tooltipLines.push('Click to Equip');
+                tooltipLines.push('Right-Click to Drop');
             } else if (item.type === 'consumable') {
                 tooltipLines.push('');
                 tooltipLines.push('Click to Use');
+                tooltipLines.push('Right-Click to Drop');
+            } else {
+                tooltipLines.push('');
+                tooltipLines.push('Right-Click to Drop');
             }
         }
 

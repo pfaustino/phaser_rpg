@@ -5,6 +5,14 @@ class MonsterCompendium {
         this.container = null;
         this.contentContainer = null;
         this.scrollbar = null;
+
+        // Permanent Input Listener (Shift+O)
+        this.scene.input.keyboard.on('keydown-O', (event) => {
+            if (this.isVisible && event.shiftKey) {
+                console.log("[COMPENDIUM] 🎮 Shift+O detected");
+                this.toggleRenderMode();
+            }
+        });
     }
 
     toggle() {
@@ -21,8 +29,8 @@ class MonsterCompendium {
 
         const width = 1100;
         const height = 650;
-        const x = (this.scene.scale.width - width) / 2;
-        const y = (this.scene.scale.height - height) / 2;
+        const x = Math.max(20, (this.scene.scale.width - width) / 2);
+        const y = Math.max(20, (this.scene.scale.height - height) / 2);
 
         // Create main container
         this.container = this.scene.add.container(x, y);
@@ -62,15 +70,34 @@ class MonsterCompendium {
         const viewWidth = width - 100;
         const viewHeight = height - 120;
 
+        // Mask for Scrollable Content
+        this.contentMask = this.scene.make.graphics();
+
         // Content Container
         this.contentContainer = this.scene.add.container(0, 0);
         this.contentContainer.setScrollFactor(0); // CRITICAL: Ensure Input uses Screen Coords
         this.contentContainer.setPosition(viewX, viewY);
         this.container.add(this.contentContainer);
 
+        // --- PIXEL ART MODE SETUP ---
+        this.proceduralMode = false;
+
+        // Input: Shift+O to toggle mode
+        // Input Listener moved to Constructor to prevent duplicates
+
+        // Mode Label
+
+        // Mode Label
+        this.modeLabel = this.scene.add.text(width / 2 + 300, 30, "Mode: SHAPES (Shift+O)", {
+            fontSize: '12px',
+            color: '#888888',
+            fontStyle: 'italic'
+        }).setOrigin(1, 0.5);
+        this.container.add(this.modeLabel);
+
         this.renderGrid(viewWidth, viewHeight, viewX, viewY);
 
-        console.log("📖 Compendium UI Initialized. W:", width, "Cols:", 6);
+        console.log("[COMPENDIUM] 📖 UI Initialized. W:", width, "Cols:", 6);
     }
 
     show() {
@@ -106,133 +133,206 @@ class MonsterCompendium {
         this.isVisible = false;
 
         // Notify UIManager
+        // Notify UIManager
         if (window.UIManager) window.UIManager.compendiumVisible = false;
     }
 
+    toggleRenderMode() {
+        this.proceduralMode = !this.proceduralMode;
+        console.log(`[COMPENDIUM] 🔄 Toggling Render Mode. New State: ${this.proceduralMode ? 'PIXEL ART' : 'SHAPES'}`);
+        if (this.modeLabel) {
+            this.modeLabel.setText(this.proceduralMode ? "Mode: PIXEL ART (Shift+O)" : "Mode: SHAPES (Shift+O)");
+            this.modeLabel.setColor(this.proceduralMode ? '#00FF00' : '#888888');
+        }
+
+        // Recalculate dimensions dynamically
+        const viewW = this.scene.scale.width;
+        const viewH = this.scene.scale.height;
+        const width = Math.min(1100, viewW - 40);
+        const height = Math.min(650, viewH - 40);
+        const viewX = 50;
+        const viewY = 80;
+        const viewWidth = width - 100;
+        const viewHeight = height - 120;
+
+        this.renderGrid(viewWidth, viewHeight, viewX, viewY);
+    }
+
     renderGrid(viewWidth, viewHeight, viewX, viewY) {
-        const monsters = this.scene.cache.json.get('monsters')?.monsters || [];
-        const startX = 60;
-        const startY = 60;
-        const gapX = 160;
-        const gapY = 180;
-        const cols = 6;
+        console.log("[COMPENDIUM] 🔄 renderGrid called");
+        try {
+            if (this.contentContainer) {
+                this.contentContainer.removeAll(true);
+            }
 
-        monsters.forEach((mon, index) => {
-            const col = index % cols;
-            const row = Math.floor(index / cols);
-            const posX = startX + col * gapX;
-            const posY = startY + row * gapY;
+            // Ensure mask graphics exists
+            if (!this.contentMask) {
+                this.contentMask = this.scene.make.graphics();
+            }
 
-            // Render Monster
-            const renderer = this.scene.monsterRenderer || window.monsterRenderer;
-            if (renderer) {
-                const monsterVisual = renderer.createMonster(0, 0, mon.id);
-                if (monsterVisual) {
-                    // CRITICAL FIX: Remove from Physics World
-                    // The renderer adds physics by default, but this is a UI element.
-                    // Leaving it in the physics world causes the 'isParent' crash during collision updates.
-                    if (monsterVisual.body) {
-                        this.scene.physics.world.remove(monsterVisual.body);
-                        monsterVisual.body.destroy();
-                        monsterVisual.body = null;
+            // Apply Mask (CRITICAL for visual containment)
+            this.contentMask.clear();
+            const absX = this.container.x + viewX;
+            const absY = this.container.y + viewY;
+            this.contentMask.fillStyle(0xffffff);
+            this.contentMask.fillRect(absX, absY, viewWidth, viewHeight);
+
+            const mask = this.contentMask.createGeometryMask();
+            this.contentContainer.setMask(mask);
+
+            const monsters = this.scene.cache.json.get('monsters')?.monsters || [];
+            const startX = 60;
+            const startY = 60;
+            const gapX = 160;
+            const gapY = 180;
+
+            // Dynamic Columns Calculation
+            // Available width for items = viewWidth - (startX * 2) roughly, or just fit as many as possible
+            const availableWidth = viewWidth - 20; // some padding
+            const cols = Math.max(1, Math.floor(availableWidth / gapX));
+
+            monsters.forEach((mon, index) => {
+                try {
+                    const col = index % cols;
+                    const row = Math.floor(index / cols);
+                    const posX = startX + col * gapX;
+                    const posY = startY + row * gapY;
+
+                    let monsterVisual = null;
+
+                    // --- RENDER LOGIC ---
+                    if (this.proceduralMode && window.ProceduralMonster && mon.generationType) {
+                        try {
+                            const textureKey = window.ProceduralMonster.generate(this.scene, mon.name, 12345 + index, {
+                                type: mon.generationType,
+                                ...mon.proceduralConfig
+                            });
+                            monsterVisual = this.scene.add.sprite(posX, posY - 20, textureKey);
+                            monsterVisual.setScale(1);
+                            monsterVisual.setData('blueprint', mon);
+                            window.ProceduralMonster.applyIdleAnimation(this.scene, monsterVisual);
+                        } catch (e) {
+                            console.error("Procedural gen failed for", mon.name, e);
+                        }
                     }
 
-                    this.contentContainer.add(monsterVisual);
-                    monsterVisual.setPosition(posX, posY);
+                    // Fallback / Default (Shape Renderer)
+                    if ((!this.proceduralMode || !monsterVisual) && !monsterVisual) {
+                        const renderer = this.scene.monsterRenderer || window.monsterRenderer;
+                        if (renderer) {
+                            monsterVisual = renderer.createMonster(posX, posY - 20, mon.id);
+                            if (monsterVisual) {
+                                if (monsterVisual.body) {
+                                    this.scene.physics.world.remove(monsterVisual.body);
+                                    monsterVisual.body.destroy();
+                                    monsterVisual.body = null;
+                                }
+                                monsterVisual.disableInteractive();
+                                monsterVisual.setScale(1.5);
+                                monsterVisual.setData('blueprint', mon);
+                                this.playAnimation(monsterVisual, 'idle');
+                            } else {
+                                // Create Placeholder if renderer fails
+                                // monsterVisual = this.scene.add.rectangle(posX, posY-20, 32, 32, 0x555555);
+                                // console.warn(`[COMPENDIUM] Renderer returned null for ${mon.id}`);
+                            }
+                        }
+                    }
 
-                    // Start in Idle Animation by default
-                    this.playAnimation(monsterVisual, 'idle');
+                    if (monsterVisual) {
+                        this.contentContainer.add(monsterVisual);
+                    } else {
+                        // Debug visuals for missing monsters
+                        // this.contentContainer.add(this.scene.add.text(posX, posY, "?", {fontSize:'32px'}).setOrigin(0.5));
+                    }
 
-                    // FLATTENED Button Helper (Prevents Nested Input bugs)
+                    // Button Helper
                     const createBtn = (bx, by, label, callback) => {
-                        // Background (Hit Area)
                         const btnBg = this.scene.add.rectangle(bx, by, 40, 20, 0x004400)
                             .setStrokeStyle(1, 0x00ff00)
-                            .setScrollFactor(0) // CRITICAL: Fix input to Camera
-                            .setInteractive({ useHandCursor: true })
-                            .on('pointerdown', (pointer) => {
-                                pointer.event.stopPropagation();
-                                console.log(`[COMPENDIUM_INPUT] Clicked Button: ${label}`);
-                                callback();
-                            });
-                        // [COMPENDIUM_INPUT] Log all clicks
-                        this.scene.input.on('pointerdown', (pointer, gameObjects) => {
-                            console.log(`[COMPENDIUM_INPUT] Pointer Down at Screen(${pointer.x}, ${pointer.y}) World(${pointer.worldX}, ${pointer.worldY})`);
-                            if (gameObjects.length > 0) {
-                                console.log(`[COMPENDIUM_INPUT] Hit ${gameObjects.length} objects. Top: ${gameObjects[0].type}`);
-                            } else {
-                                console.log("[COMPENDIUM_INPUT] Hit NOTHING");
-                            }
-                        });
+                            .setScrollFactor(0)
+                            .setInteractive({ useHandCursor: true });
 
-                        this.scene.input.enableDebug(btnBg); // VISUALIZE HIT AREA
-
-                        // Label
                         const btnText = this.scene.add.text(bx, by, label, {
-                            fontSize: '10px',
-                            color: '#00ff00'
-                        }).setOrigin(0.5);
+                            fontSize: '10px', color: '#00ff00'
+                        }).setOrigin(0.5).setScrollFactor(0);
 
-                        // Hover Logic
-                        btnBg.on('pointerover', () => {
-                            btnBg.setFillStyle(0x008800);
-                            btnText.setColor('#ffffff');
-                        });
-                        btnBg.on('pointerout', () => {
-                            btnBg.setFillStyle(0x004400);
-                            btnText.setColor('#00ff00');
+                        btnBg.on('pointerdown', (pointer) => {
+                            pointer.event.stopPropagation();
+                            callback();
                         });
 
-                        // Add directly to main container
+                        btnBg.on('pointerover', () => { btnBg.setFillStyle(0x008800); btnText.setColor('#ffffff'); });
+                        btnBg.on('pointerout', () => { btnBg.setFillStyle(0x004400); btnText.setColor('#00ff00'); });
+
                         this.contentContainer.add([btnBg, btnText]);
                     };
 
-                    // Attack Button (Left)
+                    // Attack & Move Buttons
                     createBtn(posX - 25, posY + 35, "Atk", () => {
-                        this.playAnimation(monsterVisual, 'attack');
+                        if (monsterVisual) {
+                            if (this.proceduralMode && window.ProceduralMonster && monsterVisual.texture && mon.generationType) {
+                                window.ProceduralMonster.playAttackAnimation(this.scene, monsterVisual, () => {
+                                    window.ProceduralMonster.applyIdleAnimation(this.scene, monsterVisual);
+                                });
+                            } else {
+                                this.playAnimation(monsterVisual, 'attack');
+                            }
+                        }
                     });
 
-                    // Move Button (Right)
                     createBtn(posX + 25, posY + 35, "Move", () => {
-                        this.playAnimation(monsterVisual, 'move');
+                        if (monsterVisual) {
+                            if (this.proceduralMode && window.ProceduralMonster && monsterVisual.texture && mon.generationType) {
+                                this.scene.tweens.add({
+                                    targets: monsterVisual, y: monsterVisual.y - 20, duration: 200, yoyo: true, repeat: 1,
+                                    onComplete: () => window.ProceduralMonster.applyIdleAnimation(this.scene, monsterVisual)
+                                });
+                            } else {
+                                this.playAnimation(monsterVisual, 'move');
+                            }
+                        }
                     });
 
-                } else {
-                    const fail = this.scene.add.text(posX, posY, "MISSING", { fontSize: '12px', color: '#F00' }).setOrigin(0.5);
-                    this.contentContainer.add(fail);
+                    // Labels
+                    const nameText = this.scene.add.text(posX, posY + 55, mon.name || "Unknown", { fontSize: '14px', color: '#FFF', align: 'center', wordWrap: { width: 140 } }).setOrigin(0.5);
+
+                    // Format ID for display
+                    const displayId = (mon.id || "???").replace('procedural_', '').replace(/_/g, ' ');
+                    const idText = this.scene.add.text(posX, posY + 72, displayId, { fontSize: '10px', color: '#888', align: 'center' }).setOrigin(0.5);
+                    this.contentContainer.add([nameText, idText]);
+
+                } catch (rowErr) {
+                    console.error(`[COMPENDIUM] Error rendering row for ${mon ? mon.name : 'index ' + index}:`, rowErr);
                 }
+            });
+
+            const totalRows = Math.ceil(monsters.length / cols);
+            const contentHeight = startY + (totalRows * gapY);
+            const maskRect = new Phaser.Geom.Rectangle(absX, absY, viewWidth, viewHeight);
+
+            // Scrollbar Logic
+            if (typeof Scrollbar !== 'undefined') {
+                if (this.scrollbar) this.scrollbar.destroy();
+                this.scrollbar = new Scrollbar(this.scene, this.contentContainer, maskRect, contentHeight);
+
+                // Fix Scrollbar Depth (Must be ABOVE container)
+                // Container is 35000. Scrollbar needs to be > 35000.
+                // ScrollbarUtils defaults to 2001. We need to override or modify Scrollbar.
+                // Since Scrollbar adds to scene root, we can just setDepth on its elements if we access them.
+                if (this.scrollbar.track) this.scrollbar.track.setDepth(35001);
+                if (this.scrollbar.thumb) this.scrollbar.thumb.setDepth(35002);
+
+            } else {
+                // Fallback Wheel
+                this.scene.input.off('wheel');
+                this.scene.input.on('wheel', (pointer, gameObjects, deltaX, deltaY, deltaZ) => {
+                    this.contentContainer.y = Phaser.Math.Clamp(this.contentContainer.y - deltaY * 0.5, viewY - contentHeight + viewHeight, viewY);
+                });
             }
 
-            // Labels - Shifted down to avoid button overlap
-            const nameText = this.scene.add.text(posX, posY + 55, mon.name, {
-                fontSize: '14px', color: '#FFF', align: 'center', wordWrap: { width: 140 }
-            }).setOrigin(0.5);
-            this.contentContainer.add(nameText);
-
-            const idText = this.scene.add.text(posX, posY + 72, mon.id, {
-                fontSize: '10px', color: '#888', align: 'center'
-            }).setOrigin(0.5);
-            this.contentContainer.add(idText);
-        });
-
-        const totalRows = Math.ceil(monsters.length / cols);
-        const contentHeight = startY + (totalRows * gapY);
-
-        // Add Scrollbar
-        const absX = this.container.x + viewX;
-        const absY = this.container.y + viewY;
-        const maskRect = new Phaser.Geom.Rectangle(absX, absY, viewWidth, viewHeight);
-
-        if (typeof Scrollbar !== 'undefined') {
-            this.scrollbar = new Scrollbar(this.scene, this.contentContainer, maskRect, contentHeight);
-        } else if (typeof setupScrollbar === 'function' && setupScrollbar.length > 1) {
-            // Check for the correct setupScrollbar (not the 1-arg one in game.js)
-            this.scrollbar = setupScrollbar(this.scene, this.contentContainer, viewWidth, viewHeight, contentHeight, absX, absY);
-        } else {
-            // Fallback
-            this.scene.input.on('wheel', (pointer, gameObjects, deltaX, deltaY, deltaZ) => {
-                this.contentContainer.y = Phaser.Math.Clamp(this.contentContainer.y - deltaY * 0.5, viewY - contentHeight + viewHeight, viewY);
-            });
+        } catch (err) {
+            console.error("❌ MonsterCompendium RenderGrid Error:", err);
         }
     }
 
@@ -287,7 +387,8 @@ class MonsterCompendium {
 
         this.stopMonsterAnimations(monsterVisual);
         const bp = monsterVisual.getData('blueprint');
-        if (!bp || !bp.appearance) return;
+        if (!bp) { console.warn("Missing blueprint for", monsterVisual); return; }
+        if (!bp.appearance) { console.warn("Missing appearance for", bp.name); return; }
 
         // Get Definition or Use Fallback
         let animData = bp.appearance.animations ? bp.appearance.animations[type] : null;

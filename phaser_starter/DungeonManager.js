@@ -180,34 +180,33 @@ class DungeonManager {
         const legacyKey = `level_${level}`;
 
         debugLog(`🔍 Checking Boss Spawn: ${completionKey} / ${legacyKey}`);
-        if (MapManager.dungeonCompletions) {
-            debugLog(`   -> Completions:`, JSON.stringify(MapManager.dungeonCompletions));
-            if (MapManager.dungeonCompletions[completionKey] || MapManager.dungeonCompletions[legacyKey]) {
-                debugLog(`✅ Level ${level} already completed (Key: ${MapManager.dungeonCompletions[completionKey] ? completionKey : legacyKey}). Spawning exit directly.`);
-                this.spawnDungeonExit(scene, x, y);
 
-                // EXCEPTION: If completing main_01_013 (Shard), spawn it if missing
-                if (window.uqe && window.uqe.activeQuests && window.uqe.activeQuests.some(q => q.id === 'main_01_013')) {
-                    // Check if player already has it
-                    const hasShard = window.playerStats.inventory.some(i => i.id === 'shard_resonance');
-                    if (!hasShard) {
-                        debugLog('💎 Spawning missing Shard of Resonance (Boss already dead)');
-                        if (window.spawnQuestItem) {
-                            window.spawnQuestItem(x + 50, y + 50, {
-                                id: 'shard_resonance',
-                                name: 'Shard of Resonance',
-                                type: 'quest_item',
-                                quantity: 1,
-                                sprite: 'assets/images/crystal-shard.png',
-                                quality: 'Epic'
-                            });
-                        }
+        // Special: Void Dimension is always repeatable
+        const isVoidDimension = dungeonId === 'void_dimension';
+
+        if (!isVoidDimension && (MapManager.dungeonCompletions && (MapManager.dungeonCompletions[completionKey] || MapManager.dungeonCompletions[legacyKey]))) {
+            debugLog(`✅ Level ${level} already completed (Key: ${MapManager.dungeonCompletions[completionKey] ? completionKey : legacyKey}). Spawning exit directly.`);
+            this.spawnDungeonExit(scene, x, y);
+
+            // EXCEPTION: If completing main_01_013 (Shard), spawn it if missing
+            if (window.uqe && window.uqe.activeQuests && window.uqe.activeQuests.some(q => q.id === 'main_01_013')) {
+                // Check if player already has it
+                const hasShard = window.playerStats.inventory.some(i => i.id === 'shard_resonance');
+                if (!hasShard) {
+                    debugLog('💎 Spawning missing Shard of Resonance (Boss already dead)');
+                    if (window.spawnQuestItem) {
+                        window.spawnQuestItem(x + 50, y + 50, {
+                            id: 'shard_resonance',
+                            name: 'Shard of Resonance',
+                            type: 'quest_item',
+                            quantity: 1,
+                            sprite: 'assets/images/crystal-shard.png',
+                            quality: 'Epic'
+                        });
                     }
                 }
-                return;
             }
-        } else {
-            debugLog(`⚠️ MapManager.dungeonCompletions is missing!`);
+            return;
         }
 
         if (dungeonDef) {

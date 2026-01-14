@@ -1,132 +1,80 @@
 {
     "monsters": [
         {
-            "id": "void_cultist",
-            "name": "Void Cultist",
-            "level": 30,
+            "id": "void_walker",
+            "name": "The Void Walker",
+            "level": 35,
             "stats": {
-                "hp": 150,
-                "damage": 25,
-                "defense": 10,
-                "speed": 45,
-                "xp": 120
+                "hp": 2500,
+                "attack": 65,
+                "defense": 30,
+                "xp": 3000,
+                "attackSpeed": 1500
             },
             "appearance": {
-                "baseSize": 48,
                 "layers": [
                     {
-                        "name": "robe_body",
                         "type": "shape",
-                        "shape": "triangle",
-                        "points": [
-                            0,
-                            -20,
-                            -20,
-                            25,
-                            20,
-                            25
-                        ],
+                        "shape": "star",
                         "color": "#4B0082",
-                        "z": 10
-                    },
-                    {
-                        "name": "robe_inner",
-                        "type": "shape",
-                        "shape": "triangle",
-                        "points": [
-                            0,
-                            -20,
-                            -10,
-                            25,
-                            10,
-                            25
-                        ],
-                        "color": "#2A004A",
-                        "z": 11
-                    },
-                    {
-                        "name": "sash",
-                        "type": "shape",
-                        "shape": "rect",
-                        "width": 24,
-                        "height": 6,
-                        "color": "#DDA0DD",
-                        "offset": {
-                            "x": 0,
-                            "y": 0
-                        },
-                        "z": 12
-                    },
-                    {
-                        "name": "hood",
-                        "type": "shape",
-                        "shape": "circle",
-                        "radius": 14,
-                        "color": "#191970",
-                        "offset": {
-                            "x": 0,
-                            "y": -22
-                        },
-                        "z": 15
-                    },
-                    {
-                        "name": "shoulders",
-                        "type": "shape",
-                        "shape": "rect",
-                        "width": 36,
-                        "height": 10,
-                        "color": "#4B0082",
-                        "offset": {
-                            "x": 0,
-                            "y": -15
-                        },
-                        "z": 13
-                    },
-                    {
-                        "name": "eyes",
-                        "type": "shape",
-                        "shape": "rect",
-                        "width": 12,
-                        "height": 4,
-                        "color": "#00FF00",
-                        "offset": {
-                            "x": 0,
-                            "y": -22
-                        },
-                        "z": 20
+                        "scale": 3,
+                        "width": 96,
+                        "height": 96,
+                        "particles": {
+                            "type": "void",
+                            "color": "#AA00FF"
+                        }
                     }
-                ],
-                "animations": {
-                    "idle": {
-                        "type": "float",
-                        "range": 4,
-                        "duration": 2000
-                    },
-                    "attack": {
-                        "type": "lunge",
-                        "distance": 15,
-                        "duration": 300
-                    },
-                    "move": {
-                        "type": "hop",
-                        "height": 5,
-                        "duration": 400
-                    }
-                }
+                ]
             },
-            "abilities": [
-                {
-                    "id": "dark_bolt",
-                    "damage": 20,
-                    "cooldown": 3000
-                }
+            "tags": [
+                "boss",
+                "void"
             ],
             "loot": [
                 {
-                    "itemId": "void_dust",
-                    "chance": 0.5
+                    "itemId": "void_source_crystal",
+                    "chance": 1.0,
+                    "min": 1,
+                    "max": 1
                 }
-            ]
+            ],
+            "lootTable": "boss_tier_3"
+        },
+        {
+            "id": "void_cultist",
+            "name": "Void Cultist",
+            "level": 15,
+            "stats": {
+                "hp": 300,
+                "attack": 25,
+                "defense": 10,
+                "xp": 150,
+                "attackSpeed": 1200
+            },
+            "appearance": {
+                "layers": [
+                    {
+                        "type": "shape",
+                        "shape": "triangle",
+                        "color": "#660066",
+                        "scale": 1.2,
+                        "width": 40,
+                        "height": 40
+                    }
+                ]
+            },
+            "behavior": {
+                "type": "ranged",
+                "range": 250,
+                "projectile": "void_bolt"
+            },
+            "tags": [
+                "humanoid",
+                "cultist",
+                "void"
+            ],
+            "lootTable": "standard_tier_2"
         },
         {
             "id": "void_priest_voresh",
@@ -2214,6 +2162,47 @@
                         "color": "#330033",
                         "alpha": 0.3,
                         "z": 5
+                    }
+                ],
+                "animations": {
+                    "idle": {
+                        "type": "float",
+                        "range": 20,
+                        "duration": 3000
+                    }
+                }
+            }
+        },
+        {
+            "id": "void_walker",
+            "name": "The Void Walker",
+            "isBoss": true,
+            "generationType": "cellular_automata",
+            "proceduralConfig": {
+                "primaryColor": "#191970",
+                "secondaryColor": "#4B0082",
+                "tertiaryColor": "#000000",
+                "eyes": "#FF4500",
+                "scale": 10,
+                "mirror": true
+            },
+            "stats": {
+                "hp": 2500,
+                "attack": 60,
+                "defense": 25,
+                "speed": 60,
+                "xp": 2000
+            },
+            "appearance": {
+                "baseSize": 64,
+                "layers": [
+                    {
+                        "name": "body",
+                        "type": "shape",
+                        "shape": "circle",
+                        "radius": 32,
+                        "color": "#000000",
+                        "z": 10
                     }
                 ],
                 "animations": {

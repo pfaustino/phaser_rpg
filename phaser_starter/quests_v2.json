@@ -3269,10 +3269,10 @@
             "requires": "main_03_011",
             "objectives": [
                 {
-                    "id": "destroy_source_crystal",
-                    "type": "interact",
-                    "targetObjectId": "void_source_crystal",
-                    "label": "Destroy Source Crystal",
+                    "id": "collect_source_crystal",
+                    "type": "collect",
+                    "itemId": "void_source_crystal",
+                    "label": "Collect Source Crystal",
                     "target": 1
                 }
             ],
@@ -3288,6 +3288,8 @@
             "giver": "System",
             "step": 13,
             "requires": "main_03_012",
+            "autoAccept": true,
+            "autoComplete": true,
             "objectives": [
                 {
                     "id": "escape_void",

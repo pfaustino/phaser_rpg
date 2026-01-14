@@ -271,8 +271,11 @@ window.SaveManager = {
 
                 // Try to load now if UQE is ready
                 if (window.uqe && Object.keys(window.uqe.allDefinitions || {}).length > 0) {
-
                     window.uqe.loadSaveData(data.uqeQuests);
+
+                    // CRITICAL FIX: Check for new auto-accept quests (e.g. from restored requirements)
+                    window.uqe.checkNewQuests();
+
                     window._pendingUqeQuests = null;
                 }
             }

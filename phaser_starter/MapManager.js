@@ -1176,11 +1176,22 @@ const MapManager = {
             const dName = (dungeonDef && dungeonDef.name) ? dungeonDef.name : `Dungeon (${dungeonId})`;
             debugLog(`🏷️ Updating Location Label to: ${dName} Lvl ${level}`);
 
-            if (typeof window.updateLocationLabel === 'function') {
-                window.updateLocationLabel(`${dName} Lvl ${level}`);
-            } else {
-                console.warn('⚠️ window.updateLocationLabel is NOT defined!');
-            }
+
+
+            const updateLabel = () => {
+                if (typeof window.updateLocationLabel === 'function') {
+                    window.updateLocationLabel(`${dName} Lvl ${level}`);
+                    // Force persist
+                    if (window.currentLocationText !== `${dName} Lvl ${level}`) {
+                        window.currentLocationText = `${dName} Lvl ${level}`;
+                    }
+                }
+            };
+
+            updateLabel();
+            // Retry after 500ms to overwrite any erroneous "Town" fallbacks
+            scene.time.delayedCall(500, updateLabel);
+
 
             // Trigger Exploration Event
             if (window.uqe && window.uqe.eventBus) {
@@ -1201,6 +1212,9 @@ const MapManager = {
 
             // Spawn Dungeon Interactables
             this.spawnDungeonInteractables(dungeonDef, level, dungeon, scene);
+
+            // Spawn Dungeon Bosses
+            this.spawnDungeonBosses(dungeonDef, level, dungeon, scene);
 
         } catch (e) {
             console.error("Error creating dungeon:", e);
@@ -1231,154 +1245,296 @@ const MapManager = {
                     if (Math.random() > chance) continue;
 
                     let planted = false;
+                    let rx = 0;
+                    let ry = 0;
+
+                    // Try random placement first
                     for (let a = 0; a < 20; a++) {
-                        const rx = Phaser.Math.Between(1, dungeon.width - 2);
-                        const ry = Phaser.Math.Between(1, dungeon.height - 2);
-
+                        rx = Phaser.Math.Between(1, dungeon.width - 2);
+                        ry = Phaser.Math.Between(1, dungeon.height - 2);
                         if (dungeon.mapData[ry][rx] === 1) {
-                            const pixelX = rx * scene.tileSize + scene.tileSize / 2;
-                            const pixelY = ry * scene.tileSize + scene.tileSize / 2;
+                            planted = true;
+                            break;
+                        }
+                    }
 
-                            // NOTE: Images/sprites don't render in spawnDungeonInteractables context
-                            // Using styled shapes as visual (these work)
-                            let visual;
-                            let collisionBody;
-
-                            if (def.id === 'ritual_altar') {
-                                // Dark Ritual Altar - red themed
-                                visual = scene.add.rectangle(pixelX, pixelY, 24, 64, 0x8B0000).setDepth(8);
-                                scene.add.rectangle(pixelX, pixelY - 24, 16, 16, 0xCC4444).setDepth(9);
-                                scene.add.circle(pixelX, pixelY, 28, 0xFF0000, 0.15).setDepth(7);
-                                collisionBody = scene.add.rectangle(pixelX, pixelY, 24, 64, 0x000000, 0);
-                            } else if (def.id === 'void_tear') {
-                                // Void Tear - purple/void themed with pulsing effect
-                                // Outer glow
-                                const outerGlow = scene.add.circle(pixelX, pixelY, 40, 0x8800FF, 0.2).setDepth(6);
-                                // Inner void
-                                visual = scene.add.circle(pixelX, pixelY, 24, 0x220044).setDepth(8);
-                                visual.setStrokeStyle(4, 0xAA00FF);
-                                // Core
-                                const core = scene.add.circle(pixelX, pixelY, 10, 0x000000).setDepth(9);
-                                // Pulsing animation
-                                scene.tweens.add({
-                                    targets: [outerGlow, visual],
-                                    scaleX: 1.15,
-                                    scaleY: 1.15,
-                                    alpha: { from: 1, to: 0.7 },
-                                    duration: 800,
-                                    yoyo: true,
-                                    repeat: -1,
-                                    ease: 'Sine.easeInOut'
-                                });
-                                collisionBody = scene.add.rectangle(pixelX, pixelY, 48, 48, 0x000000, 0);
-                            } else if (def.id === 'echo_crystal_node') {
-                                // Echo Crystal Node - Cyan Diamond
-                                visual = scene.add.rectangle(pixelX, pixelY, 24, 24, 0x00FFFF).setDepth(8);
-                                visual.setRotation(Math.PI / 4);
-                                scene.add.rectangle(pixelX, pixelY, 16, 16, 0xCCFFFF).setDepth(9).setRotation(Math.PI / 4);
-                                collisionBody = scene.add.rectangle(pixelX, pixelY, 32, 32, 0x000000, 0);
-                            } else {
-                                // Generic fallback - gray rectangle
-                                visual = scene.add.rectangle(pixelX, pixelY, 32, 32, 0x666666).setDepth(8);
-                                collisionBody = scene.add.rectangle(pixelX, pixelY, 32, 32, 0x000000, 0);
-                            }
-
-
-                            scene.physics.add.existing(collisionBody, true);
-
-                            // Ensure player reference
-                            const player = window.player;
-
-                            if (player && player.body) {
-                                // Add solid collision for everything EXCEPT Void Tear (which is a portal you walk into)
-                                if (def.id !== 'void_tear') {
-                                    scene.physics.add.collider(player, collisionBody);
-                                }
-
-                                // SPECIAL: Void Tear Interaction (Enter Void Dimension)
-                                if (def.id === 'void_tear') {
-                                    scene.physics.add.overlap(player, collisionBody, () => {
-                                        // DEBUG: Bypass Quest Check to unblock user
-                                        // const questId = 'main_03_008';
-
-                                        // Force TRUE for debugging
-                                        const hasQuest = true; // window.uqe && ...
-
-                                        if (hasQuest) {
-                                            // Emit event to progress objective
-                                            if (window.uqe) window.uqe.eventBus.emit('location_explored', { id: 'void_tear' });
-
-                                            // Visual feedback
-                                            // if (window.showDamageNumber) window.showDamageNumber(player.x, player.y - 70, "Portal Triggered!", 0x00FF00);
-
-                                            // Debounce transition
-                                            if (!this.isTransitioning) {
-                                                this.isTransitioning = true;
-                                                // Visual feedback
-                                                if (window.showDamageNumber) window.showDamageNumber(player.x, player.y - 50, "Entering Void...", 0xAA00FF);
-
-                                                scene.time.delayedCall(1000, () => {
-                                                    this.transitionToMap('dungeon', 1, 'void_dimension');
-                                                    this.isTransitioning = false;
-                                                });
-                                            }
-                                        }
-                                    });
-
-                                    // Chat Feedback on Spawn
-                                    const dungeonName = dungeonDef.name || "Unknown Dungeon";
-                                    if (window.addChatMessage) window.addChatMessage(`A Void Tear has appeared in ${dungeonName}...`, 0xAA00FF);
-
-                                    // VISUAL LABEL
-                                    const label = scene.add.text(pixelX, pixelY - 45, "Void Tear", {
-                                        fontSize: '12px',
-                                        fontFamily: 'monospace',
-                                        fill: '#D8BFD8',
-                                        stroke: '#000000',
-                                        strokeThickness: 3,
-                                        align: 'center'
-                                    }).setOrigin(0.5).setDepth(20);
-                                    // Add to main interactables list for cleanup (even though we don't use generic interaction)
-                                    // We'll create a dummy object to ensure the label gets destroyed on map change
-                                    this.interactables.push({ definition: { id: 'void_tear_label' }, sprite: label });
+                    // Fallback: Force find any floor tile if random failed
+                    if (!planted) {
+                        for (let y = 1; y < dungeon.height - 1; y++) {
+                            for (let x = 1; x < dungeon.width - 1; x++) {
+                                if (dungeon.mapData[y][x] === 1) {
+                                    rx = x;
+                                    ry = y;
+                                    planted = true;
+                                    debugLog(`⚠️ Forced placement for ${def.id} at ${rx},${ry}`);
+                                    break;
                                 }
                             }
+                            if (planted) break;
+                        }
+                    }
 
-                            // Get the definition for interaction tracking
-                            const fullDefs = scene.cache.json.get('interactables') || [];
-                            const fullDef = fullDefs.find(obj => obj.id === def.id);
+                    if (planted) {
+                        const pixelX = rx * scene.tileSize + scene.tileSize / 2;
+                        const pixelY = ry * scene.tileSize + scene.tileSize / 2;
 
-                            if (fullDef) {
-                                visual.collisionBody = collisionBody;
+                        // NOTE: Images/sprites don't render in spawnDungeonInteractables context
+                        // Using styled shapes as visual (these work)
+                        let visual;
+                        let collisionBody;
 
-                                // EXCEPTION: Void Tear is handled by custom overlap logic above.
-                                // Do NOT add it to the generic interactables list (which causes "Interact to Destroy")
-                                if (def.id !== 'void_tear') {
-                                    this.interactables.push({
-                                        definition: fullDef,
-                                        sprite: visual
-                                    });
-                                }
+                        if (def.id === 'ritual_altar') {
+                            // Dark Ritual Altar - red themed
+                            visual = scene.add.rectangle(pixelX, pixelY, 24, 64, 0x8B0000).setDepth(8);
+                            scene.add.rectangle(pixelX, pixelY - 24, 16, 16, 0xCC4444).setDepth(9);
+                            scene.add.circle(pixelX, pixelY, 28, 0xFF0000, 0.15).setDepth(7);
+                            collisionBody = scene.add.rectangle(pixelX, pixelY, 24, 64, 0x000000, 0);
+                        } else if (def.id === 'void_tear') {
+                            // Void Tear - purple/void themed with pulsing effect
+                            // Outer glow
+                            const outerGlow = scene.add.circle(pixelX, pixelY, 40, 0x8800FF, 0.2).setDepth(6);
+                            // Inner void
+                            visual = scene.add.circle(pixelX, pixelY, 24, 0x220044).setDepth(8);
+                            visual.setStrokeStyle(4, 0xAA00FF);
+                            // Core
+                            const core = scene.add.circle(pixelX, pixelY, 10, 0x000000).setDepth(9);
+                            // Pulsing animation
+                            scene.tweens.add({
+                                targets: [outerGlow, visual],
+                                scaleX: 1.15,
+                                scaleY: 1.15,
+                                alpha: { from: 1, to: 0.7 },
+                                duration: 800,
+                                yoyo: true,
+                                repeat: -1,
+                                ease: 'Sine.easeInOut'
+                            });
+                            collisionBody = scene.add.rectangle(pixelX, pixelY, 48, 48, 0x000000, 0);
+                        } else if (def.id === 'echo_crystal_node') {
+                            // Echo Crystal Node - Cyan Diamond
+                            visual = scene.add.rectangle(pixelX, pixelY, 24, 24, 0x00FFFF).setDepth(8);
+                            visual.setRotation(Math.PI / 4);
+                            scene.add.rectangle(pixelX, pixelY, 16, 16, 0xCCFFFF).setDepth(9).setRotation(Math.PI / 4);
+                            collisionBody = scene.add.rectangle(pixelX, pixelY, 32, 32, 0x000000, 0);
 
+                        } else if (def.id === 'void_source_crystal') {
+                            // Void Source Crystal - Critical Quest Object
+                            // Pulsing Red/Purple Crystal
+                            const outer = scene.add.circle(pixelX, pixelY, 30, 0xFF0055, 0.4).setDepth(7);
+                            visual = scene.add.rectangle(pixelX, pixelY, 24, 64, 0xAA0044).setDepth(8);
+                            visual.setStrokeStyle(2, 0xFF88AA);
 
-                                planted = true;
-                                count++;
-                                break;
-                            } else {
-                                // Definition not found - destroy the shapes
-                                visual.destroy();
-                                collisionBody.destroy();
-                                console.warn(`[INTERACTABLE] Definition for ${def.id} not found`);
-                            }
+                            scene.tweens.add({
+                                targets: outer,
+                                scale: 1.2, alpha: 0.2, duration: 1000, yoyo: true, repeat: -1
+                            });
+
+                            collisionBody = scene.add.rectangle(pixelX, pixelY, 48, 48, 0x000000, 0);
+
+                        } else {
+                            // Generic fallback - gray rectangle
+                            visual = scene.add.rectangle(pixelX, pixelY, 32, 32, 0x666666).setDepth(8);
+                            collisionBody = scene.add.rectangle(pixelX, pixelY, 32, 32, 0x000000, 0);
                         }
 
 
+                        scene.physics.add.existing(collisionBody, true);
 
+                        // Ensure player reference
+                        const player = window.player;
+
+                        if (player && player.body) {
+                            // Add solid collision for everything EXCEPT Void Tear (which is a portal you walk into)
+                            if (def.id !== 'void_tear' && def.id !== 'void_source_crystal') {
+                                scene.physics.add.collider(player, collisionBody);
+                            }
+
+                            // SPECIAL: Void Tear Interaction (Enter Void Dimension)
+                            if (def.id === 'void_tear') {
+                                scene.physics.add.overlap(player, collisionBody, () => {
+                                    console.log("[VOID TEAR] 🌀 Overlap Triggered!");
+
+                                    // Force TRUE for debugging
+                                    const hasQuest = true;
+
+                                    if (hasQuest) {
+                                        // Emit event to progress objective (exploration)
+                                        if (window.uqe) window.uqe.eventBus.emit('location_explored', { id: 'void_tear' });
+
+                                        // Debounce transition
+                                        if (!this.isTransitioning) {
+                                            this.isTransitioning = true;
+                                            console.log("[VOID TEAR] 🚀 Transitioning to Void Dimension...");
+                                            // Visual feedback
+                                            if (window.showDamageNumber) window.showDamageNumber(player.x, player.y - 50, "Entering Void...", 0xAA00FF);
+
+                                            scene.time.delayedCall(1000, () => {
+                                                console.log("[VOID TEAR] 🔌 Calling transitionToMap...");
+                                                // Use object syntax for clarity and to trigger the explicit adaptation logic
+                                                this.transitionToMap('dungeon', { dungeonLevel: 1, dungeonId: 'void_dimension' });
+                                                this.isTransitioning = false;
+                                            });
+                                        }
+                                    }
+                                });
+                            }
+
+                            // SPECIAL: Void Source Crystal Interaction (Destroy)
+                            if (def.id === 'void_source_crystal') {
+                                scene.physics.add.overlap(player, collisionBody, () => {
+                                    // Simple proximity trigger for interaction
+                                    // Destroy if quest is active
+                                    if (window.uqe && window.isQuestActive && window.isQuestActive('main_03_012')) {
+                                        if (!visual.isDestroyed) {
+                                            visual.isDestroyed = true; // Debounce
+                                            console.log("[VOID CRYSTAL] 💥 Attacking Source Crystal!");
+
+                                            if (window.showDamageNumber) window.showDamageNumber(pixelX, pixelY - 50, "Crystal Shattered!", 0xFF0000);
+
+                                            // Emit 'interact_object' event for UQE
+                                            window.uqe.eventBus.emit('interact_object', { id: 'void_source_crystal' });
+
+                                            // Visual destruction
+                                            scene.tweens.add({
+                                                targets: [visual, outer],
+                                                scale: 0, alpha: 0, rotation: 1,
+                                                duration: 500,
+                                                onComplete: () => {
+                                                    if (visual.destroy) visual.destroy();
+                                                    if (outer.destroy) outer.destroy();
+                                                    if (collisionBody.destroy) collisionBody.destroy();
+                                                }
+                                            });
+                                        }
+                                    } else if (!visual.hasWarned) {
+                                        visual.hasWarned = true;
+                                        if (window.showDamageNumber) window.showDamageNumber(pixelX, pixelY - 50, "Sealed Crystal - Quest Required", 0xAAAAAA);
+                                        // Reset warning after 3 seconds
+                                        scene.time.delayedCall(3000, () => { visual.hasWarned = false; });
+                                    }
+                                });
+                            }
+
+                            // Chat Feedback on Spawn
+                            const dungeonName = dungeonDef.name || "Unknown Dungeon";
+                            if (window.addChatMessage) window.addChatMessage(`A Void Tear has appeared in ${dungeonName}...`, 0xAA00FF);
+
+                            // VISUAL LABEL
+                            const label = scene.add.text(pixelX, pixelY - 45, "Void Tear", {
+                                fontSize: '12px',
+                                fontFamily: 'monospace',
+                                fill: '#D8BFD8',
+                                stroke: '#000000',
+                                strokeThickness: 3,
+                                align: 'center'
+                            }).setOrigin(0.5).setDepth(20);
+                            // Add to main interactables list for cleanup (even though we don't use generic interaction)
+                            // We'll create a dummy object to ensure the label gets destroyed on map change
+                            this.interactables.push({ definition: { id: 'void_tear_label' }, sprite: label });
+                        }
+                    }
+
+                    // Get the definition for interaction tracking
+                    const fullDefs = scene.cache.json.get('interactables') || [];
+                    const fullDef = fullDefs.find(obj => obj.id === def.id);
+
+                    if (fullDef) {
+                        visual.collisionBody = collisionBody;
+
+                        // EXCEPTION: Void Tear is handled by custom overlap logic above.
+                        // Do NOT add it to the generic interactables list (which causes "Interact to Destroy")
+                        if (def.id !== 'void_tear') {
+                            this.interactables.push({
+                                definition: fullDef,
+                                sprite: visual
+                            });
+                        }
+
+
+                        planted = true;
+                        count++;
+                        break;
+                    } else {
+                        // Definition not found - destroy the shapes
+                        visual.destroy();
+                        collisionBody.destroy();
+                        console.warn(`[INTERACTABLE] Definition for ${def.id} not found`);
                     }
                 }
+
+
+
+
                 debugLog(`   -> Spawned ${count} of ${def.id}`);
             } catch (err) {
                 console.error(`   -> Error spawning ${def.id}:`, err);
+            }
+        }
+    },
+
+    /**
+     * Spawn Bosses for Dungeon
+     */
+    spawnDungeonBosses(dungeonDef, level, dungeon, scene) {
+        if (!dungeonDef.bosses) return;
+
+        const bosses = dungeonDef.bosses.filter(b => b.level === level);
+        if (bosses.length === 0) return;
+
+        debugLog(`👹 [DungeonBoss] Level ${level}. Bosses found: ${bosses.length}`);
+
+        for (const bossDef of bosses) {
+            try {
+                let planted = false;
+                let rx = 0;
+                let ry = 0;
+
+                // Try random placement (center bias?)
+                // Actually bosses usually are at the end... but random is fine for now
+                for (let a = 0; a < 50; a++) {
+                    rx = Phaser.Math.Between(1, dungeon.width - 2);
+                    ry = Phaser.Math.Between(1, dungeon.height - 2);
+                    if (dungeon.mapData[ry][rx] === 1) {
+                        planted = true;
+                        break;
+                    }
+                }
+
+                // Fallback: Force find
+                if (!planted) {
+                    for (let y = 1; y < dungeon.height - 1; y++) {
+                        for (let x = 1; x < dungeon.width - 1; x++) {
+                            if (dungeon.mapData[y][x] === 1) {
+                                rx = x;
+                                ry = y;
+                                planted = true;
+                                break;
+                            }
+                        }
+                        if (planted) break;
+                    }
+                }
+
+                if (planted) {
+                    const pixelX = rx * scene.tileSize + scene.tileSize / 2;
+                    const pixelY = ry * scene.tileSize + scene.tileSize / 2;
+
+                    debugLog(`👹 Spawning BOSS ${bossDef.monsterId} at ${rx},${ry}`);
+
+                    // Create the boss using the global spawnMonster function
+                    if (typeof window.spawnMonster === 'function') {
+                        const boss = window.spawnMonster(pixelX, pixelY, bossDef.monsterId);
+                        if (boss) {
+                            // Scale up for boss effect?
+                            boss.setScale(1.2);
+                            // Add boss health bar logic here if needed
+                        }
+                    } else {
+                        console.error("spawnMonster function not found!");
+                    }
+                }
+            } catch (err) {
+                console.error(`   -> Error spawning boss ${bossDef.monsterId}:`, err);
             }
         }
     },
@@ -1522,9 +1678,12 @@ const MapManager = {
             debugLog('[MapManager] Adapted object argument to params', { level, dungeonId });
         }
 
-        // RESET LOGIC: If checking into Level 1 from Wilderness/Town, reset the specific dungeon
+        // RESET LOGIC: If checking into Level 1 from Wilderness/Town OR switching dungeons, reset the specific dungeon
         // This makes the dungeon REPEATABLE and ensures boss respawns.
-        if (targetMap === 'dungeon' && level === 1 && this.currentMap !== 'dungeon') {
+        const isSwitchingDungeons = targetMap === 'dungeon' && this.currentDungeonId !== dungeonId;
+        const isEnteringDungeon = targetMap === 'dungeon' && this.currentMap !== 'dungeon';
+
+        if (level === 1 && (isEnteringDungeon || isSwitchingDungeons)) {
             const idToReset = dungeonId || 'tower_dungeon';
             debugLog(`♻️ Resetting dungeon state for ${idToReset}...`);
 

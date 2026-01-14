@@ -221,6 +221,12 @@ class ExploreLocationObjective extends UqeObjective {
         super(data, eventBus);
         this.zoneId = data.zoneId || data.locationId; // Support both naming conventions
 
+        // IMMEDIATE CHECK: Are we already there?
+        if (typeof window.MapManager !== 'undefined' && window.MapManager.currentMap === this.zoneId) {
+            // We need to delay this slightly to ensure the quest is fully registered and UI is ready
+            setTimeout(() => this.updateProgress(1), 500);
+        }
+
         this.subscribe(UQE_EVENTS.LOCATION_EXPLORED, (data) => {
             // Match against zoneId if specified, otherwise fall back to objective ID
             const targetId = this.zoneId || this.id;

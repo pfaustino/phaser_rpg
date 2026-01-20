@@ -1142,7 +1142,7 @@ window.UIManager = {
                 const isDifferentItem = equippedItem && equippedItem !== item;
 
                 if (isDifferentItem) {
-                    const compTextStr = this.getTooltipText(equippedItem, context, true);
+                    const compTextStr = this.getTooltipText(equippedItem, 'comparison', true);
                     const compColor = (window.QUALITY_COLORS && window.QUALITY_COLORS[equippedItem.quality]) ? window.QUALITY_COLORS[equippedItem.quality] : 0xaaaaaa;
 
                     // Position: Attempt to place it to the Right of the main tooltip

@@ -2753,7 +2753,7 @@ function create() {
     }).setScrollFactor(0).setDepth(100);
 
     // Controls text (toggleable) - default to short version
-    const fullControlsText = 'WASD: Move | SPACE: Attack/Pickup | 1-3: Abilities | E: Equipment \\nQ: Quests | F: Interact | F6: Save | F9: Load | H: Help';
+    const fullControlsText = 'WASD: Move | SPACE: Attack/Pickup | 1-3: Abilities | E: Equipment \nQ: Quests | F: Interact | F6: Save | F9: Load | H: Help';
     const shortControlsText = 'H: Help';
 
     let controlsText = this.add.text(barX, startTextY + 50, shortControlsText, {

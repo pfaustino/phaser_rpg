@@ -178,12 +178,52 @@ class CollectObjective extends UqeObjective {
     constructor(data, eventBus) {
         super(data, eventBus);
         this.itemId = data.itemId;
+
+        // Check if we already have the item (retroactive functionality)
+        this.checkInventory();
+
         this.subscribe(UQE_EVENTS.ITEM_PICKUP, (data) => {
             // Match specific ID, type, or wildcard 'any'
             if (this.itemId === 'any' || data.id === this.itemId || data.type === this.itemId) {
                 this.updateProgress(data.amount || 1);
             }
         });
+    }
+
+    checkInventory() {
+        if (typeof playerStats !== 'undefined' && playerStats.inventory) {
+            // Count items in inventory matching this.itemId
+            const count = playerStats.inventory.reduce((acc, item) => {
+                if (this.itemId === 'any' || item.id === this.itemId || item.type === this.itemId) {
+                    return acc + (item.quantity || 1);
+                }
+                return acc;
+            }, 0);
+
+            // If we have items, update progress. 
+            // Note: This assumes 'collect' means 'possess'.
+            if (count > 0) {
+                // Determine if we should set absolute progress or add.
+                // Generally for 'possess', we want to ensure progress is at least what we have.
+                // But updateProgress is incremental.
+                // If progress is 0 and we have 1, updateProgress(1) -> 1.
+                // If progress is 1 and we have 1, updateProgress(0) -> 1.
+
+                // Let's rely on updateProgress logic, but we need to pass the DIFFERENCE if we want to sync, 
+                // OR we just assume this check runs once at start.
+
+                // Better approach: If current progress < count, add the difference.
+                if (this.progress < count) {
+                    this.updateProgress(count - this.progress);
+                }
+            }
+        }
+    }
+
+    rehydrate(saveData) {
+        super.rehydrate(saveData);
+        // Re-check inventory on load to fix any desync or retroactive item acquisition
+        this.checkInventory();
     }
 }
 

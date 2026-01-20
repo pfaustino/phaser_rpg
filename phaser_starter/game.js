@@ -13544,50 +13544,45 @@ function createQuestMarker(targetId, target, type = 'talk') {
     // Don't create duplicate markers
     if (questMarkers.has(targetId)) return;
 
-    // Create arrow marker using graphics
-    const markerGraphics = scene.add.graphics();
+    // Choose symbol and color based on type
+    let symbol = '!';
+    let color = '#ffff00'; // Yellow for talk
 
-    // Choose color based on type
-    let color = 0xffff00; // Yellow for talk
-    if (type === 'enter') color = 0x00aaff; // Blue for locations
-    if (type === 'turnin') color = 0x00ff00; // Green for turn-in
+    if (type === 'enter') {
+        symbol = '▼';
+        color = '#00aaff'; // Blue for locations
+    } else if (type === 'turnin') {
+        symbol = '?';
+        color = '#00ff00'; // Green for turn-in
+    }
 
-    // Draw downward arrow
-    markerGraphics.fillStyle(color, 1);
-    markerGraphics.beginPath();
-    markerGraphics.moveTo(0, 0);      // Top point
-    markerGraphics.lineTo(-8, -15);   // Left
-    markerGraphics.lineTo(-3, -15);   // Inner left
-    markerGraphics.lineTo(-3, -25);   // Top left
-    markerGraphics.lineTo(3, -25);    // Top right
-    markerGraphics.lineTo(3, -15);    // Inner right
-    markerGraphics.lineTo(8, -15);    // Right
-    markerGraphics.closePath();
-    markerGraphics.fillPath();
+    // Create text marker
+    const markerText = scene.add.text(target.x, target.y - 50, symbol, {
+        fontSize: '32px',
+        fontFamily: 'Arial',
+        fontStyle: 'bold',
+        fill: color,
+        stroke: '#000000',
+        strokeThickness: 4
+    });
 
-    // Add outline
-    markerGraphics.lineStyle(2, 0x000000, 1);
-    markerGraphics.strokePath();
-
-    // Position above target
-    const offsetY = -40; // Above the sprite
-    markerGraphics.setPosition(target.x, target.y + offsetY);
-    markerGraphics.setDepth(500); // Above everything
-    markerGraphics.setScrollFactor(1); // Move with camera
+    markerText.setOrigin(0.5);
+    markerText.setDepth(500); // Above everything
+    markerText.setScrollFactor(1); // Move with camera
 
     // Add bobbing animation
     const tween = scene.tweens.add({
-        targets: markerGraphics,
-        y: target.y + offsetY - 10,
-        duration: 500,
+        targets: markerText,
+        y: target.y - 60, // Bob up
+        duration: 800,
         yoyo: true,
         repeat: -1,
         ease: 'Sine.easeInOut'
     });
 
-    // Store marker data
+    // Store marker data (using 'sprite' key for compatibility)
     questMarkers.set(targetId, {
-        sprite: markerGraphics,
+        sprite: markerText,
         tween: tween,
         target: target,
         type: type

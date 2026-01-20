@@ -7686,12 +7686,12 @@ function updateEquipmentInventoryItems() {
         };
 
         itemSprite.on('pointerdown', onClickItem);
-        // itemSprite.on('pointerout', onHoverOut); // Already set above
-        // itemSprite.on('pointerover', onHoverIn); // Already set above
+        itemSprite.on('pointerout', onHoverOut);
+        itemSprite.on('pointerover', onHoverIn);
 
         itemBg.on('pointerdown', onClickItem);
-        // itemBg.on('pointerout', onHoverOut);
-        // itemBg.on('pointerover', onHoverIn);
+        itemBg.on('pointerout', onHoverOut);
+        itemBg.on('pointerover', onHoverIn);
 
         equipmentPanel.inventoryItems.push({
             bg: itemBg,

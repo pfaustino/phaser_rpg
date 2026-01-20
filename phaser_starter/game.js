@@ -14224,7 +14224,7 @@ function updateRaidSystem(time) {
                 ? (voidRaid.mapId.includes(currentMap) || (currentDungeonId && voidRaid.mapId.includes(currentDungeonId)))
                 : (currentMap === voidRaid.mapId || (currentDungeonId && currentDungeonId === voidRaid.mapId));
 
-            debugLog(`[RAID] 🔍 Raid Debug: Quest '${voidRaid.questId}' Active? ${qa}, Map: '${currentMap}', Dungeon: '${currentDungeonId}' (Match: ${mapMatch})`);
+
 
             if (qa && !mapMatch) {
                 debugLog(`[RAID] ⚠️ Raid blocked by map mismatch! Expected: ${voidRaid.mapId}, Got: ${currentMap} / ${currentDungeonId}`);

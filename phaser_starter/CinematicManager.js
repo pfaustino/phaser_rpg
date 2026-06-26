@@ -178,6 +178,13 @@ class CinematicManager {
 
         const closeCinematic = () => {
             if (!canClose) return;
+            canClose = false;
+
+            bg.off('pointerdown', closeCinematic);
+            if (scene.input.keyboard) {
+                scene.input.keyboard.off('keydown-SPACE', closeCinematic);
+                scene.input.keyboard.off('keydown-ENTER', closeCinematic);
+            }
 
             // Fade out
             scene.tweens.add({
@@ -186,8 +193,9 @@ class CinematicManager {
                 duration: 1000,
                 onComplete: () => {
                     container.destroy();
-                    // Resume music if changed?
-                    // Triggers?
+                    if (scene.events) {
+                        scene.events.emit('cinematic-closed', cinematic);
+                    }
                 }
             });
 
@@ -201,8 +209,10 @@ class CinematicManager {
         };
 
         bg.on('pointerdown', closeCinematic);
-        scene.input.keyboard.on('keydown-SPACE', closeCinematic);
-        scene.input.keyboard.on('keydown-ENTER', closeCinematic);
+        if (scene.input.keyboard) {
+            scene.input.keyboard.on('keydown-SPACE', closeCinematic);
+            scene.input.keyboard.on('keydown-ENTER', closeCinematic);
+        }
 
         // Auto Close (optional, usually preferred manual)
         // if (cinematic.duration) {

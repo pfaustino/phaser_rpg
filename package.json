@@ -1,0 +1,10 @@
+{
+  "name": "phaser_rpg",
+  "private": true,
+  "version": "0.9.272.0",
+  "description": "RPG Adventure: Shattered Aegis — Phaser browser port",
+  "scripts": {
+    "dev": "npx serve . -l tcp://0.0.0.0:5184",
+    "preview": "npx serve . -l tcp://0.0.0.0:5184"
+  }
+}

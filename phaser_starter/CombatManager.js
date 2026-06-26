@@ -104,7 +104,8 @@ window.CombatManager = {
 
         // Weapon properties
         const weaponQuality = equippedWeapon.quality || 'Common';
-        const weaponType = equippedWeapon.weaponType || 'Sword';
+        const hasWeapon = !!(stats.equipment && stats.equipment.weapon && stats.equipment.weapon.name);
+        const weaponType = hasWeapon ? (equippedWeapon.weaponType || 'Sword') : 'Unarmed';
 
         // Visuals: Trail & Sound
         const facingDirection = player.facingDirection || 'south';
@@ -119,25 +120,77 @@ window.CombatManager = {
         // Player Animation
         this._playPlayerAttackAnimation(player, scene);
 
-        // --- HIT DETECTION ---
-        const attackRange = 50;
-        let closestMonster = null;
-        let closestDistance = attackRange;
-
-        if (window.monsters) {
-            window.monsters.forEach(monster => {
-                if (monster.hp <= 0) return;
-                const dist = Phaser.Math.Distance.Between(player.x, player.y, monster.x, monster.y);
-                if (dist < closestDistance) {
-                    closestDistance = dist;
-                    closestMonster = monster;
-                }
-            });
+        // Sync weapon pose before hit test
+        if (typeof window.updateWeaponPosition === 'function') {
+            window.updateWeaponPosition();
         }
+
+        const closestMonster = this._findMeleeTarget(player, equippedWeapon, weaponType);
 
         if (closestMonster) {
             this.damageMonster(closestMonster, stats.attack, weaponType);
         }
+    },
+
+    /**
+     * Omni-directional melee reach (360°) around the player.
+     */
+    _getMeleeStrikeMetrics(player, equippedWeapon, weaponType) {
+        let weaponDef = null;
+        if (window.ItemManager && window.ItemManager.definitions && window.ItemManager.definitions.weaponTypes) {
+            weaponDef = window.ItemManager.definitions.weaponTypes[weaponType];
+        }
+
+        const isUnarmed = weaponType === 'Unarmed';
+        let bladeLength = isUnarmed ? 24 : (equippedWeapon.bladeLength || weaponDef?.bladeLength || 52);
+        let hitRadius = isUnarmed ? 28 : (equippedWeapon.hitRadius || weaponDef?.hitRadius || 34);
+
+        const ws = window.weaponSprite;
+        if (!isUnarmed && ws && ws.visible && ws.active) {
+            const displayLen = Math.max(ws.displayWidth || 32, ws.displayHeight || 32);
+            bladeLength = Math.max(bladeLength, displayLen * 0.72);
+        }
+
+        const bodyPad = 16;
+        const reach = bodyPad + bladeLength + hitRadius * 0.5;
+
+        return {
+            centerX: player.x,
+            centerY: player.y,
+            reach
+        };
+    },
+
+    _isInMeleeStrikeZone(monster, metrics) {
+        const dist = Phaser.Math.Distance.Between(
+            monster.x, monster.y, metrics.centerX, metrics.centerY
+        );
+        return dist <= metrics.reach;
+    },
+
+    _findMeleeTarget(player, equippedWeapon, weaponType) {
+        const metrics = this._getMeleeStrikeMetrics(player, equippedWeapon, weaponType);
+        if (!metrics || !window.monsters) {
+            return null;
+        }
+
+        let closestMonster = null;
+        let closestDistance = metrics.reach;
+
+        window.monsters.forEach(monster => {
+            if (!monster || monster.hp <= 0) return;
+            if (!this._isInMeleeStrikeZone(monster, metrics)) return;
+
+            const dist = Phaser.Math.Distance.Between(
+                monster.x, monster.y, metrics.centerX, metrics.centerY
+            );
+            if (dist < closestDistance) {
+                closestDistance = dist;
+                closestMonster = monster;
+            }
+        });
+
+        return closestMonster;
     },
 
     /**
@@ -259,6 +312,9 @@ window.CombatManager = {
         if (monster.hpBarBg) { monster.hpBarBg.destroy(); monster.hpBarBg = null; }
         if (monster.hpBar) { monster.hpBar.destroy(); monster.hpBar = null; }
         if (monster.levelLabel) { monster.levelLabel.destroy(); monster.levelLabel = null; }
+        if (window.UIManager && window.UIManager.hideTooltipForMonster) {
+            window.UIManager.hideTooltipForMonster(monster);
+        }
 
         // Stats
         if (!window.playerStats.questStats.monstersKilled) window.playerStats.questStats.monstersKilled = 0;

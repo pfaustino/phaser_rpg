@@ -1,0 +1,62 @@
+{
+    "version": 2,
+    "steps": [
+        {
+            "id": "welcome",
+            "title": "Welcome to Hearthwell",
+            "text": "The earth trembles and corruption stirs beneath the village. This short tour covers the essentials — you can skip anytime or replay it from Settings.",
+            "advance": "next"
+        },
+        {
+            "id": "movement",
+            "title": "Movement",
+            "text": "Move with {move}. On gamepad, use the left stick or D-pad.",
+            "advance": "action_move",
+            "highlight": { "x": 0.5, "y": 0.5, "w": 0.12, "h": 0.2 }
+        },
+        {
+            "id": "interact",
+            "title": "Interact",
+            "text": "Press {interact} near NPCs, doors, and objects. Quest givers often have a marker above them.",
+            "advance": "next"
+        },
+        {
+            "id": "menus",
+            "title": "Quests & Gear",
+            "text": "{quests} opens the quest log. {inventory} is inventory. {equipment} is equipment. Press H anytime for a controls reminder.",
+            "advance": "next",
+            "highlight": { "x": 0.08, "y": 0.35, "w": 0.14, "h": 0.45 }
+        },
+        {
+            "id": "save",
+            "title": "Save & Settings",
+            "text": "{save} saves your game. {load} loads. The gear icon opens Settings — including this tutorial replay.",
+            "advance": "next",
+            "highlight": { "x": 0.97, "y": 0.03, "w": 0.05, "h": 0.08 }
+        },
+        {
+            "id": "quest",
+            "title": "Your First Quest",
+            "text": "Find Elder Malik in the village — your quest log already points the way. Talk to him with {interact} to begin the main story.",
+            "advance": "next"
+        }
+    ],
+    "contextual": [
+        {
+            "id": "town_exit",
+            "trigger": "near_town_exit",
+            "title": "Town Exit",
+            "text": "You're at the edge of Hearthwell. Press {interact} here to leave town and start your adventure in the wilderness.",
+            "mode": "banner",
+            "highlight": { "x": 0.5, "y": 0.85, "w": 0.2, "h": 0.12 }
+        },
+        {
+            "id": "wilderness_combat",
+            "trigger": "enter_wilderness",
+            "title": "Combat in the Wild",
+            "text": "Monsters roam outside the walls! Press {attack} to strike — your weapon swings in every direction. Use {abilities} for special skills. Press {attack} near loot to pick it up.",
+            "mode": "full",
+            "highlight": { "x": 0.5, "y": 0.92, "w": 0.55, "h": 0.12 }
+        }
+    ]
+}

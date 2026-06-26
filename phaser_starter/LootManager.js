@@ -82,6 +82,7 @@ window.LootManager = {
 
         // Store data on sprite for pickup
         itemSprite.itemData = itemData;
+        itemSprite.isItem = true;
         itemSprite.fx = particles; // Store reference to cleanup
 
         // Add to global items list (if used primarily for cleanup)
@@ -94,12 +95,15 @@ window.LootManager = {
         // But we can make them interactive too.
         itemSprite.setInteractive();
         itemSprite.on('pointerdown', () => {
-            // Calculate distance check?
             const d = Phaser.Math.Distance.Between(window.player.x, window.player.y, itemSprite.x, itemSprite.y);
             if (d < 100) {
-                this.pickupItem(itemData, window.items.findIndex(i => i.sprite === itemSprite));
-            } else {
-                if (window.addChatMessage) window.addChatMessage("Too far away.", 0xaaaaaa);
+                const listIndex = window.items ? window.items.findIndex(i => i.sprite === itemSprite) : -1;
+                const listItem = listIndex >= 0 ? window.items[listIndex] : null;
+                if (listItem) {
+                    this.pickupItem(listItem, listIndex);
+                }
+            } else if (window.addChatMessage) {
+                window.addChatMessage("Too far away.", 0xaaaaaa);
             }
         });
 
@@ -322,46 +326,86 @@ window.LootManager = {
     },
 
     /**
+     * Resolve the world-drop entry that owns the sprite (callers often pass itemData only).
+     */
+    _resolveGroundItem(item, index) {
+        if (!window.items || !Array.isArray(window.items)) {
+            return item && item.sprite ? item : null;
+        }
+
+        if (typeof index === 'number' && index >= 0 && window.items[index]) {
+            return window.items[index];
+        }
+
+        if (item && item.sprite) {
+            const bySprite = window.items.find(i => i.sprite === item.sprite);
+            if (bySprite) return bySprite;
+            return item;
+        }
+
+        if (!item) return null;
+
+        return window.items.find(i =>
+            i.sprite &&
+            i.sprite.active &&
+            (i.sprite.itemData === item ||
+                (i.id && item.id && i.id === item.id) ||
+                (i.type === item.type && i.type === 'gold' && i.amount === item.amount))
+        ) || null;
+    },
+
+    /**
      * Pick up an item
      */
     pickupItem(item, index) {
         if (!item || !playerStats) return;
 
-        // Check Gold
-        if (item.type === 'gold') {
-            playerStats.gold += item.amount;
-            if (playerStats.questStats) playerStats.questStats.goldEarned += item.amount;
+        const groundItem = this._resolveGroundItem(item, index);
+        if (!groundItem || !groundItem.sprite || !groundItem.sprite.active) {
+            return;
+        }
 
-            this.showFeedback(item, `+${item.amount} Gold`, 0xffd700);
+        const itemData = groundItem.sprite.itemData || groundItem;
+
+        // Check Gold
+        if (itemData.type === 'gold') {
+            playerStats.gold += itemData.amount;
+            if (playerStats.questStats) playerStats.questStats.goldEarned += itemData.amount;
+
+            this.showFeedback(groundItem, `+${itemData.amount} Gold`, 0xffd700);
 
             if (typeof window.playSound === 'function') window.playSound('gold_pickup');
 
             // UQE Event
-            if (window.uqe) window.uqe.eventBus.emit(UQE_EVENTS.GOLD_EARNED, { amount: item.amount });
+            if (window.uqe) window.uqe.eventBus.emit(UQE_EVENTS.GOLD_EARNED, { amount: itemData.amount });
 
         } else {
             // Inventory Item
-            const isStackable = ItemManager.isStackable(item);
+            const isStackable = ItemManager.isStackable(itemData);
             let stacked = false;
 
-            if (isStackable && item.name) {
+            if (isStackable && itemData.name) {
                 const existing = playerStats.inventory.find(i =>
-                    i.type === item.type && i.name === item.name
+                    i.type === itemData.type && i.name === itemData.name
                 );
                 if (existing) {
-                    existing.quantity = (existing.quantity || 1) + (item.quantity || 1);
+                    existing.quantity = (existing.quantity || 1) + (itemData.quantity || 1);
                     stacked = true;
                 }
             }
 
             if (!stacked) {
-                if (isStackable) item.quantity = item.quantity || 1;
-                playerStats.inventory.push(item);
+                const inventoryItem = { ...itemData };
+                delete inventoryItem.sprite;
+                if (ItemManager.isStackable(inventoryItem)) {
+                    inventoryItem.quantity = inventoryItem.quantity || 1;
+                }
+                playerStats.inventory.push(inventoryItem);
             }
 
             if (playerStats.questStats) playerStats.questStats.itemsCollected++;
 
-            this.showFeedback(item, `Picked up ${item.name}`, 0x00ff00);
+            this.showFeedback(groundItem, `Picked up ${itemData.name}`, 0x00ff00);
             if (typeof window.playSound === 'function') window.playSound('item_pickup');
 
             // Update UI
@@ -370,29 +414,23 @@ window.LootManager = {
 
             // UQE Event
             if (window.uqe) window.uqe.eventBus.emit(UQE_EVENTS.ITEM_PICKUP, {
-                id: item.id || item.name,
-                type: item.type,
-                amount: 1
+                id: itemData.id || itemData.name,
+                type: itemData.type,
+                amount: itemData.quantity || 1
             });
         }
 
         // Cleanup Sprite and FX
-        if (item.sprite) {
-            if (item.sprite.fx) {
-                item.sprite.fx.destroy();
-            }
-            item.sprite.destroy();
-
-            // Remove from global items list if using one
-            if (window.items) {
-                const idx = window.items.indexOf(item);
-                if (idx > -1) window.items.splice(idx, 1);
-            }
+        const sprite = groundItem.sprite;
+        if (sprite.fx) {
+            sprite.fx.destroy();
         }
+        sprite.destroy();
+        groundItem.sprite = null;
 
-        // If index provided relative to a list passed in
-        if (typeof index === 'number' && window.items) {
-            // (Handled above by instance check primarily)
+        const idx = window.items.indexOf(groundItem);
+        if (idx > -1) {
+            window.items.splice(idx, 1);
         }
 
         // Update stats UI

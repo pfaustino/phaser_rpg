@@ -565,6 +565,12 @@ class UqeEngine {
         };
     }
 
+    getQuestObjective(questId, objectiveId) {
+        const quest = this.activeQuests.find(q => q.id === questId);
+        if (!quest) return null;
+        return quest.objectives.find(o => o.id === objectiveId) || null;
+    }
+
     loadSaveData(saveData) {
         debugLog(`[UQE Load] loadSaveData called with:`, saveData);
         debugLog(`[UQE Load] allDefinitions loaded:`, Object.keys(this.allDefinitions).length, 'quests');

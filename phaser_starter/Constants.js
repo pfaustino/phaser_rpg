@@ -11,7 +11,7 @@
 // ============================================
 // DEBUG UTILITIES (Must be defined FIRST)
 // ============================================
-window.GAME_VERSION = "0.9.265.1";
+window.GAME_VERSION = "0.9.272.0";
 /**
  * Debug log - only outputs to console when debugMode is enabled
  * Defined here (in Constants.js) because it loads before other scripts
@@ -43,6 +43,7 @@ window.Constants = {
     // ============================================
     // UI & VISUAL SETTINGS
     // ============================================
+    HUD_TOP_MARGIN: 28,
     QUALITY_COLORS: {
         'Common': 0x9d9d9d,    // Gray
         'Uncommon': 0x1eff00,  // Green

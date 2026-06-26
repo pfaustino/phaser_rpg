@@ -171,6 +171,8 @@
             "speed": 1.0,
             "critChance": 0.05,
             "hitSound": "sword_hit",
+            "bladeLength": 56,
+            "hitRadius": 36,
             "defaultSprite": "assets/images/item_weapon.png"
         },
         "Axe": {
@@ -178,6 +180,8 @@
             "speed": 0.9,
             "critChance": 0.08,
             "hitSound": "axe_hit",
+            "bladeLength": 50,
+            "hitRadius": 38,
             "defaultSprite": "assets/images/basic-axe.png"
         },
         "Mace": {
@@ -185,6 +189,8 @@
             "speed": 0.85,
             "critChance": 0.06,
             "hitSound": "mace_hit",
+            "bladeLength": 44,
+            "hitRadius": 40,
             "defaultSprite": "assets/images/basic-mace.png"
         },
         "Dagger": {
@@ -192,6 +198,8 @@
             "speed": 1.2,
             "critChance": 0.12,
             "hitSound": "dagger_hit",
+            "bladeLength": 36,
+            "hitRadius": 28,
             "defaultSprite": "assets/images/basic-dagger.png"
         },
         "Staff": {

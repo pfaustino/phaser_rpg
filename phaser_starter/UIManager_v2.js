@@ -40,6 +40,7 @@ window.UIManager = {
     // Tooltip State
     currentTooltip: null,
     tooltipHideTimer: null,
+    tooltipMonster: null,
 
     /**
      * Check if any UI window is currently open
@@ -64,7 +65,7 @@ window.UIManager = {
             (window.questCompletedModal && (window.questCompletedModal.visible || window.questCompletedModal.closeBtn)) ||
             (window.newQuestModal && window.newQuestModal.visible) ||
             (window.questPreviewModal !== null) ||
-            this.compendiumVisible; // Added Compendium check
+            this.compendiumVisible;
     },
 
     /**
@@ -117,6 +118,9 @@ window.UIManager = {
             }
             window.buildingPanelVisible = false;
             this.buildingPanelVisible = false;
+        }
+        if (window.DevToolsUI && window.DevToolsUI.panelOpen) {
+            window.DevToolsUI.closePanel();
         }
     },
 
@@ -273,7 +277,7 @@ window.UIManager = {
         const centerX = scene.cameras.main.width / 2;
         const centerY = scene.cameras.main.height / 2;
         const panelWidth = 400;
-        const panelHeight = 620;
+        const panelHeight = 670;
 
         // Background
         const bg = scene.add.rectangle(centerX, centerY, panelWidth, panelHeight, 0x1a1a1a, 0.95)
@@ -293,8 +297,8 @@ window.UIManager = {
             interactiveItems: [] // Structured list for controller navigation
         };
 
-        let currentY = centerY - 150;
-        const spacing = 55;
+        let currentY = centerY - 200;
+        const spacing = 52;
 
         // --- Volume Sliders Helper ---
         const createSlider = (y, label, initialValue, onUpdate, id) => {
@@ -364,7 +368,7 @@ window.UIManager = {
         const sfxVolume = (typeof window.sfxVolume !== 'undefined') ? window.sfxVolume : 0.7;
         createSlider(currentY, 'SFX Volume', sfxVolume, (val) => {
             if (typeof window.updateSFXVolume === 'function') {
-                window.updateSFXVolume(val);
+                window.updateSFXVolume(val, true);
             }
         }, 'sfx');
         currentY += spacing + 10;
@@ -548,6 +552,35 @@ window.UIManager = {
 
         currentY += spacing;
 
+        // --- Replay Tutorial ---
+        const tutorialBtnBg = scene.add.rectangle(centerX, currentY, 200, 50, 0x223355)
+            .setScrollFactor(0).setDepth(10001).setInteractive({ useHandCursor: true })
+            .setStrokeStyle(1, 0x6699cc);
+        const tutorialBtnText = scene.add.text(centerX, currentY, 'REPLAY TUTORIAL', {
+            fontSize: '18px', fill: '#aaccff', fontStyle: 'bold'
+        }).setScrollFactor(0).setDepth(10002).setOrigin(0.5);
+
+        const onReplayTutorial = () => {
+            if (window.OnboardingManager && typeof window.OnboardingManager.replay === 'function') {
+                window.OnboardingManager.replay();
+            } else if (typeof addChatMessage === 'function') {
+                addChatMessage('Tutorial is not available right now.', 0xff6666, '⚠️');
+            }
+            if (typeof playSound === 'function') playSound('menu_select');
+        };
+
+        tutorialBtnBg.on('pointerdown', onReplayTutorial);
+        this.settingsPanel.elements.push(tutorialBtnBg, tutorialBtnText);
+
+        this.settingsPanel.interactiveItems.push({
+            type: 'button',
+            id: 'tutorial',
+            bg: tutorialBtnBg,
+            action: onReplayTutorial
+        });
+
+        currentY += spacing;
+
         // --- New Game ---
         const newGameBtnBg = scene.add.rectangle(centerX, currentY, 200, 50, 0x330000)
             .setScrollFactor(0).setDepth(10001).setInteractive({ useHandCursor: true })
@@ -574,9 +607,9 @@ window.UIManager = {
         });
 
         // --- Close ---
-        const closeBtnBg = scene.add.rectangle(centerX, centerY + panelHeight / 2 - 40, 100, 40, 0x444444)
+        const closeBtnBg = scene.add.rectangle(centerX, centerY + panelHeight / 2 - 32, 100, 40, 0x444444)
             .setScrollFactor(0).setDepth(10001).setInteractive({ useHandCursor: true });
-        const closeText = scene.add.text(centerX, centerY + panelHeight / 2 - 40, 'Close', {
+        const closeText = scene.add.text(centerX, centerY + panelHeight / 2 - 32, 'Close', {
             fontSize: '18px', fill: '#ffffff'
         }).setScrollFactor(0).setDepth(10002).setOrigin(0.5);
 
@@ -1240,6 +1273,7 @@ window.UIManager = {
             // Clear explicit references
             this.currentTooltip = null;
             this.comparisonTooltip = null;
+            this.tooltipMonster = null;
         };
 
         if (immediate) {
@@ -1891,14 +1925,19 @@ window.UIManager = {
 
     showMonsterTooltip: function (monster, x, y) {
         if (!window.game || !window.game.scene || !window.game.scene.scenes[0]) return;
+        if (!monster || !monster.active || monster.isDead) return;
         const scene = window.game.scene.scenes[0];
 
         // Clean up existing tooltip immediately (cancels any pending hide timers)
         this.hideTooltip(true);
 
+        this.tooltipMonster = monster;
+
         // Create container
         const tooltip = scene.add.container(x, y - 50).setDepth(20000);
         this.currentTooltip = tooltip;
+
+        const displayName = monster.name || monster.monsterType || 'Unknown';
 
         // Background
         const bg = scene.add.rectangle(0, 0, 150, 60, 0x000000, 0.8)
@@ -1906,7 +1945,7 @@ window.UIManager = {
         tooltip.add(bg);
 
         // Name Text
-        const nameText = scene.add.text(0, -15, monster.name || 'Unknown', {
+        const nameText = scene.add.text(0, -15, displayName, {
             fontSize: '16px',
             fontFamily: 'Arial',
             fontStyle: 'bold',
@@ -1934,9 +1973,22 @@ window.UIManager = {
         tooltip.add(hpText);
 
         // Fix: Add to activeTooltips so hideTooltip() can destroy it
-        // We treat the container as the 'text' object for the destroy loop to pick it up effective immediately
         if (!this.activeTooltips) this.activeTooltips = [];
-        this.activeTooltips.push({ text: tooltip });
+        this.activeTooltips.push({ text: tooltip, bg: null, monster: monster });
+    },
+
+    hideTooltipForMonster: function (monster) {
+        if (!monster || !this.tooltipMonster || this.tooltipMonster !== monster) return;
+        this.hideTooltip(true);
+    },
+
+    /** Drop tooltip if its monster died, was destroyed, or is no longer valid. */
+    validateMonsterTooltip: function () {
+        const monster = this.tooltipMonster;
+        if (!monster) return;
+        if (!monster.active || monster.isDead || (typeof monster.hp === 'number' && monster.hp <= 0)) {
+            this.hideTooltip(true);
+        }
     },
 
     // NOTE: hideTooltip is defined earlier in this file (around line 738)

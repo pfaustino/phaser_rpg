@@ -14,15 +14,9 @@ const config = {
     backgroundColor: '#2c3e50',
     scale: {
         mode: Phaser.Scale.RESIZE,
-        autoCenter: Phaser.Scale.CENTER_BOTH,
-        min: {
-            width: 1024,
-            height: 768
-        },
-        max: {
-            width: 1920,
-            height: 1440
-        }
+        autoCenter: Phaser.Scale.NO_CENTER,
+        width: 1280,
+        height: 720
     },
     physics: {
         default: 'arcade',
@@ -74,6 +68,7 @@ let RaidRegistry = {
     "defense_town": {
         questId: 'main_01_005',
         mapId: 'town',
+        stopObjectiveId: 'survive_defense',
         active: false,
         lastSpawnTime: 0,
         waveInterval: 5000,
@@ -101,6 +96,7 @@ let RaidRegistry = {
     "defense_void": {
         questId: 'main_03_009',
         mapId: ['void_dimension', 'The Void Dimension'], // Support array for flexible matching
+        stopObjectiveId: 'survive_void',
         active: false,
         lastSpawnTime: 0,
         waveInterval: 3000,
@@ -409,10 +405,25 @@ window.updateMusicVolume = function (volume) {
 /**
  * Update global SFX volume
  * @param {number} volume - 0.0 to 1.0
+ * @param {boolean} [playPreview=false] - Play a melee strike at the new volume
  */
-window.updateSFXVolume = function (volume) {
+window.updateSFXVolume = function (volume, playPreview = false) {
     window.sfxVolume = volume;
     localStorage.setItem('sfxVolume', volume.toString());
+
+    if (!playPreview || volume <= 0) {
+        return;
+    }
+
+    if (window._sfxPreviewTimer) {
+        clearTimeout(window._sfxPreviewTimer);
+    }
+    window._sfxPreviewTimer = setTimeout(() => {
+        window._sfxPreviewTimer = null;
+        if (typeof playSound === 'function') {
+            playSound('attack_swing');
+        }
+    }, 120);
 };
 
 /**
@@ -610,6 +621,7 @@ function preload() {
     this.load.json('assets', 'assets.json');
     this.load.json('interactables', 'interactables.json');
     this.load.json('cinematicData', 'cinematics.json');
+    this.load.json('onboardingData', 'onboarding.json');
     this.load.json('dungeonData', 'dungeons.json');
 
 
@@ -2185,6 +2197,10 @@ function create() {
 
         window.uqe.init(allQuests);
 
+        if (window.DevToolsUI && typeof window.DevToolsUI.init === 'function') {
+            window.DevToolsUI.init();
+        }
+
         // Check for deferred quest data from SaveManager
         if (window._pendingUqeQuests) {
             debugLog(`[Save/Load Debug] Found deferred quest data - loading now...`);
@@ -2252,6 +2268,15 @@ function create() {
                 if (window.UIManager && typeof window.UIManager.showQuestToast === 'function') {
                     const progressMsg = `${obj.label}: ${obj.progress}/${obj.target}`;
                     window.UIManager.showQuestToast(questTitle, progressMsg, obj.completed);
+                }
+            }
+
+            // Stop defense/survival events when the survive objective finishes (quest may still need turn-in)
+            if (obj.completed && obj.type === 'survive' && obj.parentQuest && window.QuestEvents) {
+                const def = window.uqe.allDefinitions[obj.parentQuest.id];
+                if (def && def.stopEvent && typeof window.QuestEvents[def.stopEvent]?.stop === 'function') {
+                    debugLog(`⏹️ Survive objective complete — stopping event: ${def.stopEvent}`);
+                    window.QuestEvents[def.stopEvent].stop();
                 }
             }
         });
@@ -2405,11 +2430,15 @@ function create() {
             } else {
                 debugLog(`✅ [UQE Bridge] Existing save - ${uqe.activeQuests.length} active, ${uqe.completedQuests.length} completed`);
 
-                // Resume Resonant Frequencies if active
+                // Resume Resonant Frequencies if active and defense phase not finished
                 if (window.isQuestActive && window.isQuestActive('main_01_005')) {
-                    debugLog('🛡️ Resuming active defense quest...');
-                    if (typeof startResonantFrequenciesEvent === 'function') {
-                        startResonantFrequenciesEvent();
+                    const defenseDone = window.uqe.getQuestObjective
+                        && window.uqe.getQuestObjective('main_01_005', 'survive_defense')?.isComplete();
+                    if (!defenseDone) {
+                        debugLog('🛡️ Resuming active defense quest...');
+                        if (typeof startResonantFrequenciesEvent === 'function') {
+                            startResonantFrequenciesEvent();
+                        }
                     }
                 }
 
@@ -2476,45 +2505,7 @@ function create() {
         }
     }
 
-    // Start village music on initial load
-    debugLog('🎵 Checking for village music...');
-    debugLog('   - Sound system exists:', !!this.sound);
-    debugLog('   - Audio cache exists:', !!this.cache.audio);
-    debugLog('   - Village music in cache:', this.cache.audio.exists('village_music'));
-
-    // Start music on initial load (game starts in town)
-    if (musicEnabled && this.sound && this.cache.audio.exists('village_music')) {
-        try {
-            villageMusic = this.sound.add('village_music', {
-                volume: 0.5,
-                loop: true,
-                seek: 0
-            });
-
-            // Try to play - may fail due to browser autoplay policy
-            const playResult = villageMusic.play();
-            if (playResult && typeof playResult.then === 'function') {
-                // playResult is a Promise
-                playResult.then(() => {
-                    debugLog('🎵 Started village music on game start successfully');
-                }).catch(err => {
-                    console.warn('⚠️ Could not play music on start (may need user interaction):', err);
-                });
-            } else {
-                // playResult is not a Promise (might be boolean or sound object)
-                debugLog('🎵 Started village music on game start');
-            }
-        } catch (e) {
-            console.error('❌ Error playing village music:', e);
-        }
-    } else {
-        if (!musicEnabled) {
-            debugLog('🎵 Music is disabled, skipping music on start');
-        } else {
-            console.warn('⚠️ Village music not available - sound system or cache issue');
-            console.warn('   Available audio keys:', Object.keys(this.cache.audio.entries || {}));
-        }
-    }
+    // Background music is started by MapManager (createTownMap / etc.) via playBackgroundMusic()
 
     // Create player (positioned by createTownMap)
     const tileSize = this.tileSize || 32;
@@ -3102,7 +3093,7 @@ function create() {
     });
 
     // Game Title
-    this.add.text(this.scale.width / 2, 10, 'RPG ADVENTURE: SHATTERED AEGIS', {
+    this.gameTitleText = this.add.text(this.scale.width / 2, 10, 'RPG ADVENTURE: SHATTERED AEGIS', {
         fontFamily: 'Cinzel, "Times New Roman", serif',
         fontSize: '24px',
         color: '#ffcc00',
@@ -3200,6 +3191,8 @@ function create() {
         strokeThickness: 2
     }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(1);
 
+    layoutHudTopUI(this);
+
     this.settingsIcon.on('pointerover', () => this.settingsIcon.setScale(1.1));
     this.settingsIcon.on('pointerout', () => this.settingsIcon.setScale(1.0));
     this.settingsIcon.on('pointerdown', (pointer, localX, localY, event) => {
@@ -3260,12 +3253,19 @@ function create() {
         window.AbilityManager.createAbilityBar();
     }
 
+    // ONBOARDING (init once; auto-start armed below unless deferred)
+    let deferOnboardingAutoStart = false;
+    if (window.OnboardingManager && this.cache.json.exists('onboardingData')) {
+        window.OnboardingManager.init(this, this.cache.json.get('onboardingData'));
+    }
+
     // STARTUP SAVE CHECK
     if (window.SaveManager && window.SaveManager.getLatestSaveSlot) {
         // Check if we already attempted a load this session (flag set at top of create)
         if (!window._startupLoadAttempted) {
             const latestSlot = window.SaveManager.getLatestSaveSlot();
             if (latestSlot) {
+                deferOnboardingAutoStart = true;
                 // Determine date string
                 const meta = window.SaveManager.getSlotMeta(latestSlot);
                 let dateStr = "Unknown Date";
@@ -3322,6 +3322,9 @@ function create() {
                 };
 
                 btnContinue.on('pointerdown', () => {
+                    if (window.OnboardingManager) {
+                        window.OnboardingManager.suppressForSession();
+                    }
                     // Use global helper to trigger reload-based load
                     if (window.loadGame) {
                         window.loadGame(latestSlot);
@@ -3336,10 +3339,24 @@ function create() {
 
                 btnCancel.on('pointerdown', () => {
                     destroyDialog();
+                    if (window.OnboardingManager) {
+                        window.OnboardingManager.armAutoStart({ waitForCinematic: false });
+                    }
                 });
             }
+        } else if (window.OnboardingManager) {
+            window.OnboardingManager.suppressForSession();
         }
     }
+
+    if (window.OnboardingManager && !deferOnboardingAutoStart && !window._startupLoadAttempted) {
+        const waitForCinematic = window.OnboardingManager.willCinematicPlay();
+        window.OnboardingManager.armAutoStart({ waitForCinematic });
+    }
+
+    // Resize handler — register once here, never in update()
+    this.scale.on('resize', onGameResize, this);
+    applyGameResize(this);
 
     debugLog('Game created');
 }
@@ -3878,17 +3895,14 @@ function update(time, delta) {
         showFallenDialog();
         return;
     }
-    // Trigger initial tutorial
-    if (window.showTutorial) {
-        window.showTutorial();
-    }
-
-    // Handle Window Resize
-    this.scale.on('resize', resize, this);
 
     // Update Unified Quest Engine
     if (window.uqe) {
         window.uqe.update();
+    }
+
+    if (window.OnboardingManager && typeof window.OnboardingManager.update === 'function') {
+        window.OnboardingManager.update();
     }
 
     // Update Ability Manager
@@ -3927,6 +3941,10 @@ function update(time, delta) {
     // Ensure weapon sprite follows player every frame
     if (typeof updateWeaponPosition === 'function') {
         updateWeaponPosition();
+    }
+
+    if (window.UIManager && typeof window.UIManager.validateMonsterTooltip === 'function') {
+        window.UIManager.validateMonsterTooltip();
     }
 
     // Defense Quest Wave Spawner
@@ -4077,6 +4095,11 @@ function update(time, delta) {
                 else if (window.UIManager && typeof window.UIManager.toggleQuestLog === 'function') window.UIManager.toggleQuestLog();
             }
             if (isActionJustPressed('settings')) {
+                // Dev panel is non-blocking; Esc closes it without opening Settings
+                if (window.DevToolsUI && window.DevToolsUI.panelOpen) {
+                    window.DevToolsUI.closePanel();
+                    return;
+                }
                 // Modified behavior: ESC closes any open window first, otherwise toggles settings
                 // Explicitly check global flags first to be safe, then UIManager
                 const isEquipmentOpen = (typeof equipmentVisible !== 'undefined' && equipmentVisible);
@@ -4212,7 +4235,7 @@ function update(time, delta) {
             // Track if pointer started in HUD area - if so, block movement until release
             if (!this._pointerWasDown) {
                 this._pointerWasDown = true;
-                this._pointerStartedInHUD = pointer.y <= 60;
+                this._pointerStartedInHUD = pointer.y <= (window._hudClickMaxY || 60);
             }
 
             // If click started in HUD area, don't allow movement
@@ -4241,7 +4264,7 @@ function update(time, delta) {
             }
 
             // Check if clicking on UI (HUD area at top) 
-            if (pointer.y > 60) {
+            if (pointer.y > (window._hudClickMaxY || 60)) {
                 // Block movement if any UI window is open (except HUD)
                 if (!isAnyWindowOpen()) {
                     // Check if we specifically clicked an entity recently (within 250ms)
@@ -4386,14 +4409,13 @@ function update(time, delta) {
                     else if (entity.isItem) {
                         debugLog('🎒 Auto-pickup item:', entity.itemData ? entity.itemData.name : 'Unknown Item');
 
-                        // Iterate to find the index
-                        const itemIndex = items.findIndex(i => i.sprite === entity || i === entity.itemData);
-                        if (entity.itemData) {
-                            if (typeof pickupItem === 'function') pickupItem(entity.itemData, itemIndex !== -1 ? itemIndex : -1);
-                        } else {
-                            // Fallback if itemData missing
-                            console.warn('Item missing itemData', entity);
-                            if (entity.destroy) entity.destroy();
+                        const listItem = items.find(i => i.sprite === entity);
+                        if (listItem && typeof pickupItem === 'function') {
+                            pickupItem(listItem, items.indexOf(listItem));
+                        } else if (entity.itemData && typeof pickupItem === 'function') {
+                            pickupItem(entity.itemData, -1);
+                        } else if (entity.destroy) {
+                            entity.destroy();
                         }
                     }
                 }
@@ -5813,34 +5835,10 @@ function animateWeaponStrike(direction, weaponType = 'Sword') {
             }
         });
     } else {
-        // Melee weapons: 5-step strike animation rotating around handle (fulcrum)
-        // North/South use large 275-degree arcs, East/West use 120-degree arcs
-        let maxSwingAngle;
-        if (direction === 'north' || direction === 'south') {
-            maxSwingAngle = (275 * Math.PI) / 180; // 275 degrees in radians for large arc
-        } else {
-            maxSwingAngle = (120 * Math.PI) / 180; // 120 degrees in radians for East/West
-        }
-
-        // Determine swing direction based on facing
-        let swingStart, swingEnd;
-        if (direction === 'east') {
-            // East: swing from 0° to 120° (rightward arc)
-            swingStart = baseRotation;
-            swingEnd = baseRotation + maxSwingAngle;
-        } else if (direction === 'west') {
-            // West (flipped): swing from 0° to -120° (leftward arc)
-            swingStart = baseRotation;
-            swingEnd = baseRotation - maxSwingAngle;
-        } else if (direction === 'north') {
-            // North: swing from -90° to -90° - 275° = -365° (large counter-clockwise arc, same style as South)
-            swingStart = baseRotation;
-            swingEnd = baseRotation - maxSwingAngle;
-        } else { // south
-            // South: swing from 90° to 90° + 275° = 365° (large downward arc away from character)
-            swingStart = baseRotation;
-            swingEnd = baseRotation + maxSwingAngle;
-        }
+        // Melee weapons: full 360° spin around handle (fulcrum), all facings
+        const maxSwingAngle = Math.PI * 2;
+        const swingStart = baseRotation;
+        const swingEnd = baseRotation + maxSwingAngle;
 
         // 5-step animation with varying rotation increments
         const steps = 5;
@@ -10818,8 +10816,17 @@ function showFallenDialog() {
     fallenImage.setScale(finalScale);
     fallenImage.setOrigin(0.5);
 
+    const difficultyHint = scene.add.text(centerX, centerY + 130, 'Too hard? Change difficulty under the Esc menu', {
+        fontSize: '16px',
+        fill: '#aaaaaa',
+        fontFamily: 'Arial',
+        align: 'center',
+        wordWrap: { width: dialogWidth - 60 }
+    });
+    difficultyHint.setOrigin(0.5);
+
     // Add visuals to container
-    fallenDialogContainer.add([overlay, dialogBg, fallenText, fallenImage]);
+    fallenDialogContainer.add([overlay, dialogBg, fallenText, fallenImage, difficultyHint]);
 
     // --- 2. Respawn Button (Separate to ensure input works) ---
     // We create this OUTSIDE the container to avoid any container input masking issues
@@ -13105,7 +13112,7 @@ function updateQuestTrackerHUD() {
 
     const screenWidth = scene.cameras.main.width;
     const startX = screenWidth - 250;
-    let startY = 120;
+    const startY = window._questTrackerStartY || ((window.Constants && window.Constants.HUD_TOP_MARGIN) || 28) + 92;
 
     // Get active quests from UQE
     const activeQuests = (typeof uqe !== 'undefined' && uqe.activeQuests) ? uqe.activeQuests : [];
@@ -13178,7 +13185,11 @@ function updateQuestTrackerHUD() {
             const entry = questTrackerEntries[quest.id];
             entry.yStart = startY + yOffset;
             // Update title background and text positions
-            if (entry.titleBg) entry.titleBg.y = startY + yOffset + 8;
+            if (entry.titleBg) {
+                entry.titleBg.x = startX + 130;
+                entry.titleBg.y = startY + yOffset + 8;
+            }
+            entry.title.x = startX;
             entry.title.y = startY + yOffset;
             yOffset += 20;
 
@@ -13190,7 +13201,11 @@ function updateQuestTrackerHUD() {
                     objEntry.text.setText(objStr);
                     objEntry.text.setFill(obj.completed ? '#00ff00' : '#cccccc');
                     objEntry.text.y = startY + yOffset;
-                    if (objEntry.bg) objEntry.bg.y = startY + yOffset + 7;
+                    objEntry.text.x = startX;
+                    if (objEntry.bg) {
+                        objEntry.bg.x = startX + 130;
+                        objEntry.bg.y = startY + yOffset + 7;
+                    }
                     yOffset += 18;
                 }
             });
@@ -13807,6 +13822,14 @@ function startResonantFrequenciesEvent() {
                 return;
             }
 
+            const defenseObjective = window.uqe && window.uqe.getQuestObjective
+                ? window.uqe.getQuestObjective('main_01_005', 'survive_defense')
+                : null;
+            if (defenseObjective && defenseObjective.isComplete()) {
+                stopResonantFrequenciesEvent();
+                return;
+            }
+
             // 2. Spawn Logic (Echo Mites near Blacksmith)
             // Blacksmith is at ~24, 13 (from MapManager.js) -> ~768, 416
             // We verify player is in Town first
@@ -13899,6 +13922,14 @@ function startBacklashEvent() {
             // Failsafe: Check if quest is still active
             if (!window.isQuestActive('main_01_016')) {
                 console.warn('⚠️ Backlash Timer running but quest not active! stopping...');
+                stopBacklashEvent();
+                return;
+            }
+
+            const backlashObjective = window.uqe && window.uqe.getQuestObjective
+                ? window.uqe.getQuestObjective('main_01_016', 'survive_backlash')
+                : null;
+            if (backlashObjective && backlashObjective.isComplete()) {
                 stopBacklashEvent();
                 return;
             }
@@ -14084,37 +14115,167 @@ function chooseClass(className) {
 window.chooseClass = chooseClass;
 
 /**
+ * Top HUD layout metrics — keeps bars/icons below the safe top edge.
+ */
+function getHudTopMetrics(scene) {
+    const width = scene.scale.width;
+    const top = (window.Constants && window.Constants.HUD_TOP_MARGIN) || 28;
+    const barHeight = 28;
+    const barSpacing = 25;
+    const barX = 20;
+    let barY = top + barHeight / 2;
+    const bars = [];
+
+    for (let i = 0; i < 4; i++) {
+        bars.push(barY);
+        barY += barSpacing + 8;
+    }
+
+    return {
+        top,
+        width,
+        barX,
+        barWidth: 200,
+        barHeight,
+        bars,
+        startTextY: barY + barSpacing + 15,
+        topTextX: width - 120,
+        titleY: top + 2,
+        versionY: top + 2,
+        mapDiffY: top + 20,
+        iconY: top + 18,
+        iconLabelY: top + 38,
+        questTrackerY: top + 92,
+        hudClickMaxY: top + 72
+    };
+}
+
+/**
+ * Reposition fixed top HUD after create and on window resize.
+ */
+function layoutHudTopUI(scene) {
+    if (!scene) return;
+
+    const m = getHudTopMetrics(scene);
+    const width = m.width;
+    const rightIconX = width - 70;
+    const rightSettingsX = width - 25;
+    const barSets = [
+        [hpBarBg, hpBar, hpBarText],
+        [manaBarBg, manaBar, manaBarText],
+        [staminaBarBg, staminaBar, null],
+        [xpBarBg, xpBar, xpBarText]
+    ];
+
+    m.bars.forEach((y, index) => {
+        const [bg, fill, text] = barSets[index];
+        const cx = m.barX + m.barWidth / 2;
+        if (bg) bg.setPosition(cx, y);
+        if (fill) fill.setPosition(m.barX + 2, y);
+        if (text) text.setPosition(cx, y);
+    });
+
+    if (scene.debugText) scene.debugText.setPosition(m.barX, m.startTextY);
+    if (typeof goldText !== 'undefined' && goldText) goldText.setPosition(m.barX, m.startTextY + 25);
+    if (scene.controlsText) scene.controlsText.setPosition(m.barX, m.startTextY + 50);
+    if (scene.gameTitleText) scene.gameTitleText.setPosition(width / 2, m.titleY);
+    if (scene.versionText) scene.versionText.setPosition(m.topTextX, m.versionY);
+    if (scene.mapDiffIndicator) scene.mapDiffIndicator.setPosition(m.topTextX, m.mapDiffY);
+    if (scene.equipmentIcon) scene.equipmentIcon.setPosition(rightIconX, m.iconY);
+    if (scene.equipmentLabel) scene.equipmentLabel.setPosition(rightIconX, m.iconLabelY);
+    if (scene.settingsIcon) scene.settingsIcon.setPosition(rightSettingsX, m.iconY);
+    if (scene.settingsLabel) scene.settingsLabel.setPosition(rightSettingsX, m.iconLabelY);
+
+    window._questTrackerStartY = m.questTrackerY;
+    window._hudClickMaxY = m.hudClickMaxY;
+}
+
+/**
+ * Debounced resize entry — Phaser fires many events while dragging window edges.
+ */
+function onGameResize() {
+    const scene = this;
+    if (!scene.sys || !scene.sys.isActive()) return;
+
+    if (scene._resizeLayoutEvent) {
+        scene._resizeLayoutEvent.remove(false);
+    }
+    scene._resizeLayoutEvent = scene.time.delayedCall(50, () => {
+        applyGameResize(scene);
+    });
+}
+
+/**
+ * Reposition quest tracker entries without recreating them (safe during resize).
+ */
+function repositionQuestTrackerHUD() {
+    const scene = game.scene.scenes[0];
+    if (!scene || !questTrackerEntries) return;
+
+    const activeQuests = (typeof uqe !== 'undefined' && uqe.activeQuests) ? uqe.activeQuests : [];
+    const screenWidth = scene.scale.width;
+    const startX = screenWidth - 250;
+    const startY = window._questTrackerStartY || ((window.Constants && window.Constants.HUD_TOP_MARGIN) || 28) + 92;
+    let yOffset = 0;
+
+    activeQuests.forEach(quest => {
+        const entry = questTrackerEntries[quest.id];
+        if (!entry) return;
+
+        entry.yStart = startY + yOffset;
+        if (entry.titleBg) {
+            entry.titleBg.x = startX + 130;
+            entry.titleBg.y = startY + yOffset + 8;
+        }
+        if (entry.title) {
+            entry.title.x = startX;
+            entry.title.y = startY + yOffset;
+        }
+        yOffset += 20;
+
+        quest.objectives.forEach((obj, idx) => {
+            const objEntry = entry.objectives[idx];
+            if (!objEntry) return;
+            const objStr = `  ${obj.completed ? '✅' : '⏳'} ${obj.label}: ${obj.progress}/${obj.target}`;
+            if (objEntry.text) {
+                objEntry.text.setText(objStr);
+                objEntry.text.setFill(obj.completed ? '#00ff00' : '#cccccc');
+                objEntry.text.x = startX;
+                objEntry.text.y = startY + yOffset;
+            }
+            if (objEntry.bg) {
+                objEntry.bg.x = startX + 130;
+                objEntry.bg.y = startY + yOffset + 7;
+            }
+            yOffset += 18;
+        });
+        yOffset += 8;
+    });
+}
+
+/**
  * Handle Game Resize
  * Adjusts UI positions dynamically
- * @param {Phaser.Structs.Size} gameSize
+ * @param {Phaser.Scene} scene
  */
-function resize(gameSize) {
-    const width = gameSize.width;
-    const height = gameSize.height;
+function applyGameResize(scene) {
+    if (!scene || !scene.scale) return;
 
-    // Update Camera
-    this.cameras.main.setViewport(0, 0, width, height);
+    const width = scene.scale.width;
+    const height = scene.scale.height;
+    if (width < 1 || height < 1) return;
 
-    // --- 1. Update Top-Right UI ---
-    // Offset from right edge
-    const topTextX = width - 120;
-
-    if (this.versionText) {
-        this.versionText.setX(topTextX);
-    }
-    if (this.mapDiffIndicator) {
-        this.mapDiffIndicator.setX(topTextX);
+    const cam = scene.cameras.main;
+    if (cam && (cam.width !== width || cam.height !== height)) {
+        scene.cameras.resize(width, height);
     }
 
-    // Equipment Icon (70px from right)
-    if (this.equipmentIcon) {
-        this.equipmentIcon.setX(width - 70);
+    if (typeof player !== 'undefined' && player && player.active && cam) {
+        cam.startFollow(player, true, 0.08, 0.08);
     }
 
-    // Settings Icon (25px from right)
-    if (this.settingsIcon) {
-        this.settingsIcon.setX(width - 25);
-    }
+    layoutHudTopUI(scene);
+    repositionQuestTrackerHUD();
 
     // --- 2. Update System Chat Box ---
     if (systemChatBox && systemChatBox.bg) {
@@ -14147,6 +14308,7 @@ function resize(gameSize) {
     }
 
     // --- 3. Update Ability Bar ---
+    const abilityBar = window.AbilityManager && window.AbilityManager.abilityBar;
     if (abilityBar && abilityBar.buttons) {
         const bottomMargin = 20; // Requested offset from bottom
         const abilityBarY = height - bottomMargin - 30; // 30 = half button height
@@ -14262,21 +14424,17 @@ function updateRaidSystem(time) {
         // Custom Tick Logic (e.g. survival timer)
         if (raid.onTick) raid.onTick(time, raid);
 
-        // CHECK OBJECTIVE COMPLETION: Stop raid if objective is met
-        if (window.uqe && window.uqe.getQuestObjective) {
-            // Hardcoded assumption: Void Raid uses 'survive_void' objective
-            // Ideally this would be config-driven, but for now we fix the bug
-            const obj = window.uqe.getQuestObjective(raid.questId, 'survive_void');
+        // CHECK OBJECTIVE COMPLETION: Stop raid when survive phase ends
+        if (raid.stopObjectiveId && window.uqe && window.uqe.getQuestObjective) {
+            const obj = window.uqe.getQuestObjective(raid.questId, raid.stopObjectiveId);
             if (obj && obj.completed) {
                 if (raid.active) {
-                    debugLog(`[RAID] 🏆 Objective Complete! Stopping Raid: ${raid.questId}`);
+                    debugLog(`[RAID] 🏆 Objective complete! Stopping raid: ${raid.questId}`);
                     raid.active = false;
-                    // Kill existing monsters
                     raid.spawnedMonsters.forEach(m => {
                         if (m && m.active && !m.isDead) {
-                            m.currentPath = null; // Stop moving
+                            m.currentPath = null;
                             m.isAggro = false;
-                            // Fade out?
                             game.scene.scenes[0].tweens.add({
                                 targets: m,
                                 alpha: 0,

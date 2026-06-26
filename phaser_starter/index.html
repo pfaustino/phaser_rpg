@@ -21,6 +21,10 @@
             height: 100%;
             /* Removed border/shadow for full immersion, or keep if desired but strictly inside */
         }
+
+        #game-container canvas {
+            display: block;
+        }
     </style>
 </head>
 
@@ -47,6 +51,7 @@
     <script src="TextureManager.js"></script>
     <script src="MapManager.js"></script>
     <script src="DebugUtils.js"></script>
+    <script src="DevToolsUI.js"></script>
     <script src="DamageSystem.js"></script>
     <script src="UIManager_v2.js?v=0.9.264.3"></script>
     <script src="ForgeUI.js"></script>
@@ -62,7 +67,7 @@
     <script src="items.js?v=refactor1"></script>
     <script src="gamepad_controller.js?v=2"></script>
     <script src="MonsterCompendium.js?v=0.9.266.3"></script>
-    <script src="game.js?v=0.9.271.1"></script>
+    <script src="game.js?v=0.9.272.0"></script>
     <script src="ProceduralMonster.js?v=0.9.266.2"></script>
     <script src="ProjectileManager.js"></script>
     <script src="SaveManager.js"></script>
@@ -70,6 +75,7 @@
     <script src="ShopManager.js"></script>
 
     <script src="CinematicManager.js"></script>
+    <script src="OnboardingManager.js?v=3"></script>
 
     <!-- Vercel Analytics -->
     <script>
